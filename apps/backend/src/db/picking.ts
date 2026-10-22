@@ -159,7 +159,7 @@ async function loadOrderForWrite(tx: DbOrTx, orderId: string): Promise<OrderStat
 
 function assertOrderWritable(order: OrderState): void {
   if (order.status === "issue") throw new HTTPException(409, { message: "picking_order_has_open_issue" });
-  if (order.status === "finished") throw new HTTPException(409, { message: "picking_order_already_finished" });
+  if (order.status === "picking_finished" || order.status === "measuring_finished") throw new HTTPException(409, { message: "picking_order_already_finished" });
 }
 
 /** Effective source scope for a picking item's shelf checks, transfer-aware.
@@ -2394,9 +2394,9 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
 
 /**
  * Explicit finish (the ONLY way an order finishes since 2026-10-16 — boxing
- * never auto-finishes): all items fully picked (boxed) → order 'finished',
- * work lock released. No task is created (box-scoped design) — returns the
- * finished order's id + status. Blocked with 409
+ * never auto-finishes): all items fully picked (boxed) → order
+ * 'picking_finished', work lock released. No task is created (box-scoped
+ * design) — returns the finished order's id + status. Blocked with 409
  * unresolved_outdated_warnings while the order has unresolved outdated-scan
  * warnings (spec 2026-10-07).
  */
@@ -2420,15 +2420,15 @@ export async function finishPickingOrder(
     if (!items.every((i) => i.pickedQty >= i.qty)) {
       throw new HTTPException(409, { message: "not_all_items_fully_boxed" });
     }
-    await queryRun(tx, sql`UPDATE picking_orders SET status = 'finished', working_by = NULL, working_at = NULL, last_update_date = ${now()} WHERE id = ${order.id}`);
+    await queryRun(tx, sql`UPDATE picking_orders SET status = 'picking_finished', working_by = NULL, working_at = NULL, last_update_date = ${now()} WHERE id = ${order.id}`);
     await logTransition(tx, {
       entityType: "picking_order",
       entityId: order.id,
       fromState: order.status,
-      toState: "finished",
+      toState: "picking_finished",
       actorId: input.actorId,
     });
-    return { id: order.id, status: "finished" };
+    return { id: order.id, status: "picking_finished" };
   });
 }
 
@@ -2631,14 +2631,14 @@ export async function resolvePickingOrderIssue(
   });
 }
 
-export const PICKING_ORDER_STATUSES = ["pending", "allocated", "skip", "picking", "issue", "finished", "shipped"] as const;
+export const PICKING_ORDER_STATUSES = ["pending", "allocated", "skip", "picking", "issue", "picking_finished", "measuring_finished", "shipped"] as const;
 /** Statuses whose orders may hold allocation rows. The status override
  *  releases allocations only when leaving this set (allocated→picking and
  *  pending→allocated preserve them — the `allocated` lock is the point). */
 const ALLOCATION_HOLDING_STATUSES = new Set(["pending", "picking", "allocated"]);
 
 /** Admin status override (spec docs/superpowers/specs/2026-09-17-admin-picking-status-override-design.md).
- *  Sets the status to any of the 5 values with no transition guards. Side
+ *  Sets the status to any of the 8 values with no transition guards. Side
  *  effects inside the tx:
  *  - leaving open (pending/picking) releases ALL the order's leftover
  *    allocations (incl. manual pins — a closed order is out of demand so

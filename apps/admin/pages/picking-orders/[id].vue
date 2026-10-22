@@ -507,8 +507,9 @@ async function resolveIssue() {
 }
 
 // "Override status" modal (spec 2026-09-17): admin sets the order to any of
-// pending/picking/issue/finished/shipped — no transition guards; a live PDA
-// work lock is force-cleared and leftover allocations released when closing.
+// pending/picking/issue/picking_finished/measuring_finished/shipped — no
+// transition guards; a live PDA work lock is force-cleared and leftover
+// allocations released when closing.
 const overrideOpen = ref(false);
 const overriding = ref(false);
 

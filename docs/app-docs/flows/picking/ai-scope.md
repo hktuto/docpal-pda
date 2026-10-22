@@ -19,7 +19,12 @@
   yet) are always visible.
 - Order statuses `allocated` and `skip` (spec
   `docs/superpowers/specs/2026-09-22-picking-allocated-skip-status-design.md`):
-  the full lifecycle is `pending → allocated → picking → finished → shipped`
+  the full lifecycle is `pending → allocated → picking → picking_finished →
+  measuring_finished → shipped` (the old single `finished` status was split
+  by spec
+  `docs/superpowers/specs/2026-10-22-picking-status-split-design.md` —
+  `picking_finished` = operator Finish, `measuring_finished` = the order's
+  last verify task completes)
   with `issue`/`skip` as side states. `allocated` = an admin confirmed the
   order's current allocations via the status override — the allocation engine
   NEVER wipes/rebuilds the order's rows again (it is not in `loadDemands` at
@@ -30,8 +35,9 @@
   allocatable, reference-only; entering it releases all allocations, and the
   admin override back to `pending` (with reason) re-enters allocation. The
   PDA picking list defaults to `allocated`/`picking` (client-side default
-  filter in `pages/picking/index.vue` — `finished` is reachable by ticking it
-  in the filter modal; pending/skip/issue/shipped stay admin-only). An
+  filter in `pages/picking/index.vue` — the finished statuses are reachable
+  by ticking them in the filter modal; pending/skip/issue/shipped stay
+  admin-only). An
   `allocated` order is fully workable on the PDA: work
   lock acquires, barcode lookup and suggested box include it, issue reporting
   is allowed, and the first pick scan moves it to `picking`.
@@ -217,9 +223,10 @@
   picking tab is read-only info now; real printing will be added
   backend-side later.
 - Finish a picking order manually, or automatically when the last package
-  is boxed — finish just flips the order to `finished`; no next-step task is
-  created (closing a box is the measuring completion, and the box's verify
-  task is spawned by `closeShippingBox`).
+  is boxed — finish just flips the order to `picking_finished`; no next-step
+  task is created (closing a box is the measuring completion, and the box's
+  verify task is spawned by `closeShippingBox`; the last verify task's
+  completion flips the order to `measuring_finished`).
 - Supplier outdated date-code scan warnings (spec
   `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`):
   when a scan's label date code (WWYY, post decode) is older than the
@@ -398,8 +405,8 @@
   "Set status" over the multi-selectable list page, both driving
   `PATCH /admin/picking-orders/:id/status` (`overridePickingOrderStatus` in
   `apps/backend/src/db/picking.ts`). The status can be set to any of
-  pending/allocated/skip/picking/issue/finished/shipped with NO transition
-  guards; a live PDA work lock is force-cleared (the override "steals" it),
+  pending/allocated/skip/picking/issue/picking_finished/measuring_finished/shipped
+  with NO transition guards; a live PDA work lock is force-cleared (the override "steals" it),
   leaving an allocation-holding status (pending/picking/allocated) for a
   non-holding one releases ALL the order's leftover allocations (incl.
   manual pins) with RESERVE-release ledger rows and zeroes
@@ -502,9 +509,11 @@
 ## Key files
 
 - `pages/picking/index.vue` — list page (compact rows grouped into
-  status sections — Picking / Allocated / Finished, each with a count;
-  paged 50 at a time with the AppListPage load-more footer; default status
-  filter allocated+picking, finished via the filter modal; sticky search,
+  status sections — Picking / Allocated / Picking finished / Measuring
+  finished, each with a count; paged 50 at a time with the AppListPage
+  load-more footer; default status
+  filter allocated+picking, the finished statuses via the filter modal;
+  sticky search,
   status filter, batch issue report dialog; refresh button, debounced
   server-side search and multi-status/allocation filters).
 - `pages/picking/[id].vue` — detail page (items/allocations/packages,

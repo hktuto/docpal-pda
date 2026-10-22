@@ -13,8 +13,9 @@ import { queryAll, queryGet } from "./query.js";
 // are aggregated per box.
 // 2026-10-20: the work list is a POST-PICKING queue — a box appears only once
 // every picking order it holds packages for is picking-complete (the order's
-// explicit Finish → status finished/shipped), and the response is grouped by
-// picking order (a cross-order box appears under each of its orders).
+// explicit Finish → status picking_finished/measuring_finished/shipped), and
+// the response is grouped by picking order (a cross-order box appears under
+// each of its orders).
 // ---------------------------------------------------------------------------
 
 export interface MeasuringBoxListRow {
@@ -55,7 +56,7 @@ export async function listMeasuringBoxes(db: AppDb): Promise<MeasuringOrderGroup
           JOIN picking_items pi2 ON pi2.id = pp2.picking_item_id
           JOIN picking_orders po2 ON po2.id = pi2.picking_order_id
           WHERE pp2.shipping_box_id = sb.id
-            AND po2.status NOT IN ('finished', 'shipped')
+            AND po2.status NOT IN ('picking_finished', 'measuring_finished', 'shipped')
         )
       GROUP BY sb.id
       ORDER BY sb.created_date DESC, sb.id DESC

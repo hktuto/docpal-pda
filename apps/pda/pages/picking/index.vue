@@ -151,14 +151,14 @@ const filterAllocation = ref<string[]>([]);
 // The PDA only ever shows confirmed work: statuses at/after `allocated`
 // (pending/skip/issue/shipped stay admin-only). An empty status filter
 // falls back to this default set — in-progress and ready-to-pick orders;
-// `finished` stays reachable by ticking it in the filter modal.
+// the finished statuses stay reachable by ticking them in the filter modal.
 const DEFAULT_STATUSES = ["allocated", "picking"];
 
 // The list renders as one section per status, paged 50 rows at a time with
 // the shared load-more footer (a section can be partial until every page is
 // loaded); this is the section display order:
 // in-progress work first, then orders ready to pick, then completed.
-const STATUS_GROUP_ORDER = ["picking", "allocated", "finished"];
+const STATUS_GROUP_ORDER = ["picking", "allocated", "picking_finished", "measuring_finished"];
 
 const hasActiveFilter = computed(
   () => filterStatuses.value.length > 0 || filterAllocation.value.length > 0
@@ -255,7 +255,7 @@ const selectedOrders = computed(() =>
 const hasSelection = computed(() => selectedOrders.value.length > 0);
 
 function isSelectable(status: string) {
-  return status !== "finished" && status !== "issue" && status !== "shipped";
+  return !["picking_finished", "measuring_finished", "issue", "shipped"].includes(status);
 }
 
 function toggleSelection(id: string) {

@@ -190,8 +190,10 @@ function suggestedNetWeightKg(
 /**
  * Complete a box's verify task: the task must be pending, the box must be
  * closed, and every package in the box must be fully re-scanned
- * (`rescanned_qty >= qty`). Sets status 'completed' + transition log.
- * No stock movement.
+ * (`rescanned_qty >= qty`). Sets status 'completed' + transition log, then
+ * flips every `picking_finished` order with packages in this box to
+ * `measuring_finished` when no other pending verify task remains for it
+ * (spec 2026-10-22). No stock movement.
  */
 export async function completeVerifyTask(db: AppDb, input: { taskId: string; actorId: string }): Promise<void> {
   return db.transaction(async (tx) => {
@@ -226,5 +228,48 @@ export async function completeVerifyTask(db: AppDb, input: { taskId: string; act
       metadata: {},
       createdDate: now(),
     });
+
+    // Picking status split (spec 2026-10-22): flip every picking_finished
+    // order holding packages in this box to measuring_finished once no OTHER
+    // pending verify task remains for any box containing that order's
+    // packages. Orders already shipped are untouched.
+    const orderIds = await queryAll<{ id: string; status: string }>(
+      tx,
+      sql`SELECT DISTINCT po.id, po.status
+          FROM picking_packages pp
+          JOIN picking_items pi ON pi.id = pp.picking_item_id
+          JOIN picking_orders po ON po.id = pi.picking_order_id
+          WHERE pp.shipping_box_id = ${task.shippingBoxId}`
+    );
+    for (const order of orderIds) {
+      if (order.status !== "picking_finished") continue;
+      const otherPending = await queryGet<{ id: string }>(
+        tx,
+        sql`SELECT vt.id FROM verify_tasks vt
+            WHERE vt.status = 'pending'
+              AND EXISTS (
+                SELECT 1 FROM picking_packages pp2
+                JOIN picking_items pi2 ON pi2.id = pp2.picking_item_id
+                WHERE pp2.shipping_box_id = vt.shipping_box_id
+                  AND pi2.picking_order_id = ${order.id}
+              )
+            LIMIT 1`
+      );
+      if (otherPending) continue;
+      await queryRun(
+        tx,
+        sql`UPDATE picking_orders SET status = 'measuring_finished', last_update_date = ${now()} WHERE id = ${order.id}`
+      );
+      await tx.insert(transactionLogs).values({
+        id: newId(),
+        entityType: "picking_order",
+        entityId: order.id,
+        fromState: "picking_finished",
+        toState: "measuring_finished",
+        actorId: input.actorId,
+        metadata: {},
+        createdDate: now(),
+      });
+    }
   });
 }

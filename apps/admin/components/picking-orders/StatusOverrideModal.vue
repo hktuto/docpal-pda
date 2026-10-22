@@ -21,7 +21,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 
-const STATUSES = ["pending", "allocated", "skip", "picking", "finished", "issue", "shipped"];
+const STATUSES = ["pending", "allocated", "skip", "picking", "picking_finished", "measuring_finished", "issue", "shipped"];
 const OPEN_STATUSES = new Set(["pending", "picking", "allocated"]);
 
 const statusOptions = computed<SearchableSelectOption[]>(() =>
@@ -36,7 +36,7 @@ const dismiss = useOverlayDismiss(() => emit("close"));
 const reopenWarning = computed(
   () =>
     OPEN_STATUSES.has(status.value) &&
-    props.currentStatuses.some((s) => s === "finished" || s === "shipped")
+    props.currentStatuses.some((s) => s === "picking_finished" || s === "measuring_finished" || s === "shipped")
 );
 
 watch(

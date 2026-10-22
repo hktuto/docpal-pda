@@ -313,7 +313,7 @@ pickingRoute.post("/picking-orders/:id/resolve-issue", async (c) => {
   return c.json(result, 200);
 });
 
-// Explicit finish: all items fully boxed → order finished → {id, status}.
+// Explicit finish: all items fully boxed → order picking_finished → {id, status}.
 pickingRoute.post("/picking-orders/:id/finish", async (c) => {
   const result = await finishPickingOrder(db, { pickingOrderId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json(result, 200);

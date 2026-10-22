@@ -260,6 +260,13 @@
       "when": 1792569593975,
       "tag": "0037_gifted_mad_thinker",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792655000000,
+      "tag": "0038_picking_status_split",
+      "breakpoints": true
     }
   ]
 }

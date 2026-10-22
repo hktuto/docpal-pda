@@ -15,7 +15,7 @@ const deliveryDateFrom = ref("");
 const deliveryDateTo = ref("");
 const selected = ref<Set<string>>(new Set());
 
-const STATUSES = ["pending", "allocated", "skip", "picking", "finished", "issue", "shipped"];
+const STATUSES = ["pending", "allocated", "skip", "picking", "picking_finished", "measuring_finished", "issue", "shipped"];
 const ORDER_TYPES = ["invoice", "tn"];
 
 const statusOptions = computed<SearchableSelectOption[]>(() =>

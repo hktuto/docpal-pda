@@ -862,7 +862,8 @@ export default {
       allocated: "已分配",
       skip: "已跳过",
       picking: "拣货中",
-      finished: "已完成",
+      picking_finished: "拣货完成",
+      measuring_finished: "复核完成",
       issue: "异常",
       shipped: "已出货"
     },
@@ -1019,6 +1020,8 @@ export default {
     clear: "已清除",
     picking: "拣货中",
     finished: "已完成",
+    picking_finished: "拣货完成",
+    measuring_finished: "复核完成",
     issue: "异常",
     open: "打开",
     closed: "已关闭",

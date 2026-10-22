@@ -26,7 +26,7 @@
             class="badge"
             :class="badgeClass(group.pickedQty >= group.qty ? 'finished' : 'picking')"
           >
-            {{ group.pickedQty >= group.qty ? statusLabel.picking('finished') : statusLabel.picking('picking') }}
+            {{ group.pickedQty >= group.qty ? statusLabel.picking('picking_finished') : statusLabel.picking('picking') }}
           </span> -->
         </div>
         <div class="list-row__meta">

@@ -229,7 +229,8 @@ const openBoxes = computed(() =>
 );
 const actionable = computed(
   () =>
-    order.value?.status !== "finished" &&
+    order.value?.status !== "picking_finished" &&
+    order.value?.status !== "measuring_finished" &&
     order.value?.status !== "issue" &&
     !heldByOther.value
 );

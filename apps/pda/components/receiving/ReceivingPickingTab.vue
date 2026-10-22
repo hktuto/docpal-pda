@@ -44,7 +44,7 @@
           class="badge"
           :class="badgeClass(boxedQty(pi) >= pi.qty ? 'finished' : 'picking')"
         >
-          {{ boxedQty(pi) >= pi.qty ? statusLabel.picking('finished') : statusLabel.picking('picking') }}
+          {{ boxedQty(pi) >= pi.qty ? statusLabel.picking('picking_finished') : statusLabel.picking('picking') }}
         </span>
       </DetailRow>
       <div v-if="allocatedLocations(pi).length" class="detail-row">

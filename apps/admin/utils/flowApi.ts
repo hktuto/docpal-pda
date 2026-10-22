@@ -1136,8 +1136,9 @@ export function useFlowApi() {
     updatePickingOrder: (id: string, fields: PickingOrderEditFields) =>
       api.patch(`/admin/picking-orders/${id}`, fields),
     // Admin status override (spec 2026-09-17-admin-picking-status-override-design.md):
-    // any of pending/picking/issue/finished/shipped, no transition guards; a
-    // live PDA work lock is force-cleared. changed=false when already the target.
+    // any of pending/picking/issue/picking_finished/measuring_finished/shipped,
+    // no transition guards; a live PDA work lock is force-cleared. changed=false
+    // when already the target.
     overridePickingOrderStatus: (id: string, status: string, reason?: string) =>
       api.patch<{ id: string; orderNo: string; status: string; previousStatus: string; changed: boolean }>(
         `/admin/picking-orders/${id}/status`,

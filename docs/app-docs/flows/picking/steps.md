@@ -2,7 +2,7 @@
 
 ## 1. Open the picking list
 
-From the home screen, tap **Picking**. The list shows the picking orders released for work — those confirmed by the office (`allocated`) plus orders already being picked — as compact rows with status and summary information; the search bar and filter button stay pinned at the top while scrolling (finished orders appear when you tick **Finished** in the filter). The list is grouped into sections by status — **Picking** (in progress) first, then **Allocated** (ready to pick), then **Finished** — each with a count badge, and loads 50 orders at a time — tap **Load more** at the bottom for the next page, or the refresh button to reload. Search and filters apply to all orders, not just the loaded ones.
+From the home screen, tap **Picking**. The list shows the picking orders released for work — those confirmed by the office (`allocated`) plus orders already being picked — as compact rows with status and summary information; the search bar and filter button stay pinned at the top while scrolling (finished orders appear when you tick **Picking finished** / **Measuring finished** in the filter). The list is grouped into sections by status — **Picking** (in progress) first, then **Allocated** (ready to pick), then **Picking finished** and **Measuring finished** — each with a count badge, and loads 50 orders at a time — tap **Load more** at the bottom for the next page, or the refresh button to reload. Search and filters apply to all orders, not just the loaded ones.
 
 ![Picking list](./assets/picking-list.png)
 
@@ -70,6 +70,6 @@ If the quantity is wrong, the item is damaged, or stock cannot be found, use the
 
 ## 6. Finish the order
 
-Boxing items does **not** finish the order by itself — the moment every line is fully picked and packed, a **Finish picking** button appears at the bottom of the page. Tap it to confirm the task is complete: the order turns finished and its packed boxes move on to measuring. No task is created at finish — closing a box is the measuring completion, and each closed box gets its own verify task when the verify step is enabled.
+Boxing items does **not** finish the order by itself — the moment every line is fully picked and packed, a **Finish picking** button appears at the bottom of the page. Tap it to confirm the task is complete: the order turns picking-finished and its packed boxes move on to measuring. No task is created at finish — closing a box is the measuring completion, and each closed box gets its own verify task when the verify step is enabled.
 
 If the order has unresolved outdated date-code warnings (warning chip on the order), the **Finish picking** action is refused with the number of unresolved warnings. Ask an admin to resolve the order's warnings (admin console → Issues → Outdated warnings), then press **Finish picking** again.

@@ -166,7 +166,7 @@ test("reallocate: 409 lock_held when a PDA holds the order's work lock", async (
 test("reallocate: 409 order_not_open for a finished order", async () => {
   await reseed(client);
   const { orderA } = await seedScenario();
-  await client.db.execute(sql`UPDATE picking_orders SET status = 'finished' WHERE id = ${orderA}`);
+  await client.db.execute(sql`UPDATE picking_orders SET status = 'picking_finished' WHERE id = ${orderA}`);
 
   const res = await req(`/admin/picking-orders/${orderA}/reallocate`, { method: "POST" });
   assert.equal(res.status, 409);
@@ -340,7 +340,7 @@ test("remove-allocation: succeeds on a finished order (no status check)", async 
   const { orderA } = await seedScenario();
   const itemId = await itemIdOf(orderA);
   const allocId = (await allocRows(orderA))[0].id;
-  await client.db.execute(sql`UPDATE picking_orders SET status = 'finished' WHERE id = ${orderA}`);
+  await client.db.execute(sql`UPDATE picking_orders SET status = 'picking_finished' WHERE id = ${orderA}`);
 
   const res = await req(`/admin/picking-orders/${orderA}/items/${itemId}/allocations/${allocId}`, { method: "DELETE" });
   assert.equal(res.status, 200);

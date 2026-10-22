@@ -862,7 +862,8 @@ export default {
       allocated: "Allocated",
       skip: "Skipped",
       picking: "Picking",
-      finished: "Finished",
+      picking_finished: "Picking finished",
+      measuring_finished: "Measuring finished",
       issue: "Issue",
       shipped: "Shipped"
     },
@@ -1019,6 +1020,8 @@ export default {
     clear: "Clear",
     picking: "Picking",
     finished: "Finished",
+    picking_finished: "Picking finished",
+    measuring_finished: "Measuring finished",
     issue: "Issue",
     open: "Open",
     closed: "Closed",

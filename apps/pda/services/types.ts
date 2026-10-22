@@ -344,8 +344,8 @@ export type PutAwayScanResult = PutAwayScan & {
 // ------------------------------------------------------------------
 // Picking — DTOs matching apps/backend (:3002), see
 // docs/backend/api-design.md §Picking. All reads are nested (no client
-// joins); statuses are plain strings (pending | picking | finished |
-// issue). NOTE: after each scan the backend's allocateAll rebuilds an
+// joins); statuses are plain strings (pending | allocated | picking |
+// picking_finished | measuring_finished | issue | shipped | skip). NOTE: after each scan the backend's allocateAll rebuilds an
 // item's allocation rows with NEW ids until its packages are boxed —
 // pages must re-fetch the detail after scan/box mutations instead of
 // caching allocation ids.
@@ -771,8 +771,8 @@ export interface MeasuringBoxListRow {
 }
 
 /** GET /measuring-boxes group — boxes whose picking orders are ALL
- *  picking-complete (finished/shipped), grouped by picking order. A
- *  cross-order box appears under each of its orders. */
+ *  picking-complete (picking_finished/measuring_finished/shipped), grouped
+ *  by picking order. A cross-order box appears under each of its orders. */
 export interface MeasuringOrderGroup {
   orderId: string;
   orderNo: string;

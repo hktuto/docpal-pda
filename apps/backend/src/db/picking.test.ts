@@ -164,7 +164,7 @@ test("list: seeded order with item/qty counts; status filter", async () => {
   assert.equal(row.pickedQty, 0);
 
   assert.equal((await listPickingOrders(client.db, { status: "pending" })).rows.length, 1);
-  assert.equal((await listPickingOrders(client.db, { status: "finished" })).rows.length, 0);
+  assert.equal((await listPickingOrders(client.db, { status: "picking_finished" })).rows.length, 0);
 });
 
 test("list: limit/offset slice the ordered window; total counts all matches", async () => {
@@ -898,7 +898,7 @@ test("close flow: add-all-unboxed does not finish; explicit finish â†’ verify â†
   // no task rows are created at finish (verify tasks are spawned per box at
   // close time)
   const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`);
-  assert.equal(order!.status, "finished");
+  assert.equal(order!.status, "picking_finished");
   const tasks = await queryAll<{ id: string; status: string }>(
     client.db,
     sql`SELECT id, status FROM verify_tasks WHERE shipping_box_id = ${box.id}`
@@ -913,7 +913,7 @@ test("close flow: add-all-unboxed does not finish; explicit finish â†’ verify â†
     orderLogs.map((l) => [l.fromState, l.toState]),
     [
       ["pending", "picking"],
-      ["picking", "finished"],
+      ["picking", "picking_finished"],
     ]
   );
 
@@ -1199,7 +1199,7 @@ test("scan from receiving sources: order-level (no box) and box-level allocation
 test("report-issues: reported/skipped, issue fields + log; validations", async () => {
   await reseed(client);
   const { orderId, actorId } = await seededOrderAllocated();
-  const finishedId = await insertPickingOrder("SO-DONE", "finished");
+  const finishedId = await insertPickingOrder("SO-DONE", "picking_finished");
 
   // validations first (all roll back)
   const noOrders = await catchHttp(reportPickingOrderIssues(client.db, { actorId, entries: [] }));
@@ -1426,7 +1426,7 @@ test("work lock: acquire, same-user refresh, 409 other user, release, expired re
 
 test("work lock: finished order cannot be locked", async () => {
   await reseed(client);
-  const orderId = await insertPickingOrder("SO-LOCK-FIN", "finished");
+  const orderId = await insertPickingOrder("SO-LOCK-FIN", "picking_finished");
   const err = await catchHttp(acquireWorkLock(client.db, { orderId, actorId: await actorIdOf() }));
   assert.equal(err.status, 409);
 });
@@ -1449,7 +1449,7 @@ test("work lock: finishing the order clears the lock", async () => {
   await client.db.execute(sql`UPDATE picking_items SET picked_qty = 5 WHERE id = ${itemId}`);
 
   const result = await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
-  assert.deepEqual(result, { id: orderId, status: "finished" });
+  assert.deepEqual(result, { id: orderId, status: "picking_finished" });
   const row = await queryGet<{ w: string | null }>(
     client.db,
     sql`SELECT working_by AS w FROM picking_orders WHERE id = ${orderId}`
@@ -1482,7 +1482,7 @@ test("reorder: rewrites priority_seq, emits event, list follows, rejects bad ids
   const wanted = list.rows.map((o) => o.id).filter((id) => [cOrder, a, b].includes(id));
   assert.deepEqual(wanted, [cOrder, a, b]);
 
-  const fin = await insertPickingOrder("SO-REORDER-FIN", "finished");
+  const fin = await insertPickingOrder("SO-REORDER-FIN", "picking_finished");
   const err = await catchHttp(reorderPickingOrders(client.db, { actorId, orderIds: [a, fin] }));
   assert.equal(err.status, 400);
   assert.match(err.message, /invalid_order_ids/);
@@ -1692,11 +1692,11 @@ test("claim-shelf-box: detail hints the exact-match box, claim reuses the carton
   assert.equal(allocCount!.c, 0);
 
   const notFinished = await getPickingOrderDetail(client.db, orderId);
-  assert.notEqual(notFinished.status, "finished"); // boxing never finishes the order
+  assert.notEqual(notFinished.status, "picking_finished"); // boxing never finishes the order
   await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
 
   const after = await getPickingOrderDetail(client.db, orderId);
-  assert.equal(after.status, "finished");
+  assert.equal(after.status, "picking_finished");
   assert.equal(after.suggestedBox, null); // finished orders never hint
 });
 

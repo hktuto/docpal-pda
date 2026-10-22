@@ -3,7 +3,8 @@
 ## In scope
 
 - List the open shipping boxes that contain packages **whose picking orders
-  are all picking-complete** (`finished`/`shipped` — the order's explicit
+  are all picking-complete** (`picking_finished`/`measuring_finished`/`shipped`
+  — the order's explicit
   Finish on the picking detail page), grouped by picking order (box-scoped —
   no measuring task exists; specs
   `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`,

@@ -66,7 +66,8 @@ adminFlowEditsRoute.patch("/picking-orders/:id", async (c) => {
 
 // Override a picking order's status (spec
 // docs/superpowers/specs/2026-09-17-admin-picking-status-override-design.md).
-// Body { status, reason? } — any of pending/picking/issue/finished/shipped,
+// Body { status, reason? } — any of
+// pending/allocated/skip/picking/issue/picking_finished/measuring_finished/shipped,
 // no transition guards; a live PDA work lock is force-cleared. 400
 // invalid_status, 404 picking_order_not_found. No-op (changed: false) when
 // the status already matches. On change the recompute is scheduled after

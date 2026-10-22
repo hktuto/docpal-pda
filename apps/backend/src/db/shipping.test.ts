@@ -182,7 +182,7 @@ test("detail: box + packages (part identity) + orders involved; 404", async () =
     {
       id: orderId,
       orderNo: "SO-DEMO-0001",
-      status: "finished",
+      status: "measuring_finished",
       shipTo: "ACME Electronics (HK)",
       customerCode: "ACME",
       poNo: "CUST-PO-9001",
@@ -235,7 +235,7 @@ test("ship: happy path — box stamps, order derives shipped, feed, logs, event,
     sql`SELECT from_state AS "fromState", to_state AS "toState", actor_id AS "actorId"
         FROM transaction_logs WHERE entity_type = 'picking_order' AND entity_id = ${orderId} AND to_state = 'shipped'`
   );
-  assert.deepEqual(orderLog, { fromState: "finished", toState: "shipped", actorId });
+  assert.deepEqual(orderLog, { fromState: "measuring_finished", toState: "shipped", actorId });
 
   // SSE event on both topics; the old order event is gone
   const evt = await queryGet<{ type: string; topics: string[] }>(
@@ -322,8 +322,8 @@ async function seedShipWorld(): Promise<ShipWorld> {
   const box1Id = "BOX-S-SHIP-1";
   const box2Id = "BOX-S-SHIP-2";
   await client.db.execute(sql`INSERT INTO picking_orders (id, order_no, status, created_date, last_update_date)
-      VALUES (${orderAId}, 'SO-SHIP-A', 'finished', now(), now()),
-             (${orderBId}, 'SO-SHIP-B', 'finished', now(), now())`);
+      VALUES (${orderAId}, 'SO-SHIP-A', 'picking_finished', now(), now()),
+             (${orderBId}, 'SO-SHIP-B', 'picking_finished', now(), now())`);
   await client.db.execute(sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, picked_qty, line_id, line_number, shipment_number, created_date, last_update_date)
       VALUES (${itemAId}, ${orderAId}, 'RK73H1JTTD1002F', 100, 100, 9101, 1, 1, now(), now()),
              (${itemBId}, ${orderBId}, 'RK73H1JTTD2202F', 50, 50, 9102, 1, 1, now(), now())`);
@@ -352,13 +352,13 @@ test("multi-order box: an order flips to shipped only when every box holding its
   assert.equal(row1.packageCount, 2);
 
   // ship box1: order A is fully covered by box1 → shipped; order B still has
-  // packages in the unshipped box2 → stays finished
+  // packages in the unshipped box2 → stays picking_finished
   const res1 = await shipShippingBox(client.db, box1Id, actorId);
   assert.deepEqual(res1.shippedOrderIds, [orderAId]);
   const statusOf = async (id: string) =>
     (await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${id}`))!.status;
   assert.equal(await statusOf(orderAId), "shipped");
-  assert.equal(await statusOf(orderBId), "finished");
+  assert.equal(await statusOf(orderBId), "picking_finished");
 
   // ship box2 → order B flips
   const res2 = await shipShippingBox(client.db, box2Id, actorId);

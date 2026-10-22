@@ -1,7 +1,7 @@
 // Route-level tests for PATCH /admin/picking-orders/:id/status (spec
 // 2026-09-17-admin-picking-status-override-design.md): admin override of a
 // picking order's status to any of pending/allocated/skip/picking/issue/
-// finished/shipped — no transition guards, work lock force-cleared, leaving
+// picking_finished/measuring_finished/shipped — no transition guards, work lock force-cleared, leaving
 // the allocation-holding statuses (pending/picking/allocated) for a
 // non-holding one releases the order's allocations with RESERVE-release
 // ledger rows, audit transition log, picking_order.updated SSE event, and a
@@ -103,7 +103,7 @@ async function seedAllocatedOrder(tag: string): Promise<string> {
 }
 
 test("status override: 404 for an unknown picking order", async () => {
-  const res = await patchStatus(randomUUID(), "finished");
+  const res = await patchStatus(randomUUID(), "picking_finished");
   assert.equal(res.status, 404);
   assert.match(await res.text(), /picking_order_not_found/);
 });
@@ -113,9 +113,15 @@ test("status override: 400 for an invalid status value", async () => {
   const res = await patchStatus(orderId, "cancelled");
   assert.equal(res.status, 400);
   assert.match(await res.text(), /invalid_status/);
+
+  // the retired 'finished' status is invalid too (split into
+  // picking_finished/measuring_finished, spec 2026-10-22)
+  const retired = await patchStatus(orderId, "finished");
+  assert.equal(retired.status, 400);
+  assert.match(await retired.text(), /invalid_status/);
 });
 
-test("status override: pending → finished releases allocations with ledger rows", async () => {
+test("status override: pending → picking_finished releases allocations with ledger rows", async () => {
   const orderId = await seedAllocatedOrder("close");
 
   const before = await queryGet<{ n: number }>(
@@ -126,17 +132,18 @@ test("status override: pending → finished releases allocations with ledger row
   );
   assert.ok((before?.n ?? 0) > 0, "seeded order has an allocation");
 
-  const res = await patchStatus(orderId, "finished", "all picked on paper");
+  const res = await patchStatus(orderId, "picking_finished", "all picked on paper");
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.deepEqual(
     { status: body.status, previousStatus: body.previousStatus, changed: body.changed },
-    { status: "finished", previousStatus: "pending", changed: true }
+    { status: "picking_finished", previousStatus: "pending", changed: true }
   );
 
   const order = await getOrder(orderId);
-  assert.equal(order.status, "finished");
+  assert.equal(order.status, "picking_finished");
   assert.equal(order.workingBy, null);
+  assert.equal(order.shippedAt, null); // entering a finished status never stamps shipped
 
   // Allocations wiped, picking item allocated_qty zeroed, lot freed.
   const after = await queryGet<{ n: number }>(
@@ -174,7 +181,7 @@ test("status override: pending → finished releases allocations with ledger row
         ORDER BY created_date DESC LIMIT 1`
   );
   assert.equal(log!.fromState, "pending");
-  assert.equal(log!.toState, "finished");
+  assert.equal(log!.toState, "picking_finished");
   assert.equal(log!.override, "true");
 });
 
@@ -206,7 +213,7 @@ test("status override: force-clears a live PDA work lock", async () => {
   assert.equal(lock.status, 200);
   assert.ok((await getOrder(orderId)).workingBy, "operator holds the lock");
 
-  const res = await patchStatus(orderId, "finished");
+  const res = await patchStatus(orderId, "picking_finished");
   assert.equal(res.status, 200);
   assert.equal((await getOrder(orderId)).workingBy, null);
 });
@@ -232,11 +239,11 @@ test("status override: sequential calls cover the batch (client-side loop) shape
   const second = await seedAllocatedOrder("batch2");
 
   for (const orderId of [first, second]) {
-    const res = await patchStatus(orderId, "finished");
+    const res = await patchStatus(orderId, "picking_finished");
     assert.equal(res.status, 200);
   }
-  assert.equal((await getOrder(first)).status, "finished");
-  assert.equal((await getOrder(second)).status, "finished");
+  assert.equal((await getOrder(first)).status, "picking_finished");
+  assert.equal((await getOrder(second)).status, "picking_finished");
 });
 
 // --- allocated / skip statuses (spec 2026-09-22-picking-allocated-skip-status-design.md) ---

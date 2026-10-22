@@ -270,11 +270,55 @@ test("complete: happy path + guards (404, actor, not pending, re-scan required)"
   assert.deepEqual(log, { fromState: "pending", toState: "completed", actorId });
 
   const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`);
-  assert.equal(order!.status, "finished");
+  assert.equal(order!.status, "measuring_finished");
 
   const again = await catchHttp(completeVerifyTask(client.db, { taskId: verifyTaskId, actorId }));
   assert.equal(again.status, 409);
   assert.equal(again.message, "verify_task_not_pending");
+});
+
+test("complete: last pending verify task flips picking_finished → measuring_finished; another pending task holds it", async () => {
+  await reset();
+  const actorId = await actorIdOf();
+  const orderId = randomUUID();
+  const itemId = randomUUID();
+  const box1Id = "BOX-S-VERIFY-1";
+  const box2Id = "BOX-S-VERIFY-2";
+  const pkg1Id = randomUUID();
+  const pkg2Id = randomUUID();
+  await client.db.execute(sql`INSERT INTO picking_orders (id, order_no, status, created_date, last_update_date)
+      VALUES (${orderId}, 'SO-VERIFY-SPLIT', 'picking_finished', now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, picked_qty, line_id, line_number, shipment_number, created_date, last_update_date)
+      VALUES (${itemId}, ${orderId}, 'RK73H1JTTD1002F', 100, 100, 9201, 1, 1, now(), now())`);
+  await client.db.execute(sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_date, last_update_date)
+      VALUES (${box1Id}, ${orderId}, 'closed', now(), now()),
+             (${box2Id}, ${orderId}, 'closed', now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, rescanned_qty, shipping_box_id, created_date, last_update_date)
+      VALUES (${pkg1Id}, ${itemId}, ${orderId}, 'inventory_lot', 'verify-src-1', 50, 50, ${box1Id}, now(), now()),
+             (${pkg2Id}, ${itemId}, ${orderId}, 'inventory_lot', 'verify-src-2', 50, 50, ${box2Id}, now(), now())`);
+  const task1Id = randomUUID();
+  const task2Id = randomUUID();
+  await client.db.execute(sql`INSERT INTO verify_tasks (id, shipping_box_id, status, created_date, last_update_date)
+      VALUES (${task1Id}, ${box1Id}, 'pending', now(), now()),
+             (${task2Id}, ${box2Id}, 'pending', now(), now())`);
+
+  const statusOf = async () =>
+    (await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`))!.status;
+
+  // completing box1's task: box2's pending task still covers the order → holds
+  await completeVerifyTask(client.db, { taskId: task1Id, actorId });
+  assert.equal(await statusOf(), "picking_finished");
+
+  // completing box2's task: no pending verify task remains → measuring_finished
+  await completeVerifyTask(client.db, { taskId: task2Id, actorId });
+  assert.equal(await statusOf(), "measuring_finished");
+
+  const log = await queryGet<{ fromState: string; toState: string; actorId: string | null; metadata: unknown }>(
+    client.db,
+    sql`SELECT from_state AS "fromState", to_state AS "toState", actor_id AS "actorId", metadata
+        FROM transaction_logs WHERE entity_type = 'picking_order' AND entity_id = ${orderId} AND to_state = 'measuring_finished'`
+  );
+  assert.deepEqual(log, { fromState: "picking_finished", toState: "measuring_finished", actorId, metadata: {} });
 });
 
 test("complete: 409 shipping_box_not_closed while the box is open (reopened during verify)", async () => {
@@ -423,7 +467,7 @@ test("reopen: closed box → open + both package flags reset, task stays pending
   const finishLogs = await queryGet<{ n: number }>(
     client.db,
     sql`SELECT COUNT(*)::int AS n FROM transaction_logs
-        WHERE entity_type = 'picking_order' AND entity_id = ${orderId} AND to_state = 'finished'`
+        WHERE entity_type = 'picking_order' AND entity_id = ${orderId} AND to_state = 'picking_finished'`
   );
   assert.equal(finishLogs!.n, 1);
 

@@ -58,7 +58,7 @@ const emit = defineEmits<{
 
 // PDA-visible statuses only (at/after `allocated`) — pending/skip/issue/
 // shipped are admin-only and never offered here.
-const pickingStatuses = ["allocated", "picking", "finished"];
+const pickingStatuses = ["allocated", "picking", "picking_finished", "measuring_finished"];
 const allocationStatuses = ["allocated", "partial", "unallocated"];
 
 const draftStatuses = ref<Set<string>>(new Set());

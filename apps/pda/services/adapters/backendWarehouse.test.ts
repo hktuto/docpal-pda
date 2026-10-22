@@ -671,14 +671,14 @@ describe('backendWarehouse picking flow', () => {
   });
 
   it('finishPickingOrder POSTs the finish verb and returns the order status', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ id: 'po1', status: 'finished' }));
+    fetchMock.mockResolvedValue(jsonResponse({ id: 'po1', status: 'picking_finished' }));
 
     const result = await service().finishPickingOrder('po1');
 
     expect(lastCall().url).toBe(`${BASE_URL}/picking-orders/po1/finish`);
     expect(lastCall().init.method).toBe('POST');
     expect(JSON.parse(lastCall().init.body as string)).toEqual({});
-    expect(result).toEqual({ id: 'po1', status: 'finished' });
+    expect(result).toEqual({ id: 'po1', status: 'picking_finished' });
   });
 
   it('reportPickingOrderIssues POSTs per-order entries and returns id arrays', async () => {

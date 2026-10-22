@@ -179,6 +179,22 @@ test("list: a box appears only once ALL its orders are picking-complete; grouped
   assert.deepEqual(groups[0].boxes[0].orderNos, ["SO-DEMO-0001"]);
 });
 
+test("list: queue accepts picking_finished, measuring_finished and shipped orders alike", async () => {
+  await reset();
+  const { orderId } = await finishedOrder(); // lands on picking_finished
+
+  const visible = async () => (await listMeasuringBoxes(client.db)).length;
+  assert.equal(await visible(), 1); // picking_finished
+
+  for (const status of ["measuring_finished", "shipped"]) {
+    await client.db.execute(sql`UPDATE picking_orders SET status = ${status} WHERE id = ${orderId}`);
+    assert.equal(await visible(), 1, status);
+  }
+  // a still-picking order is hidden again
+  await client.db.execute(sql`UPDATE picking_orders SET status = 'picking' WHERE id = ${orderId}`);
+  assert.equal(await visible(), 0);
+});
+
 // --- detail --------------------------------------------------------------------
 
 test("detail: box fields + packages with part identity + suggestedNetWeightKg; 404", async () => {
@@ -268,7 +284,7 @@ test("detail: suggested net weight is null when no package has a formula row", a
   const bareItemId = randomUUID();
   const bareBoxId = "BOX-S-BARE-1";
   await client.db.execute(sql`INSERT INTO picking_orders (id, order_no, status, created_date, last_update_date)
-      VALUES (${bareOrderId}, 'SO-BARE', 'finished', now(), now())`);
+      VALUES (${bareOrderId}, 'SO-BARE', 'picking_finished', now(), now())`);
   await client.db.execute(sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, line_id, line_number, shipment_number, created_date, last_update_date)
       VALUES (${bareItemId}, ${bareOrderId}, 'RK73B1JTTD181G', 100, 9003, 1, 1, now(), now())`);
   await client.db.execute(sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_date, last_update_date)
@@ -300,9 +316,9 @@ test("close IS the measuring completion: spawns the box's verify task when verif
   );
   assert.deepEqual(task, { status: "pending", shippingBoxId: boxId });
 
-  // the order stays finished; no measuring task table exists at all
+  // the order stays picking_finished; no measuring task table exists at all
   const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`);
-  assert.equal(order!.status, "finished");
+  assert.equal(order!.status, "picking_finished");
 });
 
 test("close: verify disabled → no verify task; measuring disabled → close guards unchanged", async () => {

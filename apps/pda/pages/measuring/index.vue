@@ -73,7 +73,8 @@ async function load() {
   loadError.value = null;
   try {
     // The list is the post-picking work queue: open boxes whose picking
-    // orders are ALL finished, grouped by picking order.
+    // orders have ALL finished picking (picking_finished or beyond),
+    // grouped by picking order.
     rawGroups.value = await warehouse.getMeasuringBoxes();
   } catch (e: unknown) {
     loadError.value = errorMessage(e);
