@@ -59,6 +59,8 @@ export interface AdminTableOptions<T> {
   /** Server mode: sorting/paging are manual and driven by query-param reloads. */
   server?: { total: Ref<number> };
   defaultPageSize?: number;
+  /** Initial client sort (persisted state, when present, wins). */
+  initialSorting?: SortingState;
 }
 
 interface ColumnStateRefs {
@@ -136,7 +138,7 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
   // persists it. Pagination stays per-instance below.
   let shared = columnStateRegistry.get(stateKey);
   if (!shared) {
-    const sorting = ref<SortingState>([]);
+    const sorting = ref<SortingState>(options.initialSorting ?? []);
     const columnSizing = ref<ColumnSizingState>({});
     const columnOrder = ref<ColumnOrderState>([]);
     const columnVisibility = ref<ColumnVisibilityState>(defaultVisibility());
@@ -213,6 +215,15 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
     }))
   );
 
+  // The v9 adapter re-syncs options only when a watched ref changes identity —
+  // a bare rows ref tracks reassignment, so in-place row mutations (push /
+  // splice / index assignment) never reach the row model. Spreading into a
+  // fresh array makes the computed depend on the array's structural deps too,
+  // so any row-structure change invalidates it and the adapter re-syncs.
+  // (Row FIELD edits don't invalidate it — cells re-render through their own
+  // slot reactivity, independent of the row model.)
+  const data = computed(() => [...toValue(options.rows)]);
+
   const controlledState = computed(() => ({
     sorting: sorting.value,
     pagination: pagination.value,
@@ -223,7 +234,7 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
 
   const table = useTable({
     features: adminTableFeatures,
-    data: options.rows,
+    data,
     columns: tableColumns,
     state: controlledState,
     onSortingChange: (u) => {

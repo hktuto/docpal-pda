@@ -1,10 +1,10 @@
 import { HTTPException } from "hono/http-exception";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import type { AppDb } from "../db.js";
 import { newId } from "./id.js";
 import { now } from "./now.js";
-import { queryAll, queryGet, type DbOrTx } from "./query.js";
+import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { receivingCnWorkflows, transactionLogs } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import {
@@ -26,6 +26,10 @@ import { docpalCnExcelWorkflowId, docpalCnPdfWorkflowId } from "../config.js";
 // ---------------------------------------------------------------------------
 
 export interface CnUploadItem {
+  /** 1-based position of the row in the sheet's item table (passes through to
+   *  the workflow's excel_result_data so downstream steps can restore the
+   *  original row order); defaulted to the array position when absent. */
+  index?: number;
   /** Wire contract: the sheet's 发货項 value (may be blank). */
   orderNo: string;
   cartonNo?: string;
@@ -95,7 +99,16 @@ export function validateCnPayload(raw: unknown): CnUploadPayload {
     if (!Number.isInteger(qty) || qty <= 0) {
       throw new HTTPException(400, { message: `invalid_payload: items[${i}].qty must be a positive integer` });
     }
+    let index: number | undefined;
+    if (rawItem.index !== undefined && rawItem.index !== null) {
+      index = typeof rawItem.index === "number" ? rawItem.index : Number(rawItem.index);
+      if (!Number.isInteger(index) || index <= 0) {
+        throw new HTTPException(400, { message: `invalid_payload: items[${i}].index must be a positive integer` });
+      }
+    }
     const item: CnUploadItem = { orderNo, partNo, qty };
+    if (index !== undefined) item.index = index;
+    else item.index = i + 1;
     for (const field of ITEM_STRING_FIELDS) {
       if (field === "partNo" || field === "orderNo") continue;
       const v = rawItem[field];
@@ -175,9 +188,9 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
         },
       },
     ],
-    excel_result_data: [{ ...input.payload }],
+    excel_result_data: [{ ...input.payload, batchNo }],
     start_user_id: input.actor.username,
-    batch_no:batchNo,
+    batch_no: batchNo,
     __system__user_creator_id: input.actor.username,
     __system__user_creator_name: input.actor.displayName,
   };
@@ -284,6 +297,8 @@ export interface CnOrderListRow {
   deliveryDate: Date | null;
   arrivedAt: Date | null;
   arrivedBy: string | null;
+  /** users.display_name of arrivedBy (NULL when unset/unknown). */
+  arrivedByName: string | null;
   putAwayStatus: string | null;
   docpalBusinessKey: string | null;
   createdDate: Date;
@@ -312,23 +327,29 @@ export interface ListCnOrdersResult {
  * on invoice_no; put-away task status alongside). `pending` lists running
  * uploads whose order hasn't synced yet (any workflow status — DocPal
  * currently never reports terminal states), newest first, not paged.
+ * `search` (trimmed) ILIKE-filters BOTH sections across batch_no / the
+ * matched workflow's invoice_no / supplier; `total` reflects the filter.
  */
 export async function listCnOrders(
   db: AppDb,
-  { page = 1, pageSize = 20 }: { page?: number; pageSize?: number } = {}
+  { page = 1, pageSize = 20, search }: { page?: number; pageSize?: number; search?: string } = {}
 ): Promise<ListCnOrdersResult> {
   const safePage = Number.isInteger(page) && page > 0 ? page : 1;
   const safePageSize = Number.isInteger(pageSize) && pageSize > 0 ? Math.min(pageSize, 200) : 20;
+  const term = search?.trim();
+  const like = term ? `%${term}%` : null;
   const rows = await queryAll<CnOrderListRow & { totalCount: number }>(
     db,
     sql`SELECT ro.batch_no AS "batchNo",
                wf.invoice_no AS "invoiceNo", wf.supplier, ro.status,
                ro.delivery_date AS "deliveryDate", ro.arrived_at AS "arrivedAt", ro.arrived_by AS "arrivedBy",
+               ua.display_name AS "arrivedByName",
                t.status AS "putAwayStatus", wf.docpal_business_key AS "docpalBusinessKey",
                ro.created_date AS "createdDate",
                COUNT(*) OVER()::int AS "totalCount"
         FROM receiving_orders_cn ro
         LEFT JOIN put_away_tasks_cn t ON t.receiving_order_cn_id = ro.id
+        LEFT JOIN users ua ON ua.id = ro.arrived_by
         LEFT JOIN LATERAL (
           SELECT invoice_no, supplier, docpal_business_key
           FROM receiving_cn_workflows
@@ -336,6 +357,10 @@ export async function listCnOrders(
              OR (batch_no IS NULL AND invoice_no = ro.batch_no)
           ORDER BY created_date DESC LIMIT 1
         ) wf ON true
+        WHERE TRUE
+        ${like ? sql`AND (ro.batch_no ILIKE ${like}
+                    OR wf.invoice_no ILIKE ${like}
+                    OR wf.supplier ILIKE ${like})` : sql``}
         ORDER BY ro.created_date DESC, ro.id
         LIMIT ${safePageSize} OFFSET ${(safePage - 1) * safePageSize}`
   );
@@ -350,6 +375,9 @@ export async function listCnOrders(
             SELECT 1 FROM receiving_orders_cn ro
             WHERE ro.batch_no = COALESCE(wf.batch_no, wf.invoice_no)
           )
+          ${like ? sql`AND (wf.batch_no ILIKE ${like}
+                      OR wf.invoice_no ILIKE ${like}
+                      OR wf.supplier ILIKE ${like})` : sql``}
         ORDER BY created_date DESC, id`
   );
   return {
@@ -374,6 +402,8 @@ export interface CnOrderDetail {
     deliveryDate: Date | null;
     arrivedAt: Date | null;
     arrivedBy: string | null;
+    /** users.display_name of arrivedBy (NULL when unset/unknown). */
+    arrivedByName: string | null;
     orgId: number;
     dateCode: string | null;
     createdDate: Date;
@@ -406,12 +436,14 @@ export interface CnOrderDetail {
 export async function getCnOrderDetail(db: AppDb, batchNo: string): Promise<CnOrderDetail> {
   const order = await queryGet<CnOrderDetail["order"]>(
     db,
-    sql`SELECT id, batch_no AS "batchNo", status, delivery_date AS "deliveryDate",
-               arrived_at AS "arrivedAt", arrived_by AS "arrivedBy",
-               org_id AS "orgId", date_code AS "dateCode", created_date AS "createdDate"
-        FROM receiving_orders_cn
-        WHERE batch_no = ${batchNo}
-        ORDER BY created_date DESC LIMIT 1`
+    sql`SELECT ro.id, ro.batch_no AS "batchNo", ro.status, ro.delivery_date AS "deliveryDate",
+               ro.arrived_at AS "arrivedAt", ro.arrived_by AS "arrivedBy",
+               ua.display_name AS "arrivedByName",
+               ro.org_id AS "orgId", ro.date_code AS "dateCode", ro.created_date AS "createdDate"
+        FROM receiving_orders_cn ro
+        LEFT JOIN users ua ON ua.id = ro.arrived_by
+        WHERE ro.batch_no = ${batchNo}
+        ORDER BY ro.created_date DESC LIMIT 1`
   );
   if (!order) throw new HTTPException(404, { message: "receiving_cn_order_not_found" });
   const invoices = await queryAll<CnOrderDetail["invoices"][number]>(
@@ -439,6 +471,200 @@ export async function getCnOrderDetail(db: AppDb, batchNo: string): Promise<CnOr
     sql`SELECT id, status FROM put_away_tasks_cn WHERE receiving_order_cn_id = ${order.id}`
   );
   return { order, invoices, items, putAway: putAway ?? null };
+}
+
+// --- order audit logs -----------------------------------------------------------------
+
+/** Reuse the standard log row/params/page shapes (src/db/receiving.ts). */
+import type { TransactionLogRow, OrderLogsParams, OrderLogsPage } from "./receiving.js";
+
+const CN_LOG_SORTS: Record<string, SQL> = {
+  createdDate: sql`tl.created_date`,
+  actorName: sql`u.display_name`,
+  toState: sql`tl.to_state`,
+};
+
+/** CN mirror of receiving.ts's logsQueryParts: `scope` scopes to one order,
+ *  `q` adds the ILIKE predicate, sort whitelist createdDate/actorName/toState. */
+function cnLogsQueryParts(params: OrderLogsParams | undefined, scope: SQL) {
+  const q = params?.q?.trim();
+  const like = `%${(q ?? "").replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+  const where = q
+    ? sql`(${scope}) AND (u.display_name ILIKE ${like} OR tl.from_state ILIKE ${like} OR tl.to_state ILIKE ${like} OR tl.entity_type ILIKE ${like} OR tl.metadata::text ILIKE ${like})`
+    : scope;
+  const col = CN_LOG_SORTS[params?.sort ?? ""] ?? CN_LOG_SORTS.createdDate;
+  const dir = params?.dir === "asc" ? sql`ASC` : sql`DESC`;
+  return { where, orderBy: sql`ORDER BY ${col} ${dir} NULLS LAST, tl.id ${dir}` };
+}
+
+/**
+ * Audit trail for one CN receiving order, mirroring listReceivingOrderLogs:
+ * order-level rows (receiving_order_cn), the order's invoice-item rows
+ * (receiving_invoice_item_cn — item edits etc., carrying the item's part no
+ * as `partNo`), and the order-referencing task/workflow rows (finalize writes
+ * put_away_task_cn + receiving_cn_workflow rows with the order id in their
+ * metadata). Newest first by default; with `params.page` set returns
+ * `{rows, total}`, otherwise the full array. 404 when the order is absent.
+ */
+export async function listCnOrderLogs(
+  db: AppDb,
+  batchNo: string,
+  params?: OrderLogsParams
+): Promise<TransactionLogRow[] | OrderLogsPage> {
+  const order = await queryGet<{ id: string }>(
+    db,
+    sql`SELECT id FROM receiving_orders_cn WHERE batch_no = ${batchNo} ORDER BY created_date DESC LIMIT 1`
+  );
+  if (!order) throw new HTTPException(404, { message: "receiving_cn_order_not_found" });
+  const { where, orderBy } = cnLogsQueryParts(
+    params,
+    sql`(tl.entity_type = 'receiving_order_cn' AND tl.entity_id = ${order.id})
+        OR (tl.entity_type = 'receiving_invoice_item_cn' AND tl.entity_id IN (
+              SELECT rii.id FROM receiving_invoice_items_cn rii
+              JOIN receiving_invoices_cn ri ON ri.id = rii.receiving_invoice_id
+              WHERE ri.receiving_order_id = ${order.id}))
+        OR (tl.entity_type = 'put_away_task_cn' AND tl.metadata->>'receivingOrderCnId' = ${order.id})
+        OR (tl.entity_type = 'receiving_cn_workflow' AND tl.metadata->>'receivingOrderCnId' = ${order.id})`
+  );
+  const from = sql`FROM transaction_logs tl
+        LEFT JOIN users u ON u.id = tl.actor_id
+        LEFT JOIN receiving_invoice_items_cn rii
+          ON tl.entity_type = 'receiving_invoice_item_cn' AND rii.id = tl.entity_id
+        WHERE ${where}`;
+  const select = sql`SELECT tl.id, tl.entity_type AS "entityType", tl.entity_id AS "entityId",
+               tl.from_state AS "fromState", tl.to_state AS "toState",
+               tl.actor_id AS "actorId", u.display_name AS "actorName",
+               rii.part_no AS "partNo",
+               tl.metadata, tl.created_date AS "createdDate"`;
+  if (params?.page !== undefined) {
+    const page = Math.max(1, params.page);
+    const pageSize = Math.min(200, Math.max(1, params.pageSize ?? 50));
+    const [rows, count] = await Promise.all([
+      queryAll<TransactionLogRow & { partNo: string | null }>(
+        db,
+        sql`${select} ${from} ${orderBy} LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`
+      ),
+      queryGet<{ total: number }>(db, sql`SELECT COUNT(*)::int AS total ${from}`),
+    ]);
+    return { rows, total: count?.total ?? 0 };
+  }
+  return queryAll<TransactionLogRow & { partNo: string | null }>(db, sql`${select} ${from} ${orderBy}`);
+}
+
+// --- admin item edit ----------------------------------------------------------------
+
+/** Editable fields on a CN receiving invoice item (camelCase → column) —
+ *  mirrors the standard flow's RECEIVING_ITEM_FIELDS
+ *  (src/db/adminedits.ts). */
+const CN_ITEM_FIELDS = {
+  dateCode: "date_code",
+  lotCode: "lot_code",
+  coo: "coo",
+  cow: "cow",
+  ctnNo: "ctn_no",
+} as const;
+
+export type CnItemField = keyof typeof CN_ITEM_FIELDS;
+
+export interface CnItemRow {
+  id: string;
+  receivingInvoiceId: string;
+  invoiceNo: string | null;
+  partNo: string;
+  wclItemNo: string | null;
+  poNo: string | null;
+  lineQty: number | null;
+  receivedQty: number;
+  putAwayQty: number;
+  ctnNo: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  orgId: number;
+  subInventoryCode: string | null;
+}
+
+const CN_ITEM_SELECT = sql`SELECT rii.id, rii.receiving_invoice_id AS "receivingInvoiceId", ri.invoice_no AS "invoiceNo",
+               rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo", rii.po_no AS "poNo", rii.line_qty AS "lineQty",
+               rii.received_qty AS "receivedQty", rii.put_away_qty AS "putAwayQty",
+               rii.ctn_no AS "ctnNo", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
+               rii.coo, rii.cow, rii.org_id AS "orgId", rii.sub_inventory_code AS "subInventoryCode"
+        FROM receiving_invoice_items_cn rii
+        LEFT JOIN receiving_invoices_cn ri ON ri.id = rii.receiving_invoice_id`;
+
+/** Set (or clear with null) editable fields on one CN receiving invoice item.
+ *  One tx; one transaction_logs audit row per actually-changed field
+ *  (to_state "admin_edit", metadata field/from/to — same pattern as the
+ *  standard updateReceivingItemFields). `subInventory` validates the value
+ *  against the item's org pair in org_info (the composite FK target);
+ *  null/"" clears the nullable column. Returns the updated item row. */
+export async function updateCnReceivingItemFields(
+  db: AppDb,
+  input: {
+    itemId: string;
+    fields: Partial<Record<CnItemField, string | null>>;
+    actorId: string | null;
+    subInventory?: string | null;
+  }
+): Promise<CnItemRow> {
+  const keys = (Object.keys(CN_ITEM_FIELDS) as CnItemField[]).filter((k) => k in input.fields);
+  const hasSubInventory = input.subInventory !== undefined;
+  if (keys.length === 0 && !hasSubInventory) throw new HTTPException(400, { message: "no_fields" });
+  const existing = await queryGet<Record<string, string | null> & { partNo: string; wclItemNo: string | null; orgId: number }>(
+    db,
+    sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo", org_id AS "orgId",
+               date_code AS "dateCode", lot_code AS "lotCode", coo, cow, ctn_no AS "ctnNo",
+               sub_inventory_code AS "subInventoryCode"
+        FROM receiving_invoice_items_cn WHERE id = ${input.itemId}`
+  );
+  if (!existing) throw new HTTPException(404, { message: "receiving_cn_item_not_found" });
+  if (input.subInventory !== null && input.subInventory !== undefined) {
+    const pair = await queryGet<{ n: number }>(
+      db,
+      sql`SELECT COUNT(*)::int AS n FROM org_info
+          WHERE org_id = ${existing.orgId} AND secondary_inventory_name = ${input.subInventory}`
+    );
+    if (!pair?.n) throw new HTTPException(400, { message: "invalid_sub_inventory" });
+  }
+  const itemMeta: Record<string, unknown> = { partNo: existing.partNo };
+  if (existing.wclItemNo) itemMeta.wclItemNo = existing.wclItemNo;
+
+  await db.transaction(async (tx) => {
+    await queryRun(
+      tx,
+      sql`UPDATE receiving_invoice_items_cn SET ${sql.join(
+        [
+          ...keys.map((k) => sql`${sql.raw(CN_ITEM_FIELDS[k])} = ${input.fields[k] ?? null}`),
+          ...(hasSubInventory ? [sql`sub_inventory_code = ${input.subInventory ?? null}`] : []),
+        ],
+        sql`, `
+      )}, last_update_date = ${now()} WHERE id = ${input.itemId}`
+    );
+    const auditEntries: { field: string; from: string | null; to: string | null }[] = keys.map((k) => ({
+      field: CN_ITEM_FIELDS[k],
+      from: existing[k],
+      to: input.fields[k] ?? null,
+    }));
+    if (hasSubInventory) {
+      auditEntries.push({ field: "sub_inventory_code", from: existing.subInventoryCode, to: input.subInventory ?? null });
+    }
+    for (const entry of auditEntries) {
+      if (entry.from === entry.to) continue;
+      await tx.insert(transactionLogs).values({
+        id: newId(),
+        entityType: "receiving_invoice_item_cn",
+        entityId: input.itemId,
+        fromState: null,
+        toState: "admin_edit",
+        actorId: input.actorId,
+        metadata: { ...itemMeta, field: entry.field, from: entry.from, to: entry.to },
+        createdDate: now(),
+      });
+    }
+  });
+  const row = await queryGet<CnItemRow>(db, sql`${CN_ITEM_SELECT} WHERE rii.id = ${input.itemId}`);
+  return row!;
 }
 
 // --- finalize (cron) ----------------------------------------------------------

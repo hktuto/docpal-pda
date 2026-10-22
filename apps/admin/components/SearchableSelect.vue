@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useAnchoredPanel } from "~/composables/useAnchoredPanel";
+
 export interface SearchableSelectOption {
   value: string;
   label: string;
@@ -35,7 +37,13 @@ const { t } = useI18n();
 const open = ref(false);
 const query = ref("");
 const rootRef = ref<HTMLElement | null>(null);
+const panelRef = ref<HTMLElement | null>(null);
 const searchRef = ref<HTMLInputElement | null>(null);
+
+// The panel teleports to <body> (a select inside a table cell would be
+// clipped by the cell's overflow) and tracks the toggle's viewport position
+// while open.
+const { panelStyle } = useAnchoredPanel(rootRef, open);
 
 const selectedValues = computed<string[]>(() =>
   props.multiple
@@ -103,7 +111,11 @@ function clearAll() {
 }
 
 function onDocumentClick(event: MouseEvent) {
-  if (rootRef.value && !rootRef.value.contains(event.target as Node)) open.value = false;
+  const target = event.target as Node;
+  // The panel is teleported to <body> — a click inside it (e.g. its search
+  // box) is outside rootRef.
+  if (rootRef.value?.contains(target) || panelRef.value?.contains(target)) return;
+  open.value = false;
 }
 watch(open, (v) => {
   if (v) document.addEventListener("click", onDocumentClick);
@@ -126,40 +138,42 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocumentClick));
       <span class="ssel-label">{{ buttonLabel }}</span>
       <span class="ssel-caret">▾</span>
     </button>
-    <div v-if="open" class="ssel-panel" @keydown.escape="open = false">
-      <input
-        ref="searchRef"
-        v-model="query"
-        class="ssel-search"
-        :placeholder="t('admin.common.filterPlaceholder')"
-      />
-      <div class="ssel-list">
-        <div v-if="showAll" class="ssel-item" :class="{ selected: isAll }" @click="clearAll">
-          {{ allLabel }}
-          <span v-if="isAll" class="ssel-check">✓</span>
+    <Teleport to="body">
+      <div v-if="open" ref="panelRef" :style="panelStyle" class="ssel-panel" @keydown.escape="open = false">
+        <input
+          ref="searchRef"
+          v-model="query"
+          class="ssel-search"
+          :placeholder="t('admin.common.filterPlaceholder')"
+        />
+        <div class="ssel-list">
+          <div v-if="showAll" class="ssel-item" :class="{ selected: isAll }" @click="clearAll">
+            {{ allLabel }}
+            <span v-if="isAll" class="ssel-check">✓</span>
+          </div>
+          <template v-for="(g, gi) in filteredGroups" :key="gi">
+            <div v-if="g.label !== null" class="ssel-group">{{ g.label }}</div>
+            <label
+              v-for="o in g.items"
+              :key="o.value"
+              class="ssel-item"
+              :class="{ selected: selectedSet.has(o.value) }"
+              @click="!multiple && pick(o.value)"
+            >
+              <input
+                v-if="multiple"
+                type="checkbox"
+                :checked="selectedSet.has(o.value)"
+                @change="pick(o.value)"
+              />
+              <span class="ssel-item-label">{{ o.label }}</span>
+              <span v-if="!multiple && selectedSet.has(o.value)" class="ssel-check">✓</span>
+            </label>
+          </template>
+          <div v-if="filtered.length === 0" class="ssel-item muted">{{ t("admin.common.noRecords") }}</div>
         </div>
-        <template v-for="(g, gi) in filteredGroups" :key="gi">
-          <div v-if="g.label !== null" class="ssel-group">{{ g.label }}</div>
-          <label
-            v-for="o in g.items"
-            :key="o.value"
-            class="ssel-item"
-            :class="{ selected: selectedSet.has(o.value) }"
-            @click="!multiple && pick(o.value)"
-          >
-            <input
-              v-if="multiple"
-              type="checkbox"
-              :checked="selectedSet.has(o.value)"
-              @change="pick(o.value)"
-            />
-            <span class="ssel-item-label">{{ o.label }}</span>
-            <span v-if="!multiple && selectedSet.has(o.value)" class="ssel-check">✓</span>
-          </label>
-        </template>
-        <div v-if="filtered.length === 0" class="ssel-item muted">{{ t("admin.common.noRecords") }}</div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -201,11 +215,8 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocumentClick));
   color: #52606d;
 }
 .ssel-panel {
-  position: absolute;
-  top: calc(100% + 0.25rem);
-  left: 0;
+  position: fixed;
   z-index: 30;
-  min-width: 100%;
   width: max-content;
   max-width: 21.25rem;
   background: #fff;

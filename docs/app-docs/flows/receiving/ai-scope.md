@@ -269,8 +269,11 @@
 - `apps/admin/pages/receiving-cn/index.vue` +
   `apps/admin/pages/receiving-cn/new.vue` +
   `apps/admin/utils/cnReceivingExcel.ts` +
-  `apps/admin/components/receiving-cn/CnItemEditModal.vue` — admin CN
-  tracking list and the upload → verify/edit → submit wizard.
+  `apps/admin/components/receiving-cn/ReceivingCnPartNoSelect.vue` — admin CN
+  tracking list and the 2-step upload → verify/edit wizard (inline cell
+  editing; confirming uploads the file + verified JSON and starts the DocPal
+  workflow; each item carries a 1-based `index` = its excel row order, passed
+  through to the workflow payload).
 
 ## Known limitations
 

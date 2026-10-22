@@ -13,6 +13,7 @@ const { t } = useI18n();
 const rows = ref<CnMergedRow[]>([]);
 const loading = ref(false);
 const error = ref("");
+const search = ref("");
 
 const columnDefs = computed<AdminColumnDef<CnMergedRow>[]>(() => [
   { key: "batchNo", label: t("admin.pages.receivingCn.batchNo"), size: 160 },
@@ -56,8 +57,9 @@ const pageSize = computed({
   },
 });
 
-// URL query params keep pagination across navigation.
+// URL query params keep search/pagination across navigation.
 useUrlQueryState({
+  search: { state: search, defaultValue: "" },
   page: { state: page, defaultValue: 1, parse: parsePositiveInt(1) },
   pageSize: { state: pageSize, defaultValue: 50, parse: parsePositiveInt(50) },
 });
@@ -67,6 +69,7 @@ async function load() {
   error.value = "";
   try {
     const res = await flow.listCnOrders({
+      search: search.value.trim() || undefined,
       page: pagination.value.pageIndex + 1,
       pageSize: pagination.value.pageSize,
     });
@@ -80,6 +83,23 @@ async function load() {
 }
 
 watch(pagination, load);
+
+// Search/filter changes reload from page 1 (300 ms debounce, same as the
+// standard receiving list).
+function resetPageAndLoad() {
+  if (pagination.value.pageIndex !== 0) {
+    pagination.value = { ...pagination.value, pageIndex: 0 };
+  } else {
+    load();
+  }
+}
+
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+watch(search, () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(resetPageAndLoad, 300);
+});
+
 onMounted(load);
 
 // Reload when a workflow the cron tracks reaches a terminal state (SSE) —
@@ -117,6 +137,10 @@ function putAwayStatusClass(s: string): string {
           {{ $t("admin.pages.receivingCn.newUpload") }}
         </button>
       </div>
+    </div>
+
+    <div class="filters">
+      <input v-model="search" :placeholder="$t('admin.pages.receivingCn.searchPlaceholder')" />
     </div>
 
     <p v-if="rows.some((r) => r.kind === 'pending')" class="hint-text">
@@ -177,6 +201,15 @@ function putAwayStatusClass(s: string): string {
 .head-actions {
   display: flex;
   gap: 0.625rem;
+}
+.filters {
+  display: flex;
+  gap: 0.625rem;
+  margin-bottom: 0.75rem;
+}
+.filters input {
+  flex: 1;
+  max-width: 24rem;
 }
 .hint-text {
   margin: 0 0 0.5rem;

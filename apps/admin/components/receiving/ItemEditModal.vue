@@ -1,13 +1,36 @@
 <script setup lang="ts">
-import type { ReceivingItemRow } from "~/utils/flowApi";
+// Edit modal for receiving invoice items (standard + CN receiving). One item
+// = single edit (all fields submitted, so blanks clear); multiple items =
+// batch edit (only non-blank fields are applied, blanks leave the existing
+// values unchanged). The item type is the structural subset the modal
+// actually reads — both ReceivingItemRow and the CN order item satisfy it.
+export interface ItemEditTarget {
+  id: string;
+  partNo: string;
+  wclItemNo: string | null;
+  poNo: string | null;
+  poLine: string | null;
+  lineQty: number | null;
+  receivedQty: number;
+  dateCode?: string | null;
+  lotCode?: string | null;
+  coo?: string | null;
+  cow?: string | null;
+  ctnNo?: string | null;
+  subInventoryCode?: string | null;
+  mismatch?: { reason: string | null; mismatchQty: number | null; wrongPartNo: string | null; note: string | null } | null;
+}
 
-// Edit modal for receiving invoice items. One item = single edit (all fields
-// submitted, so blanks clear); multiple items = batch edit (only non-blank
-// fields are applied, blanks leave the existing values unchanged).
-const props = defineProps<{ items: ReceivingItemRow[]; saving: boolean }>();
+const props = defineProps<{
+  items: ItemEditTarget[];
+  saving: boolean;
+  /** When provided, a sub-inventory dropdown joins the form (CN receiving).
+   *  Callers without options (standard receiving) get the plain text fields. */
+  subInventoryOptions?: { value: string; label: string }[];
+}>();
 const emit = defineEmits<{
   close: [];
-  save: [fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo", string | null>>];
+  save: [fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "subInventory", string | null>>];
 }>();
 
 const { t } = useI18n();
@@ -21,6 +44,7 @@ const lotCode = ref("");
 const coo = ref("");
 const cow = ref("");
 const ctnNo = ref("");
+const subInventory = ref("");
 
 watch(
   () => props.items,
@@ -31,6 +55,7 @@ watch(
     coo.value = it?.coo ?? "";
     cow.value = it?.cow ?? "";
     ctnNo.value = it?.ctnNo ?? "";
+    subInventory.value = it?.subInventoryCode ?? "";
   },
   { immediate: true }
 );
@@ -49,6 +74,13 @@ function submit() {
     // Batch mode skips blanks (keep unchanged); single mode sends null to clear.
     if (batch.value && trimmed === "") continue;
     fields[k] = trimmed === "" ? null : trimmed;
+  }
+  // Sub-inventory (dropdown, only rendered when options are provided): single
+  // mode sends the selection — empty clears; batch mode only sends a chosen
+  // value (empty = leave unchanged).
+  if (props.subInventoryOptions) {
+    if (!batch.value) fields.subInventory = subInventory.value === "" ? null : subInventory.value;
+    else if (subInventory.value !== "") fields.subInventory = subInventory.value;
   }
   emit("save", fields);
 }
@@ -113,6 +145,17 @@ function applyDateCode(offsetWeeks: number) {
         <div class="form-row">
           <label for="ie-ctn">{{ $t("admin.pages.receiving.ctnNo") }}</label>
           <input id="ie-ctn" v-model="ctnNo" type="text" />
+        </div>
+        <div v-if="subInventoryOptions" class="form-row">
+          <label for="ie-subinv">{{ $t("admin.pages.receivingCn.itemsTable.subInventory") }}</label>
+          <SearchableSelect
+            v-model="subInventory"
+            :options="subInventoryOptions"
+            :all-label="$t('admin.pages.receivingCn.itemsTable.subInventory')"
+            :aria-label="$t('admin.pages.receivingCn.itemsTable.subInventory')"
+            :multiple="false"
+            :show-all="false"
+          />
         </div>
         <div class="dialog-actions">
           <button type="button" class="btn" @click="emit('close')">{{ $t("admin.common.cancel") }}</button>

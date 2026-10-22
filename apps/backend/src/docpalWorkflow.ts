@@ -113,8 +113,9 @@ export async function startProcess(
       body
     }
   );
-  console.log("workflow response",data)
+
   if (typeof data !== "object" || data === null || typeof (data as { id?: unknown }).id !== "string") {
+    console.log("error request", data)
     throw new HTTPException(502, { message: "docpal_workflow: process start response missing data.id" });
   }
   return data as StartedProcess;

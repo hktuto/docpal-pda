@@ -810,6 +810,8 @@ export interface CnOrderRow {
   deliveryDate: string | null;
   arrivedAt: string | null;
   arrivedBy: string | null;
+  /** Display name of arrivedBy when resolvable from the users row. */
+  arrivedByName: string | null;
   /** put_away_tasks_cn.status, null when no task exists yet. */
   putAwayStatus: "pending" | "completed" | null;
   docpalBusinessKey: string | null;
@@ -865,6 +867,7 @@ export interface CnOrderDetail {
     deliveryDate: string | null;
     arrivedAt: string | null;
     arrivedBy: string | null;
+    arrivedByName: string | null;
     orgId: number;
     dateCode: string | null;
     createdDate: string;
@@ -1192,9 +1195,11 @@ export function useFlowApi() {
 
     // Customer receiving (CN) orders — the synced receiving_orders_cn world.
     // The list merges still-running workflow uploads (pending[]) above the
-    // paged order rows; total counts order rows only.
-    listCnOrders: (params: { page?: number; pageSize?: number } = {}) => {
+    // paged order rows; total counts order rows only. `search` ILIKE-matches
+    // batch no / 編號 / supplier across both rows and pending.
+    listCnOrders: (params: { page?: number; pageSize?: number; search?: string } = {}) => {
       const qs = new URLSearchParams();
+      if (params.search) qs.set("search", params.search);
       if (params.page !== undefined) qs.set("page", String(params.page));
       if (params.pageSize !== undefined) qs.set("pageSize", String(params.pageSize));
       const s = qs.toString();
@@ -1202,6 +1207,17 @@ export function useFlowApi() {
     },
     getCnOrder: (batchNo: string) =>
       api.get<CnOrderDetail>(`/admin/receiving-cn/orders/${encodeURIComponent(batchNo)}`),
+    // CN receiving item edit: subset of { dateCode, lotCode, coo, cow, ctnNo,
+    // subInventory } (null/"" clears, absent = unchanged). 400 when no known
+    // keys present; 404 receiving_cn_item_not_found.
+    updateCnItem: (
+      id: string,
+      fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "subInventory", string | null>>
+    ) => api.patch<CnOrderItemRow>(`/admin/receiving-cn/items/${id}`, fields),
+    // CN order audit log — same page/search/sort convention as the standard
+    // receiving order logs.
+    listCnOrderLogs: (batchNo: string, params: OrderLogsParams) =>
+      api.get<OrderLogsPage>(`/admin/receiving-cn/orders/${encodeURIComponent(batchNo)}/logs${logsQuery(params)}`),
 
     // Issues (actor comes from the JWT — the backend ignores any body actorId)
     listReceivingMismatches: () => api.get<MismatchListRow[]>("/admin/receiving-mismatches"),
