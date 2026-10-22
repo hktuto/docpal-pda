@@ -95,4 +95,21 @@ describe('useFlowSteps putAway config', () => {
     await loadFlowSteps();
     expect(dateCodeFormat.value).toBe('yyww');
   });
+
+  it('defaults cnReceiving to false and adopts the resolved value', async () => {
+    getFlowConfigMock.mockResolvedValue({ flowSteps: {}, cnReceiving: true });
+    const { cnReceiving, loadFlowSteps } = await freshUseFlowSteps();
+
+    expect(cnReceiving.value).toBe(false); // default before fetch
+    await loadFlowSteps();
+    expect(cnReceiving.value).toBe(true);
+  });
+
+  it('keeps cnReceiving off when the backend omits the key', async () => {
+    getFlowConfigMock.mockResolvedValue({ flowSteps: {} });
+    const { cnReceiving, loadFlowSteps } = await freshUseFlowSteps();
+
+    await loadFlowSteps();
+    expect(cnReceiving.value).toBe(false);
+  });
 });

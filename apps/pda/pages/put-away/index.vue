@@ -55,7 +55,7 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
-const { putAwayConfig, loadFlowSteps } = useFlowSteps();
+const { putAwayConfig, cnReceiving, loadFlowSteps } = useFlowSteps();
 // Row title/meta/chip come from the warehouse's pdaViewConfig flow config
 // (spec 2026-10-04-pda-app-rewrite-design.md); tasks and candidates share the
 // put-away list config. On a backend without the key the legacy listTemplates
@@ -87,15 +87,21 @@ const error = ref<string | null>(null);
 const candidates = ref<PutAwayCandidate[]>([]);
 const tasks = ref<PutAwayTaskListRow[]>([]);
 
+// CN customer-receiving mode: the CN flow only has the task queue (the CN
+// finalize cron creates one pending task per order), so the list source is
+// always the CN task list regardless of putAway.autoCreateTasks.
+const cnMode = computed(() => cnReceiving.value);
 // Task-queue mode: the backend auto-creates one put-away task per receiving
 // order (putAway.autoCreateTasks); otherwise the derived candidates list.
-const taskMode = computed(() => putAwayConfig.value.autoCreateTasks);
+const taskMode = computed(() => cnMode.value || putAwayConfig.value.autoCreateTasks);
 
 async function load() {
   try {
     // Make sure the config is resolved before picking the list source.
     await loadFlowSteps();
-    if (taskMode.value) {
+    if (cnMode.value) {
+      tasks.value = await warehouse.listCnPutAwayTasks("pending");
+    } else if (taskMode.value) {
       tasks.value = await warehouse.listPutAwayTasks("pending");
     } else {
       candidates.value = await warehouse.getPutAwayCandidates();

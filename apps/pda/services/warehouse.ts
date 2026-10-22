@@ -23,6 +23,7 @@ import type {
   PutAwayTaskDetail,
   PutAwayTaskListRow,
   PutAwayScanResult,
+  CnPutAwayCompleteItem,
   ScanPickingItemResult,
   ScanIntoShippingBoxResult,
   Shelf,
@@ -159,6 +160,21 @@ export interface WarehouseService {
   /** Reverse a committed scan: the stock leaves the shelf (lot + ledger
    *  reversal); 409 lot_has_pick_allocations when the lot feeds picks. */
   removePutAwayScanFromShelf(scanId: string, boxId: string): Promise<void>;
+
+  // CN put-away (docs/backend/api-design.md §CN put-away) — served by
+  // /put-away-cn/* while the flow config's cnReceiving flag is on (every
+  // endpoint 404s when off). Normalized onto the standard put-away task
+  // types above so the put-away pages stay one UI: the task list/detail
+  // feed the same rows/aggregate; completion is one batch call per task
+  // (the CN world has no per-scan staging, so the PDA holds the in-progress
+  // pieces locally and posts them on confirm — same pattern as ad-hoc
+  // put-away).
+  listCnPutAwayTasks(status?: string): Promise<PutAwayTaskListRow[]>;
+  getCnPutAwayTaskDetail(id: string): Promise<PutAwayTaskDetail>;
+  completeCnPutAwayTask(
+    taskId: string,
+    items: CnPutAwayCompleteItem[]
+  ): Promise<{ taskCompleted: boolean }>;
 
   // Measuring — box-scoped (no tasks): the list is the open boxes with
   // ≥1 package whose picking orders are ALL picking-complete (the order's

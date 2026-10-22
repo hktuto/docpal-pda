@@ -24,6 +24,19 @@
         @remove-scan="removeScanHandler"
         @remove-from-shelf="removeScanFromShelfHandler"
       />
+
+      <!-- CN put-away: the CN world has no per-scan staging endpoint, so the
+           scanned pieces live locally and post in one batch on confirm. -->
+      <div v-if="cnMode && scans.length" class="cn-commit">
+        <button
+          type="button"
+          class="btn btn--primary"
+          :disabled="committingAll"
+          @click="commitCn"
+        >
+          {{ $t('putAway.cn.commit', { count: cnPendingQty }) }}
+        </button>
+      </div>
     </template>
 
       <ScanMultiItemModal
@@ -64,6 +77,8 @@ import { I18nError } from "~/composables/i18nError";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import {
   captureLabel,
+  getCachedSupplierQrTemplates,
+  getCachedDateCodePeriods,
   ocrResultToInput,
   useLabelScan,
   type LabelScanResult,
@@ -72,13 +87,15 @@ import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
 import { scrollToItem } from "~/utils/scroll";
 import { rawCode } from "~/utils/text";
-import { findPutAwayTargets } from "~/utils/putAwayScan";
+import { findCnPutAwayTargets, findPutAwayTargets } from "~/utils/putAwayScan";
 import {
   groupPutAwayItems,
   type PutAwayItemGroup,
 } from "~/utils/putAwayGroups";
 import {
   extractMultiItemRows,
+  parseQrCapture,
+  parseAndIdentify,
   type ScanMultiRow,
   type ScanMultiRowResult,
 } from "~/utils/parseOcrScan";
@@ -88,8 +105,10 @@ import ScanMultiItemModal from "~/components/ScanMultiItemModal.vue";
 import PutAwayLotsPanel from "~/components/put-away/PutAwayLotsPanel.vue";
 import { viewListRow } from "~/utils/viewConfig";
 import type {
+  CnPutAwayCompleteItem,
   PutAwayExpectedItem,
   PutAwayScan,
+  PutAwayTaskDetail,
   Shelf,
   ReceivingOrderDetail,
 } from "~/services/types";
@@ -164,14 +183,27 @@ usePageHeader({
 
 const warehouse = useWarehouse();
 const { viewConfig } = useViewConfig();
+const { cnReceiving } = useFlowSteps();
+
+// CN customer-receiving mode: the detail reads the CN task aggregate
+// (/put-away-cn/tasks/:id, normalized onto the standard types) and scanned
+// pieces accumulate LOCALLY — the CN world has no per-scan staging
+// endpoint; they post in one batch on confirm (same pattern as ad-hoc
+// put-away).
+const cnMode = computed(() => cnReceiving.value);
 
 const pending = ref(true);
 const error = ref<string | null>(null);
 const order = ref<ReceivingOrderDetail | null>(null);
 const items = ref<PutAwayExpectedItem[]>([]);
 const shelves = ref<Shelf[]>([]);
-// scans[] are the order's PENDING pieces (never committed to a shelf yet).
+// scans[] are the order's PENDING pieces. Standard mode: the unstaged scans
+// from the put-away aggregate. CN mode: the locally staged pieces awaiting
+// the batch confirm (kept across reloads; cleared on commit).
 const scans = ref<PutAwayScan[]>([]);
+// CN duplicate-serial guard (the standard path's check is backend-side).
+const cnSeenSerials = ref<Set<string>>(new Set());
+let cnLocalSeq = 0;
 
 const scanItem = ref<PutAwayExpectedItem | null>(null);
 // The group card the OCR review was opened from — its member lines ride in
@@ -194,17 +226,32 @@ useSupplierSymbologyScope(computed(() => order.value?.supplier?.code ?? undefine
 const stagedQtyByItem = computed(() => {
   const map: Record<string, number> = {};
   for (const scan of scans.value) {
-    if (!scan.receivingInvoiceItemId || scan.shelfCode) continue;
+    if (!scan.receivingInvoiceItemId) continue;
+    // CN pieces always carry a shelf (shelf-first flow) but still count as
+    // staged until the batch confirm posts them.
+    if (!cnMode.value && scan.shelfCode) continue;
     map[scan.receivingInvoiceItemId] =
       (map[scan.receivingInvoiceItemId] ?? 0) + scan.qty;
   }
   return map;
 });
 
+// CN items' server remainingQty is net of nothing local — subtract the
+// locally staged pieces so the display and the scan matcher see the truth
+// (the standard path gets the same netted value server-side).
+const matchItems = computed<PutAwayExpectedItem[]>(() => {
+  if (!cnMode.value) return items.value;
+  const staged = stagedQtyByItem.value;
+  return items.value.map((it) => {
+    const s = staged[it.id] ?? 0;
+    return s > 0 ? { ...it, remainingQty: Math.max(0, it.remainingQty - s) } : it;
+  });
+});
+
 // Same visibility rule as the old lots list: items with anything left to put
 // away, or with scans still pending.
 const visibleItems = computed(() =>
-  items.value.filter(
+  matchItems.value.filter(
     (item) =>
       item.remainingQty > 0 || (stagedQtyByItem.value[item.id] ?? 0) > 0
   )
@@ -288,6 +335,18 @@ useHardwareScanner({
       );
       const parsed = ocrResultToInput(parsedResult.parsed);
       const qty = typeof parsed.qty === "number" ? parsed.qty : Number(parsed.qty);
+      // CN mode: stage the piece locally (shelf-first, no server write until
+      // the batch confirm). Matching mirrors the standard flow but also
+      // accepts the CN item's carton number as the scanned identity.
+      if (cnMode.value) {
+        return handleCnItemScan(parsed.partNo, parsed.wclItemNo, qty, {
+          dateCode: parsed.dateCode,
+          lotCode: parsed.lotCode,
+          coo: parsed.coo,
+          cow: parsed.cow,
+          serialNo: parsed.serialNo,
+        });
+      }
       // Item-first (armed) mode: match strictly against the armed part
       // group's lines. One label's qty may span several same-part lines —
       // the scan is split FIFO into one write per line.
@@ -356,6 +415,9 @@ useHardwareScanner({
 async function selectShelf(code: string) {
   selectedShelf.value = code;
   showToast(t("putAway.shelfSelected", { shelf: code }));
+  // CN: pieces carry the shelf they were scanned on and post via the batch
+  // confirm button — no per-shelf commit prompt.
+  if (cnMode.value) return;
   if (scans.value.length === 0) return;
   const total = scans.value.reduce((sum, s) => sum + s.qty, 0);
   const confirmed = window.confirm(
@@ -363,6 +425,134 @@ async function selectShelf(code: string) {
   );
   if (!confirmed) return;
   await commitPendingToShelf(code);
+}
+
+// --- CN put-away (cnReceiving flow) -----------------------------------------
+// The CN world has no per-scan staging endpoint: scanned pieces accumulate in
+// scans[] locally (shelf-first — a shelf must be sticky before item scans)
+// and post in one batch via POST /put-away-cn/tasks/:id/complete.
+
+/** Stage one scanned label's portions onto the locally pending list. */
+function addCnPieces(
+  portions: { item: PutAwayExpectedItem; qty: number }[],
+  batch: { dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null; serialNo: string | null }
+) {
+  for (const [idx, portion] of portions.entries()) {
+    scans.value.push({
+      id: `cn-${++cnLocalSeq}`,
+      receivingInvoiceItemId: portion.item.id,
+      partNo: portion.item.partNo,
+      wclItemNo: portion.item.wclItemNo,
+      qty: portion.qty,
+      dateCode: batch.dateCode,
+      lotCode: batch.lotCode,
+      coo: batch.coo,
+      cow: batch.cow,
+      // The CN complete call is per item + shelf; a scanned physical box QR
+      // could ride here later — CN boxes are plain text, no entities.
+      shelfCode: selectedShelf.value,
+      boxId: null,
+    });
+    // The label's serial rides on the first split portion only (same rule as
+    // the standard path's backend-side dedup).
+    if (idx === 0 && batch.serialNo) cnSeenSerials.value.add(batch.serialNo);
+  }
+}
+
+/**
+ * Hardware-scan entry point in CN mode: match the parsed label against the
+ * (armed) visible items — part keys or the item's carton number — with the
+ * standard COO/COW guard, then stage the piece locally.
+ */
+async function handleCnItemScan(
+  partNo: string,
+  wclItemNo: string | undefined,
+  qty: number,
+  batch: { dateCode: string; lotCode: string; coo: string; cow: string; serialNo: string | undefined }
+): Promise<boolean> {
+  if (!selectedShelf.value) {
+    showToast(t("putAway.cn.shelfRequired"));
+    return false;
+  }
+  const portions = findCnPutAwayTargets(
+    armedGroupItems.value,
+    partNo,
+    qty,
+    wclItemNo
+  );
+  if (!portions) {
+    showToast(t("errors.scanned_part_does_not_match_item"));
+    return false;
+  }
+  // COO/COW check: when the receiving item has a value, the scan must match.
+  for (const portion of portions) {
+    const cooErr = checkBatchAttr("coo", portion.item.coo, batch.coo);
+    if (cooErr) {
+      showToast(t(cooErr, { scanned: batch.coo, expected: portion.item.coo }));
+      return false;
+    }
+    const cowErr = checkBatchAttr("cow", portion.item.cow, batch.cow);
+    if (cowErr) {
+      showToast(t(cowErr, { scanned: batch.cow, expected: portion.item.cow }));
+      return false;
+    }
+  }
+  const serial = rawCode(batch.serialNo);
+  if (serial && cnSeenSerials.value.has(serial)) {
+    showToast(t("adHocPutAway.duplicateSerial", { serialNo: serial }));
+    return false;
+  }
+  addCnPieces(portions, {
+    dateCode: rawCode(batch.dateCode),
+    lotCode: rawCode(batch.lotCode),
+    coo: rawCode(batch.coo),
+    cow: rawCode(batch.cow),
+    serialNo: serial,
+  });
+  showToast(t("common.scanSuccess"));
+  const hitGroup = groups.value.find((g) =>
+    g.items.some((i) => i.id === portions[0].item.id)
+  );
+  scrollTargetGroupKey.value = hitGroup?.key ?? null;
+  return true;
+}
+
+const cnPendingQty = computed(() =>
+  scans.value.reduce((sum, s) => sum + s.qty, 0)
+);
+
+// Batch-confirm the locally staged CN pieces: one backend tx (per-item
+// put_away_qty updates + on-hand lot upserts + PUT_AWAY ledger rows); the
+// task completes when every item is fully put away.
+async function commitCn() {
+  if (!cnMode.value || !taskId || committingAll.value || scans.value.length === 0) return;
+  const confirmed = window.confirm(
+    t("putAway.cn.commitPrompt", { count: cnPendingQty.value })
+  );
+  if (!confirmed) return;
+  committingAll.value = true;
+  error.value = null;
+  try {
+    const itemsPayload: CnPutAwayCompleteItem[] = scans.value.map((s) => ({
+      itemId: s.receivingInvoiceItemId!,
+      qty: s.qty,
+      shelfCode: s.shelfCode!,
+      boxId: s.boxId,
+    }));
+    const result = await warehouse.completeCnPutAwayTask(taskId, itemsPayload);
+    showToast(
+      result.taskCompleted
+        ? t("putAway.cn.taskDone")
+        : t("putAway.cn.commitDone", { count: cnPendingQty.value })
+    );
+    scans.value = [];
+    cnSeenSerials.value.clear();
+    await load();
+  } catch (e) {
+    showToast(errorMessage(e));
+  } finally {
+    committingAll.value = false;
+  }
 }
 
 // Commit pending scans onto a shelf (all of them, or the given scanIds for
@@ -408,6 +598,11 @@ function toggleArmScan(group: PutAwayItemGroup) {
 
 // Hard-delete a pending scan (mis-scan correction).
 async function removeScanHandler(scanId: string) {
+  // CN: the piece is local-only — dropping it needs no server round-trip.
+  if (cnMode.value) {
+    scans.value = scans.value.filter((s) => s.id !== scanId);
+    return;
+  }
   removingScan.value[scanId] = true;
   error.value = null;
   try {
@@ -425,6 +620,11 @@ async function removeScanHandler(scanId: string) {
 // rejects with 409 lot_has_pick_allocations when the lot feeds pick
 // allocations.
 async function removeScanFromShelfHandler(scan: PutAwayScan) {
+  // CN: the piece has not been posted yet — just drop it from the local list.
+  if (cnMode.value) {
+    scans.value = scans.value.filter((s) => s.id !== scan.id);
+    return;
+  }
   if (!scan.boxId) return;
   const confirmed = window.confirm(
     t("putAway.lotsPanel.removeFromShelfConfirm", {
@@ -453,22 +653,59 @@ async function removeScanFromShelfHandler(scan: PutAwayScan) {
 
 useVisibleReload(load);
 
+// CN task detail → the ReceivingOrderDetail-shaped header aggregate the page
+// renders from (CN orders have no supplier/invoices/arrival stamps).
+function cnOrderFromTaskDetail(detail: PutAwayTaskDetail): ReceivingOrderDetail {
+  return {
+    id: detail.order.id,
+    batchNo: detail.order.batchNo,
+    status: detail.order.status,
+    deliveryDate: detail.taskOrderDeliveryDate ?? null,
+    dateCode: null,
+    orgId: 0,
+    arrivedAt: null,
+    arrivedBy: null,
+    createdDate: detail.task.createdDate,
+    lastUpdateDate: detail.task.createdDate,
+    supplier: null,
+    invoices: [],
+  };
+}
+
 async function load() {
   pending.value = true;
   error.value = null;
   try {
-    const [orderData, detail, shelvesData] = await Promise.all([
-      warehouse.getReceivingOrder(orderId),
-      taskId
-        ? warehouse.getPutAwayTaskDetail(taskId)
-        : warehouse.getPutAwayDetail(orderId),
-      warehouse.getShelves(),
-    ]);
-    order.value = orderData;
-    items.value = detail.items;
-    shelves.value = shelvesData;
-    scans.value = detail.scans;
-    outdatedWarningCount.value = detail.outdatedWarningCount;
+    if (cnMode.value) {
+      // CN put-away is task-scoped — arriving without ?task= has no detail
+      // to read (the list rows always carry it).
+      if (!taskId) {
+        error.value = t("putAway.cn.noTask");
+        return;
+      }
+      const [detail, shelvesData] = await Promise.all([
+        warehouse.getCnPutAwayTaskDetail(taskId),
+        warehouse.getShelves(),
+      ]);
+      order.value = cnOrderFromTaskDetail(detail);
+      items.value = detail.items;
+      shelves.value = shelvesData;
+      // CN: the locally staged pieces stay in scans[] — never overwritten
+      // by the server read (the CN aggregate has no scans section).
+    } else {
+      const [orderData, detail, shelvesData] = await Promise.all([
+        warehouse.getReceivingOrder(orderId),
+        taskId
+          ? warehouse.getPutAwayTaskDetail(taskId)
+          : warehouse.getPutAwayDetail(orderId),
+        warehouse.getShelves(),
+      ]);
+      order.value = orderData;
+      items.value = detail.items;
+      shelves.value = shelvesData;
+      scans.value = detail.scans;
+      outdatedWarningCount.value = detail.outdatedWarningCount;
+    }
 
     // Auto-disarm when the armed group has left the visible list (fully put
     // away with no pending scans left).
@@ -499,6 +736,67 @@ async function openScan(group: PutAwayItemGroup) {
   scanItem.value = group.items[0];
   scanGroup.value = group;
   scanning.value = true;
+  // CN: no per-scan server write and no OCR review modal — parse the label,
+  // match it (part keys or carton number), and stage the piece locally,
+  // exactly like a CN hardware scan (ad-hoc put-away camera pattern).
+  if (cnMode.value) {
+    try {
+      if (!selectedShelf.value) {
+        showToast(t("putAway.cn.shelfRequired"));
+        scrollTargetGroupKey.value = null;
+        return;
+      }
+      const capture = await captureLabel();
+      if (!capture) {
+        scrollTargetGroupKey.value = null;
+        return;
+      }
+      const barcodes = JSON.parse(capture.barcodes || "[]");
+      const templates = await getCachedSupplierQrTemplates(warehouse);
+      const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
+      const isQrOnly =
+        barcodes.length === 1 && barcodes[0]?.format === "4" && !capture.imagePath;
+      const result = isQrOnly
+        ? parseQrCapture(barcodes[0].value, {
+            supplierTemplates: templates,
+            targets: [group.partNo],
+            dateCodePeriods,
+          })
+        : parseAndIdentify({ text: capture.text, barcodes }, [group.partNo]);
+      if (!result.matched) {
+        playScanError();
+        showToast(t("adHocPutAway.scanError"));
+        scrollTargetGroupKey.value = null;
+        return;
+      }
+      const qty = result.parsed.qty ?? 1;
+      const ok = await handleCnItemScan(
+        result.parsed.itemId ?? "",
+        result.parsed.wclItemNo,
+        qty,
+        {
+          dateCode: result.parsed.dateCode ?? "",
+          lotCode: result.parsed.lotCode ?? "",
+          coo: result.parsed.coo ?? "",
+          cow: result.parsed.cow ?? "",
+          serialNo: result.parsed.serialNo,
+        }
+      );
+      if (!ok) {
+        playScanError();
+        scrollTargetGroupKey.value = null;
+        return;
+      }
+      playScanSuccess();
+    } catch (e) {
+      scrollTargetGroupKey.value = null;
+      playScanError();
+      showToast(errorMessage(e));
+    } finally {
+      scanning.value = false;
+    }
+    return;
+  }
   try {
     const capture = await captureLabel();
     if (!capture) {
@@ -648,5 +946,31 @@ async function onRetake() {
   line-height: 1;
   color: var(--muted);
   cursor: pointer;
+}
+
+.cn-commit {
+  position: sticky;
+  bottom: 0;
+  margin-top: 1rem;
+  padding: 0.75rem 0;
+  background: var(--bg);
+}
+
+.cn-commit .btn {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.cn-commit .btn--primary {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+}
+
+.cn-commit .btn:disabled {
+  opacity: 0.5;
 }
 </style>

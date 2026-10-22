@@ -400,6 +400,14 @@ export default {
     boxNotOpen: "箱号 {box} 未开启",
     stagingBoxSelected: "暂存箱 {box} — 扫描将进入暂存区",
     boxScanIgnored: "上架不使用箱子 — 请扫描货架或货品标签",
+    cn: {
+      shelfRequired: "请先扫描货架 — CN 上架没有暂存区",
+      noTask: "此上架页面需要任务编号 — 请从上架任务列表进入。",
+      commit: "上架 {count} 件",
+      commitPrompt: "立即上架已扫描的 {count} 件？",
+      commitDone: "已上架 {count} 件",
+      taskDone: "任务完成 — 所有物品已上架",
+    },
     pendingPanel: {
       title: "待上架（{count}）",
       hint: "扫描货架后确认，即可上架这些货品。",

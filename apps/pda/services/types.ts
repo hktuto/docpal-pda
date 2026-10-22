@@ -637,6 +637,10 @@ export interface PutAwayExpectedItem {
   id: string;
   partNo: string;
   wclItemNo: string | null;
+  /** CN put-away only: the invoice item's plain-text carton number (no box
+   *  entities in the CN world) — an extra scan-match key. Standard backends
+   *  omit the field. */
+  ctnNo?: string | null;
   /** Expected qty; null = unknown upstream. */
   lineQty: number | null;
   receivedQty: number;
@@ -711,6 +715,9 @@ export interface PutAwayBox {
 
 export interface PutAwayDetail {
   order: { id: string; batchNo: string; status: string };
+  /** CN put-away only: the CN order's delivery date (the CN task detail
+   *  embeds the order row). Standard backends omit the field. */
+  taskOrderDeliveryDate?: string | null;
   /** Unresolved outdated-scan warnings on the order (spec 2026-10-07). */
   outdatedWarningCount: number;
   items: PutAwayExpectedItem[];
@@ -731,6 +738,24 @@ export interface PutAwayTaskDetail extends PutAwayDetail {
     receivingOrderId: string;
     createdDate: string;
   };
+}
+
+// ------------------------------------------------------------------
+// CN put-away — DTOs matching apps/backend (:3002), see
+// docs/backend/api-design.md §CN put-away. The backend serves
+// /put-away-cn/* (404 unless the flow config's cnReceiving flag is on);
+// the adapter normalizes those responses onto the standard put-away
+// task types above so the put-away pages stay shared.
+// ------------------------------------------------------------------
+
+/** One item entry of POST /put-away-cn/tasks/:id/complete. */
+export interface CnPutAwayCompleteItem {
+  /** receiving_invoice_items_cn row id. */
+  itemId: string;
+  qty: number;
+  shelfCode: string;
+  /** Optional scanned physical box QR — the lot's box_id (plain text). */
+  boxId?: string | null;
 }
 
 /** POST /shelf-boxes response (a real, non-staging box). */
@@ -916,6 +941,11 @@ export interface FlowConfig {
    *  backends predating the key omit it and the legacy listTemplates render
    *  via the migration fallback. */
   viewConfig?: PdaViewConfigDto;
+  /** CN receiving flow (backed by the `receiving-cn` flow step): when on,
+   *  the warehouse runs the customer-receiving flow and the put-away pages
+   *  read /put-away-cn/* instead of the standard put-away endpoints.
+   *  Optional — backends predating the key omit it (= off). */
+  cnReceiving?: boolean;
 }
 
 /** GET /config viewConfig section (fully resolved server-side; the client

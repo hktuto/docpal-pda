@@ -1250,3 +1250,180 @@ describe('backendWarehouse box search', () => {
     expect(result).toEqual(rows);
   });
 });
+
+describe('backendWarehouse CN put-away flow', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  function service() {
+    return createBackendWarehouseService({ apiBaseUrl: BASE_URL });
+  }
+
+  function lastCall() {
+    const [url, init] = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+    return { url: url as string, init: init as RequestInit };
+  }
+
+  it('listCnPutAwayTasks GETs /put-away-cn/tasks and normalizes onto the standard task row', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        {
+          id: 'task-cn-1',
+          status: 'pending',
+          receivingOrderCnId: 'ro-cn-1',
+          batchNo: 'CN-04958184',
+          invoiceNos: 'INV-1, INV-2',
+          deliveryDate: '2026-10-20',
+          orgId: 2,
+          subInventoryCode: 'ACME-S1',
+          receivedItems: 3,
+          remainingItems: 2,
+          createdDate: '2026-10-21T01:00:00.000Z',
+        },
+      ])
+    );
+
+    const rows = await service().listCnPutAwayTasks('pending');
+
+    expect(lastCall().url).toBe(`${BASE_URL}/put-away-cn/tasks?status=pending`);
+    expect(lastCall().init.method).toBe('GET');
+    expect(rows).toEqual([
+      {
+        id: 'task-cn-1',
+        status: 'pending',
+        receivingOrderId: 'ro-cn-1',
+        batchNo: 'CN-04958184',
+        supplierCode: null,
+        supplierName: null,
+        invoiceNos: 'INV-1, INV-2',
+        deliveryDate: '2026-10-20',
+        dateCode: null,
+        orgId: 2,
+        subInventoryCode: 'ACME-S1',
+        receivedItems: 3,
+        unboxedItems: 2,
+        createdDate: '2026-10-21T01:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('listCnPutAwayTasks skips the status param when unset', async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+
+    await service().listCnPutAwayTasks();
+
+    expect(lastCall().url).toBe(`${BASE_URL}/put-away-cn/tasks`);
+  });
+
+  it('getCnPutAwayTaskDetail GETs the CN task and normalizes the aggregate', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        task: { id: 'task-cn-1', status: 'pending', receivingOrderCnId: 'ro-cn-1', createdDate: '2026-10-21T01:00:00.000Z' },
+        order: { id: 'ro-cn-1', batchNo: 'CN-04958184', status: 'in_hand', deliveryDate: '2026-10-20' },
+        items: [
+          {
+            id: 'rii-cn-1',
+            partNo: 'RK73H2ATTD1002F',
+            wclItemNo: 'KOA/RK73H2ATTD1002F',
+            lineQty: 100,
+            receivedQty: 100,
+            pickedQty: 0,
+            putAwayQty: 40,
+            remainingQty: 60,
+            ctnNo: 'C001',
+            dateCode: '2630',
+            lotCode: 'L1',
+            coo: 'JP',
+            cow: null,
+            suggestedShelfCode: 'A0102',
+            suggestedBoxId: null,
+            suggestionReason: 'same-part-stock',
+          },
+        ],
+        lots: [
+          {
+            id: 'lot-1',
+            partNo: 'RK73H2ATTD1002F',
+            wclItemNo: 'KOA/RK73H2ATTD1002F',
+            dateCode: '2630',
+            lotCode: 'L1',
+            coo: 'JP',
+            cow: null,
+            shelfCode: 'A0102',
+            boxId: null,
+            orgId: 2,
+            subInventoryCode: 'ACME-S1',
+            totalQty: 40,
+            allocatedQty: 0,
+            availableQty: 40,
+          },
+        ],
+      })
+    );
+
+    const detail = await service().getCnPutAwayTaskDetail('task-cn-1');
+
+    expect(lastCall().url).toBe(`${BASE_URL}/put-away-cn/tasks/task-cn-1`);
+    expect(lastCall().init.method).toBe('GET');
+    expect(detail.task).toEqual({
+      id: 'task-cn-1',
+      status: 'pending',
+      receivingOrderId: 'ro-cn-1',
+      createdDate: '2026-10-21T01:00:00.000Z',
+    });
+    expect(detail.order).toEqual({ id: 'ro-cn-1', batchNo: 'CN-04958184', status: 'in_hand' });
+    expect(detail.taskOrderDeliveryDate).toBe('2026-10-20');
+    // CN world has no warnings / staging scans / boxes / allocation
+    // deductions — the standard aggregate fields get their defaults.
+    expect(detail.outdatedWarningCount).toBe(0);
+    expect(detail.scans).toEqual([]);
+    expect(detail.stagingBoxId).toBeNull();
+    expect(detail.boxes).toEqual([]);
+    expect(detail.items[0]).toEqual({
+      id: 'rii-cn-1',
+      partNo: 'RK73H2ATTD1002F',
+      wclItemNo: 'KOA/RK73H2ATTD1002F',
+      lineQty: 100,
+      receivedQty: 100,
+      pickedQty: 0,
+      putAwayQty: 40,
+      remainingQty: 60,
+      allocatedQty: 0,
+      dateCode: '2630',
+      lotCode: 'L1',
+      coo: 'JP',
+      cow: null,
+      ctnNo: 'C001',
+      suggestedShelfCode: 'A0102',
+      suggestedBoxId: null,
+      suggestionReason: 'same-part-stock',
+    });
+    // The created on-hand lot survives normalization (extra CN location
+    // fields ride along harmlessly).
+    expect(detail.lots[0].shelfCode).toBe('A0102');
+    expect(detail.lots[0].totalQty).toBe(40);
+  });
+
+  it('completeCnPutAwayTask POSTs the item batch and returns taskCompleted', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ taskCompleted: true }));
+
+    const result = await service().completeCnPutAwayTask('task-cn-1', [
+      { itemId: 'rii-cn-1', qty: 60, shelfCode: 'A0102', boxId: null },
+      { itemId: 'rii-cn-2', qty: 5, shelfCode: 'A0103' },
+    ]);
+
+    expect(lastCall().url).toBe(`${BASE_URL}/put-away-cn/tasks/task-cn-1/complete`);
+    expect(lastCall().init.method).toBe('POST');
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({
+      items: [
+        { itemId: 'rii-cn-1', qty: 60, shelfCode: 'A0102', boxId: null },
+        { itemId: 'rii-cn-2', qty: 5, shelfCode: 'A0103' },
+      ],
+    });
+    expect(result).toEqual({ taskCompleted: true });
+  });
+});

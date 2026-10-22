@@ -15,8 +15,8 @@ Page and component locations mapped to source files.
 | Picking unified detail + scan (evaluation build; what the picking list currently opens) | `/picking/unified/:id` | `pages/picking/unified/[id].vue` |
 | Receiving list | `/receiving` | `pages/receiving/index.vue` |
 | Receiving detail | `/receiving/:id` | `pages/receiving/[id].vue` or equivalent |
-| Put-away list | `/put-away` | `pages/put-away/index.vue` |
-| Put-away detail | `/put-away/:id` | `pages/put-away/[id].vue` or equivalent |
+| Put-away list (dual-source: standard tasks, or CN tasks when the `cnReceiving` flag from `useFlowSteps` is on) | `/put-away` | `pages/put-away/index.vue` |
+| Put-away detail (dual-source: standard flow, or CN local-staging flow — sticky shelf, sticky-footer batch confirm via `completeCnPutAwayTask`; flag from `useFlowSteps`) | `/put-away/:id` | `pages/put-away/[id].vue` or equivalent |
 | Measuring list | `/measuring` | `pages/measuring/index.vue` (open boxes with packages) |
 | Measuring box | `/measuring/:boxId` | `pages/measuring/[boxId].vue` (wrapper over `components/MeasureBox.vue`) |
 | Verify list | `/verify` | `pages/verify/index.vue` (boxes with a pending verify task) |
@@ -72,7 +72,7 @@ Page and component locations mapped to source files.
 |-----------|-------------|
 | Put-away lots panel (part-group cards; pending scans inside each item's expanded detail) | `components/put-away/PutAwayLotsPanel.vue` |
 | Part-group model (summed display rows) | `utils/putAwayGroups.ts` (`groupPutAwayItems`, `putAwayGroupFieldValue`) |
-| Hardware-scan item matching (free-match + armed group-first, FIFO split across same-part lines) | `utils/putAwayScan.ts` (`findPutAwayTargets`; armed state `armedItemId` = group key in `pages/put-away/[id].vue`) |
+| Hardware-scan item matching (free-match + armed group-first, FIFO split across same-part lines; CN variant `findCnPutAwayTargets` matches on part keys + `ctnNo`) | `utils/putAwayScan.ts` (`findPutAwayTargets` / `findCnPutAwayTargets`; armed state `armedItemId` = group key in `pages/put-away/[id].vue`) |
 
 ## Picking
 

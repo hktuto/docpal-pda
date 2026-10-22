@@ -97,3 +97,38 @@ export function findPutAwayTargets(
   }
   return null;
 }
+
+/**
+ * CN put-away variant of findPutAwayTargets (spec
+ * 2026-10-16-customer-receiving-upload-design.md): identical part-key +
+ * FIFO qty-split semantics, plus the CN item's plain-text `ctnNo` as an
+ * extra match key — CN labels may identify the item by carton number
+ * instead of part number. CN items have no box/lot entities, so no other
+ * standard-only fields are consulted.
+ */
+export function findCnPutAwayTargets(
+  items: PutAwayExpectedItem[],
+  partNo: string,
+  qty: number,
+  wclItemNo?: string
+): { item: PutAwayExpectedItem; qty: number }[] | null {
+  const scannedKeys = [partNo, wclItemNo]
+    .filter((v): v is string => !!v)
+    .map((v) => normalizePartNo(v));
+  if (scannedKeys.length === 0 || !Number.isInteger(qty) || qty <= 0) return null;
+  const portions: { item: PutAwayExpectedItem; qty: number }[] = [];
+  let remaining = qty;
+  for (const item of items) {
+    const itemKeys = [item.partNo, item.wclItemNo, item.ctnNo]
+      .filter((v): v is string => !!v)
+      .map((v) => normalizePartNo(v));
+    if (!itemKeys.some((k) => scannedKeys.includes(k))) continue;
+    const available = item.remainingQty ?? 0;
+    if (available <= 0) continue;
+    const take = Math.min(available, remaining);
+    portions.push({ item, qty: take });
+    remaining -= take;
+    if (remaining === 0) return portions;
+  }
+  return null;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyPutAwayScan, findPutAwayTarget, findPutAwayTargets } from "../utils/putAwayScan";
+import { classifyPutAwayScan, findCnPutAwayTargets, findPutAwayTarget, findPutAwayTargets } from "../utils/putAwayScan";
 import { groupPutAwayItems, putAwayGroupFieldValue, putAwayGroupSuggestion } from "../utils/putAwayGroups";
 import type { PutAwayExpectedItem } from "../services/types";
 
@@ -94,6 +94,69 @@ describe("findPutAwayTargets", () => {
     ]);
     expect(findPutAwayTargets(items, "", 10)).toBeNull();
     expect(findPutAwayTargets(items, "ABC123", 0)).toBeNull();
+  });
+});
+
+describe("findCnPutAwayTargets", () => {
+  function cnItem(partNo: string, remainingQty: number, over: Partial<PutAwayExpectedItem> = {}): PutAwayExpectedItem {
+    return { id: partNo, partNo, remainingQty, ...over } as PutAwayExpectedItem;
+  }
+
+  it("matches part keys exactly like the standard matcher", () => {
+    const items = [cnItem("ABC123", 300, { id: "line1" }), cnItem("DEF456", 100, { id: "line2" })];
+    expect(findCnPutAwayTargets(items, "ABC123", 200)).toEqual([
+      { item: items[0], qty: 200 },
+    ]);
+    expect(findCnPutAwayTargets(items, "ZZZ999", 10)).toBeNull();
+    expect(findCnPutAwayTargets(items, "ABC123", 400)).toBeNull();
+  });
+
+  it("splits one scan's qty FIFO across same-part lines", () => {
+    const items = [cnItem("ABC123", 300, { id: "line1" }), cnItem("ABC123", 200, { id: "line2" })];
+    expect(findCnPutAwayTargets(items, "ABC123", 500)).toEqual([
+      { item: items[0], qty: 300 },
+      { item: items[1], qty: 200 },
+    ]);
+  });
+
+  it("resolves a scanned carton number (ctnNo) to the CN item", () => {
+    const items = [cnItem("ABC123", 100, { id: "line1", ctnNo: "C001" })];
+    expect(findCnPutAwayTargets(items, "C001", 40)).toEqual([
+      { item: items[0], qty: 40 },
+    ]);
+    // Space/case-insensitive like the part keys.
+    expect(findCnPutAwayTargets(items, " c001 ", 40)?.[0].item.id).toBe("line1");
+  });
+
+  it("still matches the WCL item no, with or without a ctnNo on the item", () => {
+    const items = [
+      cnItem("ABC123", 100, { id: "line1", wclItemNo: "KOA/ABC123", ctnNo: "C001" }),
+      cnItem("DEF456", 50, { id: "line2", wclItemNo: "KOA/DEF456" }),
+    ];
+    expect(findCnPutAwayTargets(items, "", 30, "KOA/ABC123")?.[0].item.id).toBe("line1");
+    expect(findCnPutAwayTargets(items, "KOA/DEF456", 30)?.[0].item.id).toBe("line2");
+  });
+
+  it("a ctnNo key does not shadow another item's part key", () => {
+    // A carton number that coincides with another line's part number still
+    // resolves by qty fit across every matching line.
+    const items = [
+      cnItem("C001", 10, { id: "part-line" }),
+      cnItem("ABC123", 100, { id: "ctn-line", ctnNo: "C001" }),
+    ];
+    const portions = findCnPutAwayTargets(items, "C001", 105);
+    expect(portions).toEqual([
+      { item: items[0], qty: 10 },
+      { item: items[1], qty: 95 },
+    ]);
+  });
+
+  it("rejects invalid scans like the standard matcher", () => {
+    const items = [cnItem("ABC123", 100, { ctnNo: "C001" })];
+    expect(findCnPutAwayTargets(items, "", 10)).toBeNull();
+    expect(findCnPutAwayTargets(items, "C001", 0)).toBeNull();
+    expect(findCnPutAwayTargets(items, "C001", -5)).toBeNull();
+    expect(findCnPutAwayTargets(items, "C001", 1.5)).toBeNull();
   });
 });
 

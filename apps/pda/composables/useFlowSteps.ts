@@ -53,6 +53,11 @@ const pickingShelfScan = ref<"off" | "require-match" | "require-any">("off");
 // until the first fetch resolves, and backends predating the key omit it.
 const dateCodeFormat = ref<DateCodeFormat>("wwyy");
 
+// Resolved cnReceiving flag (GET /config cnReceiving): the CN
+// customer-receiving flow. Default false — pages behave as before until the
+// first fetch resolves, and backends predating the key omit it.
+const cnReceiving = ref<boolean>(false);
+
 let loading: Promise<void> | null = null;
 
 async function loadFlowSteps(): Promise<void> {
@@ -73,6 +78,9 @@ async function loadFlowSteps(): Promise<void> {
       }
       if (config.dateCodeFormat) {
         dateCodeFormat.value = config.dateCodeFormat;
+      }
+      if (config.cnReceiving) {
+        cnReceiving.value = config.cnReceiving;
       }
       if (config.viewConfig) {
         applyViewConfig(config.viewConfig);
@@ -98,6 +106,7 @@ export function useFlowSteps() {
     pickingAllocation: readonly(pickingAllocation),
     pickingShelfScan: readonly(pickingShelfScan),
     dateCodeFormat: readonly(dateCodeFormat),
+    cnReceiving: readonly(cnReceiving),
     loadFlowSteps,
   };
 }

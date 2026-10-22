@@ -23,6 +23,21 @@
   `reference_type 'receiving_order_cn'`); a full put-away flips the order
   `clear` and schedules `allocateAll`, so CN stock only appears in allocation
   after put-away completes.
+  The PDA side is the SAME put-away pages branching on the flag, not a
+  separate page set: `useFlowSteps.ts` exposes a shared `cnReceiving` ref
+  (from `GET /config`), and `pages/put-away/index.vue` / `[id].vue` switch
+  their data source to `WarehouseService.listCnPutAwayTasks` /
+  `getCnPutAwayTaskDetail` / `completeCnPutAwayTask` (the adapter normalizes
+  the `/put-away-cn/*` responses into the standard put-away types; the
+  standard flow is byte-identical when the flag is off). Behavioral
+  differences vs the standard flow: no server-side staging and no
+  `put-away-scans`/`put-away-commit`/shelf-box endpoints — scans stage
+  locally on the device (the ad-hoc-put-away staging model), the shelf
+  selection is sticky-first, and a sticky footer "Put away N pcs" button
+  batch-confirms every staged scan in one
+  `POST /put-away-cn/tasks/:id/complete` call. Label matching uses
+  `findCnPutAwayTargets` in `utils/putAwayScan.ts` (part keys + `ctnNo`,
+  since CN items carry carton numbers).
 - Show the put-away detail as **one aggregate read**
   (`GET /receiving-orders/:id/put-away`): expected invoice items (with
   remaining qty and a per-item shelf/box suggestion —
@@ -201,6 +216,15 @@
   `POST /put-away-cn/tasks/:id/complete` (`completeCnPutAwayTx` — on-hand lot
   upserts + PUT_AWAY `on_hand` ledger rows, `reference_type
   'receiving_order_cn'`).
+- `apps/pda/pages/put-away/index.vue` + `apps/pda/pages/put-away/[id].vue` +
+  `apps/pda/composables/useFlowSteps.ts` (`cnReceiving` ref) — the same
+  put-away pages dual-source: CN mode reads/executes CN tasks via
+  `WarehouseService.listCnPutAwayTasks` / `getCnPutAwayTaskDetail` /
+  `completeCnPutAwayTask` (adapter-normalized to the standard put-away
+  types), stages scans locally (no staging endpoints), and batch-confirms
+  from the sticky footer; CN label matching in
+  `apps/pda/utils/putAwayScan.ts` `findCnPutAwayTargets` (part keys +
+  `ctnNo`).
 
 ## Known limitations
 

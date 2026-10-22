@@ -46,6 +46,7 @@ import type {
   ScanPickingItemResult,
   ScanIntoShippingBoxResult,
   PutAwayScanResult,
+  CnPutAwayCompleteItem,
   AdHocPutAwayItem,
   AdHocPutAwayResult,
   AdHocPutAwayLocation,
@@ -77,6 +78,53 @@ interface DateCodePeriodRow {
   counterFrom: number;
   counterTo: number;
   periodStart: string;
+}
+
+// --- CN put-away (GET /put-away-cn/*) raw rows — normalized onto the
+// standard put-away types by the service methods below.
+
+/** GET /put-away-cn/tasks row. */
+interface CnPutAwayTaskListRowRaw {
+  id: string;
+  status: string;
+  receivingOrderCnId: string;
+  batchNo: string;
+  invoiceNos: string | null;
+  deliveryDate: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  receivedItems: number;
+  remainingItems: number;
+  createdDate: string;
+}
+
+/** GET /put-away-cn/tasks/:id expected-item row (remaining = received −
+ *  picked − put away; no allocation/staged deductions in the CN world). */
+interface CnPutAwayItemRaw {
+  id: string;
+  partNo: string;
+  wclItemNo: string | null;
+  lineQty: number | null;
+  receivedQty: number;
+  pickedQty: number;
+  putAwayQty: number;
+  remainingQty: number;
+  ctnNo: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  suggestedShelfCode: string | null;
+  suggestedBoxId: string | null;
+  suggestionReason: PutAwayTaskDetail["items"][number]["suggestionReason"];
+}
+
+/** GET /put-away-cn/tasks/:id payload. */
+interface CnPutAwayTaskDetailRaw {
+  task: { id: string; status: string; receivingOrderCnId: string; createdDate: string };
+  order: { id: string; batchNo: string; status: string; deliveryDate: string | null };
+  items: CnPutAwayItemRaw[];
+  lots: PutAwayTaskDetail["lots"];
 }
 
 /**
@@ -407,6 +455,82 @@ export function createBackendWarehouseService(
     // reversal, one tx backend-side).
     async removePutAwayScanFromShelf(scanId: string, boxId: string): Promise<void> {
       await client.del(`/shelf-boxes/${boxId}/scans/${scanId}`);
+    },
+
+    // CN put-away (spec 2026-10-16-customer-receiving-upload-design.md) —
+    // /put-away-cn/* reads normalized onto the standard put-away task
+    // types so the put-away pages stay one UI. CN orders have no supplier
+    // or displayName (supplierCode/supplierName/dateCode default null), the
+    // task's remainingItems become unboxedItems, and the CN world has no
+    // staging scans/boxes (scans/stagingBoxId/boxes default empty).
+    async listCnPutAwayTasks(status?: string): Promise<PutAwayTaskListRow[]> {
+      const rows = await client.get<CnPutAwayTaskListRowRaw[]>("/put-away-cn/tasks", { status });
+      return rows.map((r) => ({
+        id: r.id,
+        status: r.status,
+        receivingOrderId: r.receivingOrderCnId,
+        batchNo: r.batchNo,
+        supplierCode: null,
+        supplierName: null,
+        invoiceNos: r.invoiceNos,
+        deliveryDate: r.deliveryDate,
+        dateCode: null,
+        orgId: r.orgId ?? 0,
+        subInventoryCode: r.subInventoryCode,
+        receivedItems: r.receivedItems,
+        unboxedItems: r.remainingItems,
+        createdDate: r.createdDate,
+      }));
+    },
+    async getCnPutAwayTaskDetail(id: string): Promise<PutAwayTaskDetail> {
+      const raw = await client.get<CnPutAwayTaskDetailRaw>(`/put-away-cn/tasks/${id}`);
+      return {
+        task: {
+          id: raw.task.id,
+          status: raw.task.status,
+          receivingOrderId: raw.task.receivingOrderCnId,
+          createdDate: raw.task.createdDate,
+        },
+        order: {
+          id: raw.order.id,
+          batchNo: raw.order.batchNo,
+          status: raw.order.status,
+        },
+        taskOrderDeliveryDate: raw.order.deliveryDate,
+        outdatedWarningCount: 0,
+        items: raw.items.map((i) => ({
+          id: i.id,
+          partNo: i.partNo,
+          wclItemNo: i.wclItemNo,
+          lineQty: i.lineQty,
+          receivedQty: i.receivedQty,
+          pickedQty: i.pickedQty,
+          putAwayQty: i.putAwayQty,
+          remainingQty: i.remainingQty,
+          allocatedQty: 0,
+          dateCode: i.dateCode,
+          lotCode: i.lotCode,
+          coo: i.coo,
+          cow: i.cow,
+          ctnNo: i.ctnNo,
+          suggestedShelfCode: i.suggestedShelfCode,
+          suggestedBoxId: i.suggestedBoxId,
+          suggestionReason: i.suggestionReason,
+        })),
+        lots: raw.lots,
+        scans: [],
+        stagingBoxId: null,
+        boxes: [],
+      };
+    },
+    // One-batch completion: per-item put_away_qty updates + on-hand lot
+    // upserts + PUT_AWAY ledger rows in one backend tx; the task completes
+    // when every item is fully put away.
+    async completeCnPutAwayTask(
+      taskId: string,
+      items: CnPutAwayCompleteItem[]
+    ): Promise<{ taskCompleted: boolean }> {
+      return client.post(`/put-away-cn/tasks/${taskId}/complete`, { items });
     },
 
     // Measuring — box-scoped reads (no tasks): open boxes with ≥1 package
