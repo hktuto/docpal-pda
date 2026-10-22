@@ -107,7 +107,8 @@ receivingRoute.get("/receiving-orders", async (c) => {
   const sort = c.req.query("sort");
   const dir = c.req.query("dir");
   // Per-user scope applies at order level: an order stays visible when it
-  // has no items, or any item unstamped/in scope; aggregates are unchanged.
+  // has no items, or any item is in scope (exact pair, or NULL-sub item in
+  // a scope-covered org); aggregates are unchanged.
   const scope = await getUserScope(db, actorFrom(c).username);
   const rows = await queryAll<ReceivingOrderListRow & { total: number }>(
     db,

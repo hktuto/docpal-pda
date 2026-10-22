@@ -5,8 +5,9 @@
 - Per-user sub-inventory scope on list + detail reads: when the caller has a
   scope set (`user_profiles`, managed via `GET`/`PUT /auth/me/profile` or
   `/admin/user-profiles`), the list/detail are filtered by a predicate on the
-  order's `(org_id, sub_inventory_code)` pair (NULL sub-inventory stays
-  visible; out-of-scope detail = 404). Enforcement is server-side
+  order's `(org_id, sub_inventory_code)` pair (NULL sub-inventory acts as
+  every sub-inventory of its org — visible when the scope covers any
+  sub-inventory of that org; out-of-scope detail = 404). Enforcement is server-side
   (`apps/backend/src/db/user-scope.ts`), composes with `allowedOrgIds` by
   AND, reads only — mutations, allocation and SSE events unaffected (spec
   `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`).

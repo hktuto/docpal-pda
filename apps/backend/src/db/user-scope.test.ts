@@ -99,11 +99,16 @@ test("getUserScope: no row / empty / malformed → null; round-trip after upsert
 
 // --- userScopeCondition SQL semantics ----------------------------------------
 
-test("userScopeFilter: NULL stays visible, pairs match (org_id, code) exactly", async () => {
+test("userScopeFilter: NULL sub acts as all sub-inventories of its org; pairs match exactly", async () => {
   await reseed(client);
   const orderId = await pickingOrderId("SO-DEMO-0001");
-  // One NULL-sub order (freshly synced shape).
+  // One NULL-sub order (freshly synced shape) in org 2, one in org 220.
   await queryRun(client.db, sql`UPDATE picking_orders SET sub_inventory_code = NULL WHERE id = ${orderId}`);
+  const order220 = await pickingOrderId("SO-DEMO-0002");
+  await queryRun(
+    client.db,
+    sql`UPDATE picking_orders SET sub_inventory_code = NULL, org_id = 220 WHERE id = ${order220}`
+  );
 
   const visible = async (scope: Parameters<typeof userScopeFilter>[2]) =>
     (
@@ -115,9 +120,10 @@ test("userScopeFilter: NULL stays visible, pairs match (org_id, code) exactly", 
     )!.n;
 
   const total = await visible(null);
-  assert.ok(total > 1);
-  assert.equal(await visible(STORE1), total); // in-scope + NULL row
-  assert.equal(await visible(WSTORE1), 1); // only the NULL-sub order
+  assert.ok(total > 2);
+  assert.equal(await visible(STORE1), total - 1); // org-2 rows incl. the NULL-sub one
+  assert.equal(await visible(WSTORE1), 1); // only the NULL-sub org-2 order
+  assert.equal(await visible([{ orgId: 220, code: "THHK2" }]), 1); // only the NULL-sub org-220 order
   assert.equal(await visible([]), total); // empty = unrestricted
 
   // Same through the db module reads (invoice-stamped: the picking org
@@ -148,7 +154,7 @@ test("GET /picking-orders + /:id are scoped by the actor's profile", async () =>
   const orderId = await pickingOrderId("SO-DEMO-0001");
   assert.equal((await authed(token, `/picking-orders/${orderId}`)).status, 404);
 
-  // NULL-sub orders stay visible.
+  // NULL-sub orders stay visible when their org is covered by the scope.
   await queryRun(client.db, sql`UPDATE picking_orders SET sub_inventory_code = NULL WHERE id = ${orderId}`);
   const withNull = (await (await authed(token, "/picking-orders")).json()).rows;
   assert.equal(withNull.length, 1);
@@ -232,7 +238,8 @@ test("GET /receiving-orders: hidden only when ALL items are stamped out-of-scope
   assert.equal((await putMyScope(token, WSTORE1)).status, 200);
   assert.equal((await (await authed(token, "/receiving-orders")).json()).rows.length, 0);
 
-  // An order whose items are unstamped (NULL) is visible again.
+  // An order whose items are unstamped (NULL) is visible again — NULL sub
+  // acts as every sub-inventory of the item's org (org 2 is in scope).
   const orderId = await receivingOrderId("100001");
   await queryRun(
     client.db,
@@ -240,6 +247,17 @@ test("GET /receiving-orders: hidden only when ALL items are stamped out-of-scope
         WHERE receiving_invoice_id IN (SELECT id FROM receiving_invoices WHERE receiving_order_id = ${orderId})`
   );
   let rows = (await (await authed(token, "/receiving-orders")).json()).rows;
+  assert.deepEqual(rows.map((r: { id: string }) => r.id), [orderId]);
+
+  // ...but a NULL-sub item whose org is NOT covered by the scope does not
+  // make the order visible.
+  const orderId2 = await receivingOrderId("100002");
+  await queryRun(
+    client.db,
+    sql`UPDATE receiving_invoice_items SET sub_inventory_code = NULL, org_id = 220
+        WHERE receiving_invoice_id IN (SELECT id FROM receiving_invoices WHERE receiving_order_id = ${orderId2})`
+  );
+  rows = (await (await authed(token, "/receiving-orders")).json()).rows;
   assert.deepEqual(rows.map((r: { id: string }) => r.id), [orderId]);
 
   // An order with no items at all stays visible.

@@ -1,8 +1,10 @@
 // Per-user sub-inventory scope filter (spec
 // 2026-09-11-user-subinventory-scope-design.md). A user with a scope only
 // sees picking/receiving rows stamped with one of the listed
-// (org_id, sub_inventory_code) pairs; NULL sub_inventory_code stays visible
-// (freshly synced rows are unstamped). NULL/empty scope = unrestricted.
+// (org_id, sub_inventory_code) pairs. A NULL sub_inventory_code (freshly
+// synced rows are unstamped) acts as "every sub-inventory of that row's
+// org_id": visible when the scope covers ANY sub-inventory under the row's
+// org. NULL/empty scope = unrestricted.
 // Composes with allowedOrgIds by AND.
 
 import { sql, type SQL } from "drizzle-orm";
@@ -40,8 +42,10 @@ function normalizeScope(raw: unknown): UserScopeEntry[] | null {
 }
 
 /**
- * Bare `sub IS NULL OR (org, sub) IN ((org1, code1), ...)` condition, or
- * undefined when scope is null/empty (= no filtering).
+ * Scope match: exact `(org, sub)` pair, or — when `sub` is NULL — the row's
+ * org having ANY sub-inventory in the scope (unstamped rows act as
+ * all-sub-inventories of their org). Returns undefined when scope is
+ * null/empty (= no filtering).
  */
 export function userScopeCondition(
   orgCol: SQL,
@@ -53,7 +57,12 @@ export function userScopeCondition(
     scope.map((e) => sql`(${e.orgId}, ${e.code})`),
     sql`, `
   );
-  return sql`(${subCol} IS NULL OR (${orgCol}, ${subCol}) IN (${pairs}))`;
+  const orgIds = sql.join(
+    [...new Set(scope.map((e) => e.orgId))].map((id) => sql`${id}`),
+    sql`, `
+  );
+  return sql`((${subCol} IS NOT NULL AND (${orgCol}, ${subCol}) IN (${pairs}))
+              OR (${subCol} IS NULL AND ${orgCol} IN (${orgIds})))`;
 }
 
 /** `AND <condition>` fragment for interpolation after a WHERE, or empty. */
@@ -68,8 +77,8 @@ export function userScopeFilter(
 
 /**
  * Order-level scope for receiving_orders: visible when the order has NO
- * items, or ANY item unstamped (NULL) or in scope. `AND ...` fragment, or
- * empty when unrestricted.
+ * items, or ANY item in scope (exact pair, or NULL-sub item whose org is
+ * covered by the scope). `AND ...` fragment, or empty when unrestricted.
  */
 export function receivingOrderScopeFilter(
   orderIdCol: SQL,

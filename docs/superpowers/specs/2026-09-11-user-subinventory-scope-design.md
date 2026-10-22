@@ -20,9 +20,12 @@ and picking order pages, without having to filter manually each time.
   after login). Same rationale as `supplier_profiles` vs `suppliers`.
 - **Scope values are `(org_id, secondary_inventory_name)` pairs**, because sub-inventory
   identity is the composite key in `org_info` — a code alone is not unique across orgs.
-- **NULL `sub_inventory_code` stays visible.** Rows only get stamped at confirm-arrival
-  (receiving items) or by the upstream sync (picking orders); hiding NULLs would make
-  freshly synced data vanish from the people who need to work it.
+- **NULL `sub_inventory_code` acts as every sub-inventory of its org.** Rows only get
+  stamped at confirm-arrival (receiving items) or by the upstream sync (picking orders),
+  so an unstamped row is treated as if it carried all sub-inventories of its `org_id`:
+  visible when the scope includes ANY sub-inventory under that org. Hiding NULLs outright
+  would make freshly synced data vanish; showing them regardless of org would leak other
+  offices' data.
 - **Empty/absent scope = unrestricted.** The filter only applies once at least one pair
   is set.
 - **Enforcement is server-side** in the shared flow endpoints (`/receiving-orders`,
@@ -48,8 +51,10 @@ and picking order pages, without having to filter manually each time.
 For a row carrying `(org_id, sub_inventory_code)`:
 
 ```
-sub_inventory_code IS NULL
-  OR (org_id, sub_inventory_code) IN ((org1, code1), (org2, code2), ...)
+(sub_inventory_code IS NOT NULL
+   AND (org_id, sub_inventory_code) IN ((org1, code1), (org2, code2), ...))
+OR (sub_inventory_code IS NULL
+   AND org_id IN (org1, org2, ...))            -- unstamped = all subs of its org
 ```
 
 Helper lives in `apps/backend/src/db/user-scope.ts` next to `org-filter.ts`:
@@ -61,10 +66,10 @@ Helper lives in `apps/backend/src/db/user-scope.ts` next to `org-filter.ts`:
   on `po.org_id` / `po.sub_inventory_code`. Out-of-scope detail = 404.
 - **Receiving list** — `receiving_orders` has only `org_id`; the pair lives on
   `receiving_invoice_items`. An order stays visible when it has **no items**, or **any
-  item** that is unstamped (NULL) or in scope. List aggregates (item counts etc.) are
-  unchanged — computed over all items.
+  item** in scope (exact pair, or NULL-sub item whose org is covered by the scope). List
+  aggregates (item counts etc.) are unchanged — computed over all items.
 - **Receiving detail** — same order-level predicate (404 when out of scope); the
-  returned items list is additionally filtered to in-scope/NULL items.
+  returned items list is additionally filtered to in-scope items (same NULL rule).
 
 ## API
 
