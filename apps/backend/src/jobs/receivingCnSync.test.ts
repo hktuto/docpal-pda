@@ -175,6 +175,59 @@ test("cron: completed process finalizes the order matched by the generated batch
   });
 });
 
+test("cron: mixed-item order finalizes with the ORDER's org as the task-org fallback (sub-inventory NULL)", async () => {
+  await reseed(client);
+  // Order org 2 with two items of differing pairs (STORE1 vs NULL) — the
+  // uniform-pair derivation yields NULL, so the task must fall back to the
+  // order's org instead of writing a NULL-org ghost task.
+  await client.db.execute(sql`INSERT INTO receiving_orders_cn (id, batch_no, status, org_id) VALUES ('cn-order-mixed', 'CN-MIXED-1', 'pending', 2)`);
+  await client.db.execute(sql`INSERT INTO receiving_invoices_cn (id, receiving_order_id, invoice_no, org_id) VALUES ('cn-inv-mixed', 'cn-order-mixed', 'INV-MIXED', 2)`);
+  await client.db.execute(sql`INSERT INTO receiving_invoice_items_cn (id, receiving_invoice_id, part_no, received_qty, org_id, sub_inventory_code)
+      VALUES ('cn-item-mixed-1', 'cn-inv-mixed', 'PART-A', 100, 2, 'STORE1')`);
+  await client.db.execute(sql`INSERT INTO receiving_invoice_items_cn (id, receiving_invoice_id, part_no, received_qty, org_id, sub_inventory_code)
+      VALUES ('cn-item-mixed-2', 'cn-inv-mixed', 'PART-B', 50, 2, NULL)`);
+  await seedWorkflow("wf-8", "TE-MIXED-1", "proc-8", "CN-MIXED-1");
+  processStates = { "proc-8": "completed" };
+
+  await withFake(async () => {
+    await runReceivingCnSyncOnce(client.db);
+    const task = await queryGet<{ orgId: number | null; subInventoryCode: string | null }>(
+      client.db,
+      sql`SELECT org_id AS "orgId", sub_inventory_code AS "subInventoryCode" FROM put_away_tasks_cn WHERE receiving_order_cn_id = 'cn-order-mixed'`
+    );
+    assert.ok(task);
+    assert.equal(task!.orgId, 2); // the order's org, not NULL
+    assert.equal(task!.subInventoryCode, null);
+  });
+});
+
+test("cron: finalize is the receipt moment — received_qty=0 items inherit line_qty (others untouched), date code falls back to the order's", async () => {
+  await reseed(client);
+  await client.db.execute(sql`INSERT INTO receiving_orders_cn (id, batch_no, status, org_id, date_code) VALUES ('cn-order-rcv', 'CN-RCV-1', 'pending', 2, '2640')`);
+  await client.db.execute(sql`INSERT INTO receiving_invoices_cn (id, receiving_order_id, invoice_no, org_id) VALUES ('cn-inv-rcv', 'cn-order-rcv', 'INV-RCV', 2)`);
+  // received_qty 0 + line_qty → inherits line_qty and the order's date code
+  await client.db.execute(sql`INSERT INTO receiving_invoice_items_cn (id, receiving_invoice_id, part_no, line_qty, received_qty, org_id, sub_inventory_code)
+      VALUES ('cn-item-rcv-1', 'cn-inv-rcv', 'PART-A', 500, 0, 2, 'STORE1')`);
+  // real received qty + own date code → untouched
+  await client.db.execute(sql`INSERT INTO receiving_invoice_items_cn (id, receiving_invoice_id, part_no, line_qty, received_qty, date_code, org_id, sub_inventory_code)
+      VALUES ('cn-item-rcv-2', 'cn-inv-rcv', 'PART-B', 600, 550, '2634', 2, 'STORE1')`);
+  await seedWorkflow("wf-9", "TE-RCV-1", "proc-9", "CN-RCV-1");
+  processStates = { "proc-9": "completed" };
+
+  await withFake(async () => {
+    await runReceivingCnSyncOnce(client.db);
+    const rows = await queryAll<{ id: string; receivedQty: number; dateCode: string | null }>(
+      client.db,
+      sql`SELECT id, received_qty AS "receivedQty", date_code AS "dateCode"
+          FROM receiving_invoice_items_cn WHERE receiving_invoice_id = 'cn-inv-rcv' ORDER BY id`
+    );
+    assert.deepEqual(rows, [
+      { id: "cn-item-rcv-1", receivedQty: 500, dateCode: "2640" },
+      { id: "cn-item-rcv-2", receivedQty: 550, dateCode: "2634" },
+    ]);
+  });
+});
+
 test("cron: legacy workflow without batch_no still finalizes via invoice_no fallback", async () => {
   await reseed(client);
   const orderId = await seedCnOrder("TE-LEGACY-FALLBACK");

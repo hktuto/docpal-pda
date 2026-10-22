@@ -142,6 +142,11 @@ const headerStatus = computed(() =>
 // put-away aggregate (task detail embeds the same aggregate).
 const outdatedWarningCount = ref(0);
 
+// CN task detail extras for the header title template — the CN detail's
+// order aggregate carries no invoices array, so the list-row invoiceNos come
+// from the task detail payload instead.
+const cnInvoiceNos = ref<string | null>(null);
+
 // Title, status badge and header info rows render in the AppHeader. The
 // title follows the put-away list's pdaViewConfig title template (same as
 // the list rows — [batch_no] by default, [name] = the backend displayName).
@@ -158,7 +163,8 @@ usePageHeader({
       orgId: o.orgId,
       supplierCode: o.supplier?.code ?? null,
       supplierName: o.supplier?.name ?? null,
-      invoiceNos: o.invoices.map((i) => i.invoiceNo).join(","),
+      invoiceNos:
+        o.invoices.length > 0 ? o.invoices.map((i) => i.invoiceNo).join(",") : (cnInvoiceNos.value ?? ""),
     };
     return viewListRow("put-away", row, viewConfig.value).title || o.displayName || o.batchNo;
   },
@@ -513,7 +519,13 @@ async function handleCnItemScan(
   const hitGroup = groups.value.find((g) =>
     g.items.some((i) => i.id === portions[0].item.id)
   );
-  scrollTargetGroupKey.value = hitGroup?.key ?? null;
+  // CN pieces stage locally (no reload), so scroll to the hit group here
+  // instead of relying on load() to consume scrollTargetGroupKey.
+  if (hitGroup) {
+    expandedItems.value = new Set(expandedItems.value).add(hitGroup.key);
+    await nextTick();
+    scrollToItem({ itemId: hitGroup.key });
+  }
   return true;
 }
 
@@ -661,7 +673,7 @@ function cnOrderFromTaskDetail(detail: PutAwayTaskDetail): ReceivingOrderDetail 
     batchNo: detail.order.batchNo,
     status: detail.order.status,
     deliveryDate: detail.taskOrderDeliveryDate ?? null,
-    dateCode: null,
+    dateCode: detail.taskOrderDateCode ?? null,
     orgId: 0,
     arrivedAt: null,
     arrivedBy: null,
@@ -688,6 +700,7 @@ async function load() {
         warehouse.getShelves(),
       ]);
       order.value = cnOrderFromTaskDetail(detail);
+      cnInvoiceNos.value = detail.taskOrderInvoiceNos ?? null;
       items.value = detail.items;
       shelves.value = shelvesData;
       // CN: the locally staged pieces stay in scans[] — never overwritten
@@ -715,18 +728,24 @@ async function load() {
     ) {
       armedItemId.value = null;
     }
-
-    if (scrollTargetGroupKey.value) {
-      const targetKey = scrollTargetGroupKey.value;
-      scrollTargetGroupKey.value = null;
-      await nextTick();
-      scrollToItem({ itemId: targetKey });
-    }
   } catch (e) {
     error.value = errorMessage(e);
     scrollTargetGroupKey.value = null;
   } finally {
     pending.value = false;
+  }
+
+  // Scroll AFTER pending flips false: while pending, the v-if unmounts the
+  // whole panel, so the target element does not exist yet and the scroll
+  // would silently no-op (long lists also jump back to the top on remount).
+  if (scrollTargetGroupKey.value) {
+    const targetKey = scrollTargetGroupKey.value;
+    scrollTargetGroupKey.value = null;
+    // Expand the group so the just-recorded scan row is visible at the
+    // scroll target (it renders inside the card's expanded block).
+    expandedItems.value = new Set(expandedItems.value).add(targetKey);
+    await nextTick();
+    scrollToItem({ itemId: targetKey });
   }
 }
 

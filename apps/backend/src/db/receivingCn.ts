@@ -697,16 +697,35 @@ async function cnOrderPair(
 export async function finalizeCnOrder(db: AppDb, workflowRow: CnWorkflowRow, actorId: string | null): Promise<boolean> {
   const matchKey = workflowRow.batchNo ?? workflowRow.invoiceNo;
   if (!matchKey) return false;
-  const order = await queryGet<{ id: string; status: string }>(
+  const order = await queryGet<{ id: string; status: string; orgId: number; dateCode: string | null }>(
     db,
-    sql`SELECT id, status FROM receiving_orders_cn
+    sql`SELECT id, status, org_id AS "orgId", date_code AS "dateCode" FROM receiving_orders_cn
         WHERE batch_no = ${matchKey}
         ORDER BY created_date DESC LIMIT 1`
   );
   if (!order) return false;
 
   await db.transaction(async (tx) => {
-    const pair = await cnOrderPair(tx, order.id);
+    // Full-receipt default (confirmReceivingArrival mirror): the CN flow has
+    // no separate confirm step — finalize IS the receipt moment. Rows the
+    // sync left at received_qty = 0 inherit line_qty; rows with a real
+    // received qty are untouched. Date code falls back to the order's.
+    await queryRun(
+      tx,
+      sql`UPDATE receiving_invoice_items_cn rii
+          SET received_qty = rii.line_qty,
+              date_code = COALESCE(rii.date_code, ${order.dateCode}),
+              last_update_date = ${now()}
+          FROM receiving_invoices_cn ri
+          WHERE rii.receiving_invoice_id = ri.id AND ri.receiving_order_id = ${order.id}
+            AND rii.received_qty = 0 AND rii.line_qty IS NOT NULL`
+    );
+    const derived = await cnOrderPair(tx, order.id);
+    // Uniform item pair wins; when the items are mixed/unknown the task still
+    // belongs to the order's org (receiving_orders_cn.org_id) so the PDA list
+    // never derives a NULL-org ghost (sub-inventory stays NULL — the order
+    // carries no sub-inventory).
+    const pair = { orgId: derived.orgId ?? order.orgId, subInventoryCode: derived.subInventoryCode };
     const at = now();
     const changed = await queryGet<{ id: string }>(
       tx,

@@ -9,7 +9,6 @@ import { emitEvent } from "./events.js";
 import { computeItemShelfSuggestions, type PutAwaySuggestionReason } from "./putaway.js";
 import { putAwayConfig, dateCodeFormat } from "../config.js";
 import { toCanonicalDateCode } from "./dateCode.js";
-import { allowedOrgFilter } from "./org-filter.js";
 
 // ---------------------------------------------------------------------------
 // CN put-away (spec docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md).
@@ -38,7 +37,9 @@ export interface CnPutAwayTaskListRow {
 }
 
 /** CN task queue, oldest first. Item counts mirror the standard candidates
- *  formula minus the standard-only allocation/staging deductions. */
+ *  formula minus the standard-only allocation/staging deductions. No
+ *  allowedOrgIds filter — a task row only exists after its order arrived in
+ *  this warehouse, so it's always actionable work here. */
 export async function listCnPutAwayTasks(db: AppDb, status?: string): Promise<CnPutAwayTaskListRow[]> {
   return queryAll<CnPutAwayTaskListRow>(
     db,
@@ -60,7 +61,6 @@ export async function listCnPutAwayTasks(db: AppDb, status?: string): Promise<Cn
       JOIN receiving_invoice_items_cn rii ON rii.receiving_invoice_id = ri.id
       WHERE TRUE
       ${status ? sql`AND t.status = ${status}` : sql``}
-      ${allowedOrgFilter(sql`t.org_id`)}
       GROUP BY t.id, ro.id
       ORDER BY t.created_date ASC, t.id
     `
@@ -105,7 +105,15 @@ export interface CnPutAwayLotRow {
 
 export interface CnPutAwayTaskDetail {
   task: { id: string; status: string; receivingOrderCnId: string; createdDate: Date };
-  order: { id: string; batchNo: string; status: string; deliveryDate: Date | null };
+  order: {
+    id: string;
+    batchNo: string;
+    status: string;
+    deliveryDate: Date | null;
+    /** Comma-joined invoice numbers (same string_agg as the task list). */
+    invoiceNos: string | null;
+    dateCode: string | null;
+  };
   items: CnPutAwayItemRow[];
   lots: CnPutAwayLotRow[];
 }
@@ -126,8 +134,11 @@ export async function getCnPutAwayTaskDetail(db: AppDb, taskId: string): Promise
   if (!task) throw new HTTPException(404, { message: "put_away_task_cn_not_found" });
   const order = await queryGet<CnPutAwayTaskDetail["order"]>(
     db,
-    sql`SELECT id, batch_no AS "batchNo", status, delivery_date AS "deliveryDate"
-        FROM receiving_orders_cn WHERE id = ${task.receivingOrderCnId}`
+    sql`SELECT ro.id, ro.batch_no AS "batchNo", ro.status, ro.delivery_date AS "deliveryDate",
+               ro.date_code AS "dateCode",
+               (SELECT string_agg(DISTINCT ri.invoice_no, ', ')
+                FROM receiving_invoices_cn ri WHERE ri.receiving_order_id = ro.id) AS "invoiceNos"
+        FROM receiving_orders_cn ro WHERE ro.id = ${task.receivingOrderCnId}`
   );
   const rawItems = await queryAll<CnPutAwayItemRow & { itemOrgId: number | null; itemSubInventoryCode: string | null }>(
     db,

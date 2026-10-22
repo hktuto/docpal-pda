@@ -122,7 +122,7 @@ interface CnPutAwayItemRaw {
 /** GET /put-away-cn/tasks/:id payload. */
 interface CnPutAwayTaskDetailRaw {
   task: { id: string; status: string; receivingOrderCnId: string; createdDate: string };
-  order: { id: string; batchNo: string; status: string; deliveryDate: string | null };
+  order: { id: string; batchNo: string; status: string; deliveryDate: string | null; invoiceNos: string | null; dateCode: string | null };
   items: CnPutAwayItemRaw[];
   lots: PutAwayTaskDetail["lots"];
 }
@@ -497,6 +497,8 @@ export function createBackendWarehouseService(
           status: raw.order.status,
         },
         taskOrderDeliveryDate: raw.order.deliveryDate,
+        taskOrderInvoiceNos: raw.order.invoiceNos,
+        taskOrderDateCode: raw.order.dateCode,
         outdatedWarningCount: 0,
         items: raw.items.map((i) => ({
           id: i.id,

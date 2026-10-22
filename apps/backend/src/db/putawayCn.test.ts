@@ -9,7 +9,7 @@ import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, TEST_DATABASE_URL, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
 import { completeCnPutAwayTx, getCnPutAwayTaskDetail, listCnPutAwayTasks } from "./putawayCn.js";
-import { _setCnReceivingForTests } from "../config.js";
+import { _setCnReceivingForTests, _setAllowedOrgIdsForTests, _resetFlowConfigForTests } from "../config.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 
@@ -94,6 +94,19 @@ test("list: task row carries order + item counts", async () => {
   assert.equal(rows[0].remainingItems, 1);
   assert.equal(rows[0].orgId, 2);
   assert.equal(rows[0].subInventoryCode, "STORE1");
+});
+
+test("list: no allowedOrgIds filter — a task in this warehouse lists even when its org is out of scope", async () => {
+  await reseed(client);
+  await seedCnPutAwayWorld();
+  try {
+    _setAllowedOrgIdsForTests([7, 14, 5, 12]); // org 2 deliberately excluded
+    const rows = await listCnPutAwayTasks(client.db, "pending");
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].orgId, 2);
+  } finally {
+    _resetFlowConfigForTests();
+  }
 });
 
 test("detail: items with remaining + lots; unknown id → 404", async () => {

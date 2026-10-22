@@ -718,6 +718,12 @@ export interface PutAwayDetail {
   /** CN put-away only: the CN order's delivery date (the CN task detail
    *  embeds the order row). Standard backends omit the field. */
   taskOrderDeliveryDate?: string | null;
+  /** CN put-away only: comma-joined invoice numbers + date code of the CN
+   *  order (same values as the task list rows — they feed the header title
+   *  template, which the detail renders like the list). Standard backends
+   *  omit the fields. */
+  taskOrderInvoiceNos?: string | null;
+  taskOrderDateCode?: string | null;
   /** Unresolved outdated-scan warnings on the order (spec 2026-10-07). */
   outdatedWarningCount: number;
   items: PutAwayExpectedItem[];

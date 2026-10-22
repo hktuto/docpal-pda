@@ -9,7 +9,6 @@ import { now } from "./now.js";
 import { getPutAwayAggregate, orderPair, type PutAwayAggregate } from "./putaway.js";
 import { receivingOrderNameTemplate } from "../config.js";
 import { formatReceivingOrderName } from "../receivingOrderName.js";
-import { allowedOrgFilter } from "./org-filter.js";
 
 // ---------------------------------------------------------------------------
 // Put-away tasks (spec 2026-08-10-put-away-tasks-design.md). One task per
@@ -82,7 +81,10 @@ export interface PutAwayTaskListRow {
   createdDate: Date;
 }
 
-/** Task queue, oldest truck first. Item counts use the candidates formula. */
+/** Task queue, oldest truck first. Item counts use the candidates formula.
+ *  No allowedOrgIds filter: a task row only exists after its order arrived in
+ *  this warehouse — it's actionable work here regardless of org scope (same
+ *  rule as the CN list below). */
 export async function listPutAwayTasks(db: AppDb, status?: string): Promise<PutAwayTaskListRow[]> {
   const rows = await queryAll<Omit<PutAwayTaskListRow, "displayName">>(
     db,
@@ -123,7 +125,6 @@ export async function listPutAwayTasks(db: AppDb, status?: string): Promise<PutA
       ) staged ON staged.receiving_invoice_item_id = rii.id
       WHERE TRUE
       ${status ? sql`AND t.status = ${status}` : sql``}
-      ${allowedOrgFilter(sql`t.org_id`)}
       GROUP BY t.id, ro.id, s.id
       ORDER BY t.created_date ASC, t.id
     `
