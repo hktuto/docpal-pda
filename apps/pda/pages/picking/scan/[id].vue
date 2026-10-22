@@ -198,14 +198,14 @@ const orderItems = computed(() => order.value?.items ?? []);
 // once per location visit, then keeps scanning items there; the banner is
 // replaced by the next shelf scan or cleared manually. No pick-from-box
 // dialog opens on a shelf scan in these modes.
-const { pickingShelfScan: shelfScanMode } = useFlowSteps();
+const { pickingShelfScan: shelfScanMode, dateCodeFormat } = useFlowSteps();
 const requireShelfScan = computed(() => shelfScanMode.value !== "off");
 const pendingShelf = ref<{ label: string; shelfCode: string | null; boxId: string | null } | null>(null);
 // require-match presence check: the scanned part must have stock on the
 // pending shelf (cached per location+part for the session; the backend's
 // no_stock_at_location 409 is the safety net when stock moves mid-session).
 const shelfStockChecker = createShelfStockChecker(async (q) => (await warehouse.getPickingShelfStock(q)).qty);
-const { rows, addScan, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, reresolveQueued, applyAll } = usePickingScanQueue(orderItems);
+const { rows, addScan, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, reresolveQueued, applyAll } = usePickingScanQueue(orderItems, { dateCodeFormat });
 const queuedCount = computed(() => rows.value.filter((r) => r.status === "queued").length);
 
 // The table aggregates scans of the same part + batch fields (lot/date/coo/

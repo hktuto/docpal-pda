@@ -42,7 +42,7 @@ async function insertLot(opts: {
     id: opts.id,
     partNo: opts.partNo ?? TEST_PART_NO,
     wclItemNo: opts.wclItemNo ?? TEST_WCL_ITEM_NO,
-    dateCode: opts.dateCode === undefined ? "2640" : opts.dateCode,
+    dateCode: opts.dateCode === undefined ? "4026" : opts.dateCode,
     lotCode: opts.lotCode === undefined ? "LOT-A" : opts.lotCode,
     coo: "CN",
     cow: "CN",
@@ -127,7 +127,7 @@ test("shelf exchange — preview", async () => {
   });
 
   await test("FIFO: oldest date_code wins when the label carries no date code", async () => {
-    await insertLot({ id: "lot-sx-old", shelfCode: SOURCE_SHELF, qty: 50, dateCode: "2501" });
+    await insertLot({ id: "lot-sx-old", shelfCode: SOURCE_SHELF, qty: 50, dateCode: "0125" });
     await insertLot({ id: "lot-sx-new", shelfCode: SOURCE_SHELF, qty: 50, dateCode: "2640" });
     const result = await previewShelfExchange(db, {
       sourceShelfCode: SOURCE_SHELF,
@@ -260,7 +260,7 @@ test("shelf exchange — commit", async () => {
     // Target lot inherits the location pair + batch fields.
     assert.equal(target.orgId, TEST_ORG_ID);
     assert.equal(target.subInventoryCode, TEST_SUB_INVENTORY);
-    assert.equal(target.dateCode, "2640");
+    assert.equal(target.dateCode, "4026");
     assert.equal(target.coo, "CN");
     assert.equal(target.wclItemNo, TEST_WCL_ITEM_NO);
     assert.equal(target.allocatedQty, 0);

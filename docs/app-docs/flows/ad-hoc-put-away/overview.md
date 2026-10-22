@@ -13,7 +13,7 @@ Home tile → **Ad-hoc Put-away** (`/ad-hoc-put-away`)
 - **Supplier-driven parsing** — the selected supplier provides the OCR/QR parsing rules (qty encoding, date-code encoding) and the scanner symbology whitelist.
 - **No receiving order** — items are committed directly to inventory lots without a receiving order reference.
 - **Location assignment** — the user selects an `(org_id, sub_inventory_code)` pair for all items, with per-item override.
-- **Date code defaulting** — new items default to today's date code (WWYY format); users can edit date code and lot code by batch or per item.
+- **Date code defaulting** — new items default to today's date code in label format (per the `dateCodeFormat` flow config — WWYY for default `wwyy` warehouses); users can edit date code and lot code by batch or per item.
 - **Shelf selection** — scan a shelf QR code or pick from a dropdown.
 - **One-shot commit** — all scanned items are committed to the selected shelf in one transaction.
 

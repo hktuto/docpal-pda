@@ -10,6 +10,8 @@ import { now } from "./now.js";
 import { queryGet } from "./query.js";
 import { allowedOrgFilter } from "./org-filter.js";
 import { normalizePartNo } from "./scanParse.js";
+import { toCanonicalDateCode } from "./dateCode.js";
+import { dateCodeFormat } from "../config.js";
 import { scheduleAllocateAll } from "./allocate.js";
 
 // Shelf exchange domain logic (spec 2026-10-12-shelf-exchange-design.md):
@@ -95,6 +97,11 @@ export async function previewShelfExchange(
   );
   if (!shelf) throw new HTTPException(404, { message: "shelf_not_found" });
 
+  // The scanned label's date code arrives in the label format; lots store
+  // canonical YYWW — canonicalize before the match (spec
+  // 2026-10-22-datecode-format-config-design.md).
+  const scannedDateCode = toCanonicalDateCode(input.dateCode, dateCodeFormat());
+
   const rows = await db.execute<{
     id: string;
     partNo: string;
@@ -125,7 +132,7 @@ export async function previewShelfExchange(
         )}
           AND il.shelf_code = ${sourceShelfCode}
           ${allowedOrgFilter(sql`il.org_id`)}
-          AND (${input.dateCode ?? null}::text IS NULL OR il.date_code = ${input.dateCode ?? null})
+          AND (${scannedDateCode ?? null}::text IS NULL OR il.date_code = ${scannedDateCode ?? null})
           AND (${input.lotCode ?? null}::text IS NULL OR il.lot_code = ${input.lotCode ?? null})
           AND (${input.coo ?? null}::text IS NULL OR upper(il.coo) = upper(${input.coo ?? null}))
           AND (${input.cow ?? null}::text IS NULL OR upper(il.cow) = upper(${input.cow ?? null}))

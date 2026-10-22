@@ -429,3 +429,16 @@ test("pdaViewConfig accessor: detail overrides merge over defaults", () => {
     _resetFlowConfigForTests();
   }
 });
+
+test("parseFlowConfig: dateCodeFormat merges over the \"wwyy\" default", () => {
+  assert.equal(parseFlowConfig(undefined).dateCodeFormat, "wwyy");
+  assert.equal(parseFlowConfig("{}").dateCodeFormat, "wwyy");
+  assert.equal(parseFlowConfig('{"dateCodeFormat":"wwyy"}').dateCodeFormat, "wwyy");
+  assert.equal(parseFlowConfig('{"dateCodeFormat":"yyww"}').dateCodeFormat, "yyww");
+});
+
+test("parseFlowConfig: dateCodeFormat validation", () => {
+  assert.throws(() => parseFlowConfig('{"dateCodeFormat":"WWYY"}'), /dateCodeFormat must be "wwyy" or "yyww"/);
+  assert.throws(() => parseFlowConfig('{"dateCodeFormat":"yymm"}'), /dateCodeFormat must be "wwyy" or "yyww"/);
+  assert.throws(() => parseFlowConfig('{"dateCodeFormat":1}'), /dateCodeFormat must be "wwyy" or "yyww"/);
+});

@@ -7,7 +7,8 @@ import { transactionLogs, inventoryTransactions } from "./schema/index.js";
 import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
 import { completePutAwayTaskTx } from "./putawaytasks.js";
-import { putAwayConfig, receivingOrderNameTemplate } from "../config.js";
+import { putAwayConfig, receivingOrderNameTemplate, dateCodeFormat } from "../config.js";
+import { toCanonicalDateCode } from "./dateCode.js";
 import { formatReceivingOrderName } from "../receivingOrderName.js";
 import { allowedOrgFilter } from "./org-filter.js";
 import {
@@ -903,8 +904,11 @@ export async function recordPutAwayScan(
     // regardless — a hit records the warning row in this tx and rides on the
     // response for the PDA alert. Supplier = the receiving order's
     // supplier_code; the label's own date code is checked (none = no check).
+    // The scanned label code is canonicalized to YYWW for the age rank and the
+    // stored warning row (spec 2026-10-22).
     let outdatedWarning: OutdatedWarningInfo | null = null;
-    const outdatedHit = await checkOutdatedDateCode(tx, { supplierCode: order.supplierCode, dateCode: input.dateCode });
+    const scannedCanonicalDateCode = toCanonicalDateCode(input.dateCode, dateCodeFormat());
+    const outdatedHit = await checkOutdatedDateCode(tx, { supplierCode: order.supplierCode, dateCode: scannedCanonicalDateCode });
     if (outdatedHit) {
       outdatedWarning = await recordOutdatedWarning(tx, {
         orderKind: "putaway",
@@ -914,7 +918,7 @@ export async function recordPutAwayScan(
         supplierCode: order.supplierCode!,
         wclItemNo: item.wclItemNo,
         partNo: item.partNo,
-        dateCode: input.dateCode!,
+        dateCode: scannedCanonicalDateCode!,
         limitMonths: outdatedHit.limitMonths,
         qty: input.qty,
         scannedBy: input.actorId,
@@ -1068,13 +1072,19 @@ async function assignScanToBoxTx(
       )
     )?.wclItemNo ?? item.wclItemNo;
 
+  // Enclave → canonical: the receiving item's date code stays in the label
+  // format; the lot (downstream of receiving) stores canonical YYWW, so the
+  // unique-lot lookup, the INSERT and the ledger snapshot all use the
+  // converted value (spec 2026-10-22-datecode-format-config-design.md).
+  const canonicalDateCode = toCanonicalDateCode(item.dateCode, dateCodeFormat());
+
   // Lot lookup mirrors the unique index (part_no + batch attrs + shelf + box
   // + location pair); a match merges into the existing lot.
   const lot = await queryGet<{ id: string }>(
     tx,
     sql`SELECT id FROM inventory_lots
         WHERE part_no = ${item.partNo} AND shelf_code = ${box.shelfCode} AND box_id = ${box.id}
-          AND date_code IS NOT DISTINCT FROM ${item.dateCode}
+          AND date_code IS NOT DISTINCT FROM ${canonicalDateCode}
           AND lot_code IS NOT DISTINCT FROM ${item.lotCode}
           AND coo IS NOT DISTINCT FROM ${item.coo}
           AND cow IS NOT DISTINCT FROM ${item.cow}
@@ -1097,7 +1107,7 @@ async function assignScanToBoxTx(
       tx,
       sql`INSERT INTO inventory_lots (id, part_no, wcl_item_no, date_code, lot_code, coo, cow, shelf_code, box_id,
                                      org_id, sub_inventory_code, total_qty, allocated_qty)
-          VALUES (${lotId}, ${item.partNo}, ${partWclItemNo}, ${item.dateCode}, ${item.lotCode}, ${item.coo}, ${item.cow},
+          VALUES (${lotId}, ${item.partNo}, ${partWclItemNo}, ${canonicalDateCode}, ${item.lotCode}, ${item.coo}, ${item.cow},
                   ${box.shelfCode}, ${box.id},
                   ${boxPair.orgId}, ${boxPair.subInventoryCode},
                   ${scan.qty}, 0)`
@@ -1132,7 +1142,7 @@ async function assignScanToBoxTx(
     shelfCode: box.shelfCode,
     boxId: box.id,
     txnType: "PUT_AWAY",
-    dateCode: item.dateCode,
+    dateCode: canonicalDateCode,
     lotCode: item.lotCode,
     coo: item.coo,
     cow: item.cow,
@@ -1272,14 +1282,17 @@ export async function removeScanFromBox(
       sql`UPDATE shelf_box_items SET shelf_box_id = ${stagingBoxId}, verified = false WHERE id = ${scan.id}`
     );
 
-    // Reverse the lot materialization (same key as assign: RII + box + batch).
+    // Reverse the lot materialization (same key as assign: RII + box + batch,
+    // with the same enclave → canonical date-code conversion the
+    // materialization applied — spec 2026-10-22-datecode-format-config-design.md).
+    const canonicalDateCode = toCanonicalDateCode(item.dateCode, dateCodeFormat());
     const src = await queryGet<{ id: string; lotId: string; qty: number }>(
       tx,
       sql`SELECT ils.id, ils.inventory_lot_id AS "lotId", ils.qty
           FROM inventory_lot_sources ils
           JOIN inventory_lots il ON il.id = ils.inventory_lot_id
           WHERE ils.receiving_invoice_item_id = ${scan.itemId} AND il.box_id = ${box.id}
-            AND il.date_code IS NOT DISTINCT FROM ${item.dateCode}
+            AND il.date_code IS NOT DISTINCT FROM ${canonicalDateCode}
             AND il.lot_code IS NOT DISTINCT FROM ${item.lotCode}
             AND il.coo IS NOT DISTINCT FROM ${item.coo}
             AND il.cow IS NOT DISTINCT FROM ${item.cow}`
@@ -1327,7 +1340,7 @@ export async function removeScanFromBox(
       shelfCode: box.shelfCode,
       boxId: box.id,
       txnType: "PUT_AWAY",
-      dateCode: item.dateCode,
+      dateCode: canonicalDateCode,
       lotCode: item.lotCode,
       coo: item.coo,
       cow: item.cow,

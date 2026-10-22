@@ -330,7 +330,7 @@ test("detail: nested shape — order, items with allocations/packages, boxes; 40
   assert.ok(alloc.lot);
   assert.equal(alloc.lot.shelfCode, "A0101");
   assert.equal(alloc.lot.boxId, "BOX-H-20260701-0001");
-  assert.equal(alloc.lot.dateCode, "2603");
+  assert.equal(alloc.lot.dateCode, "0326");
   assert.equal(alloc.lot.lotCode, "L2603A");
   assert.equal(alloc.lot.coo, "JP");
   assert.equal(alloc.lot.cow, "JP");
@@ -347,7 +347,7 @@ test("detail: nested shape — order, items with allocations/packages, boxes; 40
   assert.ok(alloc3.lot);
   assert.equal(alloc3.lot.shelfCode, "A0102");
   assert.equal(alloc3.lot.boxId, "BOX-H-20260701-0002");
-  assert.equal(alloc3.lot.dateCode, "2604");
+  assert.equal(alloc3.lot.dateCode, "0426");
   assert.equal(alloc3.lot.lotCode, "L2604A");
   assert.equal(alloc3.lot.totalQty, 700);
   assert.equal(alloc3.lot.allocatedQty, 700);
@@ -378,17 +378,17 @@ test("detail: allocation lot carries the shelf warning (null when unset)", async
 
 // --- outdated allocation flag (spec 2026-10-20) ---------------------------------
 
-test("detail: allocation outdated flag — old WWYY true, fresh/invalid/null false", async () => {
+test("detail: allocation outdated flag — old code true, fresh/invalid/null false", async () => {
   await reseed(client);
   const { orderId } = await seededOrderAllocated();
 
-  // seed lots carry 2003/2004 WWYY codes → outdated at the default 2y threshold
+  // seed lots carry canonical YYWW 2003/2004 codes → outdated at the default 2y threshold
   let detail = await getPickingOrderDetail(client.db, orderId);
   const item1002F = (d: typeof detail) => d.items.find((i) => i.partNo === "RK73H1JTTD1002F")!;
   const item181G = (d: typeof detail) => d.items.find((i) => i.partNo === "RK73B1JTTD181G")!;
   assert.equal(item1002F(detail).allocations[0].outdated, true);
 
-  // fresh WWYY → not outdated
+  // fresh code → not outdated
   await client.db.execute(
     sql`UPDATE inventory_lots SET date_code = ${dateToDateCode(new Date())} WHERE shelf_code = 'A0101'`
   );
@@ -413,7 +413,7 @@ test("list: hasOutdatedAllocations follows the source date code and threshold co
   // keep the demo world hermetic: drop the other seeded picking order
   await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${orderId}`);
 
-  // seed lots carry 2003/2004 WWYY codes → outdated at the default 2y threshold
+  // seed lots carry canonical YYWW 2003/2004 codes → outdated at the default 2y threshold
   let rows = (await listPickingOrders(client.db)).rows;
   assert.equal(rows.length, 1);
   assert.equal(rows[0].hasOutdatedAllocations, true);
@@ -424,7 +424,7 @@ test("list: hasOutdatedAllocations follows the source date code and threshold co
   assert.equal(rows[0].hasOutdatedAllocations, false);
 
   // config sensitivity: a 30y threshold un-flags even the 2003/2004 seed codes
-  await client.db.execute(sql`UPDATE inventory_lots SET date_code = '2603'`);
+  await client.db.execute(sql`UPDATE inventory_lots SET date_code = '0326'`);
   _setOutdatedStockYearsForTests(30);
   try {
     rows = (await listPickingOrders(client.db)).rows;
@@ -473,7 +473,7 @@ test("scan: lot source — package + batch snapshot, lot/allocation shrink, PICK
   assert.equal(pkg.sourceType, "inventory_lot");
   assert.equal(pkg.sourceId, lotId);
   assert.equal(pkg.qty, 500);
-  assert.equal(pkg.dateCode, "2603");
+  assert.equal(pkg.dateCode, "0326");
   assert.equal(pkg.lotCode, "L2603A");
   assert.equal(pkg.coo, "JP");
   assert.equal(pkg.cow, "JP");
@@ -520,7 +520,7 @@ test("scan: lot source — package + batch snapshot, lot/allocation shrink, PICK
     assert.equal(t.referenceType, "picking_item");
     assert.equal(t.referenceId, itemId);
     assert.equal(t.actorId, actorId);
-    assert.equal(t.dateCode, "2603");
+    assert.equal(t.dateCode, "0326");
     assert.equal(t.txnReason, "pick");
   }
 
@@ -556,7 +556,7 @@ test("scan: lot source — package + batch snapshot, lot/allocation shrink, PICK
   );
   assert.equal(pkg2!.lotCode, "L2603A");
   assert.equal(pkg2!.coo, "JP");
-  assert.equal(pkg2!.dateCode, "2603");
+  assert.equal(pkg2!.dateCode, "0326");
 });
 
 test("scan guards: over-allocation, over-required, ownership, actor, qty, order status", async () => {
@@ -2258,7 +2258,9 @@ test("scan shelf-scan mode require-any: deducts the scanned shelf's lot; 409s", 
     assert.equal(origLot!.totalQty, 900); // only the A0101 scan above
     assert.equal(origLot!.allocatedQty, 700);
 
-    // label batch fields must match the candidate lot when the label carries them
+    // label batch fields must match the candidate lot when the label carries
+    // them — the scanned label code arrives in the label format ("0126" =
+    // wk01/2026) and is canonicalized ("2601") before the lot match
     const batchMiss = await catchHttp(
       scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 50, shelfCode: "A0102", dateCode: "9999" })
     );
@@ -2269,7 +2271,7 @@ test("scan shelf-scan mode require-any: deducts the scanned shelf's lot; 409s", 
       allocationId: alloc.id,
       qty: 50,
       shelfCode: "A0102",
-      dateCode: "2601",
+      dateCode: "0126",
       lotCode: "L2601X",
     });
     assert.equal((await allocationOf(itemId)).qty, 650);

@@ -8,7 +8,7 @@ import { queryAll, queryGet } from "./query.js";
 import { allocateAll } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
 import { insertReceivingOrder } from "./test-fixtures.js";
-import { dateCodeRank, dateToDateCode, outdatedThresholdRankMonths } from "./dateCode.js";
+import { dateCodeRank, dateToDateCode, outdatedThresholdRankMonths, swapDateCode } from "./dateCode.js";
 import {
   checkOutdatedDateCode,
   listOutdatedWarnings,
@@ -155,14 +155,14 @@ async function insertPickingItem(orderId: string, partNo: string, qty: number): 
   return id;
 }
 
-// --- WWYY helpers + check logic -------------------------------------------------
+// --- canonical YYWW helpers + check logic -------------------------------------------------
 
 test("dateCodeRank: 2-digit-year window reads future YY a century earlier; invalid codes rank null", async () => {
-  assert.equal(dateCodeRank("0198", REF), 199801); // 2098 > 2027 → 1998
-  assert.equal(dateCodeRank("5326", REF), 202653);
+  assert.equal(dateCodeRank("9801", REF), 199801); // 2098 > 2027 → 1998
+  assert.equal(dateCodeRank("2653", REF), 202653);
   assert.equal(dateCodeRank("9999", REF), null); // week 99
-  assert.equal(dateCodeRank("0061", REF), null); // week 00
-  assert.equal(dateCodeRank("012", REF), null); // not WWYY
+  assert.equal(dateCodeRank("0061", REF), null); // week 61
+  assert.equal(dateCodeRank("012", REF), null); // not a 4-digit code
   assert.equal(dateCodeRank(null, REF), null);
 });
 
@@ -244,7 +244,7 @@ test("picking scan: outdated label warns (response + row + event + order surface
     actorId,
     allocationId: await allocationIdOf(item2),
     qty: 5,
-    dateCode: dateToDateCode(new Date()),
+    dateCode: swapDateCode(dateToDateCode(new Date())), // label format of today's code
   });
   assert.equal(clean.outdatedWarning, null);
   const noCode = await scanPickingItem(client.db, item2, {
@@ -421,7 +421,7 @@ test("put-away scan: outdated label warns; commit stays allowed; order clear hel
     actorId,
     receivingInvoiceItemId: itemId,
     qty: 4900,
-    dateCode: dateToDateCode(new Date()),
+    dateCode: swapDateCode(dateToDateCode(new Date())), // label format of today's code
   });
   assert.equal(clean.outdatedWarning, null);
 

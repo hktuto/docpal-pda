@@ -7,18 +7,20 @@ import { userScopeFilter, type UserScopeEntry } from "./user-scope.js";
 import { outdatedStockYears } from "../config.js";
 import { dateCodeRank, outdatedThresholdRank } from "./dateCode.js";
 
-// WWYY date-code helpers (dateCodeRank / dateToDateCode / threshold ranks)
-// live in ./dateCode.ts — shared with the supplier outdated-scan check.
-// rank = year*100 + week orders codes correctly; a lexicographic string
-// compare does NOT ("5221" = 2021w52 sorts after "0322" = 2022w03 as strings
-// but is chronologically earlier). The SQL rank below mirrors dateCodeRank.
+// Canonical YYWW date-code helpers (dateCodeRank / dateToDateCode / threshold
+// ranks) live in ./dateCode.ts — shared with the supplier outdated-scan check.
+// Canonical YYWW sorts chronologically both by rank (year*100 + week) and as a
+// plain string ("2652" = 2026w52 < "2701" = 2027w01 lexicographically). The
+// SQL rank below mirrors dateCodeRank (kept for the outdated threshold, where
+// the 2-digit-year window matters); plain range filters use string compares.
 
 /** SQL rank expression for inventory_lots.date_code (aliased il) — mirrors
  *  dateCodeRank including the 2-digit-year window (a YY landing more than a
- *  year ahead of the DB clock is read as a century earlier). */
-const DC_RANK = sql`((2000 + right(il.date_code, 2)::int) - CASE WHEN 2000 + right(il.date_code, 2)::int > EXTRACT(YEAR FROM now())::int + 1 THEN 100 ELSE 0 END) * 100 + left(il.date_code, 2)::int`;
-/** SQL guard: date_code is a well-formed WWYY code (week 01–53). */
-const DC_VALID = sql`il.date_code ~ '^[0-9]{4}$' AND left(il.date_code, 2)::int BETWEEN 1 AND 53`;
+ *  year ahead of the DB clock is read as a century earlier). Canonical codes
+ *  are YYWW: left pair = year, right pair = week. */
+const DC_RANK = sql`((2000 + left(il.date_code, 2)::int) - CASE WHEN 2000 + left(il.date_code, 2)::int > EXTRACT(YEAR FROM now())::int + 1 THEN 100 ELSE 0 END) * 100 + right(il.date_code, 2)::int`;
+/** SQL guard: date_code is a well-formed canonical YYWW code (week 01–53). */
+const DC_VALID = sql`il.date_code ~ '^[0-9]{4}$' AND right(il.date_code, 2)::int BETWEEN 1 AND 53`;
 
 // ---------------------------------------------------------------------------
 // Stock search (read-only). One aggregate query replaces the old 3-call
@@ -41,9 +43,10 @@ const DC_VALID = sql`il.date_code ~ '^[0-9]{4}$' AND left(il.date_code, 2)::int 
 //     (independent dimensions — kept for backwards compatibility).
 //   - location: any-of match on the EXACT (org_id, sub_inventory_code) pair
 //     (no cross-product) — the combined location dropdown's filter.
-//   - dateCodeFrom / dateCodeTo: WWYY date-code range, ranked as
-//     year*100+week (NOT lexicographic — "5221" < "0322" chronologically);
-//     lots with NULL/invalid date codes never match once a bound is set.
+//   - dateCodeFrom / dateCodeTo: canonical YYWW date-code range; valid codes
+//     compare chronologically as plain strings (year pair first — "2652" <
+//     "2701"), so the filter is a string range over valid codes only; lots
+//     with NULL/invalid date codes never match once a bound is set.
 //   - supplierCode: the lot traces to the supplier via inventory_lot_sources →
 //     receiving_invoice_items → receiving_invoices → receiving_orders —
 //     filtered on receiving_orders.supplier_code, mirroring the old
@@ -74,8 +77,8 @@ export interface StockSearchFilters {
   /** Exact (orgId, subInventoryCode) pairs, any-of — the combined location
    *  dropdown filter (selecting (2,A)+(3,B) does NOT match (2,B)/(3,A)). */
   location?: { orgId: number; code: string }[];
-  /** WWYY date-code range bounds (either optional; swapped bounds are
-   *  normalized). When a bound is set, lots with NULL/invalid date codes
+  /** Canonical YYWW date-code range bounds (either optional; swapped bounds
+   *  are normalized). When a bound is set, lots with NULL/invalid date codes
    *  never match. */
   dateCodeFrom?: string;
   dateCodeTo?: string;
@@ -171,8 +174,8 @@ export interface StockSearchSummary {
   lastUpdateDate: string | null;
   /** Outdated threshold in force (flow config outdatedStockYears). */
   outdatedYears: number;
-  /** Distinct parts with at least one outdated lot (WWYY date code older
-   *  than outdatedYears). */
+  /** Distinct parts with at least one outdated lot (canonical YYWW date code
+   *  older than outdatedYears). */
   outdatedPartCount: number;
   outdatedLotCount: number;
   /** Σ total_qty over outdated lots. */
@@ -209,7 +212,9 @@ function stockFromWhere(filters: StockSearchFilters) {
 }
 
 /** Default row order — also the tiebreaker tail for stable pagination when a
- *  sort key is active. */
+ *  sort key is active. Canonical YYWW date codes sort chronologically as
+ *  plain strings (year pair first), so the lexicographic date_code order is
+ *  correct across year boundaries. */
 const DEFAULT_ORDER = sql`il.part_no, il.date_code NULLS LAST, il.shelf_code, il.box_id`;
 
 /** Sort key whitelist → SQL expression(s), each rendered `<expr> ASC|DESC
@@ -337,12 +342,13 @@ export async function searchStock(
 function stockFilterClauses(filters: StockSearchFilters) {
   const partNoNorm = filters.partNo ? normalizePartNo(filters.partNo) : "";
   const drawingNoNorm = filters.drawingNo ? normalizePartNo(filters.drawingNo) : "";
-  // Normalize the date-code range: ranks (year*100+week), swapped bounds
+  // Normalize the canonical YYWW date-code range: valid codes compare
+  // chronologically as plain strings (year pair first); swapped bounds are
   // fixed up, invalid codes treated as unbounded.
-  const fromRank = dateCodeRank(filters.dateCodeFrom);
-  const toRank = dateCodeRank(filters.dateCodeTo);
-  const dcLo = fromRank !== null && toRank !== null ? Math.min(fromRank, toRank) : fromRank;
-  const dcHi = fromRank !== null && toRank !== null ? Math.max(fromRank, toRank) : toRank;
+  const fromOk = dateCodeRank(filters.dateCodeFrom) !== null ? filters.dateCodeFrom! : null;
+  const toOk = dateCodeRank(filters.dateCodeTo) !== null ? filters.dateCodeTo! : null;
+  const dcLo = fromOk !== null && toOk !== null ? (fromOk <= toOk ? fromOk : toOk) : fromOk;
+  const dcHi = fromOk !== null && toOk !== null ? (fromOk <= toOk ? toOk : fromOk) : toOk;
   return sql`
     ${allowedOrgFilter(sql`il.org_id`)}
     ${partNoNorm ? sql`AND (strpos(regexp_replace(upper(p.part_no), '\\s', '', 'g'), ${partNoNorm}) > 0 OR strpos(regexp_replace(upper(p.wcl_item_no), '\\s', '', 'g'), ${partNoNorm}) > 0)` : sql``}
@@ -363,8 +369,8 @@ function stockFilterClauses(filters: StockSearchFilters) {
     ${
       dcLo !== null || dcHi !== null
         ? sql`AND ${DC_VALID}
-          ${dcLo !== null ? sql`AND ${DC_RANK} >= ${dcLo}` : sql``}
-          ${dcHi !== null ? sql`AND ${DC_RANK} <= ${dcHi}` : sql``}`
+          ${dcLo !== null ? sql`AND il.date_code >= ${dcLo}` : sql``}
+          ${dcHi !== null ? sql`AND il.date_code <= ${dcHi}` : sql``}`
         : sql``
     }
     ${
@@ -387,7 +393,7 @@ function stockFilterClauses(filters: StockSearchFilters) {
  * matching the given search filters ({} = overall), scoped by the same
  * allowed-org filter as searchStock. Sums are cast to int — pg returns
  * SUM(int) as a bigint string.
- * Outdated = lot WWYY date code older than the flow config's
+ * Outdated = lot canonical YYWW date code older than the flow config's
  * outdatedStockYears (lots with NULL/invalid date codes never count).
  */
 export async function stockSearchSummary(db: AppDb, filters: StockSearchFilters = {}): Promise<StockSearchSummary> {

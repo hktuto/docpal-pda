@@ -2,6 +2,7 @@ import { useAuth } from './useAuth';
 import { useWarehouse } from './useWarehouse';
 import { I18nError } from '~/composables/i18nError';
 import type { OcrInput } from '~/utils/ocrNormalize';
+import { toCanonicalDateCode, type DateCodeFormat } from '~/utils/dateCode';
 import type {
   PutAwayExpectedItem,
   MeasuringPackage,
@@ -30,7 +31,7 @@ export async function runScanMatcher(
       return m.matchPutAway(ctx.receivingOrderId, ctx.putAwayItems ?? [ctx.receivingItem], parsed, ctx.shelfCode);
     case 'measuring':
       if (!ctx.packages) return m.error('missing_box_packages');
-      return m.matchMeasuring(ctx.packages, ctx.targetPackageId, parsed, ctx.flow, ctx.rawLabel);
+      return m.matchMeasuring(ctx.packages, ctx.targetPackageId, parsed, ctx.flow, ctx.rawLabel, ctx.dateCodeFormat);
     default:
       return m.error('unknown_scan_task');
   }
@@ -79,6 +80,11 @@ export interface ScanTaskContext {
   flow?: 'measuring' | 'verify';
   // when true, even a single match opens the review dialog instead of auto-applying
   confirmSingleMatch?: boolean;
+  /** Resolved flow config dateCodeFormat (useFlowSteps) — the label/upstream
+   *  format of decoded scan output. The measuring matcher canonicalizes the
+   *  scanned date code with it before comparing against canonical package
+   *  batch values. Default "wwyy". */
+  dateCodeFormat?: DateCodeFormat;
 }
 
 export interface ScanMatchRecord {
@@ -98,7 +104,7 @@ export type ScanMatchResult =
 export interface ScanMatchers {
   matchPicking(allocation: PickingAllocationRef, pickingItem: PickingItemRef, parsed: OcrInput): Promise<ScanMatchResult>;
   matchPutAway(receivingOrderId: string | undefined, putAwayItems: PutAwayExpectedItem[], parsed: OcrInput, shelfCode?: string | null): Promise<ScanMatchResult>;
-  matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow?: 'measuring' | 'verify', rawLabel?: string): Promise<ScanMatchResult>;
+  matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow?: 'measuring' | 'verify', rawLabel?: string, dateCodeFormat?: DateCodeFormat): Promise<ScanMatchResult>;
   error(err: I18nError): ScanMatchResult;
   error(code: string, params?: Record<string, unknown>): ScanMatchResult;
 }
@@ -246,7 +252,7 @@ export function useScanMatchers(): ScanMatchers {
   // design): totals per part + batch fields, not physical labels — the scan
   // qty is credited FIFO across the matching packages (partial allowed).
   // Apply = verifyPackage per credit.
-  async function matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow: 'measuring' | 'verify' = 'measuring', rawLabel?: string): Promise<ScanMatchResult> {
+  async function matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow: 'measuring' | 'verify' = 'measuring', rawLabel?: string, format: DateCodeFormat = 'wwyy'): Promise<ScanMatchResult> {
     const user = currentUser.value;
     if (!user?.id) return error('operator_not_signed_in');
 
@@ -260,7 +266,13 @@ export function useScanMatchers(): ScanMatchers {
           partNo: parsed.partNo,
           wclItemNo: parsed.wclItemNo,
           qty,
-          dateCode: parsed.dateCode ? String(parsed.dateCode) : undefined,
+          // The scanned label decodes in the label format (parseOcrScan
+          // contract); packages anchor to canonical YYWW batch values (the
+          // backend canonicalizes the pick-time scanned snapshot) — convert
+          // before the compare (spec 2026-10-22).
+          dateCode: parsed.dateCode
+            ? (toCanonicalDateCode(String(parsed.dateCode), format) ?? String(parsed.dateCode))
+            : undefined,
           lotCode: parsed.lotCode ? String(parsed.lotCode) : undefined,
           coo: parsed.coo ? String(parsed.coo) : undefined,
           cow: parsed.cow ? String(parsed.cow) : undefined,

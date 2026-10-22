@@ -19,7 +19,7 @@ export const outdatedScanWarnings = pgTable(
     supplierCode: text("supplier_code").notNull(),
     wclItemNo: text("wcl_item_no"),
     partNo: text("part_no"),
-    dateCode: text("date_code").notNull(), // scanned WWYY (post decode)
+    dateCode: text("date_code").notNull(), // scanned date code, canonical YYWW (post decode + canonicalize)
     limitMonths: integer("limit_months").notNull(), // supplier limit snapshot
     qty: integer("qty"),
     scannedBy: text("scanned_by").notNull(),

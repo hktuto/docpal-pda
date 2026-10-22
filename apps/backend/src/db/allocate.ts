@@ -63,7 +63,10 @@ import { locationMatches } from "./locationMatch.js";
 //     or its wcl_item_no equals the picking item's part_no — real picking
 //     items carry the WCL business key (e.g. "NCC-…") while receiving items /
 //     lots store the supplier part number in part_no.
-//   - FIFO: oldest date_code first (NULLS LAST).
+//   - FIFO: oldest date_code first (NULLS LAST). Canonical YYWW lexicographic
+//     order is chronological (year pair first), so the plain string ORDER BY
+//     is correct across year boundaries (spec
+//     2026-10-22-datecode-format-config-design.md).
 //   - Box granularity: a receiving line WITH ctn_no allocates down to that box
 //     (receiving_invoice_item_id); a line WITHOUT ctn_no allocates to the
 //     whole receiving order (receiving_order_id).

@@ -2172,8 +2172,15 @@ export default {
         allowedOrgIdsInvalid: "Org ID 必須是以逗號分隔的整數（例如 2, 3）。",
         stockSection: "庫存",
         outdatedStockYears: "過期門檻（年）",
-        outdatedStockYearsHint: "批次日期代碼（WWYY）早於此年數的物料，會在庫存查詢概要中計為過期。",
+        outdatedStockYearsHint: "批次日期代碼（YYWW）早於此年數的物料，會在庫存查詢概要中計為過期。",
         outdatedStockYearsInvalid: "過期門檻必須是正整數（年）。",
+        dateCodeSection: "日期代碼",
+        dateCodeFormat: "收貨標籤日期代碼格式",
+        dateCodeFormatHint: "上游收貨資料及實體供應商標籤所使用的日期代碼格式 ——「wwyy」（週-年，例如 KOA/香港標籤）或「yyww」（年-週，例如深圳）。收貨之後的儲存格式一律為標準 YYWW，系統會在收貨邊界自動轉換。",
+        dateCodeFormatValues: {
+          wwyy: "WWYY（週-年，例如 3726）",
+          yyww: "YYWW（年-週，例如 2637）"
+        },
         rulesSection: "收貨子庫存規則（確認到貨）",
         ruleOrgIds: "Org ID（例如 140, 143）",
         rulePoPattern: "PO 模式（例如 319*、11*W）",

@@ -136,6 +136,14 @@ test("complete: partial put-away creates on-hand lot + ledger, task stays pendin
   assert.equal(lot!.totalQty, 60);
   assert.equal(lot!.orgId, 2); // pair from the CN item — allocation/stock-search see it
   assert.equal(lot!.subInventoryCode, "STORE1");
+  // enclave → canonical at the lot boundary: the CN item's label code "2641"
+  // is stored on the lot as canonical YYWW "4126" (spec
+  // 2026-10-22-datecode-format-config-design.md)
+  const lotDc = await queryGet<{ dateCode: string | null }>(
+    client.db,
+    sql`SELECT date_code AS "dateCode" FROM inventory_lots WHERE part_no = 'RK73B1JTTD181G' AND shelf_code = 'A0103'`
+  );
+  assert.equal(lotDc!.dateCode, "4126");
 
   const txns = await queryAll<{ txnType: string; qtyType: string; qtyDelta: number; referenceType: string | null; referenceId: string | null }>(
     client.db,

@@ -102,6 +102,9 @@ test("ad-hoc put-away", async () => {
     assert.equal(lots.length, 1);
     assert.equal(lots[0].totalQty, 100);
     assert.equal(lots[0].shelfCode, TEST_SHELF_CODE);
+    // canonical YYWW stored from the label-format scan input ("2640" → "4026";
+    // spec 2026-10-22-datecode-format-config-design.md)
+    assert.equal(lots[0].dateCode, "4026");
 
     // Check ledger row was created
     const txns = await db.select().from(inventoryTransactions).where(

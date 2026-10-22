@@ -4,6 +4,7 @@ import {
   allowDockStock,
   allowedOrgIds,
   cnReceiving,
+  dateCodeFormat,
   isStepEnabled,
   pdaListTemplates,
   pdaViewConfig,
@@ -22,6 +23,9 @@ export const configRoute = new Hono();
 // allowedOrgIds is informational — org filtering happens server-side.
 // listTemplates carries the resolved per-list {title, meta} display templates
 // (spec 2026-09-21-pda-list-row-templates-design.md), applied client-side.
+// dateCodeFormat is the receiving enclave's label date-code format ("wwyy" |
+// "yyww"); canonical storage downstream is always YYWW (spec
+// 2026-10-22-datecode-format-config-design.md).
 // warehouseCode is the instance's warehouse selector (WAREHOUSE_CODE env) —
 // the admin console uses it to pick warehouse-specific layouts (e.g. shelf
 // label borders).
@@ -36,6 +40,7 @@ configRoute.get("/config", async (c) => {
       listTemplates: pdaListTemplates(),
       viewConfig: pdaViewConfig(),
       pickingShelfScan: pickingShelfScan(),
+      dateCodeFormat: dateCodeFormat(),
       cnReceiving: cnReceiving(),
       warehouseCode: (process.env.WAREHOUSE_CODE ?? "").toLowerCase(),
     },

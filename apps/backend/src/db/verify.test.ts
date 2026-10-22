@@ -203,13 +203,15 @@ test("detail: pick-time scanned batch fields (2026-10-14) are stored and exposed
     await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 500 })
   ).packageIds[0];
 
-  // stored verbatim next to the source snapshot
+  // the scanned label code arrives in the label format ("2526") and is stored
+  // canonicalized ("2625") next to the source snapshot (spec
+  // 2026-10-22-datecode-format-config-design.md)
   const row = await queryGet<{ scannedDateCode: string | null; scannedLotCode: string | null }>(
     client.db,
     sql`SELECT scanned_date_code AS "scannedDateCode", scanned_lot_code AS "scannedLotCode"
         FROM picking_packages WHERE id = ${p1}`
   );
-  assert.deepEqual(row, { scannedDateCode: "2526", scannedLotCode: "1625H713" });
+  assert.deepEqual(row, { scannedDateCode: "2625", scannedLotCode: "1625H713" });
 
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
@@ -222,7 +224,7 @@ test("detail: pick-time scanned batch fields (2026-10-14) are stored and exposed
 
   const detail = await getVerifyTaskDetail(client.db, vt.id);
   const pkg1 = detail.packages.find((p) => p.id === p1)!;
-  assert.equal(pkg1.scannedDateCode, "2526");
+  assert.equal(pkg1.scannedDateCode, "2625"); // canonical (label "2526" swapped at the scan boundary)
   assert.equal(pkg1.scannedLotCode, "1625H713");
   assert.equal(pkg1.scannedCoo, "JP");
   assert.equal(pkg1.scannedCow, null);

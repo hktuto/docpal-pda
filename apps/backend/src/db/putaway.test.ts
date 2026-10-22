@@ -20,6 +20,7 @@ import {
   recordPutAwayScan,
   removeScanFromBox,
 } from "./putaway.js";
+import { _resetFlowConfigForTests, _setDateCodeFormatForTests } from "../config.js";
 
 let client: TestDb;
 
@@ -381,7 +382,7 @@ test("assign: materializes lot with shelf location, sources, put_away_qty, ledge
   assert.equal(lot.partNo, "RK73B1JTTD181G");
   assert.equal(lot.shelfCode, "A0103");
   assert.equal(lot.boxId, box.id);
-  assert.equal(lot.dateCode, "2610");
+  assert.equal(lot.dateCode, "1026"); // canonical YYWW (label "2610" swapped at the lot boundary)
   assert.equal(lot.coo, "JP");
   assert.equal(lot.orgId, 2);
   assert.equal(lot.subInventoryCode, "STORE1");
@@ -435,12 +436,32 @@ test("assign: materializes lot with shelf location, sources, put_away_qty, ledge
     assert.equal(t.referenceId, box.id);
     assert.equal(t.itemId, itemId);
     assert.equal(t.actorId, actorId);
-    assert.equal(t.dateCode, "2610");
+    assert.equal(t.dateCode, "1026"); // canonical
   }
 });
 
-test("assign: same part/batch/box merges into the same lot", async () => {
+test("assign: dateCodeFormat \"yyww\" stores the label code unchanged (identity conversion)", async () => {
   await reseed(client);
+  _setDateCodeFormatForTests("yyww");
+  try {
+    const { orderId, actorId } = await daitoInHand();
+    const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
+    const scan = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100 });
+    const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
+    await assignScanToBox(client.db, { scanId: scan.id, shelfBoxId: box.id, actorId });
+
+    const lot = await queryGet<{ dateCode: string | null }>(
+      client.db,
+      sql`SELECT date_code AS "dateCode" FROM inventory_lots WHERE box_id = ${box.id}`
+    );
+    // yyww labels are already canonical — the conversion is a pass-through
+    assert.equal(lot!.dateCode, "2610");
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
+test("assign: same part/batch/box merges into the same lot", async () => {  await reseed(client);
   const { orderId, actorId } = await daitoInHand();
   const itemId = await itemIdOf(orderId, "RK73B1JTTD181G"); // qty 5000
   const scan1 = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 1000 });
@@ -856,7 +877,7 @@ test("aggregate: order + lots + staging scans + boxes with items; 404", async ()
   assert.equal(lot.partNo, "RK73B1JTTD181G");
   assert.equal(lot.shelfCode, "A0103");
   assert.equal(lot.boxId, box.id);
-  assert.equal(lot.dateCode, "2610");
+  assert.equal(lot.dateCode, "1026"); // canonical YYWW (label "2610" swapped at the lot boundary)
   assert.equal(lot.orgId, 2);
   assert.equal(lot.subInventoryCode, "STORE1");
   assert.equal(lot.totalQty, 2000);

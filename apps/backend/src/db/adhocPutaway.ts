@@ -10,6 +10,8 @@ import { now } from "./now.js";
 import { scheduleAllocateAll } from "./allocate.js";
 import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
 import { normalizePartNo } from "./scanParse.js";
+import { toCanonicalDateCode } from "./dateCode.js";
+import { dateCodeFormat } from "../config.js";
 
 // Ad-hoc put-away domain logic (spec 2026-10-07-ad-hoc-put-away-design.md).
 // Commits scanned items (no receiving order) directly to a shelf in one
@@ -124,8 +126,13 @@ export async function commitAdHocPutAway(
     // 3. For each item: find-or-create lot, increment qty, write ledger
     const lotCache = new Map<string, string>(); // key → lot id
     const nowDate = now();
+    const fmt = dateCodeFormat();
 
     for (const item of items) {
+      // Scanned labels decode to the receiving enclave's label format; lots,
+      // ledger rows and the audit snapshot store canonical YYWW (spec
+      // 2026-10-22-datecode-format-config-design.md).
+      item.dateCode = toCanonicalDateCode(item.dateCode, fmt);
       const key = lotKey(item, shelfCode);
       const cacheKey = JSON.stringify(key);
 

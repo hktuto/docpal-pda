@@ -59,9 +59,10 @@
   tooltip row.
 - Allocation outdated-stock warning (spec
   `docs/superpowers/specs/2026-10-20-allocation-outdated-stock-warning-design.md`):
-  each allocation row carries `outdated: boolean` — the source's WWYY date
-  code (lot date code, or the dock invoice-item date code for receiving-area
-  sources) is valid and ranks older than the flow-config `outdatedStockYears`
+  each allocation row carries `outdated: boolean` — the source's date
+  code (canonical YYWW lot date code, or the dock invoice-item date code for
+  receiving-area sources — label format, canonicalized before ranking)
+  is valid and ranks older than the flow-config `outdatedStockYears`
   threshold (default 2, the stock-search outdated-count key). Warning-only —
   no scan hook, no allocation/pick change, no finish blocking. Surfaces: ⚠️
   stock-age warning on the date/lot row of `PickingUnifiedItems.vue` +
@@ -137,9 +138,10 @@
   Since 2026-10-14 every queued label scan is also **batch-validated against
   its allocation source** and the label's parsed batch fields are stored on
   the package: COO/COW must match when the source carries them, the date code
-  must be equal or earlier than the source's (parsed WWYY compare via
-  `utils/wwyyDateCode.ts` — codes in another on-label convention are skipped,
-  never mis-rejected), and the lot code is a hard match whenever the source
+  must be equal or earlier than the source's (canonical YYWW compare via
+  `utils/dateCode.ts`, the scanned label code canonicalized per the
+  `dateCodeFormat` config first — codes in another on-label convention are
+  skipped, never mis-rejected), and the lot code is a hard match whenever the source
   has one (rejects with `lot_code_mismatch`, including the label-vs-upstream
   vocabulary mismatch). The scanned values ride the Confirm POST as
   `scannedDateCode/scannedLotCode/scannedCoo/scannedCow` and land on
@@ -229,7 +231,8 @@
   completion flips the order to `measuring_finished`).
 - Supplier outdated date-code scan warnings (spec
   `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`):
-  when a scan's label date code (WWYY, post decode) is older than the
+  when a scan's label date code (post decode — label format, WWYY for
+  `dateCodeFormat=wwyy` warehouses, canonicalized to YYWW for the check) is older than the
   supplier's `supplier_profiles.outdated_limit_months` (NULL = no check),
   the scan still succeeds but records an `outdated_scan_warnings` row inside
   the scan tx and the response carries
@@ -593,11 +596,12 @@
   `POST /picking-orders/:id/resolve-issue`,
   `POST`/`DELETE /picking-orders/:id/work-lock`, `POST /picking-orders/reorder`.
 - `apps/backend/src/db/outdated.ts` — supplier outdated date-code warnings:
-  `checkPartScanOutdated` (brand→profile lookup + WWYY age check),
+  `checkPartScanOutdated` (brand→profile lookup + age check on the
+  canonicalized YYWW code),
   `recordOutdatedWarning` (in-tx insert + `outdated.warning.created`),
   `unresolvedOutdatedWarningCount`, `assertNoUnresolvedOutdatedWarnings`
   (finish 409), `resolveOrderOutdatedWarnings`, `listOutdatedWarnings`;
-  shared WWYY rank helpers in `apps/backend/src/db/dateCode.ts`; admin
+  shared canonical YYWW rank helpers in `apps/backend/src/db/dateCode.ts`; admin
   routes in `apps/backend/src/routes/admin/outdatedWarnings.ts`
   (`GET /admin/outdated-warnings`, `POST /admin/outdated-warnings/resolve-order`
   — also re-runs the held receiving auto-clear `retryReceivingOrderClear`).

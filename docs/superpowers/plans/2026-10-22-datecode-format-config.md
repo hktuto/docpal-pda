@@ -1,5 +1,28 @@
 # Date-code format config — YYWW canonical — implementation plan
 
+> NOTE (final): implementation findings that supersede details below —
+> 1. The print OUT boundary is `buildKoaLabelRaw` (there is no
+>    `buildScanSegments`); it takes a `dateCodeFormat` input and applies
+>    `toLabelDateCode` before `encodeKoaDateCodeRaw` (`labels.ts` canonicalizes
+>    receiving-source codes first — an involution round-trip — so receiving
+>    labels keep printing their own enclave code).
+> 2. `getTodayDateCode` lives in the PDA ad-hoc put-away page, not the backend;
+>    it was replaced by `toLabelDateCode(dateToDateCode(new Date()), format)`.
+> 3. `goodsverify.ts` has no scanned-vs-lot matching — task 10 was a no-op;
+>    measuring/verify matching is client-side aggregate (string equality on
+>    scanned snapshots), safe by design.
+> 4. Two unplanned IN boundaries were converted: `removeScanFromBox` (put-away
+>    reversal lot lookup) and `previewShelfExchange`.
+> 5. **Wire convention:** clients keep POSTing label-format date codes
+>    (scanned values are label format by contract); the backend canonicalizes
+>    at every body boundary (`picking.ts` scanPickingItem, `adhocPutaway.ts`,
+>    `shelfExchange.ts` preview). Client-side compares canonicalize at compare
+>    time only — converting before posting would double-swap.
+> 6. `apps/pda/utils/wwyyDateCode.ts` was deleted; its functions moved into
+>    `apps/pda/utils/dateCode.ts` (canonical YYWW orientation).
+> 7. One-time migration script: `scripts/migrate-datecode-yyww.mjs`
+>    (run-once marker in `warehouse_config`, NOT idempotent).
+
 Spec: `docs/superpowers/specs/2026-10-22-datecode-format-config-design.md` (authoritative).
 
 ## Goal

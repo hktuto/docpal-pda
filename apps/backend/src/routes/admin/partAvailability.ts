@@ -3,9 +3,9 @@ import { HTTPException } from "hono/http-exception";
 import { inArray, sql } from "drizzle-orm";
 import { db } from "../../db.js";
 import { queryAll } from "../../db/query.js";
-import { allowDockStock, outdatedStockYears } from "../../config.js";
+import { allowDockStock, outdatedStockYears, dateCodeFormat } from "../../config.js";
 import { resolveDemandLocation, workLockExpiry, type DemandRow as AllocateDemandRow } from "../../db/allocate.js";
-import { dateCodeRank, isOutdatedRank, outdatedThresholdRank } from "../../db/dateCode.js";
+import { dateCodeRank, isOutdatedRank, outdatedThresholdRank, toCanonicalDateCode } from "../../db/dateCode.js";
 import { locationMatches, type LocationMatchContext } from "../../db/locationMatch.js";
 
 // Admin part-availability lookup: every stock location (inventory_lots) and
@@ -289,8 +289,13 @@ interface AllocationBreakdownRow {
   shelfDisplayName: string | null;
   boxId: string | null;
   dateCode: string | null;
-  /** Source date code is valid WWYY older than the flow-config
-   *  outdatedStockYears threshold (spec 2026-10-20). */
+  /** Canonical lot date code (NULL for receiving-side sources). */
+  lotDateCode: string | null;
+  /** Receiving-item (enclave label format) date code. */
+  recvDateCode: string | null;
+  /** Source date code is valid and older than the flow-config
+   *  outdatedStockYears threshold (spec 2026-10-20); receiving-item codes are
+   *  canonicalized before the age rank (spec 2026-10-22). */
   outdated: boolean;
   lotCode: string | null;
   locked: boolean;
@@ -343,6 +348,8 @@ adminPartAvailabilityRoute.get("/part-allocations", async (c) => {
         s.display_name AS "shelfDisplayName",
         COALESCE(il.box_id, rii.ctn_no) AS "boxId",
         COALESCE(il.date_code, rii.date_code) AS "dateCode",
+        il.date_code AS "lotDateCode",
+        rii.date_code AS "recvDateCode",
         COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
         (po.working_by IS NOT NULL AND po.working_at >= ${workLockExpiry()}) AS "locked",
         u.display_name AS "workingByName"
@@ -360,10 +367,16 @@ adminPartAvailabilityRoute.get("/part-allocations", async (c) => {
   );
 
   const outdatedRank = outdatedThresholdRank(outdatedStockYears());
+  const dcFmt = dateCodeFormat();
   return c.json({
-    allocations: allocations.map((a) => ({
-      ...a,
-      outdated: isOutdatedRank(dateCodeRank(a.dateCode), outdatedRank),
-    })),
+    allocations: allocations.map((a) => {
+      // Lot codes are canonical; receiving-item (enclave) codes canonicalize
+      // before the age rank (spec 2026-10-22-datecode-format-config-design.md).
+      const { lotDateCode, recvDateCode, ...rest } = a;
+      return {
+        ...rest,
+        outdated: isOutdatedRank(dateCodeRank(lotDateCode ?? toCanonicalDateCode(recvDateCode, dcFmt)), outdatedRank),
+      };
+    }),
   });
 });

@@ -64,7 +64,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     description: "RES 180 OHM 5% 1/10W 0603",
     brand: "KOA",
     zone: "A",
-    dateCode: "2604",
+    dateCode: "0426",
     lotCode: "L2604A",
     coo: "JP",
     cow: "JP",
@@ -85,7 +85,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     description: "RES 10K OHM 1% 1/10W 0603",
     brand: "KOA",
     zone: "A",
-    dateCode: "2603",
+    dateCode: "0326",
     lotCode: "L2603A",
     coo: "JP",
     cow: "JP",
@@ -106,7 +106,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     description: "RES 22K OHM 1% 1/10W 0603",
     brand: "KOA",
     zone: "A",
-    dateCode: "2603",
+    dateCode: "0326",
     lotCode: "L2603B",
     coo: "JP",
     cow: "JP",
@@ -127,7 +127,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     description: "RES 47K OHM 1% 1/10W 0603",
     brand: "KOA",
     zone: "A",
-    dateCode: "2604",
+    dateCode: "0426",
     lotCode: "L2604B",
     coo: "JP",
     cow: "JP",
@@ -148,7 +148,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     description: null,
     brand: "KOA",
     zone: "A",
-    dateCode: "2609",
+    dateCode: "0926",
     lotCode: "L2609A",
     coo: "JP",
     cow: "JP",
@@ -169,7 +169,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     description: null,
     brand: "KOA",
     zone: "A",
-    dateCode: "2609",
+    dateCode: "0926",
     lotCode: "L2609B",
     coo: "JP",
     cow: "JP",
@@ -538,7 +538,7 @@ test("summary: overall totals across all lots", async () => {
   assert.ok(!Number.isNaN(Date.parse(s.lastUpdateDate!)));
 });
 
-test("summary: outdated counts — seed codes are WWYY weeks of 2003/2004/2009, all over 2y old", async () => {
+test("summary: outdated counts — seed codes are canonical YYWW weeks of 2003/2004/2009, all over 2y old", async () => {
   await reseed(client);
   _setOutdatedStockYearsForTests(2);
   try {
@@ -581,36 +581,52 @@ test("summary: lots with NULL/invalid date codes are never outdated", async () =
   }
 });
 
-// --- date-code range (WWYY ranked, not lexicographic) ---------------------------
+// --- date-code range (canonical YYWW — plain string range is chronological) -------
 
-test("dateCode range: ranked WWYY bounds, swapped bounds normalized", async () => {
+test("dateCode range: canonical YYWW bounds, swapped bounds normalized", async () => {
   await reseed(client);
 
-  // seed codes (WWYY): 2603 = 2003w26 (2 lots), 2604 = 2004w26 (2 lots),
-  // 2609 = 2009w26 (2 lots)
-  let r = await searchStock(client.db, { dateCodeFrom: "2604", dateCodeTo: "2604" });
+  // seed lot codes (canonical YYWW): 0326 = 2003w26 (2 lots), 0426 = 2004w26
+  // (2 lots), 0926 = 2009w26 (2 lots)
+  let r = await searchStock(client.db, { dateCodeFrom: "0426", dateCodeTo: "0426" });
   assert.deepEqual(r.lots.map((l) => l.partNo), ["RK73B1JTTD181G", "RK73H1JTTD4702F"]);
 
-  r = await searchStock(client.db, { dateCodeFrom: "2609", dateCodeTo: "2604" }); // swapped
+  r = await searchStock(client.db, { dateCodeFrom: "0926", dateCodeTo: "0426" }); // swapped
   assert.equal(r.lots.length, 4);
-  assert.ok(r.lots.every((l) => l.dateCode === "2604" || l.dateCode === "2609"));
+  assert.ok(r.lots.every((l) => l.dateCode === "0426" || l.dateCode === "0926"));
 
   // unbounded sides
-  r = await searchStock(client.db, { dateCodeTo: "2603" });
+  r = await searchStock(client.db, { dateCodeTo: "0326" });
   assert.deepEqual(r.lots.map((l) => l.partNo), ["RK73H1JTTD1002F", "RK73H1JTTD2202F"]);
-  r = await searchStock(client.db, { dateCodeFrom: "0127" }); // 2027w01 — nothing this new (codes window past-ward only beyond +1y)
+  r = await searchStock(client.db, { dateCodeFrom: "2701" }); // 2027w01 — nothing this new
   assert.deepEqual(r, { parts: [], lots: [] });
 });
 
-test("dateCode range: ranking is chronological, not lexicographic", async () => {
+test("dateCode ordering: canonical YYWW lexicographic order is chronological across a year boundary", async () => {
   await reseed(client);
-  // "5221" = 2021w52 (rank 202152) — as a string it sorts AFTER "0122"
-  // (2022w01, rank 202201), so a lexicographic compare would wrongly match.
-  await queryRun(client.db, sql`UPDATE inventory_lots SET date_code = '5221' WHERE part_no = 'RK73H1JTTD2202F'`);
+  // wk52/2026 ("2652") is chronologically BEFORE wk01/2027 ("2701") — and
+  // under canonical YYWW the plain string order agrees (the old WWYY format
+  // got this wrong for ~1 week every January).
+  await queryRun(client.db, sql`UPDATE inventory_lots SET date_code = '2652' WHERE part_no = 'RK73H1JTTD2202F'`);
+  await queryRun(client.db, sql`UPDATE inventory_lots SET date_code = '2701' WHERE part_no = 'RK73H1JTTD4702F'`);
 
-  const r = await searchStock(client.db, { dateCodeFrom: "0122" });
-  assert.ok(r.lots.every((l) => l.partNo !== "RK73H1JTTD2202F"));
-  assert.equal(r.lots.length, 0); // every seed lot is older than 2022w01
+  // ascending sort by dateCode puts 2026w52 before 2027w01
+  const paged = await searchStock(client.db, {}, { page: 1, pageSize: 6, sort: "dateCode" });
+  const dc = paged.rows.map((l) => l.dateCode!);
+  assert.ok(dc.indexOf("2652") < dc.indexOf("2701"));
+
+  const r = await searchStock(client.db, { dateCodeFrom: "2652", dateCodeTo: "2701" });
+  // the 2003/2004/2009 seed lots fall below the range and stay excluded
+  assert.deepEqual(
+    r.lots.map((l) => l.dateCode).sort(),
+    ["2652", "2701"]
+  );
+
+  // the upper bound excludes codes after 2027w01 even though "2701" < "0926"
+  // is FALSE as strings — the window is chronological both ways
+  const capped = await searchStock(client.db, { dateCodeTo: "2652" });
+  assert.ok(capped.lots.every((l) => l.dateCode !== "2701"));
+  assert.ok(capped.lots.some((l) => l.dateCode === "2652"));
 });
 
 test("dateCode range: NULL/invalid date codes never match once a bound is set", async () => {

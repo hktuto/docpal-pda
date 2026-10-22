@@ -38,9 +38,10 @@ test("buildKoaLabelRaw round-trips through parseQrRaw with the seeded KOA templa
   );
   assert.ok(profile?.qrTemplate);
 
-  // a WWYY date code is re-encoded into the KOA raw form (month counter + day
-  // of the week's Monday)
-  const raw = buildKoaLabelRaw({ partNo: "RK73H1JTTD3302F", qty: 500, dateCode: "0926", serialNo: "900001" });
+  // a canonical YYWW date code ("2609" = 2009 wk26) is converted to the label
+  // format and re-encoded into the KOA raw form (month counter + day of the
+  // week's Monday); the decode output stays label-format WWYY
+  const raw = buildKoaLabelRaw({ partNo: "RK73H1JTTD3302F", qty: 500, dateCode: "2609", serialNo: "900001" });
   assert.ok(raw);
   assert.ok(raw!.includes(":1223:"), `raw carries the re-encoded date segment: ${raw}`);
   const parsed = parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);

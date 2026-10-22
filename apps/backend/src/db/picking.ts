@@ -8,8 +8,8 @@ import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { workLockExpiry } from "./allocate.js";
-import { isStepEnabled, outdatedStockYears, pickingFromSubinventoryOrgs, pickingShelfScan, receivingSubInventoryRules } from "../config.js";
-import { dateCodeRank, outdatedThresholdRank } from "./dateCode.js";
+import { isStepEnabled, outdatedStockYears, pickingFromSubinventoryOrgs, pickingShelfScan, receivingSubInventoryRules, dateCodeFormat } from "../config.js";
+import { dateCodeRank, outdatedThresholdRank, toCanonicalDateCode } from "./dateCode.js";
 import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
 import { userScopeCondition, type UserScopeEntry } from "./user-scope.js";
 import { normalizePartNo } from "./scanParse.js";
@@ -581,7 +581,8 @@ export interface PickingOrderListRow {
   allocatedQty: number;
   /** Unresolved outdated-scan warnings (spec 2026-10-07); 0 = none. */
   outdatedWarningCount: number;
-  /** Any qty > 0 allocation whose source date code (WWYY) is older than the
+  /** Any qty > 0 allocation whose source date code (canonical lot / enclave
+   *  receiving-item, canonicalized for the comparison) is older than the
    *  flow-config outdatedStockYears threshold (spec 2026-10-20). */
   hasOutdatedAllocations: boolean;
   createdDate: Date;
@@ -650,6 +651,15 @@ export async function listPickingOrders(
   const allocations = (opts?.allocation ?? "").split(",").map((v) => v.trim()).filter(Boolean);
   const types = (opts?.type ?? "").split(",").map((v) => v.trim()).filter(Boolean);
   const search = opts?.search?.trim();
+  // Allocation-source date code for the outdated flag: canonical lot codes as
+  // stored; receiving-item (enclave label format) codes canonicalized in-line
+  // (spec 2026-10-22-datecode-format-config-design.md).
+  const dcFmt = dateCodeFormat();
+  const srcDateCode = sql`COALESCE(il.date_code, ${
+    dcFmt === "wwyy"
+      ? sql`CASE WHEN rii.date_code ~ '^[0-9]{4}$' THEN right(rii.date_code, 2) || left(rii.date_code, 2) ELSE rii.date_code END`
+      : sql`rii.date_code`
+  })`;
   const rows = await queryAll<PickingOrderListRow & { total: number }>(
     db,
     sql`
@@ -674,9 +684,9 @@ export async function listPickingOrders(
           LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
           LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
           WHERE pi2.picking_order_id = po.id AND a.qty > 0
-            AND COALESCE(il.date_code, rii.date_code) ~ '^[0-9]{4}$'
-            AND left(COALESCE(il.date_code, rii.date_code), 2)::int BETWEEN 1 AND 53
-            AND ((2000 + right(COALESCE(il.date_code, rii.date_code), 2)::int) - CASE WHEN 2000 + right(COALESCE(il.date_code, rii.date_code), 2)::int > EXTRACT(YEAR FROM now())::int + 1 THEN 100 ELSE 0 END) * 100 + left(COALESCE(il.date_code, rii.date_code), 2)::int < ${outdatedThresholdRank(outdatedStockYears())}
+            AND ${srcDateCode} ~ '^[0-9]{4}$'
+            AND right(${srcDateCode}, 2)::int BETWEEN 1 AND 53
+            AND ((2000 + left(${srcDateCode}, 2)::int) - CASE WHEN 2000 + left(${srcDateCode}, 2)::int > EXTRACT(YEAR FROM now())::int + 1 THEN 100 ELSE 0 END) * 100 + right(${srcDateCode}, 2)::int < ${outdatedThresholdRank(outdatedStockYears())}
         ) AS "hasOutdatedAllocations",
         po.created_date AS "createdDate",
         po.last_update_date AS "lastUpdateDate",
@@ -910,9 +920,10 @@ export interface PickingOrderDetail extends PickingOrderRow {
   suggestedBox: ShelfBoxMatch | null;
 }
 
-/** True when an allocation source date code (coalesced lot → receiving item
- *  WWYY) is valid and older than the flow-config outdatedStockYears threshold
- *  (spec 2026-10-20); invalid/null codes are never flagged. */
+/** True when an allocation source date code (coalesced canonical lot →
+ *  receiving enclave label-format) is valid and older than the flow-config
+ *  outdatedStockYears threshold (spec 2026-10-20); invalid/null codes are
+ *  never flagged. */
 function isOutdatedSource(dateCode: string | null): boolean {
   const rank = dateCodeRank(dateCode);
   return rank !== null && rank < outdatedThresholdRank(outdatedStockYears());
@@ -1105,7 +1116,7 @@ export async function getPickingOrderDetail(
                 dateCode: a.recvDateCode,
               }
             : null,
-          outdated: isOutdatedSource(a.lotDateCode ?? a.recvDateCode),
+          outdated: isOutdatedSource(a.lotDateCode ?? toCanonicalDateCode(a.recvDateCode, dateCodeFormat())),
         })),
       packages: packages
         .filter((p) => p.pickingItemId === i.id)
@@ -1128,7 +1139,9 @@ export interface ScanPickingItemInput {
    *  shipping box — the scan-into-box flow behind POST /shipping-boxes/:id/scan. */
   shippingBoxId?: string;
   /** Batch-attr overrides for the created package(s); the source's attrs win
-   *  when a field is absent. */
+   *  when a field is absent. `dateCode` arrives in the label format and is
+   *  canonicalized to YYWW before storage/matching (spec
+   *  2026-10-22-datecode-format-config-design.md). */
   dateCode?: string | null;
   lotCode?: string | null;
   coo?: string | null;
@@ -1144,11 +1157,12 @@ export interface ScanPickingItemInput {
   scannedPartNo?: string | null;
   scannedWclItemNo?: string | null;
   /** Pick-time scanned batch fields (2026-10-14): the label's parsed
-   *  date/lot/coo/cow as scanned, stored verbatim on every package row so
-   *  verify/measuring re-scans compare against the physical label, not the
-   *  source snapshot. NULL for paths without a parsed label (whole-carton
-   *  queues, shipping-box scans) → consumers fall back to the stored source
-   *  values (legacy behavior). */
+   *  date/lot/coo/cow as scanned. The date code is canonicalized to YYWW at
+   *  this boundary (it arrives in the label format) and stored on every
+   *  package row so verify/measuring re-scans compare against the physical
+   *  label, not the source snapshot. NULL for paths without a parsed label
+   *  (whole-carton queues, shipping-box scans) → consumers fall back to the
+   *  stored source values (legacy behavior). */
   scannedDateCode?: string | null;
   scannedLotCode?: string | null;
   scannedCoo?: string | null;
@@ -1214,6 +1228,10 @@ async function resolveScannedShelfLot(
   order: OrderState,
   input: ScanPickingItemInput
 ): Promise<SourceLine & { shelfCode: string | null; totalQty: number }> {
+  // The scanned label's date code arrives in the label format; lots store
+  // canonical YYWW — canonicalize before the match (spec
+  // 2026-10-22-datecode-format-config-design.md).
+  const scannedDateCode = toCanonicalDateCode(input.dateCode, dateCodeFormat());
   // Transfer items pick from the from_subinventory's org, not the order's
   // destination pair — same conversion the allocator applies.
   const scope = await resolveItemSourceScope(tx, item.id, order);
@@ -1232,7 +1250,7 @@ async function resolveScannedShelfLot(
                           WHERE sm_d.org_id = ${scope.orgId} AND upper(sm_d.code) = upper(${scope.subInventoryCode})
                             AND sm_s.org_id = il.org_id AND upper(sm_s.code) = upper(il.sub_inventory_code)))
           ${allowedOrgFilter(sql`il.org_id`)}
-          AND (${input.dateCode ?? null}::text IS NULL OR il.date_code = ${input.dateCode ?? null})
+          AND (${scannedDateCode ?? null}::text IS NULL OR il.date_code = ${scannedDateCode ?? null})
           AND (${input.lotCode ?? null}::text IS NULL OR il.lot_code = ${input.lotCode ?? null})
           -- Same guard as allocate.ts: lots whose shelf is missing from
           -- shelves fail the FK on UPDATE, so never source from them.
@@ -1496,19 +1514,26 @@ export async function scanPickingItem(
 
     // Package rows (batch snapshot = source attrs, explicit body fields win) +
     // two PICK ledger rows per portion (reserved −qty / on_hand −qty).
+    // Scanned label batch fields arrive in the label format (the receiving
+    // enclave); the date code is canonicalized to YYWW before it is stored on
+    // packages, matched against canonical lots or age-ranked (spec
+    // 2026-10-22-datecode-format-config-design.md).
     const at = now();
+    const fmt = dateCodeFormat();
+    const scannedLabelDateCode = toCanonicalDateCode(input.dateCode, fmt);
     const packageIds: string[] = [];
     const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
     for (const p of portions) {
       const pid = newId();
-      const dateCode = p.dateCode ?? input.dateCode;
+      const dateCode = p.dateCode ?? scannedLabelDateCode;
       const lotCode = p.lotCode ?? input.lotCode;
       const coo = p.coo ?? input.coo;
       const cow = p.cow ?? input.cow;
       // Empty scanned fields normalize to NULL — the scanned_* columns mean
       // "the label carried this value" and NULL drives the verify/measuring
-      // fallback to the stored source snapshot (legacy behavior).
-      const scannedDateCode = input.scannedDateCode?.trim() ? input.scannedDateCode : null;
+      // fallback to the stored source snapshot (legacy behavior). The scanned
+      // date code is stored canonical (label format → YYWW at this boundary).
+      const scannedDateCode = input.scannedDateCode?.trim() ? toCanonicalDateCode(input.scannedDateCode.trim(), fmt) : null;
       const scannedLotCode = input.scannedLotCode?.trim() ? input.scannedLotCode : null;
       const scannedCoo = input.scannedCoo?.trim() ? input.scannedCoo : null;
       const scannedCow = input.scannedCow?.trim() ? input.scannedCow : null;
@@ -1556,7 +1581,7 @@ export async function scanPickingItem(
     // The label's own date code is checked; no date code on the scan = no
     // check. Supplier = the profile whose brands cover the item part's brand.
     let outdatedWarning: OutdatedWarningInfo | null = null;
-    const outdatedHit = await checkPartScanOutdated(tx, { partNo: item.partNo, dateCode: input.dateCode });
+    const outdatedHit = await checkPartScanOutdated(tx, { partNo: item.partNo, dateCode: scannedLabelDateCode });
     if (outdatedHit) {
       outdatedWarning = await recordOutdatedWarning(tx, {
         orderKind: "picking",

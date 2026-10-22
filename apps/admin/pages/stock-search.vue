@@ -18,8 +18,8 @@ const shelfCode = ref<string[]>([]);
 const partNo = ref("");
 const drawingNo = ref("");
 
-// Date-code range (WWYY): native date pickers converted to WWYY codes, same
-// pattern as the picking availability modal (utils/dateCode.ts).
+// Date-code range (canonical YYWW): native date pickers converted to YYWW
+// codes, same pattern as the picking availability modal (utils/dateCode.ts).
 const dcFrom = ref("");
 const dcTo = ref("");
 const dcFromDate = computed(() => (dcFrom.value ? new Date(`${dcFrom.value}T00:00:00`) : null));

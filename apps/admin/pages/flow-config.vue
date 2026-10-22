@@ -39,11 +39,17 @@ const allowDockStock = ref(true);
 const autoCreateTasks = ref(false);
 const suggestShelf = ref<"existing-stock" | "off">("existing-stock");
 const pickingShelfScan = ref<"off" | "require-match" | "require-any">("off");
+const dateCodeFormat = ref<"wwyy" | "yyww">("wwyy");
 
 const pickingShelfScanOptions = computed<SearchableSelectOption[]>(() => [
   { value: "off", label: t("admin.pages.flowConfig.pickingShelfScanModes.off") },
   { value: "require-match", label: t("admin.pages.flowConfig.pickingShelfScanModes.require-match") },
   { value: "require-any", label: t("admin.pages.flowConfig.pickingShelfScanModes.require-any") },
+]);
+
+const dateCodeFormatOptions = computed<SearchableSelectOption[]>(() => [
+  { value: "wwyy", label: t("admin.pages.flowConfig.dateCodeFormatValues.wwyy") },
+  { value: "yyww", label: t("admin.pages.flowConfig.dateCodeFormatValues.yyww") },
 ]);
 
 const suggestShelfOptions = computed<SearchableSelectOption[]>(() => [
@@ -77,6 +83,7 @@ async function load() {
     autoCreateTasks.value = state.value.config.putAway.autoCreateTasks;
     suggestShelf.value = state.value.config.putAway.suggestShelf;
     pickingShelfScan.value = state.value.config.pickingShelfScan ?? "off";
+    dateCodeFormat.value = state.value.config.dateCodeFormat ?? "wwyy";
     allowedOrgIdsText.value = state.value.config.allowedOrgIds.join(", ");
     outdatedStockYearsText.value = String(state.value.config.outdatedStockYears);
     groups.value = state.value.config.receivingSubInventoryRules.map((g) => ({
@@ -173,7 +180,7 @@ async function save() {
       autoCreateTasks: autoCreateTasks.value,
       suggestShelf: suggestShelf.value,
     };
-    state.value = await flow.saveFlowConfig({ steps, allowedOrgIds, outdatedStockYears, receivingSubInventoryRules, pickingFromSubinventoryOrgs, pickingShelfScan: pickingShelfScan.value });
+    state.value = await flow.saveFlowConfig({ steps, allowedOrgIds, outdatedStockYears, receivingSubInventoryRules, pickingFromSubinventoryOrgs, pickingShelfScan: pickingShelfScan.value, dateCodeFormat: dateCodeFormat.value });
     saved.value = true;
     // Nav visibility (e.g. the CN receiving link) follows the saved steps.
     await loadFlowSteps(useApi());
@@ -263,6 +270,23 @@ onMounted(load);
           <input id="fc-outdated-years" v-model="outdatedStockYearsText" type="number" min="1" step="1" class="years-input" />
         </div>
         <p class="hint-text">{{ $t("admin.pages.flowConfig.outdatedStockYearsHint") }}</p>
+      </div>
+
+      <div class="card form-card">
+        <h2>{{ $t("admin.pages.flowConfig.dateCodeSection") }}</h2>
+        <div class="form-row">
+          <label for="fc-datecode-format">{{ $t("admin.pages.flowConfig.dateCodeFormat") }}</label>
+          <SearchableSelect
+            id="fc-datecode-format"
+            v-model="dateCodeFormat"
+            :options="dateCodeFormatOptions"
+            :all-label="$t('admin.pages.flowConfig.dateCodeFormat')"
+            :aria-label="$t('admin.pages.flowConfig.dateCodeFormat')"
+            :multiple="false"
+            :show-all="false"
+          />
+        </div>
+        <p class="hint-text">{{ $t("admin.pages.flowConfig.dateCodeFormatHint") }}</p>
       </div>
 
       <div class="card form-card">

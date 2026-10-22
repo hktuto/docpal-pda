@@ -86,4 +86,13 @@ describe('useFlowSteps putAway config', () => {
 
     expect(getFlowConfigMock).not.toHaveBeenCalled();
   });
+
+  it('defaults dateCodeFormat to "wwyy" and adopts the resolved value', async () => {
+    getFlowConfigMock.mockResolvedValue({ flowSteps: {}, dateCodeFormat: 'yyww' });
+    const { dateCodeFormat, loadFlowSteps } = await freshUseFlowSteps();
+
+    expect(dateCodeFormat.value).toBe('wwyy'); // default before fetch
+    await loadFlowSteps();
+    expect(dateCodeFormat.value).toBe('yyww');
+  });
 });

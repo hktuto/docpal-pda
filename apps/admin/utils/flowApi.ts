@@ -77,8 +77,8 @@ export interface PickingItemRow {
       receivedQty: number | null;
       dateCode: string | null;
     } | null;
-    /** Source date code (WWYY) older than the outdatedStockYears threshold
-     *  (spec 2026-10-20). */
+    /** Source date code (canonical YYWW) older than the outdatedStockYears
+     *  threshold (spec 2026-10-20). */
     outdated: boolean;
   }[];
   packages: { id: string; qty: number; dateCode: string | null; lotCode: string | null; verified: boolean; verifyVerified: boolean; shippingBoxId: string | null }[];
@@ -249,8 +249,8 @@ export interface ReceivingItemAllocation {
   pickingOrderId: string;
   orderNo: string;
   orderStatus: string;
-  /** Source date code (WWYY) older than the outdatedStockYears threshold
-   *  (spec 2026-10-20). */
+  /** Source date code (canonical YYWW) older than the outdatedStockYears
+   *  threshold (spec 2026-10-20). */
   outdated: boolean;
 }
 
@@ -601,8 +601,8 @@ export interface PartAllocationRow {
   boxId: string | null;
   dateCode: string | null;
   lotCode: string | null;
-  /** Source date code (WWYY) older than the outdatedStockYears threshold
-   *  (spec 2026-10-20). */
+  /** Source date code (canonical YYWW) older than the outdatedStockYears
+   *  threshold (spec 2026-10-20). */
   outdated: boolean;
   /** The holding order is open on a PDA — transfer/remove is rejected (409 lock_held). */
   locked: boolean;
@@ -722,6 +722,9 @@ export interface FlowConfigState {
     };
     /** Picking shelf-scan mode ("off" | "require-match" | "require-any"). */
     pickingShelfScan: "off" | "require-match" | "require-any";
+    /** Label/upstream (receiving enclave) date-code format; canonical storage
+     *  downstream of receiving is always YYWW (spec 2026-10-22). */
+    dateCodeFormat: "wwyy" | "yyww";
   };
   /** Raw warehouse_config row value (partial JSON as stored). */
   stored: Record<string, unknown>;

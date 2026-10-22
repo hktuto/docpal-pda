@@ -17,9 +17,9 @@ import { scheduleAllocateAll, allocateForReceivingOrder } from "../db/allocate.j
 import { actorFrom } from "../auth/middleware.js";
 import { allowedOrgFilter } from "../db/org-filter.js";
 import { getUserScope, receivingOrderScopeFilter, userScopeFilter } from "../db/user-scope.js";
-import { receivingOrderNameTemplate, outdatedStockYears } from "../config.js";
+import { receivingOrderNameTemplate, outdatedStockYears, dateCodeFormat } from "../config.js";
 import { formatReceivingOrderName } from "../receivingOrderName.js";
-import { dateCodeRank, outdatedThresholdRank } from "../db/dateCode.js";
+import { dateCodeRank, outdatedThresholdRank, toCanonicalDateCode } from "../db/dateCode.js";
 
 // Empty bodies parse as {} — after the auth migration several mutations no
 // longer carry any body fields (the actor comes from the token).
@@ -253,9 +253,10 @@ interface ItemRow {
   partDescription: string | null;
 }
 
-// True when an allocation source date code (WWYY, coalesced lot → receiving
-// invoice item) is valid and older than the flow-config outdatedStockYears
-// threshold (spec 2026-10-20); invalid/null codes are never flagged.
+// True when an allocation source date code (canonical lot → receiving enclave
+// label format, canonicalized for the comparison) is valid and older than the
+// flow-config outdatedStockYears threshold (spec 2026-10-20); invalid/null
+// codes are never flagged.
 function isOutdatedAllocationSource(dateCode: string | null): boolean {
   const rank = dateCodeRank(dateCode);
   return rank !== null && rank < outdatedThresholdRank(outdatedStockYears());
@@ -441,7 +442,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
                 pickingOrderId: a.pickingOrderId,
                 orderNo: a.orderNo,
                 orderStatus: a.orderStatus,
-                outdated: isOutdatedAllocationSource(a.lotDateCode ?? i.dateCode),
+                outdated: isOutdatedAllocationSource(a.lotDateCode ?? toCanonicalDateCode(i.dateCode, dateCodeFormat())),
               })),
             part: {
               id: i.partPk,
@@ -729,7 +730,7 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
           receivingInvoiceItemId: a.receivingInvoiceItemId,
           receivingOrderId: a.receivingOrderId,
           boxId: a.boxId,
-          outdated: isOutdatedAllocationSource(a.dateCode ?? a.recvDateCode),
+          outdated: isOutdatedAllocationSource(a.dateCode ?? toCanonicalDateCode(a.recvDateCode, dateCodeFormat())),
         })),
       packages: packages
         .filter((p) => p.pickingItemId === r.itemId)

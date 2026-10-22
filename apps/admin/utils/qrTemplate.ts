@@ -136,7 +136,10 @@ function isoWeekYear(date: Date): { week: number; year: number } {
 /** KOA date-code encoding ('koa_month_counter'): leading digit run (>= 4
  *  digits) = 2-digit month counter + 2-digit DAY of month. The counter maps
  *  to a month through the configured periods (see DateCodePeriod); the result
- *  is rendered as WWYY = ISO-8601 week + ISO week-year of that date. */
+ *  is rendered in the physical label format WWYY (ISO-8601 week + ISO
+ *  week-year) — labels stay label-format; canonical YYWW storage downstream
+ *  is the backend's concern (spec
+ *  docs/superpowers/specs/2026-10-22-datecode-format-config-design.md). */
 export function decodeKoaDateCode(
   raw: string,
   periods: DateCodePeriod[] = DEFAULT_DATE_CODE_PERIODS,

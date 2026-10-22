@@ -3,6 +3,7 @@
 import { eq } from "drizzle-orm";
 import type { AppDb } from "./db.js";
 import { warehouseConfig } from "./db/schema/config.js";
+import type { DateCodeFormat } from "./db/dateCode.js";
 
 // Secret used to sign/verify HS256 JWTs. Set AUTH_SECRET in any real
 // deployment; the built-in default keeps local dev zero-config.
@@ -114,6 +115,7 @@ export const docpalGroupMapping: Record<string, string[]> = {
 //     "dateCodeDisplayTemplate": "[date_code][coo]",
 //     "receivingOrderNameTemplate": "[batch_no]",
 //     "pickingShelfScan": "off",
+//     "dateCodeFormat": "wwyy",
 //     "pdaListTemplates": { "receiving": { "title": "[name]", "meta": "[supplier_name] · [delivery_date]" } } }
 //
 // dateCodeDisplayTemplate (spec 2026-09-17-date-code-display-template-design.md):
@@ -135,6 +137,13 @@ export const docpalGroupMapping: Record<string, string[]> = {
 // lists/fields keep the built-in defaults (= today's hardcoded rows). Served
 // to the PDA via GET /config `listTemplates` and applied client-side.
 // DEPRECATED by pdaViewConfig (still accepted; see below).
+//
+// dateCodeFormat (spec 2026-10-22-datecode-format-config-design.md): the
+// date-code format the receiving enclave uses — upstream receiving data and
+// physical supplier labels ("wwyy" = e.g. KOA's WWYY, "yyww" = e.g. SZ).
+// Canonical storage downstream of receiving is ALWAYS YYWW; conversion happens
+// at the boundaries (src/db/dateCode.ts toCanonicalDateCode / toLabelDateCode).
+// Default "wwyy".
 //
 // pdaViewConfig (spec 2026-10-04-pda-app-rewrite-design.md): the PDA view
 // layout config — per-list {title, meta (1–2 lines), chip} templates (the six
@@ -281,6 +290,8 @@ export type PickingShelfScanMode = "off" | "require-match" | "require-any";
 
 export const PICKING_SHELF_SCAN_MODES: readonly PickingShelfScanMode[] = ["off", "require-match", "require-any"];
 
+export const DATE_CODE_FORMATS: readonly DateCodeFormat[] = ["wwyy", "yyww"];
+
 export interface FlowConfig {
   steps: Record<FlowStep, { enabled: boolean }>;
   pickingAllocation: PickingAllocationConfig;
@@ -309,6 +320,10 @@ export interface FlowConfig {
   pdaViewConfig: PdaViewConfigOverrides;
   /** Picking shelf-scan mode; default "off". */
   pickingShelfScan: PickingShelfScanMode;
+  /** Label/upstream (receiving enclave) date-code format; canonical storage
+   *  downstream of receiving is always YYWW. Default "wwyy" (spec
+   *  2026-10-22-datecode-format-config-design.md). */
+  dateCodeFormat: DateCodeFormat;
 }
 
 /** Built-in defaults — reproduce the PDA's hardcoded list rows. */
@@ -453,6 +468,7 @@ function defaultFlowConfig(): FlowConfig {
     pdaListTemplates: defaultPdaListTemplates(),
     pdaViewConfig: {},
     pickingShelfScan: "off",
+    dateCodeFormat: "wwyy",
   };
 }
 
@@ -788,6 +804,13 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
       cfg.pickingShelfScan = value as PickingShelfScanMode;
       continue;
     }
+    if (key === "dateCodeFormat") {
+      if (typeof value !== "string" || !(DATE_CODE_FORMATS as readonly string[]).includes(value)) {
+        throw new Error('[config] flow config.dateCodeFormat must be "wwyy" or "yyww"');
+      }
+      cfg.dateCodeFormat = value as DateCodeFormat;
+      continue;
+    }
     if (key === "pdaViewConfig") {
       cfg.pdaViewConfig = validatePdaViewConfig(value);
       continue;
@@ -965,6 +988,12 @@ export function pickingShelfScan(): PickingShelfScanMode {
   return flowConfig.pickingShelfScan;
 }
 
+/** Label/upstream (receiving enclave) date-code format; canonical storage is
+ *  always YYWW (spec docs/superpowers/specs/2026-10-22-datecode-format-config-design.md). */
+export function dateCodeFormat(): DateCodeFormat {
+  return flowConfig.dateCodeFormat;
+}
+
 /** CN receiving flow flag (spec 2026-10-16-customer-receiving-upload-design.md):
  *  backed by the `receiving-cn` flow step — a warehouse disables the standard
  *  `receiving` step and enables `receiving-cn`. Exposed on GET /config. */
@@ -1024,6 +1053,11 @@ export function _setOutdatedStockYearsForTests(years: number): void {
 /** Test-only override for the picking shelf-scan mode. */
 export function _setPickingShelfScanForTests(mode: PickingShelfScanMode): void {
   flowConfig.pickingShelfScan = mode;
+}
+
+/** Test-only override for the label/upstream date-code format. */
+export function _setDateCodeFormatForTests(format: DateCodeFormat): void {
+  flowConfig.dateCodeFormat = format;
 }
 
 /** Test-only override for the CN receiving flow flag. */

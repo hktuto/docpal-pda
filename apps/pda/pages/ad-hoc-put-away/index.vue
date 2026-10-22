@@ -151,6 +151,8 @@ import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useBrandSymbologyScope } from "~/composables/useScannerConfig";
 import { I18nError } from "~/composables/i18nError";
 import { parseQrCapture, parseAndIdentify } from "~/utils/parseOcrScan";
+import { dateToDateCode, toLabelDateCode } from "~/utils/dateCode";
+import { useFlowSteps } from "~/composables/useFlowSteps";
 import { captureLabel, getCachedSupplierQrTemplates, getCachedDateCodePeriods } from "~/composables/useLabelScan";
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import SearchableSelect from "~/components/SearchableSelect.vue";
@@ -163,6 +165,7 @@ const { t } = useI18n();
 const warehouse = useWarehouse();
 const { showToast } = useToast();
 const errorMessage = useErrorMessage();
+const { dateCodeFormat } = useFlowSteps();
 
 const loading = ref(true);
 const error = ref<string | null>(null);
@@ -307,26 +310,16 @@ function addItem(item: AdHocPutAwayItem) {
     item.orgId = Number(orgId);
     item.subInventoryCode = subInventoryCode;
   }
-  // Default date code to today's WWYY if not set
+  // Default date code to today's code. The commit endpoint treats the whole
+  // body as the label/upstream format and canonicalizes it server-side at the
+  // lot boundary (spec 2026-10-22), so the default is converted canonical →
+  // label before posting — the stored lot lands on canonical YYWW either way.
+  // Scanned label codes are posted verbatim (they already ARE label format);
+  // converting them here as well would double-swap on the backend.
   if (!item.dateCode) {
-    item.dateCode = getTodayDateCode();
+    item.dateCode = toLabelDateCode(dateToDateCode(new Date()), dateCodeFormat.value);
   }
   items.value.push(item);
-}
-
-function getTodayDateCode(): string {
-  const now = new Date();
-  const year = now.getFullYear() % 100;
-  const week = getWeekNumber(now);
-  return `${String(year).padStart(2, "0")}${String(week).padStart(2, "0")}`;
-}
-
-function getWeekNumber(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
 function removeItem(idx: number) {

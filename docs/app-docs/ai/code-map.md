@@ -243,7 +243,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Per-user sub-inventory scope (`user_profiles` read + filter fragments for receiving/picking list/detail reads) | `apps/backend/src/db/user-scope.ts` |
 | Goods verify (generation, queue, verify with ADJUST) | `apps/backend/src/db/goodsverify.ts` |
 | Stock search | `apps/backend/src/db/stocksearch.ts` |
-| Outdated date-code scan warnings (check / record / resolve / list; WWYY rank helpers) | `apps/backend/src/db/outdated.ts` (+ `apps/backend/src/db/dateCode.ts`) |
+| Outdated date-code scan warnings (check / record / resolve / list; canonical YYWW rank helpers) | `apps/backend/src/db/outdated.ts` (+ `apps/backend/src/db/dateCode.ts`) |
 | Allocation engine (`allocateAll`, `allocateForReceivingOrder`, `allocateForPickingOrder`) | `apps/backend/src/db/allocate.ts` |
 | Demo seed (+ generated real-data artifacts) | `apps/backend/src/db/seed.ts` (+ `seed-parts-data.json`, `seed-subinventories-data.ts`, `seed-net-weight-data.ts`, `seed-order-210726.ts`; generator `scripts/gen-seed-real-data.mjs`) |
 

@@ -1,4 +1,5 @@
 import type { FlowStep } from "~/services/types";
+import type { DateCodeFormat } from "~/utils/dateCode";
 import { applyListTemplates } from "~/composables/useListTemplates";
 import { applyLegacyListTemplates, applyViewConfig } from "~/composables/useViewConfig";
 
@@ -47,6 +48,11 @@ const pickingAllocation = ref<{ allowDockStock: boolean }>({
 // predating the key omit it entirely.
 const pickingShelfScan = ref<"off" | "require-match" | "require-any">("off");
 
+// Resolved dateCodeFormat (GET /config dateCodeFormat): the receiving
+// enclave's label date-code format. Default "wwyy" — pages behave as before
+// until the first fetch resolves, and backends predating the key omit it.
+const dateCodeFormat = ref<DateCodeFormat>("wwyy");
+
 let loading: Promise<void> | null = null;
 
 async function loadFlowSteps(): Promise<void> {
@@ -64,6 +70,9 @@ async function loadFlowSteps(): Promise<void> {
       }
       if (config.pickingShelfScan) {
         pickingShelfScan.value = config.pickingShelfScan;
+      }
+      if (config.dateCodeFormat) {
+        dateCodeFormat.value = config.dateCodeFormat;
       }
       if (config.viewConfig) {
         applyViewConfig(config.viewConfig);
@@ -88,6 +97,7 @@ export function useFlowSteps() {
     putAwayConfig: readonly(putAwayConfig),
     pickingAllocation: readonly(pickingAllocation),
     pickingShelfScan: readonly(pickingShelfScan),
+    dateCodeFormat: readonly(dateCodeFormat),
     loadFlowSteps,
   };
 }

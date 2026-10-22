@@ -50,7 +50,7 @@ presented as tap-to-toggle chips.
   org + sub-inventory pairs and are limited to your user sub-inventory
   scope.
 - **Drawing no** — substring match on the lot's drawing number.
-- **Date-code range** — calendar pickers converted to WWYY date codes.
+- **Date-code range** — calendar pickers converted to canonical YYWW date codes.
 
 All filters combine (AND) in a single backend query
 (`GET /stock-search`); lots with zero quantity are included by design.

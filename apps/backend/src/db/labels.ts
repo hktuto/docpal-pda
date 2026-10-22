@@ -9,6 +9,8 @@ import { sql } from "drizzle-orm";
 import { queryAll, type DbOrTx } from "./query.js";
 import { buildKoaLabelRaw } from "./scanParse.js";
 import { listDateCodePeriods } from "./dateCodePeriods.js";
+import { toCanonicalDateCode } from "./dateCode.js";
+import { dateCodeFormat } from "../config.js";
 
 export interface LabelPartRow {
   partNo: string;
@@ -88,6 +90,13 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
 
   // Counter periods for the KOA date-code encode (rolling 10→99 cycles).
   const dateCodePeriods = await listDateCodePeriods(db);
+  // Label/upstream format: buildKoaLabelRaw takes a CANONICAL date code and
+  // converts it back to the label format at this out boundary (spec
+  // 2026-10-22-datecode-format-config-design.md). Lot codes are already
+  // canonical; receiving item codes are already label format, so they pass
+  // through toCanonicalDateCode first (an involution round-trip for
+  // well-formed codes under either format).
+  const fmt = dateCodeFormat();
 
   let serial = 900001;
   const nextSerial = () => String(serial++);
@@ -96,11 +105,18 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
     partNo: string,
     qty: number,
     lotCode: string | null,
-    dateCode: string | null
+    canonicalDateCode: string | null
   ): string | null => {
     if (!supplierCode || !hasTemplate.get(supplierCode)) return null;
-    return buildKoaLabelRaw({ partNo, qty, lotCode, dateCode, serialNo: nextSerial(), dateCodePeriods }) ?? null;
+    return buildKoaLabelRaw({ partNo, qty, lotCode, dateCode: canonicalDateCode, serialNo: nextSerial(), dateCodePeriods, dateCodeFormat: fmt }) ?? null;
   };
+  const receivingItemLabel = (
+    supplierCode: string | null,
+    partNo: string,
+    qty: number,
+    lotCode: string | null,
+    labelDateCode: string | null
+  ): string | null => partLabel(supplierCode, partNo, qty, lotCode, toCanonicalDateCode(labelDateCode, fmt));
 
   const boxes = await queryAll<{
     id: string;
@@ -209,7 +225,7 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
       poLine: r.poLine,
       lotCode: r.lotCode,
       dateCode: r.dateCode,
-      qrValue: r.qty === null ? null : partLabel(r.supplierCode, r.partNo, r.qty, r.lotCode, r.dateCode),
+      qrValue: r.qty === null ? null : receivingItemLabel(r.supplierCode, r.partNo, r.qty, r.lotCode, r.dateCode),
       pickingOrderRefs: refs(r.partNo),
     });
   }
@@ -219,7 +235,10 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
     partNo: string;
     qty: number;
     lotCode: string | null;
-    dateCode: string | null;
+    /** Canonical lot date code (NULL for dock/allocation sources). */
+    lotDateCode: string | null;
+    /** Receiving-item (enclave label format) date code — the dock fallback. */
+    recvDateCode: string | null;
     boxId: string | null;
     shelfCode: string | null;
     ctnNo: string | null;
@@ -228,7 +247,8 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
     db,
     sql`SELECT po.order_no AS "orderNo", pi.part_no AS "partNo", a.qty,
                COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
-               COALESCE(il.date_code, rii.date_code) AS "dateCode",
+               il.date_code AS "lotDateCode",
+               rii.date_code AS "recvDateCode",
                il.box_id AS "boxId", il.shelf_code AS "shelfCode",
                rii.ctn_no AS "ctnNo",
                p.brand
@@ -246,13 +266,13 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
     partNo: a.partNo,
     qty: a.qty,
     lotCode: a.lotCode,
-    dateCode: a.dateCode,
+    dateCode: a.lotDateCode ?? a.recvDateCode,
     source: a.ctnNo
       ? `CTN ${a.ctnNo}`
       : a.boxId
         ? `${a.boxId}${a.shelfCode ? ` @ ${a.shelfCode}` : ""}`
         : (a.shelfCode ?? "receiving"),
-    qrValue: partLabel(a.brand, a.partNo, a.qty, a.lotCode, a.dateCode),
+    qrValue: partLabel(a.brand, a.partNo, a.qty, a.lotCode, a.lotDateCode ?? toCanonicalDateCode(a.recvDateCode, fmt)),
     pickingOrderRefs: [a.orderNo],
   }));
 

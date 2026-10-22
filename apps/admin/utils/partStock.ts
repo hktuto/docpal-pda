@@ -20,7 +20,8 @@ export function sortStockRows(rows: PartAvailabilityStockRow[], key: StockSortKe
   const sorted = [...rows];
   const shelf = (r: PartAvailabilityStockRow) => (r.shelfDisplayName ?? r.shelfCode ?? "").toLowerCase();
   const byDateCode = (a: PartAvailabilityStockRow, b: PartAvailabilityStockRow) => {
-    // WWYY strings are fixed-width — plain lexicographic order works.
+    // Canonical YYWW strings are fixed-width and lexicographic order IS
+    // chronological (year-first) — plain string compare is correct.
     if (!a.dateCode) return b.dateCode ? 1 : 0;
     if (!b.dateCode) return -1;
     return cmpStr(a.dateCode, b.dateCode);

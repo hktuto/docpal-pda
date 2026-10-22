@@ -175,8 +175,9 @@ const selectedBrands = ref<string[]>([]);
 const selectedLocations = ref<string[]>([]);
 const selectedShelves = ref<string[]>([]);
 const drawingNo = ref("");
-// Date-code range (WWYY): native date pickers converted to WWYY codes, same
-// pattern as the admin stock-search page.
+// Date-code range (canonical YYWW): native date pickers converted to YYWW
+// codes via utils/dateCode.ts dateToDateCode, matching the canonical lots
+// the backend filters on.
 const dcFrom = ref("");
 const dcTo = ref("");
 const dcActive = computed(() => !!dcFrom.value || !!dcTo.value);

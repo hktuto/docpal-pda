@@ -4,7 +4,7 @@
 
 - Search parts by part-number substring, with the same filter set as the
   admin console (all ANDed): supplier (single), brand / location /
-  shelf (multi-select, any-of), drawing-no substring, and a WWYY
+  shelf (multi-select, any-of), drawing-no substring, and a canonical YYWW
   date-code range. Location values are exact `orgId:subInventoryCode`
   pairs.
 - Filter options (brands, shelves, locations) come from
@@ -49,7 +49,7 @@
 - `components/FilterChipGroup.vue` — shared tap-to-toggle chip list used
   for the brand/location/shelf multi-selects (search box appears when
   there are more than 8 options).
-- `utils/dateCode.ts` — calendar date → WWYY date-code conversion.
+- `utils/dateCode.ts` — calendar date → canonical YYWW date-code conversion.
 - `services/adapters/backendWarehouse.ts` — `searchStock` (legacy full
   read), `searchStockPage` (paged `{rows,total}` for the load-more list),
   `getStockSearchOptions`, `getStockSearchSummary`, and `getSuppliers`

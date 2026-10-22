@@ -83,7 +83,11 @@ const effContext = computed(() => {
   };
 });
 
-// Date-code (WWYY) range filter: native calendar pickers, converted to WWYY.
+// Date-code range filter: native calendar pickers, converted to canonical
+// YYWW codes (stock-lot date codes are canonical; receiving-source date codes
+// are enclave/label format and canonicalized through the flow config's
+// dateCodeFormat before the same compare — utils/dateCode.ts).
+const dcFormat = useDateCodeFormat();
 const dcFrom = ref("");
 const dcTo = ref("");
 const dcFromDate = computed(() => (dcFrom.value ? new Date(`${dcFrom.value}T00:00:00`) : null));
@@ -105,7 +109,9 @@ const filteredStock = computed(() =>
   applicableStock.value.filter((s) => dateCodeInRange(s.dateCode, dcFromDate.value, dcToDate.value))
 );
 const filteredReceiving = computed(() =>
-  applicableReceiving.value.filter((r) => dateCodeInRange(r.dateCode, dcFromDate.value, dcToDate.value))
+  applicableReceiving.value.filter((r) =>
+    dateCodeInRange(toCanonicalDateCode(r.dateCode, dcFormat.format.value), dcFromDate.value, dcToDate.value)
+  )
 );
 // Receiving dock stock is not allocatable when the flow config turns it off.
 const showReceiving = computed(() => data.value?.dockStockAllowed === true);

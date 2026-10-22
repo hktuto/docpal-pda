@@ -11,14 +11,14 @@ import { dateCodeRank, outdatedThresholdRankMonths } from "./dateCode.js";
 // ---------------------------------------------------------------------------
 // Supplier outdated date-code scan warnings (spec
 // docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md).
-// When a picking / put-away scan's label date code (WWYY) is older than the
-// supplier profile's outdated_limit_months, the scan STILL succeeds and an
-// outdated_scan_warnings row is recorded inside the same transaction; order
-// completion is blocked until an admin resolves the whole order's warnings —
-// the explicit picking finish 409s while unresolved (boxing itself never
-// finishes an order since 2026-10-16) and the receiving order's auto-clear is
-// held (the resolve-order route re-runs it). No profile /
-// NULL limit / unparseable date code = no check (silently pass).
+// When a picking / put-away scan's label date code (canonicalized to YYWW)
+// is older than the supplier profile's outdated_limit_months, the scan STILL
+// succeeds and an outdated_scan_warnings row is recorded inside the same
+// transaction; order completion is blocked until an admin resolves the whole
+// order's warnings — the explicit picking finish 409s while unresolved
+// (boxing itself never finishes an order since 2026-10-16) and the receiving
+// order's auto-clear is held (the resolve-order route re-runs it). No profile
+// / NULL limit / unparseable date code = no check (silently pass).
 // ---------------------------------------------------------------------------
 
 export type OutdatedOrderKind = "picking" | "putaway";
@@ -29,7 +29,7 @@ function orderTopic(orderKind: OutdatedOrderKind): string {
 }
 
 /**
- * Is `dateCode` (WWYY, post date_code_encoding decode) older than the
+ * Is `dateCode` (canonical YYWW, post decode + canonicalize) older than the
  * supplier's outdated limit? Returns { limitMonths } when outdated, null when
  * the scan passes — no supplier profile, NULL limit, or an
  * unparseable/missing date code all pass silently.
@@ -52,7 +52,8 @@ export async function checkOutdatedDateCode(
 /**
  * Picking-scan variant: resolve the supplier from the part's brand
  * (parts.brand ∈ supplier_profiles.brands — the same matching the PDA's
- * brandWhitelistUnion scan-template lookup uses) and run the WWYY age check.
+ * brandWhitelistUnion scan-template lookup uses) and run the canonical YYWW
+ * age check.
  * Returns the warning payload when outdated, null when the scan passes (no
  * brand-matched profile, NULL limit, or unparseable/missing date code).
  * `partNo` is the picking item's part key (parts.wcl_item_no).

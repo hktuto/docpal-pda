@@ -95,10 +95,13 @@ export const demoShelfBoxItems = [
 ];
 
 export const demoLots = [
-  { id: "00000000-0000-4000-9000-000000000044", partNo: "RK73H1JTTD1002F", dateCode: "2603", lotCode: "L2603A", coo: "JP", cow: "JP", shelfCode: "A0101", boxId: "BOX-H-20260701-0001", orgId: 2, subInventoryCode: "STORE1", totalQty: 1000 },
-  { id: "00000000-0000-4000-9000-000000000045", partNo: "RK73H1JTTD2202F", dateCode: "2603", lotCode: "L2603B", coo: "JP", cow: "JP", shelfCode: "A0101", boxId: "BOX-H-20260701-0001", orgId: 2, subInventoryCode: "STORE1", totalQty: 500 },
-  { id: "00000000-0000-4000-9000-000000000046", partNo: "RK73B1JTTD181G", dateCode: "2604", lotCode: "L2604A", coo: "JP", cow: "JP", shelfCode: "A0102", boxId: "BOX-H-20260701-0002", orgId: 2, subInventoryCode: "STORE1", totalQty: 700 },
-  { id: "00000000-0000-4000-9000-000000000047", partNo: "RK73H1JTTD4702F", dateCode: "2604", lotCode: "L2604B", coo: "JP", cow: "JP", shelfCode: "A0102", boxId: "BOX-H-20260701-0002", orgId: 2, subInventoryCode: "STORE1", totalQty: 200 },
-  { id: "00000000-0000-4000-9000-000000000048", partNo: "RK73H1JTTD5602F", dateCode: "2609", lotCode: "L2609A", coo: "JP", cow: "JP", shelfCode: "A0201", boxId: "BOX-H-20260701-0003", orgId: 2, subInventoryCode: "STORE1", totalQty: 1000 },
-  { id: "00000000-0000-4000-9000-000000000049", partNo: "RK73H2ATTD2212F", dateCode: "2609", lotCode: "L2609B", coo: "JP", cow: "JP", shelfCode: "A0201", boxId: "BOX-H-20260701-0003", orgId: 2, subInventoryCode: "STORE1", totalQty: 400 }
+  // Canonical YYWW lot date codes (spec 2026-10-22-datecode-format-config-design.md):
+  // "0326" = 2003 wk26, "0426" = 2004 wk26, "0926" = 2009 wk26 — deliberately
+  // old so the stock-search outdated summary fires on the demo data.
+  { id: "00000000-0000-4000-9000-000000000044", partNo: "RK73H1JTTD1002F", dateCode: "0326", lotCode: "L2603A", coo: "JP", cow: "JP", shelfCode: "A0101", boxId: "BOX-H-20260701-0001", orgId: 2, subInventoryCode: "STORE1", totalQty: 1000 },
+  { id: "00000000-0000-4000-9000-000000000045", partNo: "RK73H1JTTD2202F", dateCode: "0326", lotCode: "L2603B", coo: "JP", cow: "JP", shelfCode: "A0101", boxId: "BOX-H-20260701-0001", orgId: 2, subInventoryCode: "STORE1", totalQty: 500 },
+  { id: "00000000-0000-4000-9000-000000000046", partNo: "RK73B1JTTD181G", dateCode: "0426", lotCode: "L2604A", coo: "JP", cow: "JP", shelfCode: "A0102", boxId: "BOX-H-20260701-0002", orgId: 2, subInventoryCode: "STORE1", totalQty: 700 },
+  { id: "00000000-0000-4000-9000-000000000047", partNo: "RK73H1JTTD4702F", dateCode: "0426", lotCode: "L2604B", coo: "JP", cow: "JP", shelfCode: "A0102", boxId: "BOX-H-20260701-0002", orgId: 2, subInventoryCode: "STORE1", totalQty: 200 },
+  { id: "00000000-0000-4000-9000-000000000048", partNo: "RK73H1JTTD5602F", dateCode: "0926", lotCode: "L2609A", coo: "JP", cow: "JP", shelfCode: "A0201", boxId: "BOX-H-20260701-0003", orgId: 2, subInventoryCode: "STORE1", totalQty: 1000 },
+  { id: "00000000-0000-4000-9000-000000000049", partNo: "RK73H2ATTD2212F", dateCode: "0926", lotCode: "L2609B", coo: "JP", cow: "JP", shelfCode: "A0201", boxId: "BOX-H-20260701-0003", orgId: 2, subInventoryCode: "STORE1", totalQty: 400 }
 ];

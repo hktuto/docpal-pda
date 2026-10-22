@@ -93,6 +93,7 @@ import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { runScanMatcher, useScanMatchers, type ScanTaskContext } from "~/composables/useScanMatchers";
+import { useFlowSteps } from "~/composables/useFlowSteps";
 import type { PageHeaderAction } from "~/composables/usePageHeader";
 import type { MeasuringPackage } from "~/services/types";
 
@@ -174,6 +175,7 @@ const {
 
 const matchers = useScanMatchers();
 const { parseRawValue } = useLabelScan();
+const { dateCodeFormat } = useFlowSteps();
 const verifying = ref(false);
 
 useVisibleReload(load);
@@ -284,6 +286,7 @@ const scanContext = computed<ScanTaskContext>(() => ({
   task: "measuring",
   flow: props.mode,
   packages: packages.value,
+  dateCodeFormat: dateCodeFormat.value,
 }));
 
 async function openScan(packageId?: string) {

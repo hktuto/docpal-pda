@@ -89,7 +89,10 @@ test("getPartLedger: stock + totals + in/out movements with receiving refs", asy
     assert.equal(m.receivingOrderId, orderId);
     assert.equal(m.receivingBatchNo, "04958300");
     assert.equal(m.actorName, "Demo Operator");
-    assert.equal(m.dateCode, "2610");
+    // PUT_AWAY rows snapshot the canonical lot code (label "2610" → "1026" at
+    // the lot boundary); RECEIVE_TO_DOCK rides the enclave receiving-item code
+    // (spec 2026-10-22-datecode-format-config-design.md).
+    assert.equal(m.dateCode, m.txnType === "PUT_AWAY" ? "1026" : "2610");
     assert.equal(m.coo, "JP");
     assert.equal(m.cow, "JP");
     assert.equal(m.pickingOrderId, null);

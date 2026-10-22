@@ -2175,8 +2175,15 @@ export default {
         allowedOrgIdsInvalid: "Org IDs must be integers separated by commas (e.g. 2, 3).",
         stockSection: "Stock",
         outdatedStockYears: "Outdated threshold (years)",
-        outdatedStockYearsHint: "Items whose lot date code (WWYY) is older than this many years count as outdated in the stock-search summary.",
+        outdatedStockYearsHint: "Items whose lot date code (YYWW) is older than this many years count as outdated in the stock-search summary.",
         outdatedStockYearsInvalid: "Outdated threshold must be a positive integer (years).",
+        dateCodeSection: "Date codes",
+        dateCodeFormat: "Receiving label date-code format",
+        dateCodeFormatHint: "The date-code format that upstream receiving data and physical supplier labels use — \"wwyy\" (week-year, e.g. KOA/HK labels) or \"yyww\" (year-week, e.g. SZ). Storage downstream of receiving is always canonical YYWW; the system converts at the receiving boundaries.",
+        dateCodeFormatValues: {
+          wwyy: "WWYY (week-year, e.g. 3726)",
+          yyww: "YYWW (year-week, e.g. 2637)"
+        },
         rulesSection: "Receiving sub-inventory rules (confirm arrival)",
         ruleOrgIds: "Org IDs (e.g. 140, 143)",
         rulePoPattern: "PO pattern (e.g. 319*, 11*W)",

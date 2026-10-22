@@ -31,7 +31,7 @@ The scanned items are shown in a list. You can:
 - **Batch edit** — enter a date code or lot code in the batch fields and tap "Apply to all"
 - **Remove items** — tap × to remove a mis-scanned item
 
-New items default to today's date code (WWYY format).
+New items default to today's date code in label format (per the `dateCodeFormat` flow config — WWYY for default `wwyy` warehouses).
 
 ## 6. Select a shelf
 

@@ -232,8 +232,8 @@ export interface ReceivingPickingAllocation {
   receivingInvoiceItemId: string | null;
   receivingOrderId: string | null;
   boxId: string | null;
-  /** Source date code (WWYY) older than the outdatedStockYears threshold
-   *  (spec 2026-10-20). */
+  /** Source date code (canonical YYWW) older than the outdatedStockYears
+   *  threshold (spec 2026-10-20). */
   outdated: boolean;
 }
 
@@ -415,8 +415,8 @@ export interface PickingAllocation {
   receivingInvoiceItemId: string | null;
   receivingOrderId: string | null;
   boxId: string | null;
-  /** Source date code (WWYY) older than the outdatedStockYears threshold
-   *  (spec 2026-10-20). */
+  /** Source date code (canonical YYWW) older than the outdatedStockYears
+   *  threshold (spec 2026-10-20). */
   outdated: boolean;
 }
 
@@ -906,6 +906,11 @@ export interface FlowConfig {
   /** Picking shelf-scan mode ("off" | "require-match" | "require-any").
    *  Optional — backends predating the feature omit it (= "off"). */
   pickingShelfScan?: "off" | "require-match" | "require-any";
+  /** The receiving enclave's label date-code format ("wwyy" | "yyww").
+   *  Canonical storage downstream of receiving is always YYWW; the PDA
+   *  canonicalizes scanned label codes before comparing them against lots.
+   *  Optional — backends predating the key omit it (= "wwyy"). */
+  dateCodeFormat?: "wwyy" | "yyww";
   /** Resolved pdaViewConfig (spec 2026-10-04-pda-app-rewrite-design.md):
    *  per-list {title, meta[1-2], chip} + detail field lists. Optional —
    *  backends predating the key omit it and the legacy listTemplates render
@@ -991,7 +996,7 @@ export interface GoodsVerifyTaskDetail {
  *  filters are any-of (IN) matches sent as repeated query params;
  *  `location` entries are exact "orgId:subInventoryCode" pairs. supplierCode
  *  traces the lot back to its receiving order (lot sources → invoices →
- *  order); dateCodeFrom/To are WWYY range bounds. */
+ *  order); dateCodeFrom/To are canonical YYWW range bounds. */
 export interface StockSearchFilters {
   supplierCode?: string;
   partNo?: string;

@@ -1,6 +1,7 @@
 import { computed, ref, type Ref } from "vue";
 import type { PickingOrderDetail, PickingShelfStockQuery } from "~/services/types";
 import type { OcrInput } from "~/utils/ocrNormalize";
+import type { DateCodeFormat } from "~/utils/dateCode";
 import { usePickingScanQueue, type ScanQueueRow } from "~/composables/usePickingScanQueue";
 import { useLabelScan, ocrResultToInput } from "~/composables/useLabelScan";
 import { createShelfStockChecker } from "~/utils/shelfStockCheck";
@@ -28,6 +29,9 @@ export interface PickingScanSessionOptions {
   scope: Ref<{ orgId?: number; subInventoryCode?: string; orderId?: string }>;
   /** Resolved pickingShelfScan mode (useFlowSteps). */
   shelfMode: Ref<PickingShelfScanMode>;
+  /** Resolved dateCodeFormat (useFlowSteps) — drives the queue's scanned-vs-
+   *  source date-code compare (label format → canonical YYWW). */
+  dateCodeFormat?: Ref<DateCodeFormat>;
   /** Backend shelf-stock probe (warehouse.getPickingShelfStock → qty). */
   shelfStockFn: (query: PickingShelfStockQuery) => Promise<number>;
 }
@@ -57,7 +61,7 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
     removeRow,
     reresolveQueued,
     applyAll,
-  } = usePickingScanQueue(orderItems);
+  } = usePickingScanQueue(orderItems, { dateCodeFormat: options.dateCodeFormat });
 
   const queuedCount = computed(() => rows.value.filter((r) => r.status === "queued").length);
   const applying = ref(false);

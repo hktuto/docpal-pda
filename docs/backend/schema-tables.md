@@ -50,10 +50,10 @@ supplier rows.
 | qr_template_config | jsonb | Structured editor config (`{version, mode: delimited\|fixed\|advanced, delimiter, fields}`) the admin QR-template editor builds `qr_template` from; null = hand-written legacy template (editor opens in advanced mode) |
 | qr_type | text | Barcode symbology on the supplier's labels (e.g. QR Code, PDF417, Code 128, ISBN) — informational, unrelated to qr_template parsing |
 | qty_encoding | text | Qty decoding rule, e.g. 'koa_zeros' |
-| date_code_encoding | text | dateCode-group decoding rule, e.g. 'koa_month_counter' (KOA month counter + week → WWYY); null = raw value |
+| date_code_encoding | text | dateCode-group decoding rule, e.g. 'koa_month_counter' (KOA month counter + week → label-format date code, WWYY for `dateCodeFormat=wwyy` warehouses; canonical storage downstream of receiving is YYWW); null = raw value |
 | barcode_types | text[] | PDA hardware-scanner symbology whitelist; null = no restriction |
 | brands | text[] | parts.brand values this supplier covers — scan pages try brand-matching suppliers' templates first (fallback: all templates); null = unknown |
-| outdated_limit_months | integer | Per-supplier outdated date-code limit in months (spec 2026-10-07): a picking/put-away scan whose label WWYY is older warns (row in `outdated_scan_warnings` + completion held). NULL = no check; create defaults to 12; existing rows backfilled to 12 (migration 0025); admin PATCH with explicit null clears |
+| outdated_limit_months | integer | Per-supplier outdated date-code limit in months (spec 2026-10-07): a picking/put-away scan whose label date code (label format — WWYY for `dateCodeFormat=wwyy`; canonicalized to YYWW before the age check) is older warns (row in `outdated_scan_warnings` + completion held). NULL = no check; create defaults to 12; existing rows backfilled to 12 (migration 0025); admin PATCH with explicit null clears |
 | remark | text | Free-form remark for extension |
 | creation_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
@@ -1049,8 +1049,9 @@ and `is_active` (PDA visibility). Managed via `/admin/inventory-labels` CRUD.
 
 ## outdated_scan_warnings
 
-One row per picking / put-away scan whose label date code (WWYY, post
-`date_code_encoding` decode) was older than the supplier's
+One row per picking / put-away scan whose label date code (post
+`date_code_encoding` decode — label format, WWYY for `dateCodeFormat=wwyy`
+warehouses; canonicalized to YYWW for the age check and the stored snapshot) was older than the supplier's
 `supplier_profiles.outdated_limit_months` (2026-10-07,
 `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`).
 The scan still succeeds; the row is written inside the scan transaction (a
@@ -1073,7 +1074,7 @@ trigger — PDA-local, admin-resolved state.
 | supplier_code | text NOT NULL | Supplier from the matched profile (plain text, display key) |
 | wcl_item_no | text | Business key of the part |
 | part_no | text | Display part number |
-| date_code | text NOT NULL | The scanned WWYY (post decode) |
+| date_code | text NOT NULL | The scanned date code (post decode; canonical YYWW for new rows, label-format history in older rows) |
 | limit_months | integer NOT NULL | Supplier limit snapshot at scan time |
 | qty | integer | Scanned quantity |
 | scanned_by | text NOT NULL | Actor id from the JWT |

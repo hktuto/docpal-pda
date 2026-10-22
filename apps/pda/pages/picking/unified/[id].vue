@@ -174,7 +174,7 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const { showToast } = useToast();
-const { pickingShelfScan: shelfScanMode } = useFlowSteps();
+const { pickingShelfScan: shelfScanMode, dateCodeFormat } = useFlowSteps();
 const { viewConfig } = useViewConfig();
 const { parseRawValue } = useLabelScan();
 
@@ -220,6 +220,7 @@ const session = usePickingScanSession({
     orderId: order.value?.id ?? undefined,
   })),
   shelfMode: shelfScanMode,
+  dateCodeFormat,
   shelfStockFn: async (q) => (await warehouse.getPickingShelfStock(q)).qty,
 });
 const {

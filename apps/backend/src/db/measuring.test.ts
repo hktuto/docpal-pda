@@ -220,7 +220,7 @@ test("detail: box fields + packages with part identity + suggestedNetWeightKg; 4
   const pkg1 = byPartNo.get("RK73H1JTTD1002F")!;
   assert.equal(pkg1.id, packageIds[0]);
   assert.equal(pkg1.qty, 1000);
-  assert.equal(pkg1.dateCode, "2603");
+  assert.equal(pkg1.dateCode, "0326");
   assert.equal(pkg1.lotCode, "L2603A");
   assert.equal(pkg1.coo, "JP");
   assert.equal(pkg1.cow, "JP");
@@ -230,12 +230,12 @@ test("detail: box fields + packages with part identity + suggestedNetWeightKg; 4
   const pkg2 = byPartNo.get("RK73H1JTTD2202F")!;
   assert.equal(pkg2.id, packageIds[1]);
   assert.equal(pkg2.qty, 500);
-  assert.equal(pkg2.dateCode, "2603");
+  assert.equal(pkg2.dateCode, "0326");
   assert.equal(pkg2.lotCode, "L2603B");
   const pkg3 = byPartNo.get("RK73B1JTTD181G")!;
   assert.equal(pkg3.id, packageIds[2]);
   assert.equal(pkg3.qty, 300);
-  assert.equal(pkg3.dateCode, "2604");
+  assert.equal(pkg3.dateCode, "0426");
   assert.equal(pkg3.lotCode, "L2604A");
 
   const notFound = await catchHttp(getMeasuringBoxDetail(client.db, randomUUID()));

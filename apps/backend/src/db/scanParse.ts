@@ -3,7 +3,15 @@
 // Ported from apps/web/utils/parseOcrScan.ts — the `supplier_profiles.qr_template`
 // regex (named groups) + `qty_encoding` ('koa_zeros') logic. Camera OCR fallback
 // parsing stays client-side; clients send `raw` and/or explicit fields.
+//
+// Decode output (parseQrRaw / parseScanText) stays in the receiving enclave's
+// label format by contract — no conversion inside the parser (spec
+// 2026-10-22-datecode-format-config-design.md). Callers canonicalize at the
+// in boundaries; the label-printing helpers below take a CANONICAL date code
+// and convert it to the label format before KOA raw encoding.
 // ---------------------------------------------------------------------------
+
+import { toLabelDateCode, type DateCodeFormat } from "./dateCode.js";
 
 const QTY_ENCODING_KOA_ZEROS = "koa_zeros";
 export const DATE_CODE_ENCODING_KOA_MONTH_COUNTER = "koa_month_counter";
@@ -103,7 +111,9 @@ function parsePeriodStart(periodStart: string): { year: number; month0: number }
 
 /**
  * Decode a KOA date-code field (template segment 5, e.g. "1625H713",
- * "5420Q156") to the system's WWYY date code. Take the leading digit run's
+ * "5420Q156") to the label-format date code (WWYY under the default
+ * dateCodeFormat="wwyy"; decode output stays label format by contract — spec
+ * 2026-10-22-datecode-format-config-design.md). Take the leading digit run's
  * first 4 digits: the first 2 are a month counter that rolls 10→99 and
  * restarts (90-month cycles, each cycle = one date_code_counter_periods row:
  * 10 = 2025/12 … 99 = 2033/05 today, 10 = 2018/06 … 99 = 2025/11 before);
@@ -157,10 +167,11 @@ export function decodeKoaDateCode(
  * used to print scannable demo part labels. Round-trips through parseQrRaw
  * with that template (the tail lands in the `wclItemNo` group). `fullName`
  * defaults to the "KOA+<partNo>" marking style seen on older reels.
- * `dateCode` is a WWYY lot date code; it is re-encoded into the KOA raw
- * form (month counter + week) with a mid-year counter so the year
- * round-trips for recent lots. Without it, `lotCode` text (or "-") fills
- * the segment and the parsed label simply yields no dateCode.
+ * `dateCode` is a CANONICAL YYWW lot date code; it is converted to the label
+ * format (`dateCodeFormat`, default "wwyy") and re-encoded into the KOA raw
+ * form (month counter + week) with a mid-year counter so the year round-trips
+ * for recent lots. Without it, `lotCode` text (or "-") fills the segment and
+ * the parsed label simply yields no dateCode.
  */
 export function buildKoaLabelRaw(input: {
   partNo: string;
@@ -170,11 +181,15 @@ export function buildKoaLabelRaw(input: {
   serialNo: string;
   fullName?: string;
   dateCodePeriods?: DateCodePeriod[];
+  /** Label/upstream format for the canonical→label conversion; default "wwyy". */
+  dateCodeFormat?: DateCodeFormat;
 }): string | undefined {
   const qty = encodeKoaQty(input.qty);
   if (!qty) return undefined;
   const fullName = input.fullName ?? `KOA+${input.partNo}`;
-  const dateSegment = encodeKoaDateCodeRaw(input.dateCode, input.dateCodePeriods) ?? input.lotCode?.trim() ?? "-";
+  // Canonical YYWW → label format at this out boundary before KOA raw encoding.
+  const labelDateCode = toLabelDateCode(input.dateCode, input.dateCodeFormat ?? "wwyy");
+  const dateSegment = encodeKoaDateCodeRaw(labelDateCode, input.dateCodePeriods) ?? input.lotCode?.trim() ?? "-";
   // the template's dateCode/serialNo groups require 1+ chars — never emit empties
   return `:${input.partNo}::${qty}:X:${dateSegment || "-"}:${input.serialNo}:${fullName}`;
 }
@@ -191,11 +206,12 @@ function getIsoWeekMonday(year: number, week: number): Date {
 }
 
 /**
- * Inverse of decodeKoaDateCode for printing labels: WWYY "0822" → "5420"
- * (Monday of ISO week 8 of 2022 = 2022-02-21; counter 54 of the 2018/06
- * cycle = 2022-02). The target month must be covered by one of the period
- * rows; returns undefined when no period represents it (e.g. before
- * 2011/06).
+ * Inverse of decodeKoaDateCode for printing labels: a label-format (WWYY)
+ * code "0822" → "5420" (Monday of ISO week 8 of 2022 = 2022-02-21; counter 54
+ * of the 2018/06 cycle = 2022-02). Callers pass the canonical YYWW code
+ * through toLabelDateCode first (buildKoaLabelRaw does). The target month
+ * must be covered by one of the period rows; returns undefined when no period
+ * represents it (e.g. before 2011/06).
  */
 export function encodeKoaDateCodeRaw(
   dateCode: string | null | undefined,

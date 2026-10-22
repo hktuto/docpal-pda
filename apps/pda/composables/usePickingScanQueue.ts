@@ -1,7 +1,7 @@
 import { computed, ref, type Ref } from "vue";
 import { normalize, normalizeCode, type OcrInput } from "~/utils/ocrNormalize";
 import { normalizePartNo } from "~/utils/text";
-import { compareWwyyDateCodes } from "~/utils/wwyyDateCode";
+import { compareDateCodes, toCanonicalDateCode, type DateCodeFormat } from "~/utils/dateCode";
 import type { PickingAllocation, PickingOrderDetail } from "~/services/types";
 
 /** A rejected scan: the scanSession i18n key + interpolation params. */
@@ -28,18 +28,24 @@ function checkBatchAttr(
   };
 }
 
-/** Scanned date code vs the source's: must be equal or EARLIER (WWYY compare,
- *  spec 2026-10-14) — a reel older than stock records say is tolerable, a
- *  newer one means the wrong reel. Unparseable codes on either side never
+/** Scanned date code vs the source's: must be equal or EARLIER (canonical
+ *  YYWW compare, spec 2026-10-14 batch validation, canonical orientation
+ *  2026-10-22) — a reel older than stock records say is tolerable, a newer
+ *  one means the wrong reel. The scanned label arrives in the label format
+ *  (parseOcrScan contract) and is canonicalized via `format` for the compare;
+ *  the target is already canonical (see sourceDateCode). The rejection params
+ *  echo the raw scanned label value. Unparseable codes on either side never
  *  reject so an unknown label format never blocks the scan. */
 function checkDateCode(
   targetValue: string | null | undefined,
-  scannedValue: string | null | undefined
+  scannedValue: string | null | undefined,
+  format: DateCodeFormat
 ): ScanRejection | null {
   const target = (targetValue ?? "").trim();
   const scanned = (scannedValue ?? "").trim();
   if (!target || !scanned) return null;
-  if (compareWwyyDateCodes(scanned, target) === "later") {
+  const scannedCanonical = toCanonicalDateCode(scanned, format) ?? scanned;
+  if (compareDateCodes(scannedCanonical, target) === "later") {
     return { message: "date_code_newer", params: { scanned, expected: target } };
   }
   return null;
@@ -64,10 +70,16 @@ function checkLotCode(
   return null;
 }
 
-/** The source's date code for a portion: the inventory lot's, falling back to
- *  the receiving-area line's (the DTO exposes no lot code/COO/COW there). */
-function sourceDateCode(allocation: PickingAllocation): string | null {
-  return allocation.lot?.dateCode ?? allocation.receiving?.dateCode ?? null;
+/** The source's date code in canonical YYWW for the scanned-vs-source check:
+ *  inventory lots already store canonical YYWW; receiving-area sources are in
+ *  the label format (receiving enclave — never converted upstream) and are
+ *  canonicalized here, so both sides of the compare speak canonical (spec
+ *  2026-10-22-datecode-format-config-design.md). */
+function sourceDateCode(allocation: PickingAllocation, format: DateCodeFormat): string | null {
+  const lotCode = allocation.lot?.dateCode ?? null;
+  if (lotCode) return lotCode;
+  const receivingCode = allocation.receiving?.dateCode ?? null;
+  return receivingCode ? toCanonicalDateCode(receivingCode, format) : null;
 }
 
 export interface ScanQueueRow {
@@ -85,9 +97,10 @@ export interface ScanQueueRow {
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
-  /** The label's batch fields as scanned (2026-10-14) — stored on the package
-   *  as scanned_date_code/lot_code/coo/cow so verify re-scans compare against
-   *  the physical label. NULL for whole-carton rows (no label scanned). */
+  /** The label's batch fields as scanned (2026-10-14), in the label format —
+   *  the backend canonicalizes the date code when it stores the
+   *  scanned_date_code snapshot. NULL for whole-carton rows (no label
+   *  scanned). */
   scannedDateCode: string | null;
   scannedLotCode: string | null;
   scannedCoo: string | null;
@@ -110,8 +123,19 @@ let nextKey = 1;
  * already queued against their allocations), and the same raw QR value cannot
  * be queued twice.
  */
-export function usePickingScanQueue(items: Ref<OrderItems>) {
+export interface PickingScanQueueOptions {
+  /** Resolved flow config dateCodeFormat (useFlowSteps) — the label/upstream
+   *  format of decoded scan output. Scanned label codes are canonicalized to
+   *  YYWW (via toCanonicalDateCode) before they are compared against
+   *  canonical lot/package values; the label-format values themselves stay
+   *  on the queued rows and are posted verbatim — the backend canonicalizes
+   *  at its scan boundary. Defaults to "wwyy". */
+  dateCodeFormat?: { value: DateCodeFormat };
+}
+
+export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingScanQueueOptions) {
   const rows = ref<ScanQueueRow[]>([]);
+  const labelFormat = () => options?.dateCodeFormat?.value ?? "wwyy";
 
   const queuedRows = computed(() => rows.value.filter((r) => r.status !== "applied"));
 
@@ -205,13 +229,17 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
 
     // Batch-field checks (2026-10-14): COO/COW exact when the source carries
     // them; date code equal-or-earlier; lot code hard match when the source
-    // has one.
+    // has one. The scanned date code decodes in the label format
+    // (parseOcrScan contract) — checkDateCode canonicalizes it for the
+    // compare against canonical sources; the row keeps + posts the
+    // label-format value (the backend converts at its boundary,
+    // spec 2026-10-22).
     for (const portion of target) {
       const cooErr = checkBatchAttr("coo", portion.allocation.lot?.coo, parsed.coo);
       if (cooErr) return { ok: false, ...cooErr };
       const cowErr = checkBatchAttr("cow", portion.allocation.lot?.cow, parsed.cow);
       if (cowErr) return { ok: false, ...cowErr };
-      const dateErr = checkDateCode(sourceDateCode(portion.allocation), parsed.dateCode);
+      const dateErr = checkDateCode(sourceDateCode(portion.allocation, labelFormat()), parsed.dateCode ? String(parsed.dateCode) : "", labelFormat());
       if (dateErr) return { ok: false, ...dateErr };
       const lotErr = checkLotCode(portion.allocation.lot?.lotCode ?? null, parsed.lotCode);
       if (lotErr) return { ok: false, ...lotErr };
@@ -328,12 +356,13 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     if (qty > allocationRemaining(allocationId)) {
       return { ok: false, message: "qty_exceeds" };
     }
-    // Batch-field checks (2026-10-14) — same rules as addScan.
+    // Batch-field checks (2026-10-14) — same rules as addScan; the scanned
+    // date code is canonicalized for the compare (label format → YYWW).
     const cooErr = checkBatchAttr("coo", allocation.lot?.coo, parsed.coo);
     if (cooErr) return { ok: false, ...cooErr };
     const cowErr = checkBatchAttr("cow", allocation.lot?.cow, parsed.cow);
     if (cowErr) return { ok: false, ...cowErr };
-    const dateErr = checkDateCode(sourceDateCode(allocation), parsed.dateCode);
+    const dateErr = checkDateCode(sourceDateCode(allocation, labelFormat()), parsed.dateCode ? String(parsed.dateCode) : "", labelFormat());
     if (dateErr) return { ok: false, ...dateErr };
     const lotErr = checkLotCode(allocation.lot?.lotCode ?? null, parsed.lotCode);
     if (lotErr) return { ok: false, ...lotErr };

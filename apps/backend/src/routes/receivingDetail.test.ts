@@ -12,7 +12,7 @@ import { setupTestDb, reseed, TEST_DATABASE_URL, type TestDb } from "../db/test-
 import { queryGet, queryRun } from "../db/query.js";
 import { insertReceivingOrder, insertPickingOrder } from "../db/test-fixtures.js";
 import { newId } from "../db/id.js";
-import { dateToDateCode } from "../db/dateCode.js";
+import { dateToDateCode, swapDateCode } from "../db/dateCode.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 
@@ -89,12 +89,13 @@ async function allocOutdatedFlag(roId: string): Promise<boolean> {
 test("receiving detail: allocation outdated flag — old/fresh/invalid item date codes", async () => {
   await reseed(client);
 
-  // "2607" = week 26 of 2007 → over 2y old at the default threshold
+  // "2607" (label WWYY wk26/2007) canonicalizes to "0726" → over 2y old at
+  // the default threshold
   const old = await worldWithDockAllocation("2607");
   assert.equal(await allocOutdatedFlag(old), true);
 
-  // fresh WWYY → not outdated
-  const fresh = await worldWithDockAllocation(dateToDateCode(new Date()));
+  // fresh label code → canonicalizes to this week → not outdated
+  const fresh = await worldWithDockAllocation(swapDateCode(dateToDateCode(new Date())));
   assert.equal(await allocOutdatedFlag(fresh), false);
 
   // invalid code → never flagged

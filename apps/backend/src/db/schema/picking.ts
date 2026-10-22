@@ -136,9 +136,11 @@ export const pickingPackages = pgTable(
     scannedPartNo: text("scanned_part_no"),
     scannedWclItemNo: text("scanned_wcl_item_no"),
     // Pick-time scanned batch fields (2026-10-14): the label's parsed
-    // date/lot/coo/cow as scanned, verbatim. Verify/measuring re-scans compare
-    // against THESE (falling back to the source snapshot for legacy NULL rows)
-    // so matching is anchored to the physical label, not upstream stock data.
+    // lot/coo/cow as scanned, verbatim, and the date code canonicalized to
+    // YYWW (it arrives in the label format and is converted at this in
+    // boundary, spec 2026-10-22). Verify/measuring re-scans compare against
+    // THESE (falling back to the source snapshot for legacy NULL rows) so
+    // matching is anchored to the physical label, not upstream stock data.
     scannedDateCode: text("scanned_date_code"),
     scannedLotCode: text("scanned_lot_code"),
     scannedCoo: text("scanned_coo"),

@@ -7,7 +7,8 @@ import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { inventoryTransactions, transactionLogs } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import { computeItemShelfSuggestions, type PutAwaySuggestionReason } from "./putaway.js";
-import { putAwayConfig } from "../config.js";
+import { putAwayConfig, dateCodeFormat } from "../config.js";
+import { toCanonicalDateCode } from "./dateCode.js";
 import { allowedOrgFilter } from "./org-filter.js";
 
 // ---------------------------------------------------------------------------
@@ -272,13 +273,17 @@ export async function completeCnPutAwayTx(
         )
       )?.wclItemNo ?? item.wclItemNo;
 
+    // Enclave → canonical: the CN item's date code stays in the label format;
+    // the lot stores canonical YYWW (spec 2026-10-22-datecode-format-config-design.md).
+    const canonicalDateCode = toCanonicalDateCode(item.dateCode, dateCodeFormat());
+
     // Lot upsert mirrors assignScanToBoxTx's key, with the location pair from
     // the CN item (a CN lot has no shelf box to stamp from).
     const lot = await queryGet<{ id: string }>(
       tx,
       sql`SELECT id FROM inventory_lots
           WHERE part_no = ${item.partNo} AND shelf_code = ${entry.shelfCode} AND box_id IS NOT DISTINCT FROM ${boxId}
-            AND date_code IS NOT DISTINCT FROM ${item.dateCode}
+            AND date_code IS NOT DISTINCT FROM ${canonicalDateCode}
             AND lot_code IS NOT DISTINCT FROM ${item.lotCode}
             AND coo IS NOT DISTINCT FROM ${item.coo}
             AND cow IS NOT DISTINCT FROM ${item.cow}
@@ -301,7 +306,7 @@ export async function completeCnPutAwayTx(
         tx,
         sql`INSERT INTO inventory_lots (id, part_no, wcl_item_no, date_code, lot_code, coo, cow, shelf_code, box_id,
                                        org_id, sub_inventory_code, total_qty, allocated_qty)
-            VALUES (${lotId}, ${item.partNo}, ${partWclItemNo}, ${item.dateCode}, ${item.lotCode}, ${item.coo}, ${item.cow},
+            VALUES (${lotId}, ${item.partNo}, ${partWclItemNo}, ${canonicalDateCode}, ${item.lotCode}, ${item.coo}, ${item.cow},
                     ${entry.shelfCode}, ${boxId}, ${item.orgId}, ${item.subInventoryCode},
                     ${entry.qty}, 0)`
       );
@@ -324,7 +329,7 @@ export async function completeCnPutAwayTx(
       txnType: "PUT_AWAY",
       qtyType: "on_hand",
       qtyDelta: entry.qty,
-      dateCode: item.dateCode,
+      dateCode: canonicalDateCode,
       lotCode: item.lotCode,
       coo: item.coo,
       cow: item.cow,

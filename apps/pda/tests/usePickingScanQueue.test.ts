@@ -373,9 +373,10 @@ describe('usePickingScanQueue', () => {
 
   it('records the scanned batch fields on queued rows (NULL for carton scans)', () => {
     const q = usePickingScanQueue(ref(makeShelfItems()));
-    q.addAllocationScan('item-1', 'alloc-1', qrFull('RK73H1JTTD1002F', 100, { dateCode: '0926', lotCode: 'L2607', coo: 'jp' }), ':A::102:X:L:S:F', 'qr');
+    // label "0326" (wwyy, wk03 2026) → canonical "2603" = the lot's code → accepted
+    q.addAllocationScan('item-1', 'alloc-1', qrFull('RK73H1JTTD1002F', 100, { dateCode: '0326', lotCode: 'L2607', coo: 'jp' }), ':A::102:X:L:S:F', 'qr');
     expect(q.rows.value[0]).toMatchObject({
-      scannedDateCode: '0926',
+      scannedDateCode: '0326',
       scannedLotCode: 'L2607',
       scannedCoo: 'jp',
       scannedCow: null,
@@ -409,7 +410,7 @@ describe('usePickingScanQueue', () => {
   it('accepts the date code when equal or earlier than the source, rejects newer', () => {
     const q = usePickingScanQueue(ref(makeShelfItems()));
     const items = makeShelfItems() as any;
-    items[0].allocations[0].lot.dateCode = '2626'; // WWYY = week 26 of 2026
+    items[0].allocations[0].lot.dateCode = '2626'; // canonical YYWW = week 26 of 2026
     const q2 = usePickingScanQueue(ref(items as Items));
     const okScan = (dateCode: string) => qrFull('RK73H1JTTD1002F', 100, { dateCode, lotCode: 'L2607' });
     expect(q2.addAllocationScan('item-1', 'alloc-1', okScan('2626'), ':A::102:X:L:S1:F', 'qr')).toEqual({ ok: true });
@@ -429,6 +430,43 @@ describe('usePickingScanQueue', () => {
     expect(q.addScan(qrFull('RK73H1JTTD1002F', 100, { dateCode: '2726' }), ':A::102:X:L:S1:F', 'qr'))
       .toEqual({ ok: false, message: 'date_code_newer', params: { scanned: '2726', expected: '2626' } });
     expect(q.addScan(qrFull('RK73H1JTTD1002F', 100, { dateCode: '2626' }), ':A::102:X:L:S2:F', 'qr')).toEqual({ ok: true });
+  });
+
+  // --- 2026-10-22 dateCodeFormat: label scan vs canonical sources ----------
+
+  it('canonicalizes a WWYY label scan before comparing to a canonical lot (default wwyy)', () => {
+    const items = makeShelfItems() as any;
+    items[0].allocations[0].lot.dateCode = '2637'; // canonical YYWW = wk37 of 2026
+    const q = usePickingScanQueue(ref(items as Items));
+    const scan = (dateCode: string, raw: string) =>
+      q.addAllocationScan('item-1', 'alloc-1', qrFull('RK73H1JTTD1002F', 100, { dateCode, lotCode: 'L2607' }), raw, 'qr');
+    expect(scan('3726', ':A::102:X:L:S1:F')).toEqual({ ok: true }); // label WWYY wk37 2026 = canonical 2637
+    expect(scan('3626', ':A::102:X:L:S2:F')).toEqual({ ok: true }); // wk36 2026 → earlier
+    expect(scan('3826', ':A::102:X:L:S3:F'))
+      .toEqual({ ok: false, message: 'date_code_newer', params: { scanned: '3826', expected: '2637' } });
+    // the queued rows keep the label-format values (the backend canonicalizes the body)
+    expect(q.rows.value.map((r) => r.scannedDateCode)).toEqual(['3626', '3726']);
+  });
+
+  it('passes the label scan through unchanged when dateCodeFormat is "yyww"', () => {
+    const items = makeShelfItems() as any;
+    items[0].allocations[0].lot.dateCode = '2637'; // lots are always canonical
+    const q = usePickingScanQueue(ref(items as Items), { dateCodeFormat: ref('yyww') });
+    const scan = (dateCode: string, raw: string) =>
+      q.addAllocationScan('item-1', 'alloc-1', qrFull('RK73H1JTTD1002F', 100, { dateCode, lotCode: 'L2607' }), raw, 'qr');
+    expect(scan('2637', ':A::102:X:L:S1:F')).toEqual({ ok: true }); // yyww label already canonical
+    expect(scan('2636', ':A::102:X:L:S2:F')).toEqual({ ok: true }); // earlier
+    expect(scan('2638', ':A::102:X:L:S3:F'))
+      .toEqual({ ok: false, message: 'date_code_newer', params: { scanned: '2638', expected: '2637' } });
+  });
+
+  it('canonicalizes the receiving-area source (enclave label format) before comparing', () => {
+    const items = makeItems() as any;
+    items[0].allocations[0].receiving = { orderId: 'ro-1', batchNo: 'B1', invoiceNo: 'INV1', partNo: 'RK73H1JTTD1002F', poNo: 'PO1', receivedQty: 2000, dateCode: '3726' }; // label WWYY = wk37 2026
+    const q = usePickingScanQueue(ref(items as Items));
+    expect(q.addScan(qrFull('RK73H1JTTD1002F', 100, { dateCode: '3726' }), ':A::102:X:L:S1:F', 'qr')).toEqual({ ok: true });
+    expect(q.addScan(qrFull('RK73H1JTTD1002F', 100, { dateCode: '3826' }), ':A::102:X:L:S2:F', 'qr'))
+      .toEqual({ ok: false, message: 'date_code_newer', params: { scanned: '3826', expected: '2637' } });
   });
 
   it('addScan applies the same batch checks to every portion of a spanning label', () => {
