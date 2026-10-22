@@ -8,7 +8,7 @@ const { t } = useI18n();
 const rows = ref<ReceivingOrderRow[]>([]);
 const loading = ref(false);
 const error = ref("");
-const status = ref("");
+const status = ref<string[]>([]);
 const search = ref("");
 const selected = ref<Set<string>>(new Set());
 
@@ -91,7 +91,14 @@ const pageSize = computed({
 // URL query params keep filter/keyword/pagination across navigation (browser
 // back from a detail page restores the list as it was).
 useUrlQueryState({
-  status: { state: status, defaultValue: "" },
+  // Multi-select; comma-joined on the wire (the backend matches any of the
+  // listed statuses). Empty selection = all → param omitted.
+  status: {
+    state: status,
+    defaultValue: [] as string[],
+    parse: (raw) => raw.split(",").map((s) => s.trim()).filter(Boolean),
+    serialize: (v: string[]) => v.join(","),
+  },
   q: { state: search, defaultValue: "" },
   page: { state: page, defaultValue: 1, parse: parsePositiveInt(1) },
   pageSize: { state: pageSize, defaultValue: 50, parse: parsePositiveInt(50) },
@@ -103,7 +110,7 @@ async function load() {
   try {
     const sort = sorting.value[0];
     const res = await flow.listReceivingOrders({
-      status: status.value || undefined,
+      status: status.value.length ? status.value : undefined,
       search: search.value.trim() || undefined,
       // Orders with no invoices are hidden (upstream placeholders).
       hasInvoices: true,
@@ -220,7 +227,6 @@ const {
         :options="statusOptions"
         :all-label="$t('admin.common.allStatuses')"
         :aria-label="$t('admin.pages.receiving.status')"
-        :multiple="false"
       />
       <input v-model="search" :placeholder="$t('admin.pages.receiving.searchPlaceholder')" />
       <UserScopeFilterButton @saved="load" />

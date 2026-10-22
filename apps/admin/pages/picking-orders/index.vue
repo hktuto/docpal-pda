@@ -8,7 +8,7 @@ const { t } = useI18n();
 const rows = ref<PickingOrderRow[]>([]);
 const loading = ref(false);
 const error = ref("");
-const status = ref("");
+const status = ref<string[]>([]);
 const orderTypes = ref<string[]>([]);
 const search = ref("");
 const deliveryDateFrom = ref("");
@@ -99,7 +99,12 @@ const pageSize = computed({
 // URL query params keep filter/keyword/pagination across navigation (browser
 // back from a detail page restores the list as it was).
 useUrlQueryState({
-  status: { state: status, defaultValue: "" },
+  status: {
+    state: status,
+    defaultValue: [] as string[],
+    parse: (raw) => raw.split(",").filter(Boolean),
+    serialize: (v) => v.join(","),
+  },
   type: {
     state: orderTypes,
     defaultValue: [] as string[],
@@ -119,7 +124,7 @@ async function load() {
   try {
     const sort = sorting.value[0];
     const res = await flow.listPickingOrders({
-      status: status.value || undefined,
+      status: status.value.length ? status.value : undefined,
       type: orderTypes.value.length ? orderTypes.value : undefined,
       search: search.value.trim() || undefined,
       deliveryDateFrom: deliveryDateFrom.value || undefined,
@@ -278,7 +283,6 @@ const {
         :options="statusOptions"
         :all-label="$t('admin.common.allStatuses')"
         :aria-label="$t('admin.pages.pickingOrders.status')"
-        :multiple="false"
       />
       <SearchableSelect
         v-model="orderTypes"

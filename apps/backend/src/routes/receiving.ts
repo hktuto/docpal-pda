@@ -93,11 +93,13 @@ function receivingListOrderBy(sort?: string, dir?: string) {
 // `pendingPickingOrders` = distinct open picking orders with allocations
 // pointing at this order (whole-order or via a boxed invoice item).
 // `?status=` is a pass-through filter (statuses evolve, no enum here);
-// `?search=` matches batch_no / supplier code / supplier name / invoice no;
+// comma-separated values match any of the listed statuses (e.g.
+// "pending,in_hand"); `?search=` matches batch_no / supplier code / supplier
+// name / invoice no;
 // `?hasInvoices=1` hides orders with no invoices (upstream placeholders);
 // `?limit=`/`?offset=` page; `?sort=`/`?dir=` sort by a whitelisted column key.
 receivingRoute.get("/receiving-orders", async (c) => {
-  const status = c.req.query("status");
+  const statuses = (c.req.query("status") ?? "").split(",").map((v) => v.trim()).filter(Boolean);
   const search = c.req.query("search")?.trim();
   const hasInvoices = c.req.query("hasInvoices") === "1" || c.req.query("hasInvoices") === "true";
   const limitParam = Number(c.req.query("limit"));
@@ -149,7 +151,7 @@ receivingRoute.get("/receiving-orders", async (c) => {
       LEFT JOIN receiving_invoices inv ON inv.receiving_order_id = ro.id
       LEFT JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = inv.id
       WHERE TRUE
-      ${status ? sql`AND ro.status = ${status}` : sql``}
+      ${statuses.length ? sql`AND ro.status = ANY(ARRAY[${sql.join(statuses, sql`, `)}])` : sql``}
       ${search ? sql`AND (ro.batch_no ILIKE ${"%" + search + "%"} OR s.code ILIKE ${"%" + search + "%"} OR s.name ILIKE ${"%" + search + "%"} OR inv.invoice_no ILIKE ${"%" + search + "%"})` : sql``}
       ${allowedOrgFilter(sql`ro.org_id`)}
       ${receivingOrderScopeFilter(sql`ro.id`, scope)}

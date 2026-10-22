@@ -23,6 +23,7 @@ before(async () => {
 interface ListRow {
   id: string;
   batchNo: string;
+  status: string;
   supplierCode: string | null;
   invoiceCount: number;
 }
@@ -85,6 +86,41 @@ test("list: hasInvoices=1 hides orders with no invoices", async () => {
   assert.equal(filtered.total, all.total - 1);
   assert.ok(filtered.rows.every((r) => r.invoiceCount > 0));
   assert.ok(!filtered.rows.some((r) => r.id === bareId));
+});
+
+test("list: status filter accepts comma-separated values (any-of)", async () => {
+  await reseed(client);
+  const token = await operatorToken();
+  await insertOrderlessReceivingOrder("TEST-ST-PENDING"); // status pending
+  for (const [batchNo, status] of [
+    ["TEST-ST-CLEAR", "clear"],
+    ["TEST-ST-INHAND", "in_hand"],
+  ] as const) {
+    await client.db.execute(
+      sql`INSERT INTO receiving_orders (id, batch_no, status, org_id, created_date, last_update_date)
+          VALUES (${randomUUID()}, ${batchNo}, ${status}, 2, now(), now())`
+    );
+  }
+
+  const single = await list(token, "?status=clear");
+  assert.ok(single.total >= 1);
+  assert.ok(single.rows.every((r) => r.status === "clear"));
+  assert.ok(single.rows.some((r) => r.batchNo === "TEST-ST-CLEAR"));
+  assert.ok(!single.rows.some((r) => r.batchNo === "TEST-ST-PENDING"));
+
+  const multi = await list(token, "?status=pending,clear");
+  assert.ok(multi.rows.some((r) => r.batchNo === "TEST-ST-PENDING"));
+  assert.ok(multi.rows.some((r) => r.batchNo === "TEST-ST-CLEAR"));
+  assert.ok(!multi.rows.some((r) => r.batchNo === "TEST-ST-INHAND"));
+
+  // Whitespace around the comma is tolerated; empty = no filter.
+  const spaced = await list(token, "?status=pending, clear");
+  assert.deepEqual(
+    spaced.rows.map((r) => r.id).sort(),
+    multi.rows.map((r) => r.id).sort()
+  );
+  const all = await list(token);
+  assert.ok(all.rows.some((r) => r.batchNo === "TEST-ST-INHAND"));
 });
 
 test("list: search matches supplier code (plus batch no / supplier name / invoice no)", async () => {

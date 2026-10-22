@@ -1055,7 +1055,8 @@ function logsQuery(p: OrderLogsParams): string {
  *  { rows, total }; page/pageSize convert to limit/offset, omitted = full
  *  list). `sort` is a backend-whitelisted column key. */
 export interface OrderListParams {
-  status?: string;
+  /** Any-of status filter (comma-joined for the wire), both lists. */
+  status?: string[];
   /** Picking only: order types, any-of (comma-joined for the wire). */
   type?: string[];
   search?: string;
@@ -1072,7 +1073,7 @@ export interface OrderListParams {
 
 function orderListQuery(params: OrderListParams): string {
   const qs = new URLSearchParams();
-  if (params.status) qs.set("status", params.status);
+  if (params.status?.length) qs.set("status", params.status.join(","));
   if (params.type?.length) qs.set("type", params.type.join(","));
   if (params.search) qs.set("search", params.search);
   if (params.hasInvoices) qs.set("hasInvoices", "1");
