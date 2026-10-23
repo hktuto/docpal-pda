@@ -193,7 +193,7 @@ usePageHeader({
 
 const warehouse = useWarehouse();
 const { viewConfig } = useViewConfig();
-const { cnReceiving } = useFlowSteps();
+const { cnReceiving, loadFlowSteps } = useFlowSteps();
 
 // CN customer-receiving mode: the detail reads the CN task aggregate
 // (/put-away-cn/tasks/:id, normalized onto the standard types) and scanned
@@ -352,6 +352,7 @@ useHardwareScanner({
       // CN mode: stage the piece locally (shelf-first, no server write until
       // the batch confirm). Matching mirrors the standard flow but also
       // accepts the CN item's carton number as the scanned identity.
+      console.log("parsed", parsed, parsedResult)
       if (cnMode.value) {
         return handleCnItemScan(parsed.partNo, parsed.wclItemNo, qty, {
           dateCode: parsed.dateCode,
@@ -696,6 +697,10 @@ async function load() {
   pending.value = true;
   error.value = null;
   try {
+    // Resolve the config before picking the source — direct navigation
+    // (QR scan-to-open, refresh) can outrun the layout's config fetch, and
+    // reading in CN mode with the flag still false hits the standard API.
+    await loadFlowSteps();
     if (cnMode.value) {
       // CN put-away is task-scoped — arriving without ?task= has no detail
       // to read (the list rows always carry it).

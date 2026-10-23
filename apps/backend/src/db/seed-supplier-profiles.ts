@@ -70,7 +70,7 @@ const SII_TEMPLATE = String.raw`^1\$[^$]+\$(?<qty>\d+)\$(?<lotCode>[^$]+)\$(?<it
 // RS after "[)>"), e.g. "[)>06\xA0LT3SILJP00C4QSKH\xA0PN5172070-1\xA0...".
 // Plain space is deliberately NOT a separator — TE lot codes contain real
 // spaces ("20026 1F"). The trailer (RS/EOT) is optional.
-const TE_TEMPLATE = String.raw`^\[\)>[\x1d\x1e\xA0]?06[\x1d\xA0]LT(?<serialNo>[^\x1d\xA0\x1e\x04]+)[\x1d\xA0]PN(?<itemId>[^\x1d\xA0\x1e\x04]+)[\x1d\xA0]RV[^\x1d\xA0]*[\x1d\xA0]QT(?<qty>\d+)[\x1d\xA0]PO[^\x1d\xA0]*[\x1d\xA0]BT(?<lotCode>[^\x1d\xA0\x1e\x04]+)[\x1d\xA0]BX[^\x1d\xA0]+[\x1d\xA0]DC(?<dateCode>[^\x1d\xA0\x1e\x04]+)[\x1e\x04]*$`;
+const TE_TEMPLATE = String.raw`^\[\)>[\x1d\x1e\xA0]?06[\x1d\xA0]LT(?<serialNo>[^\x1d\xA0\x1e\x04]+)[\x1d\xA0]PN(?<itemId>[^\x1d\xA0\x1e\x04]+)[\x1d\xA0]RV[^\x1d\xA0]*[\x1d\xA0]QT(?<qty>\d+)[\x1d\xA0]PO[^\x1d\xA0]*[\x1d\xA0]BT(?<lotCode>[^\x1d\xA0\x1e\x04]*)[\x1d\xA0]BX[^\x1d\xA0]+[\x1d\xA0]DC(?<dateCode>[^\x1d\xA0\x1e\x04]+)[\x1e\x04]*$`;
 
 // NDK: MH10.8.2 QR, e.g.
 //   [)>RS06 GS PWEL-EXS00A-CS16279 GS 1TL5101564 GS Q9000 GS 1PEXS00A-CS16279 RS EOT
