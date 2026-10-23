@@ -219,7 +219,7 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocumentClick));
 }
 .ssel-panel {
   position: fixed;
-  z-index: 30;
+  z-index: 100;
   width: max-content;
   max-width: 21.25rem;
   background: #fff;
