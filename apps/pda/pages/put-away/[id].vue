@@ -177,7 +177,11 @@ usePageHeader({
   info: () => {
     const o = order.value;
     if (!o) return [];
+    const title = viewListRow("put-away", o, viewConfig.value).title
     return [
+      {
+        label: "", value: title
+      },
       { label: t("putAway.detail.supplier"), value: o.supplier?.name || t("common.noData") },
       {
         label: t("putAway.detail.deliveryDate"),

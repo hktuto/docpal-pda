@@ -5,7 +5,8 @@
 // built by the backend (apps/backend/src/export/orderLink.ts) — a custom
 // scheme so no host/IP configuration is needed in the Excel file.
 // Picking links land on the unified detail page directly (it acquires the
-// work lock on mount); receiving links land on the order detail.
+// work lock on mount); receiving links land on the order detail; putaway-cn
+// links land on the CN put-away task (the CN detail page is task-scoped).
 
 export const ORDER_SCAN_PREFIX = 'warehouse://';
 
@@ -22,6 +23,9 @@ export function resolveOrderScanRoute(value: string): string | null {
   if (slash <= 0) return null;
   const kind = rest.slice(0, slash);
   const id = rest.slice(slash + 1);
-  if ((kind !== 'receiving' && kind !== 'picking') || !id || id.includes('/')) return null;
-  return kind === 'picking' ? `/picking/unified/${id}` : `/receiving/${id}`;
+  if (!id || id.includes('/')) return null;
+  if (kind === 'picking') return `/picking/unified/${id}`;
+  if (kind === 'receiving') return `/receiving/${id}`;
+  if (kind === 'putaway-cn') return `/put-away/cn?task=${id}`;
+  return null;
 }

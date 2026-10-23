@@ -167,9 +167,9 @@ describe("buildCnReceivingExportAoa — round-trip through the parser", () => {
 });
 
 describe("cnPutAwayQrPayload", () => {
-  it("builds /put-away/<orderId>?task=<taskId> when a put-away task exists", () => {
+  it("builds the warehouse://putaway-cn/<taskId> order link when a task exists", () => {
     expect(cnPutAwayQrPayload({ ...DETAIL, putAway: { id: "task-1", status: "pending" } })).toBe(
-      "/put-away/o1?task=task-1"
+      "warehouse://putaway-cn/task-1"
     );
   });
 

@@ -128,7 +128,10 @@ export function buildCnReceivingExportAoa(detail: CnOrderDetail): CnExportAoa { 
 }
 
 /** QR payload for the exported sheet: scanning it on the PDA jumps straight
- *  into this order's put-away task. Null when no task exists yet. */
+ *  into this order's put-away task. Uses the shared `warehouse://` order-link
+ *  scheme (spec 2026-10-02-excel-order-barcode-scan-to-open-design.md) so the
+ *  PDA's global scan navigation resolves it from any page. Null when no task
+ *  exists yet. */
 export function cnPutAwayQrPayload(detail: CnOrderDetail): string | null {
-  return detail.putAway ? `/put-away/${detail.order.id}?task=${detail.putAway.id}` : null;
+  return detail.putAway ? `warehouse://putaway-cn/${detail.putAway.id}` : null;
 }

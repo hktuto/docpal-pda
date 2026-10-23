@@ -4,7 +4,13 @@ import { parsePutAwayOpenScan } from "../utils/putAwayScanToOpen";
 const TASK_ID = "8f14e45f-ceea-4a0a-9a6f-4e8f1a2b3c4d";
 
 describe("parsePutAwayOpenScan", () => {
-  it("accepts the full route payload from the Excel QR", () => {
+  it("accepts the warehouse://putaway-cn order-link payload from the Excel QR", () => {
+    expect(parsePutAwayOpenScan(`warehouse://putaway-cn/${TASK_ID}`)).toEqual({
+      taskId: TASK_ID,
+    });
+  });
+
+  it("accepts the legacy full route payload", () => {
     expect(parsePutAwayOpenScan(`/put-away/ro-cn-1?task=${TASK_ID}`)).toEqual({
       taskId: TASK_ID,
     });

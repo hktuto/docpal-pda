@@ -8,7 +8,7 @@
 
 import QRCode from "qrcode";
 
-export type OrderLinkKind = "receiving" | "picking";
+export type OrderLinkKind = "receiving" | "picking" | "putaway-cn";
 
 export function orderLink(kind: OrderLinkKind, id: string): string {
   return `warehouse://${kind}/${id}`;

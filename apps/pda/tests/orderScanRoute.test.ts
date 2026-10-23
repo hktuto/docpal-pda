@@ -10,6 +10,14 @@ describe('resolveOrderScanRoute', () => {
     expect(resolveOrderScanRoute('warehouse://picking/def-456')).toBe('/picking/unified/def-456');
   });
 
+  it('resolves a CN put-away task link to the task-scoped detail page', () => {
+    expect(resolveOrderScanRoute('warehouse://putaway-cn/abc-123')).toBe('/put-away/cn?task=abc-123');
+  });
+
+  it('rejects unknown order-link kinds', () => {
+    expect(resolveOrderScanRoute('warehouse://stock/abc-123')).toBeNull();
+  });
+
   it('trims surrounding whitespace from the scanned value', () => {
     expect(resolveOrderScanRoute('  warehouse://picking/def-456\n')).toBe('/picking/unified/def-456');
   });

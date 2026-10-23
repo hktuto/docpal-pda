@@ -8,6 +8,7 @@ import { orderLink, orderLinkQrPng } from "./orderLink.js";
 test("orderLink builds the warehouse:// payload for both kinds", () => {
   assert.equal(orderLink("receiving", "abc-123"), "warehouse://receiving/abc-123");
   assert.equal(orderLink("picking", "def-456"), "warehouse://picking/def-456");
+  assert.equal(orderLink("putaway-cn", "ghi-789"), "warehouse://putaway-cn/ghi-789");
 });
 
 test("orderLinkQrPng returns a PNG buffer", async () => {
