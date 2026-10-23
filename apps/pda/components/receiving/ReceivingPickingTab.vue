@@ -69,7 +69,7 @@
               :aria-label="$t('stockAgeWarning.tooltip')"
             >⚠️</span>
           </template>
-          · {{ loc.lot?.dateCode || $t('common.stateNone') }} / {{ loc.lot?.lotCode || $t('common.stateNone') }} / {{ loc.lot?.coo || $t('common.stateNone') }} / {{ loc.lot?.cow || $t('common.stateNone') }}
+          · {{ labelDateCode(loc.lot?.dateCode ?? null) }} / {{ loc.lot?.lotCode || $t('common.stateNone') }} / {{ loc.lot?.coo || $t('common.stateNone') }} / {{ loc.lot?.cow || $t('common.stateNone') }}
           · {{ loc.qty }} {{ $t('common.pcs') }}
         </li>
       </ul>
@@ -84,7 +84,7 @@
         >
           <div style="display: flex; flex-direction: column; gap: 0.25rem;">
             <span style="font-size: 0.875rem;">
-              {{ pkg.qty }} {{ $t('common.pcs') }} · {{ pkg.dateCode || $t('common.stateNone') }} / {{ pkg.lotCode || $t('common.stateNone') }}
+              {{ pkg.qty }} {{ $t('common.pcs') }} · {{ labelDateCode(pkg.dateCode) }} / {{ pkg.lotCode || $t('common.stateNone') }}
             </span>
             <span style="font-size: 0.75rem; color: var(--muted);">
               <template v-if="pkg.shippingBoxId">{{ $t('common.inBox', { id: pkg.shippingBoxId }) }}</template>
@@ -104,8 +104,19 @@ import type {
   ReceivingPickingOrder,
 } from "~/services/types";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { toLabelDateCode } from "~/utils/dateCode";
 
 const statusLabel = useStatusLabel();
+const { t } = useI18n();
+const { dateCodeFormat } = useFlowSteps();
+
+// Allocation lots + picking packages store canonical YYWW — the date codes
+// render in the label format (spec 2026-10-22); the receiving order/items
+// themselves stay in the receiving enclave's label format and are not
+// converted anywhere.
+function labelDateCode(code: string | null): string {
+  return toLabelDateCode(code, dateCodeFormat.value) || t('common.stateNone');
+}
 
 defineProps<{
   pickingOrders: ReceivingPickingOrder[];

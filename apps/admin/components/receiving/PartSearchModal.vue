@@ -39,6 +39,9 @@ const dismiss = useOverlayDismiss(() => emit("close"));
 // Stock-table sort (shared options/ordering with the picking-side modal).
 const stockSort = ref<StockSortKey>("date-code");
 const sortedStock = computed(() => sortStockRows(stock.value, stockSort.value));
+// Stock-lot date codes are canonical YYWW — display converts to the label
+// format (dcFormat); the related-stock table is read-only context.
+const dcFormat = useDateCodeFormat();
 
 // Desired final totals per picking item. Unset = "keep what it is now".
 const plan = ref<Record<string, number>>({});
@@ -227,8 +230,8 @@ watch(
               <td>{{ s.subInventoryCode ?? "—" }}</td>
               <td>{{ s.shelfDisplayName ?? s.shelfCode ?? "—" }}</td>
               <td>{{ s.boxId ?? "—" }}</td>
-              <td>{{ formatStockLocation(s) }}</td>
-              <td>{{ s.dateCode ?? "—" }}</td>
+              <td>{{ formatStockLocation(s, dcFormat.format.value) }}</td>
+              <td>{{ toLabelDateCode(s.dateCode, dcFormat.format.value) ?? "—" }}</td>
               <td>{{ s.lotCode ?? "—" }}</td>
               <td class="num">{{ s.totalQty }}</td>
               <td class="num">

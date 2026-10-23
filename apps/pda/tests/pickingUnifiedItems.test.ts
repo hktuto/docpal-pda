@@ -61,7 +61,29 @@ describe('unifiedCollapsedMeta', () => {
       }),
       t
     );
-    expect(meta).toBe('2K/3K · 3K(1K SZA01-2626-CN-CN, 2K SZB02A-2631-CN)');
+    expect(meta).toBe('2K/3K · 3K(1K SZA01-2626-CN-CN, 2K SZB02A-3126-CN)');
+  });
+
+  it('converts the chip date code to the label format (canonical YYWW → WWYY)', () => {
+    const meta = unifiedCollapsedMeta(
+      metaArgs({
+        dateCodeFormat: 'wwyy',
+        allocations: [alloc({ qty: 3000, lot: lot({ dateCode: '2637' }) })],
+      }),
+      t
+    );
+    expect(meta).toBe('2K/3K · 3K(3K 3726)');
+  });
+
+  it('passes the chip date code through when dateCodeFormat is "yyww"', () => {
+    const meta = unifiedCollapsedMeta(
+      metaArgs({
+        dateCodeFormat: 'yyww',
+        allocations: [alloc({ qty: 3000, lot: lot({ dateCode: '2637' }) })],
+      }),
+      t
+    );
+    expect(meta).toBe('2K/3K · 3K(3K 2637)');
   });
 
   it('skips empty batch fields in the chip label', () => {
@@ -130,6 +152,15 @@ describe('allocationChipLabel', () => {
     expect(
       allocationChipLabel(alloc({ lot: lot({ lotCode: 'SZA01', shelfCode: 'A-01', dateCode: '2626' }) }), t)
     ).toBe('SZA01-A-01-2626');
+  });
+
+  it('converts the lot date code to the label format (default "wwyy")', () => {
+    expect(
+      allocationChipLabel(alloc({ lot: lot({ lotCode: 'SZA01', dateCode: '2637' }) }), t)
+    ).toBe('SZA01-3726');
+    expect(
+      allocationChipLabel(alloc({ lot: lot({ lotCode: 'SZA01', dateCode: '2637' }) }), t, 'yyww')
+    ).toBe('SZA01-2637');
   });
 
   it('renders carton sources as CTN <boxId>', () => {

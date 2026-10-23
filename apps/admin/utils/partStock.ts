@@ -1,4 +1,5 @@
 import type { PartAvailabilityStockRow } from "~/utils/flowApi";
+import { toLabelDateCode, type DateCodeFormat } from "~/utils/dateCode";
 
 // Stock-lot table helpers shared by the picking/receiving part-availability
 // modals: client-side sorting and the combined location column (spec
@@ -38,8 +39,10 @@ export function sortStockRows(rows: PartAvailabilityStockRow[], key: StockSortKe
 }
 
 // Combined `shelf - date code - coo - cow` cell ("—" when all parts empty).
-export function formatStockLocation(r: PartAvailabilityStockRow): string {
-  const parts = [r.shelfDisplayName ?? r.shelfCode, r.dateCode, r.coo, r.cow].filter(
+// Lot date codes are canonical YYWW and render converted to the label/operator
+// format — sorting (sortStockRows above) stays on the canonical value.
+export function formatStockLocation(r: PartAvailabilityStockRow, format: DateCodeFormat): string {
+  const parts = [r.shelfDisplayName ?? r.shelfCode, toLabelDateCode(r.dateCode, format) ?? "", r.coo, r.cow].filter(
     (p): p is string => !!p
   );
   return parts.length > 0 ? parts.join(" - ") : "—";

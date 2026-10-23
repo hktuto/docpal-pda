@@ -6,6 +6,7 @@
 // country list once to resolve the [coo_short]/[cow_short] placeholders via
 // country_list.short_code (spec 2026-09-22-coo-cow-short-code-design.md).
 import { formatDateCodeDisplay, type DateCodeFields } from "~/utils/dateCodeDisplay";
+import { toLabelDateCode } from "~/utils/dateCode";
 
 const DEFAULT_TEMPLATE = "[date_code][coo]";
 
@@ -43,8 +44,16 @@ function ensureLoaded(): Promise<void> {
 export function useDateCodeDisplay() {
   // Called from component setup — Nuxt context (runtime config etc.) is live.
   void ensureLoaded();
+  const dcFormat = useDateCodeFormat();
   function format(fields: DateCodeFields): string {
     return formatDateCodeDisplay(fields, template.value, shortCodes.value);
   }
-  return { template: readonly(template), format };
+  // Canonical-source variant: stock lots / picking packages store canonical
+  // YYWW — convert to the label/operator format before rendering. Receiving
+  // enclave values are already label format: use `format` for those (spec
+  // docs/superpowers/specs/2026-10-22-datecode-format-config-design.md).
+  function formatLabel(fields: DateCodeFields): string {
+    return format({ ...fields, dateCode: toLabelDateCode(fields.dateCode, dcFormat.format.value) });
+  }
+  return { template: readonly(template), format, formatLabel };
 }

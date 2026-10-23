@@ -7,8 +7,10 @@
 import type { PickingOrderDetail } from "~/services/types";
 import type { ScanQueueRow } from "~/composables/usePickingScanQueue";
 import type { PdaDetailCollapsedStyle } from "~/utils/viewConfig";
+import type { DateCodeFormat } from "~/utils/dateCode";
 import { formatCompactQtyUpper } from "~/utils/formatNumber";
 import { normalizePartNo } from "~/utils/text";
+import { toLabelDateCode } from "~/utils/dateCode";
 import { IDENTITY_DETAIL_FIELDS, PICKING_GROUP_FIELDS } from "~/utils/viewConfig";
 
 type PickingItem = PickingOrderDetail["items"][number];
@@ -35,6 +37,9 @@ export interface UnifiedCollapsedMetaArgs {
   collapsedStyle: PdaDetailCollapsedStyle;
   itemFields: readonly string[];
   allocations: UnifiedAllocation[];
+  /** Resolved flow config dateCodeFormat — drives the allocation chip's
+   *  date-code display conversion (canonical YYWW → label format). */
+  dateCodeFormat?: DateCodeFormat;
 }
 
 export type TranslateFn = (key: string) => string;
@@ -69,7 +74,7 @@ export function unifiedCollapsedMeta(args: UnifiedCollapsedMetaArgs, t: Translat
   }
   const parts = [progress.join(" ")];
   if (args.actionable && args.scannedQty < args.qty && args.allocations.length > 0) {
-    const chips = args.allocations.map((a) => `${formatCompactQtyUpper(a.qty)} ${allocationChipLabel(a, t)}`);
+    const chips = args.allocations.map((a) => `${formatCompactQtyUpper(a.qty)} ${allocationChipLabel(a, t, args.dateCodeFormat)}`);
 
     parts.push(`${formatCompactQtyUpper(args.qty)}(${chips.join(", ")})`);
   }
@@ -77,10 +82,12 @@ export function unifiedCollapsedMeta(args: UnifiedCollapsedMetaArgs, t: Translat
 }
 
 /** Allocation chip suffix: `lot-shelf-date-coo-cow` (empties skipped), the carton
- *  id for receiving-carton sources, or the receiving-area label. */
-export function allocationChipLabel(a: UnifiedAllocation, t: TranslateFn): string {
+ *  id for receiving-carton sources, or the receiving-area label. The lot's date
+ *  code stores canonical YYWW — it renders in the label format (spec
+ *  2026-10-22; `format` defaults to the flow-config default "wwyy"). */
+export function allocationChipLabel(a: UnifiedAllocation, t: TranslateFn, format: DateCodeFormat = "wwyy"): string {
   if (a.lot) {
-    return [a.lot.lotCode, a.lot.shelfCode, a.lot.dateCode, a.lot.coo, a.lot.cow]
+    return [a.lot.lotCode, a.lot.shelfCode, toLabelDateCode(a.lot.dateCode, format), a.lot.coo, a.lot.cow]
       .filter((v): v is string => !!v && v.trim() !== "")
       .join("-");
   }

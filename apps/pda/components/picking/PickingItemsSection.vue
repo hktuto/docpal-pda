@@ -173,6 +173,7 @@
 import type { PickingOrderDetail } from "~/services/types";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { normalizePartNo } from "~/utils/text";
+import { toLabelDateCode } from "~/utils/dateCode";
 import { PICKING_GROUP_FIELDS, IDENTITY_DETAIL_FIELDS } from "~/utils/viewConfig";
 
 type PickingItem = PickingOrderDetail["items"][number];
@@ -197,6 +198,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const { viewConfig } = useViewConfig();
+const { dateCodeFormat } = useFlowSteps();
 
 // Collapsed meta line + expanded allocation rows are driven by
 // pdaViewConfig.pickingDetail (spec 2026-10-04): itemFields pick the
@@ -225,10 +227,12 @@ const showAllocSource = computed(() => detailConfig.value.expandedFields.include
 
 // The date/lot/COO/COW batch row shows only the batch fields present in
 // expandedFields (all four by default); hidden when none are configured.
+// Lots + packages store canonical YYWW — the date code renders in the label
+// format (spec 2026-10-22); compare/match logic is untouched.
 function allocBatchLabel(lot: { dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null }): string {
   const fields = detailConfig.value.expandedFields;
   const parts: string[] = [];
-  if (fields.includes("date_code")) parts.push(lot.dateCode || t("common.noData"));
+  if (fields.includes("date_code")) parts.push(toLabelDateCode(lot.dateCode, dateCodeFormat.value) || t("common.noData"));
   if (fields.includes("lot_code")) parts.push(lot.lotCode || t("common.noData"));
   if (fields.includes("coo")) parts.push(lot.coo || t("common.noData"));
   if (fields.includes("cow")) parts.push(lot.cow || t("common.noData"));
@@ -343,7 +347,7 @@ function updateBoxSelection(packageId: string, value: string) {
 }
 
 function formatLotFields(source: { dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null }): string {
-  return `${source.dateCode || t('common.noData')} / ${source.lotCode || t('common.noData')} / ${source.coo || t('common.noData')} / ${source.cow || t('common.noData')}`;
+  return `${toLabelDateCode(source.dateCode, dateCodeFormat.value) || t('common.noData')} / ${source.lotCode || t('common.noData')} / ${source.coo || t('common.noData')} / ${source.cow || t('common.noData')}`;
 }
 
 </script>

@@ -26,7 +26,7 @@
                 {{ pkg.qty }}
                 <span v-if="partialQty(pkg) !== null" class="partial-qty">({{ partialQty(pkg) }})</span>
               </td>
-              <td>{{ pkg.dateCode || $t('common.noData') }} / {{ pkg.lotCode || $t('common.noData') }} / {{ pkg.coo || $t('common.noData') }} / {{ pkg.cow || $t('common.noData') }}</td>
+              <td>{{ labelDateCode(pkg.dateCode) }} / {{ pkg.lotCode || $t('common.noData') }} / {{ pkg.coo || $t('common.noData') }} / {{ pkg.cow || $t('common.noData') }}</td>
               <td>
                 <span class="badge" :class="badgeClass(isVerified(pkg) ? 'verified' : 'pending')">
                   {{ isVerified(pkg) ? $t('common.verified') : $t('common.pending') }}
@@ -94,6 +94,7 @@ import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { runScanMatcher, useScanMatchers, type ScanTaskContext } from "~/composables/useScanMatchers";
 import { useFlowSteps } from "~/composables/useFlowSteps";
+import { toLabelDateCode } from "~/utils/dateCode";
 import type { PageHeaderAction } from "~/composables/usePageHeader";
 import type { MeasuringPackage } from "~/services/types";
 
@@ -177,6 +178,12 @@ const matchers = useScanMatchers();
 const { parseRawValue } = useLabelScan();
 const { dateCodeFormat } = useFlowSteps();
 const verifying = ref(false);
+
+// Packages store canonical YYWW — render the date code in the label format
+// (spec 2026-10-22); scan matching keeps comparing canonical values.
+function labelDateCode(code: string | null): string {
+  return toLabelDateCode(code, dateCodeFormat.value) || t('common.noData');
+}
 
 useVisibleReload(load);
 

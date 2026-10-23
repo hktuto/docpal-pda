@@ -26,7 +26,7 @@
             </div>
             <div v-if="preview.dateCode" class="shelf-exchange__field">
               <dt>{{ $t("shelfExchange.confirm.dateCode") }}</dt>
-              <dd>{{ preview.dateCode }}</dd>
+              <dd>{{ labelDateCode(preview.dateCode) }}</dd>
             </div>
             <div v-if="preview.lotCode" class="shelf-exchange__field">
               <dt>{{ $t("shelfExchange.confirm.lotCode") }}</dt>
@@ -71,6 +71,7 @@
 
 <script setup lang="ts">
 import type { ShelfExchangePreview } from "~/services/types";
+import { toLabelDateCode } from "~/utils/dateCode";
 
 // Confirm dialog for a shelf exchange (spec 2026-10-12-shelf-exchange-design.md):
 // shows the resolved lot + qty and the source → target route before the move
@@ -84,6 +85,14 @@ const emit = defineEmits<{
   confirm: [];
   cancel: [];
 }>();
+
+const { dateCodeFormat } = useFlowSteps();
+
+// The preview's date code is the canonical YYWW lot value from the backend —
+// render it in the label format (spec 2026-10-22).
+function labelDateCode(code: string | null): string {
+  return toLabelDateCode(code, dateCodeFormat.value) ?? "";
+}
 </script>
 
 <style scoped>

@@ -2183,8 +2183,8 @@ export default {
         outdatedStockYearsHint: "批次日期代码（YYWW）早于此年数的物料，会在库存查询概要中计为过期。",
         outdatedStockYearsInvalid: "过期门槛必须是正整数（年）。",
         dateCodeSection: "日期代码",
-        dateCodeFormat: "收货标签日期代码格式",
-        dateCodeFormatHint: "上游收货数据及实体供应商标签所使用的日期代码格式 ——「wwyy」（周-年，例如 KOA/香港标签）或「yyww」（年-周，例如深圳）。收货之后的存储格式一律为标准 YYWW，系统会在收货边界自动转换。",
+        dateCodeFormat: "标签／显示日期代码格式",
+        dateCodeFormatHint: "实体供应商标签所使用、并向操作员显示的日期代码格式 ——「wwyy」（周-年，例如 KOA/香港标签）或「yyww」（年-周，例如深圳）。扫描会以该格式读取，库存日期代码在界面上亦以该格式显示。收货之后的存储格式一律为标准 YYWW，系统会在收货边界自动转换。",
         dateCodeFormatValues: {
           wwyy: "WWYY（周-年，例如 3726）",
           yyww: "YYWW（年-周，例如 2637）"

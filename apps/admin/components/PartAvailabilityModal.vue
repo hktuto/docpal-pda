@@ -234,7 +234,8 @@ function rowLabel(key: string): string {
   if (key.startsWith("s:")) {
     const s = (data.value?.stock ?? []).find((x) => x.lotId === key.slice(2));
     if (!s) return key;
-    return [s.shelfDisplayName ?? s.shelfCode, s.boxId, s.dateCode].filter(Boolean).join("-") || s.lotId;
+    // Stock lots are canonical YYWW — display in the label format like the table.
+    return [s.shelfDisplayName ?? s.shelfCode, s.boxId, toLabelDateCode(s.dateCode, dcFormat.format.value)].filter(Boolean).join("-") || s.lotId;
   }
   const r = (data.value?.receiving ?? []).find((x) => x.receivingInvoiceItemId === key.slice(2));
   if (!r) return key;
@@ -423,8 +424,8 @@ watch(
               <td>{{ s.subInventoryCode ?? "—" }}</td>
               <td>{{ s.shelfDisplayName ?? s.shelfCode ?? "—" }}</td>
               <td>{{ s.boxId ?? "—" }}</td>
-              <td>{{ formatStockLocation(s) }}</td>
-              <td>{{ s.dateCode ?? "—" }}</td>
+              <td>{{ formatStockLocation(s, dcFormat.format.value) }}</td>
+              <td>{{ toLabelDateCode(s.dateCode, dcFormat.format.value) ?? "—" }}</td>
               <td>{{ s.lotCode ?? "—" }}</td>
               <td class="num">{{ s.totalQty }}</td>
               <td class="num">

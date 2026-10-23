@@ -342,6 +342,19 @@ describe('usePickingScanQueue', () => {
     expect(q.addCartonScan(q.matchCartonAllocations('C2002'), 'C2002').ok).toBe(true); // alloc-2 untouched
   });
 
+  it('addCartonScan stores the lot date code in the label format for display + posting', () => {
+    const items = makeShelfItems() as any;
+    items[0].allocations[0].boxId = 'C1001';
+    // default "wwyy": canonical YYWW '2603' → label WWYY '0326'
+    const q = usePickingScanQueue(ref(items as Items));
+    q.addCartonScan(q.matchCartonAllocations('C1001'), 'C1001');
+    expect(q.rows.value[0].dateCode).toBe('0326');
+    // "yyww": canonical passes through unchanged
+    const q2 = usePickingScanQueue(ref(items as Items), { dateCodeFormat: ref('yyww' as const) });
+    q2.addCartonScan(q2.matchCartonAllocations('C1001'), 'C1001');
+    expect(q2.rows.value[0].dateCode).toBe('2603');
+  });
+
   it('addAllocationScan queues a part scan against a specific allocation', () => {
     const q = usePickingScanQueue(ref(makeShelfItems()));
     const res = q.addAllocationScan('item-1', 'alloc-1', qr('RK73H1JTTD1002F', 1500), ':A::152:X:L:S:F', 'qr');

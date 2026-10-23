@@ -15,7 +15,7 @@
           <p class="outdated-warning__message">
             {{
               $t("outdatedWarning.message", {
-                dateCode: current.dateCode,
+                dateCode: labelDateCode(current.dateCode),
                 supplierCode: current.supplierCode,
                 limitMonths: current.limitMonths,
               })
@@ -37,11 +37,20 @@ import {
   dismissOutdatedWarning,
   useOutdatedWarningState,
 } from "~/composables/useOutdatedWarning";
+import { toLabelDateCode } from "~/utils/dateCode";
 
 // One dismissible alert per queued warning (spec 2026-10-07 supplier outdated
 // date-code warning): the scan already succeeded server-side — dismissing
 // reveals the next queued warning and scanning continues.
 const { current } = useOutdatedWarningState();
+const { t } = useI18n();
+const { dateCodeFormat } = useFlowSteps();
+
+// The warning's date code is the canonical YYWW lot value from the backend —
+// render it in the label format (spec 2026-10-22).
+function labelDateCode(code: string | null): string {
+  return toLabelDateCode(code, dateCodeFormat.value) ?? "";
+}
 </script>
 
 <style scoped>

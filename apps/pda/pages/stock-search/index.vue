@@ -136,7 +136,7 @@ import FilterChipGroup, { type FilterChipOption } from "~/components/FilterChipG
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
-import { dateToDateCode } from "~/utils/dateCode";
+import { dateToDateCode, toLabelDateCode } from "~/utils/dateCode";
 import { viewListRow } from "~/utils/viewConfig";
 import type {
   StockSearchFilters,
@@ -152,6 +152,7 @@ const { t } = useI18n();
 const route = useRoute();
 const warehouse = useWarehouse();
 const errorMessage = useErrorMessage();
+const { dateCodeFormat } = useFlowSteps();
 
 useHead({ title: t("stockSearch.title") });
 
@@ -373,7 +374,9 @@ function locationLabel(lot: StockSearchLot): string {
 }
 
 function batchLabel(lot: StockSearchLot): string {
-  return [lot.dateCode, lot.lotCode, lot.coo, lot.cow, lot.drawingNo]
+  // Lots store canonical YYWW — render the date code in the label format the
+  // operators see on physical labels (spec 2026-10-22).
+  return [toLabelDateCode(lot.dateCode, dateCodeFormat.value), lot.lotCode, lot.coo, lot.cow, lot.drawingNo]
     .filter(Boolean)
     .join(" / ");
 }

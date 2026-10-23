@@ -1,7 +1,7 @@
 import { computed, ref, type Ref } from "vue";
 import { normalize, normalizeCode, type OcrInput } from "~/utils/ocrNormalize";
 import { normalizePartNo } from "~/utils/text";
-import { compareDateCodes, toCanonicalDateCode, type DateCodeFormat } from "~/utils/dateCode";
+import { compareDateCodes, toCanonicalDateCode, toLabelDateCode, type DateCodeFormat } from "~/utils/dateCode";
 import type { PickingAllocation, PickingOrderDetail } from "~/services/types";
 
 /** A rejected scan: the scanSession i18n key + interpolation params. */
@@ -93,6 +93,10 @@ export interface ScanQueueRow {
   scannedPartNo: string;
   scannedWclItemNo: string | null;
   qty: number;
+  /** The row's date code in the LABEL format, always: label rows carry the
+   *  scanned value (parseOcrScan contract) and carton rows carry the source
+   *  lot's canonical YYWW converted for display + posting (the backend
+   *  canonicalizes at its scan boundary). */
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -418,7 +422,10 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
         scannedPartNo: item.partNo,
         scannedWclItemNo: item.wclItemNo ?? null,
         qty: take,
-        dateCode: allocation.lot?.dateCode ?? null,
+        // The lot stores canonical YYWW — convert to the label format so the
+        // row renders like a scanned label and posts verbatim (the backend
+        // canonicalizes at its scan boundary), spec 2026-10-22.
+        dateCode: toLabelDateCode(allocation.lot?.dateCode, labelFormat()),
         lotCode: allocation.lot?.lotCode ?? null,
         coo: allocation.lot?.coo ?? null,
         cow: allocation.lot?.cow ?? null,

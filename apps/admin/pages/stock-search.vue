@@ -20,6 +20,9 @@ const drawingNo = ref("");
 
 // Date-code range (canonical YYWW): native date pickers converted to YYWW
 // codes, same pattern as the picking availability modal (utils/dateCode.ts).
+// The lots table displays codes converted to the label/operator format
+// (dcFormat); the range filter itself stays canonical.
+const dcFormat = useDateCodeFormat();
 const dcFrom = ref("");
 const dcTo = ref("");
 const dcFromDate = computed(() => (dcFrom.value ? new Date(`${dcFrom.value}T00:00:00`) : null));
@@ -149,6 +152,9 @@ const lotsColumnDefs = computed<AdminColumnDef<StockSearchLot>[]>(() => [
   {
     key: "dateCode",
     label: t("stockSearch.dateCode"),
+    // Canonical — the accessor also drives client-side (grouped) sorting, and
+    // canonical YYWW sorts chronologically. Display converts via the
+    // #cell-dateCode slot; exportExcel converts for the sheet too.
     accessor: (l) => l.dateCode ?? "",
     size: 100,
   },
@@ -354,7 +360,12 @@ async function exportExcel() {
   const aoa = [
     cols.map((c) => c.label),
     ...lots.map((l) =>
-      cols.map((c) => (c.accessor ? c.accessor(l) : (((l as Record<string, unknown>)[c.key] as string | number | null) ?? "")))
+      cols.map((c) => {
+        const v = c.accessor ? c.accessor(l) : (((l as Record<string, unknown>)[c.key] as string | number | null) ?? "");
+        // The sheet is an operator deliverable — date codes render in the
+        // label format, like the on-screen column.
+        return c.key === "dateCode" ? (toLabelDateCode(String(v) || null, dcFormat.format.value) ?? "") : v;
+      })
     ),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -512,6 +523,9 @@ const {
           <template #cell-description="{ row }">
             <span class="wrap">{{ row.description ?? "—" }}</span>
           </template>
+          <template #cell-dateCode="{ row }">
+            {{ toLabelDateCode(row.dateCode, dcFormat.format.value) ?? "—" }}
+          </template>
         </DataTable>
         <Pager v-model:page="lotsPage" v-model:page-size="lotsPageSize" :total="lotsTotal" />
       </template>
@@ -535,6 +549,9 @@ const {
             </template>
             <template #cell-description="{ row }">
               <span class="wrap">{{ row.description ?? "—" }}</span>
+            </template>
+            <template #cell-dateCode="{ row }">
+              {{ toLabelDateCode(row.dateCode, dcFormat.format.value) ?? "—" }}
             </template>
           </DataTable>
         </template>

@@ -9,7 +9,10 @@ defineProps<{ a: PickingItemRow["allocations"][number] }>();
 
 // Date code line renders through the admin-configured display template
 // (e.g. "[date_code][coo]" → "3626cn"); the remaining rows stay raw fields.
-const { format: formatDc } = useDateCodeDisplay();
+// Lot date codes are canonical YYWW and render converted to the label/operator
+// format; receiving-source date codes are enclave (already label format) and
+// render raw.
+const { format: formatDc, formatLabel: formatDcLabel } = useDateCodeDisplay();
 </script>
 
 <template>
@@ -28,7 +31,7 @@ const { format: formatDc } = useDateCodeDisplay();
     </div>
     <div class="alloc-tip-row">
       <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.dateCode") }}</span>
-      <span>{{ formatDc(a.lot) || "—" }}</span>
+      <span>{{ formatDcLabel(a.lot) || "—" }}</span>
       <span v-if="a.outdated" style="cursor: help;" :title="$t('stockAgeWarning.tooltip')">⚠️</span>
     </div>
     <div class="alloc-tip-row">

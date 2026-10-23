@@ -68,7 +68,7 @@
               <span class="box-contents__part">{{ entry.partLabel }}</span>
               {{ entry.qty }} {{ $t('common.pcs') }} ·
               {{ $t('picking.itemsSection.dateLotCooCow') }}:
-              {{ entry.dateCode || $t('common.noData') }} / {{ entry.lotCode || $t('common.noData') }} /
+              {{ labelDateCode(entry.dateCode) }} / {{ entry.lotCode || $t('common.noData') }} /
               {{ entry.coo || $t('common.noData') }} / {{ entry.cow || $t('common.noData') }}
             </span>
             <button
@@ -130,6 +130,7 @@
 <script setup lang="ts">
 import type { PickingOrderDetail } from "~/services/types";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { toLabelDateCode } from "~/utils/dateCode";
 
 /** One row of a box's contents list (derived from the order's packages). */
 export interface BoxContentEntry {
@@ -143,6 +144,14 @@ export interface BoxContentEntry {
 }
 
 const statusLabel = useStatusLabel();
+const { t } = useI18n();
+const { dateCodeFormat } = useFlowSteps();
+
+// Packages store canonical YYWW — render the date code in the label format
+// (spec 2026-10-22).
+function labelDateCode(code: string | null): string {
+  return toLabelDateCode(code, dateCodeFormat.value) || t('common.noData');
+}
 
 const props = defineProps<{
   boxes: PickingOrderDetail["boxes"];

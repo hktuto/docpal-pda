@@ -31,7 +31,7 @@
                 <span class="box-pick__line">L{{ entry.lineNumber ?? '—' }}/S{{ entry.shipmentNumber ?? '—' }}</span>
                 {{ entry.wclItemNo ?? entry.partNo }}
               </td>
-              <td>{{ entry.lotCode || $t('common.stateNone') }} / {{ entry.dateCode || $t('common.stateNone') }}</td>
+              <td>{{ entry.lotCode || $t('common.stateNone') }} / {{ labelDateCode(entry.dateCode) }}</td>
               <td>{{ entry.queued }} / {{ entry.required }}</td>
               <td>
                 <span v-if="entry.queued >= entry.required" class="box-pick__done">✓</span>
@@ -53,6 +53,8 @@
 </template>
 
 <script setup lang="ts">
+import { toLabelDateCode } from "~/utils/dateCode";
+
 export interface PickFromBoxEntry {
   itemId: string;
   allocationId: string;
@@ -70,6 +72,15 @@ const props = defineProps<{
   boxId: string;
   entries: PickFromBoxEntry[];
 }>();
+
+const { t } = useI18n();
+const { dateCodeFormat } = useFlowSteps();
+
+// Allocation lots store canonical YYWW — render the date code in the label
+// format (spec 2026-10-22).
+function labelDateCode(code: string | null): string {
+  return toLabelDateCode(code, dateCodeFormat.value) || t('common.stateNone');
+}
 
 const emit = defineEmits<{
   (e: "close"): void;
