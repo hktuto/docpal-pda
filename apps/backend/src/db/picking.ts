@@ -2672,8 +2672,9 @@ const ALLOCATION_HOLDING_STATUSES = new Set(["pending", "picking", "allocated"])
  *  - leaving `shipped` clears shipped_at/shipped_by; entering `shipped`
  *    stamps them with the admin actor; leaving `issue` clears the issue fields.
  *  No-op (changed: false, no audit/event) when the status is already the target.
- *  The caller schedules the allocation recompute after commit whenever
- *  `changed` — reopening re-enters demand, closing frees stock. */
+ *  No recompute is scheduled by the caller: closing releases the order's own
+ *  allocations above, and reopening stays unallocated until the admin runs
+ *  the manual Re-allocate (POST /admin/picking-orders/:id/reallocate). */
 export async function overridePickingOrderStatus(
   db: AppDb,
   input: { orderId: string; status: string; reason?: string | null; actorId: string }

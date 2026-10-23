@@ -38,10 +38,12 @@ picked, or a shipped order that came back. They need:
   row, no event, no recompute (batch loops stay cheap).
 - **Audit + convergence.** One tx: status UPDATE + `transaction_logs` transition row
   (`fromState`/`toState` = old/new status, `metadata.override = true`, optional
-  `reason`) + `picking_order.updated` SSE event (topics `/picking-orders`). After
-  commit the route schedules `scheduleAllocateAll(db, "admin_status_override")` —
-  reopening re-enters demand, closing frees stock for other orders. Batch = the
-  admin client loops the route per id (same contract as `shipShippingBoxes`:
+  `reason`) + `picking_order.updated` SSE event (topics `/picking-orders`). No
+  allocation recompute is scheduled — a global `allocateAll` after every status
+  flip made routine overrides painfully slow. Closing releases the order's own
+  allocations inside the tx; reopening stays unallocated until the admin runs
+  the manual Re-allocate (`POST /admin/picking-orders/:id/reallocate`). Batch =
+  the admin client loops the route per id (same contract as `shipShippingBoxes`:
   attempts every id, aggregates per-id failures on `failed`) — no dedicated batch
   endpoint.
 
@@ -67,6 +69,6 @@ picked, or a shipped order that came back. They need:
 
 ## Test notes
 
-The status change schedules the background allocateAll; its row locks can deadlock
-the next reseed's TRUNCATE, so the tests wait for `getAllocationRunStatus()` to go
-idle in `beforeEach` before `reseed`.
+The status change schedules no allocation recompute; tests that need
+post-override allocations call `allocateAll` (or `allocateForPickingOrder`)
+explicitly.

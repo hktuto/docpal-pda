@@ -4,9 +4,9 @@
 // picking_finished/measuring_finished/shipped — no transition guards, work lock force-cleared, leaving
 // the allocation-holding statuses (pending/picking/allocated) for a
 // non-holding one releases the order's allocations with RESERVE-release
-// ledger rows, audit transition log, picking_order.updated SSE event, and a
-// background recompute scheduled on change. Same auth/fixture pattern as
-// pickingList.test.ts.
+// ledger rows, audit transition log, picking_order.updated SSE event, and no
+// allocation recompute (admins re-allocate manually). Same auth/fixture
+// pattern as pickingList.test.ts.
 
 import { test, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
@@ -15,7 +15,7 @@ import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, TEST_DATABASE_URL, type TestDb } from "../../db/test-helper.js";
 import { queryAll, queryGet } from "../../db/query.js";
 import { insertPickingOrder } from "../../db/test-fixtures.js";
-import { allocateAll, allocateForPickingOrder, getAllocationRunStatus } from "../../db/allocate.js";
+import { allocateAll, allocateForPickingOrder } from "../../db/allocate.js";
 import { scanPickingItem } from "../../db/picking.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
@@ -24,17 +24,6 @@ let client: TestDb;
 let app: (typeof import("../../index.js"))["app"];
 let token: string;
 let operatorToken: string;
-
-// A status change schedules the background allocateAll; its row locks can
-// deadlock the next reseed's TRUNCATE, so wait for the runner to settle first.
-async function waitForAllocationIdle(): Promise<void> {
-  for (let i = 0; i < 250; i++) {
-    const s = getAllocationRunStatus();
-    if (!s.running && !s.queued) return;
-    await new Promise((r) => setTimeout(r, 20));
-  }
-  throw new Error("allocation runner did not settle");
-}
 
 before(async () => {
   client = await setupTestDb();
@@ -52,7 +41,6 @@ before(async () => {
 });
 
 beforeEach(async () => {
-  await waitForAllocationIdle();
   await reseed(client);
 });
 

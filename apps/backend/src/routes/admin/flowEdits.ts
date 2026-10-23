@@ -70,8 +70,11 @@ adminFlowEditsRoute.patch("/picking-orders/:id", async (c) => {
 // pending/allocated/skip/picking/issue/picking_finished/measuring_finished/shipped,
 // no transition guards; a live PDA work lock is force-cleared. 400
 // invalid_status, 404 picking_order_not_found. No-op (changed: false) when
-// the status already matches. On change the recompute is scheduled after
-// commit (reopening re-enters demand; closing frees stock).
+// the status already matches. No recompute is scheduled: closing releases the
+// order's own allocations inside the tx, and reopening stays unallocated
+// until the admin runs the manual Re-allocate (POST
+// /admin/picking-orders/:id/reallocate) — a global allocateAll after every
+// status flip made routine overrides painfully slow.
 adminFlowEditsRoute.patch("/picking-orders/:id/status", async (c) => {
   const body = await readJson(c);
   const v = body.status;
@@ -85,7 +88,6 @@ adminFlowEditsRoute.patch("/picking-orders/:id/status", async (c) => {
     reason: typeof reason === "string" ? reason : null,
     actorId: actorFrom(c).id,
   });
-  if (result.changed) scheduleAllocateAll(db, "admin_status_override");
   return c.json(result, 200);
 });
 

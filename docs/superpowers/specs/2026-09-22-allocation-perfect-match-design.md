@@ -104,9 +104,9 @@ HK2609-0477 needed exactly 10,000. The pure priority+FIFO greedy engine
   "admin sets an order in_hand" path. On scoped failure it falls back to
   `scheduleAllocateAll(db, "admin_status_override")`, mirroring the
   confirm-arrival pattern (`allocation: null` semantics; the response body
-  itself is unchanged). The picking status override keeps
-  `scheduleAllocateAll` (reopening/closing an order changes demand, and
-  `allocateForPickingOrder`'s 409 guards don't fit an any→any override).
+  itself is unchanged). The picking status override schedules no recompute
+  (a global run per status flip proved too slow); reopening stays
+  unallocated until the admin's manual Re-allocate.
 
 ## Out of scope
 
