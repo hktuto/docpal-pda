@@ -641,6 +641,10 @@ export interface PutAwayExpectedItem {
    *  entities in the CN world) — an extra scan-match key. Standard backends
    *  omit the field. */
   ctnNo?: string | null;
+  /** CN put-away only: the invoice item's PO no / PO line — the detail list
+   *  sorts by po_line, then part_no. Standard backends omit the fields. */
+  poNo?: string | null;
+  poLine?: string | null;
   /** Expected qty; null = unknown upstream. */
   lineQty: number | null;
   receivedQty: number;

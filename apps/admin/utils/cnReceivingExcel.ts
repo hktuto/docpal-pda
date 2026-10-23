@@ -259,7 +259,7 @@ export function parseCnReceivingAoa(aoa: unknown[][], filledCells?: Set<string>)
       let any = false;
       for (let c = 0; c < row.length; c++) {
         const field = colMap[c];
-        if (!field || field === "cartonMerged") continue;
+        if (!field || field === "index" || field === "cartonMerged") continue;
         const value = text(row[c]);
         if (value !== "") any = true;
         // String() on purpose: qty/cartonNo/dateCode are stringified on the

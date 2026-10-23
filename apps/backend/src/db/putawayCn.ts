@@ -77,6 +77,8 @@ export interface CnPutAwayItemRow {
   putAwayQty: number;
   remainingQty: number;
   ctnNo: string | null;
+  poNo: string | null;
+  poLine: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -140,7 +142,7 @@ export async function getCnPutAwayTaskDetail(db: AppDb, taskId: string): Promise
                 FROM receiving_invoices_cn ri WHERE ri.receiving_order_id = ro.id) AS "invoiceNos"
         FROM receiving_orders_cn ro WHERE ro.id = ${task.receivingOrderCnId}`
   );
-  const rawItems = await queryAll<CnPutAwayItemRow & { itemOrgId: number | null; itemSubInventoryCode: string | null }>(
+  const rawItems = await queryAll<CnPutAwayItemRow & { itemOrgId: number | null; itemSubInventoryCode: string | null; additionalData: Record<string, unknown> | null }>(
     db,
     sql`
       SELECT
@@ -148,8 +150,9 @@ export async function getCnPutAwayTaskDetail(db: AppDb, taskId: string): Promise
         rii.line_qty AS "lineQty", rii.received_qty AS "receivedQty", rii.picked_qty AS "pickedQty",
         rii.put_away_qty AS "putAwayQty",
         (rii.received_qty - rii.picked_qty - rii.put_away_qty)::int AS "remainingQty",
-        rii.ctn_no AS "ctnNo", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
-        rii.coo, rii.cow,
+        rii.ctn_no AS "ctnNo", rii.po_no AS "poNo", rii.po_line AS "poLine",
+        rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
+        rii.coo, rii.cow, rii.additional_data AS "additionalData",
         rii.org_id AS "itemOrgId", rii.sub_inventory_code AS "itemSubInventoryCode"
       FROM receiving_invoice_items_cn rii
       JOIN receiving_invoices_cn ri ON ri.id = rii.receiving_invoice_id
@@ -163,12 +166,17 @@ export async function getCnPutAwayTaskDetail(db: AppDb, taskId: string): Promise
       : new Map<string, { shelfCode: string | null; boxId: string | null; reason: PutAwaySuggestionReason }>();
   const items: CnPutAwayItemRow[] = rawItems.map((it) => {
     const s = suggestions.get(it.partNo);
-    const { itemOrgId: _o, itemSubInventoryCode: _si, ...row } = it;
+    // Admin override wins (set on the CN order detail, stored in
+    // additional_data.suggestedShelf) — a user-picked shelf is not a computed
+    // suggestion, so the reason/box come along only for computed ones.
+    const override = it.additionalData?.suggestedShelf;
+    const overrideShelf = typeof override === "string" && override.trim() !== "" ? override.trim() : null;
+    const { itemOrgId: _o, itemSubInventoryCode: _si, additionalData: _ad, ...row } = it;
     return {
       ...row,
-      suggestedShelfCode: s?.shelfCode ?? null,
-      suggestedBoxId: s?.boxId ?? null,
-      suggestionReason: s?.reason ?? null,
+      suggestedShelfCode: overrideShelf ?? s?.shelfCode ?? null,
+      suggestedBoxId: overrideShelf ? null : (s?.boxId ?? null),
+      suggestionReason: overrideShelf ? null : (s?.reason ?? null),
     };
   });
   const lots = await queryAll<CnPutAwayLotRow>(

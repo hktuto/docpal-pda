@@ -407,6 +407,9 @@ export default {
       commitPrompt: "Put away {count} scanned pcs now?",
       commitDone: "Put away {count} pcs",
       taskDone: "Task completed — all items put away",
+      scanToOpen: "Scan to open a put-away task",
+      scanToOpenPlaceholder: "Scan the task QR code…",
+      scanToOpenInvalid: "Not a valid put-away task QR",
     },
     pendingPanel: {
       title: "Pending ({count})",
@@ -1887,6 +1890,7 @@ export default {
         addItem: "Add Item",
         totalsMismatch: "Totals mismatch: current items Σ cartons/qty = {carton}/{qty}, sheet totals = {sheet}. Please verify before submitting.",
         detailTitle: "CN Receiving Order {batchNo}",
+        downloadExcel: "Download Excel",
         putAway: "Put-away Task",
         arrivedAt: "Arrived At",
         arrivedBy: "Arrived By",
@@ -1909,6 +1913,8 @@ export default {
           coo: "COO",
           cow: "COW",
           subInventory: "Sub-inventory",
+          suggestedShelf: "Suggested Shelf",
+          putAwayStatus: "Put-away",
           totalQty: "Total Qty",
           totalCtn: "Total Ctn"
         },

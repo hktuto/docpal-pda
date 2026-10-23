@@ -860,6 +860,14 @@ export interface CnOrderItemRow {
   cow: string | null;
   orgId: number | null;
   subInventoryCode: string | null;
+  /** Where this item has been put away (shelf/box + qty per location). */
+  putAwayLocations: { shelfCode: string | null; boxId: string | null; qty: number }[];
+  /** Resolved suggestion (user override ?? computed); null = none. */
+  suggestedShelf: string | null;
+  /** Item-level upstream extras jsonb passthrough. */
+  additionalData?: Record<string, unknown> | null;
+  /** Order-level upstream extras jsonb passthrough. */
+  orderData?: Record<string, unknown> | null;
 }
 
 export interface CnOrderDetail {
@@ -878,6 +886,15 @@ export interface CnOrderDetail {
   invoices: { id: string; invoiceNo: string; totalQty: number | null; totalCtn: number | null; deliveryDate: string | null }[];
   items: CnOrderItemRow[];
   putAway: { id: string; status: string } | null;
+  /** Matched upload workflow — header fields the _cn tables don't carry; the
+   *  Excel export falls back to these. */
+  workflow: {
+    supplier: string | null;
+    receivedOffice: string | null;
+    receiptNo: string | null;
+    invoiceNo: string | null;
+    receivedDate: string | null;
+  } | null;
 }
 
 // ---- audit logs (transaction_logs rows for an order + its child entities) ----
@@ -1213,11 +1230,13 @@ export function useFlowApi() {
     getCnOrder: (batchNo: string) =>
       api.get<CnOrderDetail>(`/admin/receiving-cn/orders/${encodeURIComponent(batchNo)}`),
     // CN receiving item edit: subset of { dateCode, lotCode, coo, cow, ctnNo,
-    // subInventory } (null/"" clears, absent = unchanged). 400 when no known
-    // keys present; 404 receiving_cn_item_not_found.
+    // subInventory, suggestedShelf } (null/"" clears, absent = unchanged).
+    // 400 when no known keys present; 404 receiving_cn_item_not_found.
     updateCnItem: (
       id: string,
-      fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "subInventory", string | null>>
+      fields: Partial<
+        Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "subInventory" | "suggestedShelf", string | null>
+      >
     ) => api.patch<CnOrderItemRow>(`/admin/receiving-cn/items/${id}`, fields),
     // CN order audit log — same page/search/sort convention as the standard
     // receiving order logs.

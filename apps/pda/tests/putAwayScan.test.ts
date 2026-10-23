@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { classifyPutAwayScan, findCnPutAwayTargets, findPutAwayTarget, findPutAwayTargets } from "../utils/putAwayScan";
+import { classifyPutAwayScan, compareByPoLineThenPartNo, compareNumericAware, findCnPutAwayTargets, findPutAwayTarget, findPutAwayTargets } from "../utils/putAwayScan";
 import { groupPutAwayItems, putAwayGroupFieldValue, putAwayGroupSuggestion } from "../utils/putAwayGroups";
 import type { PutAwayExpectedItem } from "../services/types";
+
+describe("compareByPoLineThenPartNo (CN put-away list order)", () => {
+  const row = (poLine: string | null, partNo: string) => ({ poLine, partNo });
+
+  it("sorts by po_line numerically, then part_no; blank po_line trails", () => {
+    const sorted = [row("10", "P1"), row(null, "PA"), row("9", "P2"), row("1", "P3"), row("9", "P1")].sort(compareByPoLineThenPartNo);
+    expect(sorted.map((s) => `${s.poLine ?? ""}:${s.partNo}`)).toEqual(["1:P3", "9:P1", "9:P2", "10:P1", ":PA"]);
+  });
+
+  it("compareNumericAware orders digit runs by value", () => {
+    expect(compareNumericAware("9", "10")).toBeLessThan(0);
+    expect(compareNumericAware("PO2A", "PO10A")).toBeLessThan(0);
+  });
+});
 
 function item(partNo: string, remainingQty: number, id = partNo): PutAwayExpectedItem {
   return { id, partNo, remainingQty } as PutAwayExpectedItem;

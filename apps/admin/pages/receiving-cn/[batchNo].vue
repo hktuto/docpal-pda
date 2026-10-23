@@ -15,6 +15,7 @@ import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 const route = useRoute();
 const batchNo = route.params.batchNo as string;
 const flow = useFlowApi();
+const api = useApi();
 const { t } = useI18n();
 
 const detail = ref<CnOrderDetail | null>(null);
@@ -35,6 +36,60 @@ const subInventoryOptions = computed<SearchableSelectOption[]>(() =>
     label: r.subinvDescription ? `${r.secondaryInventoryName} — ${r.subinvDescription}` : r.secondaryInventoryName,
   }))
 );
+
+// Suggested-shelf dropdown options for the item edit modal — the shelf
+// master, same source the shelves page uses.
+const shelfRows = ref<{ code: string; displayName?: string | null }[]>([]);
+const shelfOptions = computed<SearchableSelectOption[]>(() =>
+  shelfRows.value.map((s) => ({ value: s.code, label: s.displayName || s.code }))
+);
+
+// Regenerate the 收貨確認及付款通知書 from the latest order data and download it.
+// Built with exceljs (not SheetJS) because the community xlsx build cannot
+// embed images: when the order has a put-away task, a QR code linking straight
+// into it on the PDA is anchored in the title block, left of the 編號 label.
+const downloading = ref(false);
+async function downloadExcel() {
+  if (!detail.value || downloading.value) return;
+  downloading.value = true;
+  try {
+    const { buildCnReceivingExportAoa, cnPutAwayQrPayload } = await import("~/utils/cnReceivingExcelExport");
+    const { Workbook } = await import("exceljs");
+    const QRCode = (await import("qrcode")).default;
+    const { aoa, merges } = buildCnReceivingExportAoa(detail.value);
+
+    const workbook = new Workbook();
+    const worksheet = workbook.addWorksheet("Sheet1");
+    for (const row of aoa) worksheet.addRow(row);
+    for (const m of merges ?? []) {
+      worksheet.mergeCells(m.s.r + 1, m.s.c + 1, m.e.r + 1, m.e.c + 1);
+    }
+
+    const payload = cnPutAwayQrPayload(detail.value);
+    if (payload) {
+      const dataUrl = await QRCode.toDataURL(payload, { margin: 1, width: 160 });
+      const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
+      const imageId = workbook.addImage({ base64, extension: "png" });
+      worksheet.addImage(imageId, {
+        tl: { col: 6, row: 0.2 },
+        ext: { width: 120, height: 120 },
+      });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${detail.value.order.batchNo}.xlsx`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  } finally {
+    downloading.value = false;
+  }
+}
 
 async function load() {
   loading.value = true;
@@ -60,6 +115,10 @@ onMounted(() => {
   flow
     .listSubInventories()
     .then((rows) => (subInventoryRows.value = rows))
+    .catch(() => {}); // picker options stay empty; the order still loads
+  api
+    .get<{ code: string; displayName?: string | null }[]>("/admin/shelves")
+    .then((rows) => (shelfRows.value = rows))
     .catch(() => {}); // picker options stay empty; the order still loads
 });
 
@@ -156,6 +215,12 @@ const itemColumnDefs = computed<AdminColumnDef<CnOrderItemRow>[]>(() => [
   { key: "poLine", label: t("admin.pages.receivingCn.itemsTable.poLine"), size: 80 },
   { key: "lineQty", label: t("admin.pages.receivingCn.itemsTable.lineQty"), size: 90 },
   { key: "receivedQty", label: t("admin.pages.receivingCn.itemsTable.receivedQty"), size: 90 },
+  {
+    key: "putAway",
+    label: t("admin.pages.receivingCn.itemsTable.putAwayStatus"),
+    accessor: (it) => it.putAwayQty,
+    size: 150,
+  },
   { key: "putAwayQty", label: t("admin.pages.receivingCn.itemsTable.putAwayQty"), size: 90 },
   { key: "ctnNo", label: t("admin.pages.receivingCn.itemsTable.ctnNo"), size: 80 },
   { key: "dateCode", label: t("admin.pages.receivingCn.itemsTable.dateCode"), size: 90 },
@@ -163,6 +228,7 @@ const itemColumnDefs = computed<AdminColumnDef<CnOrderItemRow>[]>(() => [
   { key: "coo", label: t("admin.pages.receivingCn.itemsTable.coo"), size: 70 },
   { key: "cow", label: t("admin.pages.receivingCn.itemsTable.cow"), size: 70 },
   { key: "subInventoryCode", label: t("admin.pages.receivingCn.itemsTable.subInventory"), size: 110 },
+  { key: "suggestedShelf", label: t("admin.pages.receivingCn.itemsTable.suggestedShelf"), size: 110 },
 ]);
 
 type GroupTable = ReturnType<typeof useAdminTable<CnOrderItemRow>>;
@@ -204,7 +270,9 @@ function openBatchEdit() {
 }
 
 async function saveEdit(
-  fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "subInventory", string | null>>
+  fields: Partial<
+    Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "subInventory" | "suggestedShelf", string | null>
+  >
 ) {
   const items = editItems.value;
   if (!items || Object.keys(fields).length === 0) {
@@ -251,6 +319,9 @@ function putAwayStatusClass(s: string): string {
     <div class="page-head">
       <h1>{{ $t("admin.pages.receivingCn.detailTitle", { batchNo }) }}</h1>
       <div class="head-actions">
+        <button class="btn" :disabled="downloading || loading" @click="downloadExcel">
+          {{ downloading ? $t("admin.common.loading") : $t("admin.pages.receivingCn.downloadExcel") }}
+        </button>
         <button class="btn" @click="navigateTo('/receiving-cn')">{{ $t("admin.common.back") }}</button>
       </div>
     </div>
@@ -350,6 +421,18 @@ function putAwayStatusClass(s: string): string {
           :empty-text="$t('admin.common.noRecords')"
           :on-reset-columns="tableForGroup(group.key).resetColumnState"
         >
+          <template #cell-putAway="{ row }">
+            <span v-if="row.putAwayQty > 0 || row.putAwayLocations.length > 0">
+              {{ row.putAwayQty }}/{{ row.receivedQty }}
+              <span v-if="row.putAwayLocations.length > 0" class="muted locations">
+                {{ row.putAwayLocations.map((l) => l.shelfCode ?? l.boxId).filter(Boolean).join(", ") }}
+              </span>
+            </span>
+            <span v-else>—</span>
+          </template>
+          <template #cell-suggestedShelf="{ row }">
+            {{ row.suggestedShelf ?? "—" }}
+          </template>
           <template #actions="{ row }">
             <button class="btn btn-small" @click="openEdit(row)">{{ $t("admin.common.edit") }}</button>
           </template>
@@ -365,6 +448,7 @@ function putAwayStatusClass(s: string): string {
       :items="editItems"
       :saving="savingEdit"
       :sub-inventory-options="subInventoryOptions"
+      :shelf-options="shelfOptions"
       @close="editItems = null"
       @save="saveEdit"
     />
@@ -425,6 +509,10 @@ function putAwayStatusClass(s: string): string {
 .section-title .muted {
   font-weight: 400;
   font-size: 0.8125rem;
+}
+.locations {
+  display: block;
+  font-size: 0.75rem;
 }
 .chip {
   display: inline-block;

@@ -407,6 +407,9 @@ export default {
       commitPrompt: "立即上架已扫描的 {count} 件？",
       commitDone: "已上架 {count} 件",
       taskDone: "任务完成 — 所有物品已上架",
+      scanToOpen: "扫描打开上架任务",
+      scanToOpenPlaceholder: "扫描任务二维码…",
+      scanToOpenInvalid: "无效的二维码",
     },
     pendingPanel: {
       title: "待上架（{count}）",
@@ -1885,6 +1888,7 @@ export default {
         addItem: "新增明细",
         totalsMismatch: "合计不符：目前明细 Σ 箱数/数量 = {carton}/{qty}，工作表合计 = {sheet}。请核对后再送出。",
         detailTitle: "客户收货单 {batchNo}",
+        downloadExcel: "下载 Excel",
         putAway: "上架任务",
         arrivedAt: "收货时间",
         arrivedBy: "收货人",
@@ -1907,6 +1911,8 @@ export default {
           coo: "COO",
           cow: "COW",
           subInventory: "子库",
+          suggestedShelf: "建议货架",
+          putAwayStatus: "上架进度",
           totalQty: "总数量",
           totalCtn: "总箱数"
         },

@@ -98,6 +98,38 @@ export function findPutAwayTargets(
   return null;
 }
 
+/** Digit-run-aware compare: "9" < "10", "PO2A" < "PO10A" (alpha runs
+ * case-insensitive). Empty sorts first. */
+export function compareNumericAware(a: string, b: string): number {
+  const ra = a.match(/(\d+|\D+)/g) ?? [];
+  const rb = b.match(/(\d+|\D+)/g) ?? [];
+  const n = Math.max(ra.length, rb.length);
+  for (let i = 0; i < n; i++) {
+    const x = ra[i];
+    const y = rb[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    const cmp = /^\d+$/.test(x) && /^\d+$/.test(y) ? Number(x) - Number(y) : x.localeCompare(y, undefined, { sensitivity: "base" });
+    if (cmp !== 0) return cmp;
+  }
+  return 0;
+}
+
+/** CN put-away detail list order: po_line, then part_no (both numeric-aware;
+ * items without a po_line trail at the end, ordered by part_no). */
+export function compareByPoLineThenPartNo(
+  a: Pick<PutAwayExpectedItem, "poLine" | "partNo">,
+  b: Pick<PutAwayExpectedItem, "poLine" | "partNo">
+): number {
+  const al = a.poLine?.trim() ?? "";
+  const bl = b.poLine?.trim() ?? "";
+  if (!al && !bl) return compareNumericAware(a.partNo, b.partNo);
+  if (!al) return 1;
+  if (!bl) return -1;
+  const c = compareNumericAware(al, bl);
+  return c !== 0 ? c : compareNumericAware(a.partNo, b.partNo);
+}
+
 /**
  * CN put-away variant of findPutAwayTargets (spec
  * 2026-10-16-customer-receiving-upload-design.md): identical part-key +

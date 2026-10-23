@@ -18,6 +18,7 @@ export interface ItemEditTarget {
   cow?: string | null;
   ctnNo?: string | null;
   subInventoryCode?: string | null;
+  suggestedShelf?: string | null;
   mismatch?: { reason: string | null; mismatchQty: number | null; wrongPartNo: string | null; note: string | null } | null;
 }
 
@@ -27,10 +28,14 @@ const props = defineProps<{
   /** When provided, a sub-inventory dropdown joins the form (CN receiving).
    *  Callers without options (standard receiving) get the plain text fields. */
   subInventoryOptions?: { value: string; label: string }[];
+  /** Same pattern as subInventoryOptions: a shelf dropdown (CN receiving). */
+  shelfOptions?: { value: string; label: string }[];
 }>();
 const emit = defineEmits<{
   close: [];
-  save: [fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "subInventory", string | null>>];
+  save: [
+    fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "subInventory" | "suggestedShelf", string | null>>,
+  ];
 }>();
 
 const { t } = useI18n();
@@ -45,6 +50,7 @@ const coo = ref("");
 const cow = ref("");
 const ctnNo = ref("");
 const subInventory = ref("");
+const suggestedShelf = ref("");
 
 watch(
   () => props.items,
@@ -56,6 +62,7 @@ watch(
     cow.value = it?.cow ?? "";
     ctnNo.value = it?.ctnNo ?? "";
     subInventory.value = it?.subInventoryCode ?? "";
+    suggestedShelf.value = it?.suggestedShelf ?? "";
   },
   { immediate: true }
 );
@@ -75,12 +82,16 @@ function submit() {
     if (batch.value && trimmed === "") continue;
     fields[k] = trimmed === "" ? null : trimmed;
   }
-  // Sub-inventory (dropdown, only rendered when options are provided): single
-  // mode sends the selection — empty clears; batch mode only sends a chosen
-  // value (empty = leave unchanged).
+  // Sub-inventory / suggested shelf (dropdowns, only rendered when their
+  // options are provided): single mode sends the selection — empty clears;
+  // batch mode only sends a chosen value (empty = leave unchanged).
   if (props.subInventoryOptions) {
     if (!batch.value) fields.subInventory = subInventory.value === "" ? null : subInventory.value;
     else if (subInventory.value !== "") fields.subInventory = subInventory.value;
+  }
+  if (props.shelfOptions) {
+    if (!batch.value) fields.suggestedShelf = suggestedShelf.value === "" ? null : suggestedShelf.value;
+    else if (suggestedShelf.value !== "") fields.suggestedShelf = suggestedShelf.value;
   }
   emit("save", fields);
 }
@@ -147,12 +158,23 @@ function applyDateCode(offsetWeeks: number) {
           <input id="ie-ctn" v-model="ctnNo" type="text" />
         </div>
         <div v-if="subInventoryOptions" class="form-row">
-          <label for="ie-subinv">{{ $t("admin.pages.receivingCn.itemsTable.subInventory") }}</label>
+          <label>{{ $t("admin.pages.receivingCn.itemsTable.subInventory") }}</label>
           <SearchableSelect
             v-model="subInventory"
             :options="subInventoryOptions"
             :all-label="$t('admin.pages.receivingCn.itemsTable.subInventory')"
             :aria-label="$t('admin.pages.receivingCn.itemsTable.subInventory')"
+            :multiple="false"
+            :show-all="false"
+          />
+        </div>
+        <div v-if="shelfOptions" class="form-row">
+          <label>{{ $t("admin.pages.receivingCn.itemsTable.suggestedShelf") }}</label>
+          <SearchableSelect
+            v-model="suggestedShelf"
+            :options="shelfOptions"
+            :all-label="$t('admin.pages.receivingCn.itemsTable.suggestedShelf')"
+            :aria-label="$t('admin.pages.receivingCn.itemsTable.suggestedShelf')"
             :multiple="false"
             :show-all="false"
           />

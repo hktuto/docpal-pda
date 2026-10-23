@@ -15,6 +15,26 @@
       <p class="page-hint">
         {{ $t(taskMode ? 'putAway.tasksHint' : 'putAway.hint') }}
       </p>
+      <!-- CN only: scan-to-open — the admin CN order detail exports an Excel
+           whose QR payload is the PDA route /put-away/<orderId>?task=<taskId>.
+           The autofocused input receives hardware scans (broadcast fills the
+           focused input; the wedge types into it) and opens the task on
+           Enter. Standard warehouses never render this row. -->
+      <div v-if="cnMode" class="scan-to-open">
+        <label class="scan-to-open__label" for="put-away-scan-to-open">
+          {{ $t('putAway.cn.scanToOpen') }}
+        </label>
+        <input
+          id="put-away-scan-to-open"
+          v-model="scanToOpen"
+          type="text"
+          class="scan-to-open__input"
+          autocomplete="off"
+          autofocus
+          :placeholder="$t('putAway.cn.scanToOpenPlaceholder')"
+          @keydown.enter.prevent="onScanToOpen"
+        />
+      </div>
     </template>
 
     <template v-if="taskMode">
@@ -47,6 +67,7 @@
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { viewListChip, viewListRow } from "~/utils/viewConfig";
+import { parsePutAwayOpenScan } from "~/utils/putAwayScanToOpen";
 import type { PutAwayCandidate, PutAwayTaskListRow } from "~/services/types";
 
 definePageMeta({ title: "meta.putAway" });
@@ -54,6 +75,7 @@ definePageMeta({ title: "meta.putAway" });
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
+const { showToast } = useToast();
 const warehouse = useWarehouse();
 const { putAwayConfig, cnReceiving, loadFlowSteps } = useFlowSteps();
 // Row title/meta/chip come from the warehouse's pdaViewConfig flow config
@@ -112,6 +134,21 @@ async function load() {
     pending.value = false;
   }
 }
+
+// CN scan-to-open: the Excel QR payload is `/put-away/<orderId>?task=<taskId>`
+// (a bare task UUID is accepted too). The CN detail is task-scoped — the
+// [id] route segment is ignored — so we navigate with a placeholder segment.
+const scanToOpen = ref("");
+async function onScanToOpen() {
+  const value = scanToOpen.value;
+  scanToOpen.value = "";
+  const parsed = parsePutAwayOpenScan(value);
+  if (!parsed) {
+    showToast(t("putAway.cn.scanToOpenInvalid"));
+    return;
+  }
+  await navigateTo(`/put-away/cn?task=${parsed.taskId}`);
+}
 </script>
 
 <style scoped>
@@ -119,5 +156,26 @@ async function load() {
   margin: -0.25rem 0 1rem;
   color: var(--muted);
   font-size: 0.875rem;
+}
+
+.scan-to-open {
+  margin: -0.25rem 0 1rem;
+}
+
+.scan-to-open__label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.scan-to-open__input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
 }
 </style>

@@ -110,6 +110,8 @@ interface CnPutAwayItemRaw {
   putAwayQty: number;
   remainingQty: number;
   ctnNo: string | null;
+  poNo: string | null;
+  poLine: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -515,6 +517,8 @@ export function createBackendWarehouseService(
           coo: i.coo,
           cow: i.cow,
           ctnNo: i.ctnNo,
+          poNo: i.poNo,
+          poLine: i.poLine,
           suggestedShelfCode: i.suggestedShelfCode,
           suggestedBoxId: i.suggestedBoxId,
           suggestionReason: i.suggestionReason,

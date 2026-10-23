@@ -12,7 +12,8 @@ import {
   startProcess,
   uploadWorkflowFile,
 } from "../docpalWorkflow.js";
-import { docpalCnExcelWorkflowId, docpalCnPdfWorkflowId } from "../config.js";
+import { docpalCnExcelWorkflowId, docpalCnPdfWorkflowId, putAwayConfig } from "../config.js";
+import { computeItemShelfSuggestions } from "./putaway.js";
 
 // ---------------------------------------------------------------------------
 // Customer receiving (CN) upload domain (spec
@@ -394,6 +395,35 @@ export async function listCnOrders(
   };
 }
 
+export interface CnOrderDetailItem {
+  id: string;
+  receivingInvoiceId: string;
+  invoiceNo: string;
+  partNo: string;
+  wclItemNo: string | null;
+  poNo: string | null;
+  poLine: string | null;
+  lineQty: number | null;
+  receivedQty: number;
+  putAwayQty: number;
+  ctnNo: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  orgId: number;
+  subInventoryCode: string | null;
+  /** On-hand stock this order's CN put-away created for the item, summed per
+   *  shelf/box (from the PUT_AWAY ledger rows carrying the CN item id in
+   *  metadata). Empty until put-away completes. */
+  putAwayLocations: { shelfCode: string | null; boxId: string | null; qty: number }[];
+  /** Advisory shelf: the admin override (additional_data.suggestedShelf) when
+   *  set, else the computed suggestion (same helper as the CN task detail). */
+  suggestedShelf: string | null;
+  additionalData: Record<string, unknown> | null;
+  orderData: Record<string, unknown> | null;
+}
+
 export interface CnOrderDetail {
   order: {
     id: string;
@@ -409,26 +439,18 @@ export interface CnOrderDetail {
     createdDate: Date;
   };
   invoices: { id: string; invoiceNo: string; totalQty: number | null; totalCtn: number | null; deliveryDate: Date | null }[];
-  items: {
-    id: string;
-    receivingInvoiceId: string;
-    invoiceNo: string;
-    partNo: string;
-    wclItemNo: string | null;
-    poNo: string | null;
-    poLine: string | null;
-    lineQty: number | null;
-    receivedQty: number;
-    putAwayQty: number;
-    ctnNo: string | null;
-    dateCode: string | null;
-    lotCode: string | null;
-    coo: string | null;
-    cow: string | null;
-    orgId: number;
-    subInventoryCode: string | null;
-  }[];
+  items: CnOrderDetailItem[];
   putAway: { id: string; status: string } | null;
+  /** The matched upload workflow (newest batch_no match, legacy invoice_no
+   *  fallback). The _cn tables don't carry the sheet's header fields — the
+   *  Excel export falls back to these. */
+  workflow: {
+    supplier: string | null;
+    receivedOffice: string | null;
+    receiptNo: string | null;
+    invoiceNo: string | null;
+    receivedDate: string | null;
+  } | null;
 }
 
 /** One CN order by batch_no with its invoices/items/put-away task; a
@@ -454,23 +476,84 @@ export async function getCnOrderDetail(db: AppDb, batchNo: string): Promise<CnOr
         WHERE receiving_order_id = ${order.id}
         ORDER BY invoice_no, id`
   );
-  const items = await queryAll<CnOrderDetail["items"][number]>(
+  const rawItems = await queryAll<Omit<CnOrderDetailItem, "putAwayLocations" | "suggestedShelf"> & { itemOrgId: number | null; itemSubInventoryCode: string | null }>(
     db,
     sql`SELECT rii.id, rii.receiving_invoice_id AS "receivingInvoiceId", ri.invoice_no AS "invoiceNo",
                rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo", rii.po_no AS "poNo", rii.po_line AS "poLine",
                rii.line_qty AS "lineQty", rii.received_qty AS "receivedQty", rii.put_away_qty AS "putAwayQty",
                rii.ctn_no AS "ctnNo", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
-               rii.coo, rii.cow, rii.org_id AS "orgId", rii.sub_inventory_code AS "subInventoryCode"
+               rii.coo, rii.cow, rii.org_id AS "orgId", rii.sub_inventory_code AS "subInventoryCode",
+               rii.additional_data AS "additionalData", rii.order_data AS "orderData",
+               rii.org_id AS "itemOrgId", rii.sub_inventory_code AS "itemSubInventoryCode"
         FROM receiving_invoice_items_cn rii
         JOIN receiving_invoices_cn ri ON ri.id = rii.receiving_invoice_id
         WHERE ri.receiving_order_id = ${order.id}
         ORDER BY ri.invoice_no, rii.po_no, rii.po_line, rii.id`
   );
+  const suggestions =
+    putAwayConfig().suggestShelf !== "off"
+      ? await computeItemShelfSuggestions(db, rawItems)
+      : new Map<string, { shelfCode: string | null }>();
+  const items: CnOrderDetailItem[] = rawItems.map((it) => {
+    const override = it.additionalData?.suggestedShelf;
+    const { itemOrgId: _o, itemSubInventoryCode: _si, ...row } = it;
+    return {
+      ...row,
+      putAwayLocations: [],
+      suggestedShelf:
+        typeof override === "string" && override.trim() !== "" ? override : (suggestions.get(it.partNo)?.shelfCode ?? null),
+    };
+  });
+  // Per-item put-away locations from this order's CN ledger rows (the CN item
+  // id rides in metadata.receivingInvoiceItemCnId — see completeCnPutAwayTx).
+  const locations = await queryAll<{ itemId: string; shelfCode: string | null; boxId: string | null; qty: number }>(
+    db,
+    sql`SELECT it.metadata->>'receivingInvoiceItemCnId' AS "itemId",
+               it.shelf_code AS "shelfCode", it.box_id AS "boxId", SUM(it.qty_delta)::int AS qty
+        FROM inventory_transactions it
+        WHERE it.reference_type = 'receiving_order_cn' AND it.reference_id = ${order.id}
+          AND it.qty_type = 'on_hand' AND it.qty_delta > 0
+          AND it.metadata->>'receivingInvoiceItemCnId' IS NOT NULL
+        GROUP BY 1, 2, 3`
+  );
+  const byItem = new Map<string, { shelfCode: string | null; boxId: string | null; qty: number }[]>();
+  for (const loc of locations) {
+    const list = byItem.get(loc.itemId) ?? [];
+    list.push({ shelfCode: loc.shelfCode, boxId: loc.boxId, qty: loc.qty });
+    byItem.set(loc.itemId, list);
+  }
+  for (const it of items) it.putAwayLocations = byItem.get(it.id) ?? [];
   const putAway = await queryGet<{ id: string; status: string }>(
     db,
     sql`SELECT id, status FROM put_away_tasks_cn WHERE receiving_order_cn_id = ${order.id}`
   );
-  return { order, invoices, items, putAway: putAway ?? null };
+  // Header-field fallback source: the matched upload workflow's payload
+  // carries the verified 收貨辦事處/供應商/發票號碼/收貨日期 the _cn tables lack.
+  const wf = await queryGet<{ supplier: string | null; payload: Record<string, unknown> | null }>(
+    db,
+    sql`SELECT supplier, payload FROM receiving_cn_workflows
+        WHERE batch_no = ${order.batchNo} OR (batch_no IS NULL AND invoice_no = ${order.batchNo})
+        ORDER BY created_date DESC LIMIT 1`
+  );
+  const payloadStr = (key: string): string | null => {
+    const v = wf?.payload?.[key];
+    return typeof v === "string" && v.trim() !== "" ? v : null;
+  };
+  return {
+    order,
+    invoices,
+    items,
+    putAway: putAway ?? null,
+    workflow: wf
+      ? {
+          supplier: wf.supplier,
+          receivedOffice: payloadStr("receivedOffice"),
+          receiptNo: payloadStr("receiptNo"),
+          invoiceNo: payloadStr("invoiceNo"),
+          receivedDate: payloadStr("receivedDate"),
+        }
+      : null,
+  };
 }
 
 // --- order audit logs -----------------------------------------------------------------
@@ -598,7 +681,9 @@ const CN_ITEM_SELECT = sql`SELECT rii.id, rii.receiving_invoice_id AS "receiving
  *  (to_state "admin_edit", metadata field/from/to — same pattern as the
  *  standard updateReceivingItemFields). `subInventory` validates the value
  *  against the item's org pair in org_info (the composite FK target);
- *  null/"" clears the nullable column. Returns the updated item row. */
+ *  null/"" clears the nullable column. `suggestedShelf` read-modify-writes
+ *  the override inside additional_data (null/"" clears the key back to the
+ *  computed suggestion); free-text, advisory only. Returns the updated row. */
 export async function updateCnReceivingItemFields(
   db: AppDb,
   input: {
@@ -606,16 +691,20 @@ export async function updateCnReceivingItemFields(
     fields: Partial<Record<CnItemField, string | null>>;
     actorId: string | null;
     subInventory?: string | null;
+    suggestedShelf?: string | null;
   }
 ): Promise<CnItemRow> {
   const keys = (Object.keys(CN_ITEM_FIELDS) as CnItemField[]).filter((k) => k in input.fields);
   const hasSubInventory = input.subInventory !== undefined;
-  if (keys.length === 0 && !hasSubInventory) throw new HTTPException(400, { message: "no_fields" });
-  const existing = await queryGet<Record<string, string | null> & { partNo: string; wclItemNo: string | null; orgId: number }>(
+  const hasSuggestedShelf = input.suggestedShelf !== undefined;
+  if (keys.length === 0 && !hasSubInventory && !hasSuggestedShelf) throw new HTTPException(400, { message: "no_fields" });
+  const existing = await queryGet<
+    Record<string, string | null> & { partNo: string; wclItemNo: string | null; orgId: number; additionalData: Record<string, unknown> | null }
+  >(
     db,
     sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo", org_id AS "orgId",
                date_code AS "dateCode", lot_code AS "lotCode", coo, cow, ctn_no AS "ctnNo",
-               sub_inventory_code AS "subInventoryCode"
+               sub_inventory_code AS "subInventoryCode", additional_data AS "additionalData"
         FROM receiving_invoice_items_cn WHERE id = ${input.itemId}`
   );
   if (!existing) throw new HTTPException(404, { message: "receiving_cn_item_not_found" });
@@ -637,10 +726,16 @@ export async function updateCnReceivingItemFields(
         [
           ...keys.map((k) => sql`${sql.raw(CN_ITEM_FIELDS[k])} = ${input.fields[k] ?? null}`),
           ...(hasSubInventory ? [sql`sub_inventory_code = ${input.subInventory ?? null}`] : []),
+          ...(hasSuggestedShelf
+            ? input.suggestedShelf === null
+              ? [sql`additional_data = additional_data - 'suggestedShelf'`]
+              : [sql`additional_data = jsonb_set(COALESCE(additional_data, '{}'::jsonb), '{suggestedShelf}', to_jsonb(${input.suggestedShelf}::text))`]
+            : []),
         ],
         sql`, `
       )}, last_update_date = ${now()} WHERE id = ${input.itemId}`
     );
+    const existingOverride = existing.additionalData?.suggestedShelf;
     const auditEntries: { field: string; from: string | null; to: string | null }[] = keys.map((k) => ({
       field: CN_ITEM_FIELDS[k],
       from: existing[k],
@@ -648,6 +743,13 @@ export async function updateCnReceivingItemFields(
     }));
     if (hasSubInventory) {
       auditEntries.push({ field: "sub_inventory_code", from: existing.subInventoryCode, to: input.subInventory ?? null });
+    }
+    if (hasSuggestedShelf) {
+      auditEntries.push({
+        field: "suggested_shelf",
+        from: typeof existingOverride === "string" ? existingOverride : null,
+        to: input.suggestedShelf ?? null,
+      });
     }
     for (const entry of auditEntries) {
       if (entry.from === entry.to) continue;

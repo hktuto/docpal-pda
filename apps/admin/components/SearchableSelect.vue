@@ -100,7 +100,10 @@ function pick(value: string) {
     else next.add(value);
     model.value = [...next];
   } else {
-    model.value = value;
+    // Single-select: clicking the current value clears it (the panel may
+    // hide the "all" reset row, so this is the only way back to empty).
+    const current = typeof model.value === "string" ? model.value : "";
+    model.value = current === value ? "" : value;
     open.value = false;
   }
 }

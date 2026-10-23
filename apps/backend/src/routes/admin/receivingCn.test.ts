@@ -13,6 +13,7 @@ import type { AddressInfo } from "node:net";
 import { setupTestDb, reseed, TEST_DATABASE_URL, FAKE_DOCPAL_URL, type TestDb } from "../../db/test-helper.js";
 import { queryAll, queryGet } from "../../db/query.js";
 import { transactionLogs } from "../../db/schema/index.js";
+import { completeCnPutAwayTx } from "../../db/putawayCn.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 
@@ -841,4 +842,96 @@ test("order logs: paged mode respects page/pageSize; q filters actor/metadata", 
   assert.ok(Array.isArray(qActorRows));
   assert.ok(qActorRows.length >= 2); // both item edits by Demo Admin
   assert.ok(qActorRows.every((r) => r.actorName === "Demo Admin"));
+});
+
+// --- detail enrichments: putAwayLocations + suggestedShelf + jsonb passthrough ----------
+
+interface CnDetailItem {
+  id: string;
+  partNo: string;
+  putAwayQty: number;
+  putAwayLocations: { shelfCode: string | null; boxId: string | null; qty: number }[];
+  suggestedShelf: string | null;
+  additionalData: Record<string, unknown> | null;
+  orderData: Record<string, unknown> | null;
+}
+
+async function getDetailItem(token: string, batchNo: string): Promise<CnDetailItem> {
+  const res = await app.request(`/admin/receiving-cn/orders/${batchNo}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { items: CnDetailItem[] };
+  return body.items[0];
+}
+
+test("order detail: putAwayLocations from the CN ledger after put-away; empty before", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  await seedCnOrderByBatch("TE-PA-LOC-1", { withTask: true });
+  const itemId = await itemIdOf("TE-PA-LOC-1");
+
+  // Nothing put away yet → empty locations.
+  const before = await getDetailItem(token, "TE-PA-LOC-1");
+  assert.deepEqual(before.putAwayLocations, []);
+
+  // Real CN put-away (same path putawayCn.test.ts exercises) writes the
+  // on-hand ledger rows carrying the CN item id in metadata.
+  const operatorId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`))!.id;
+  const taskId = "cn-task-TE-PA-LOC-1";
+  await client.db.transaction(async (tx) =>
+    completeCnPutAwayTx(tx, { taskId, items: [{ itemId, qty: 60, shelfCode: "A0103" }], actorId: operatorId })
+  );
+
+  const after = await getDetailItem(token, "TE-PA-LOC-1");
+  assert.equal(after.putAwayQty, 60);
+  assert.deepEqual(after.putAwayLocations, [{ shelfCode: "A0103", boxId: null, qty: 60 }]);
+});
+
+test("order detail: suggestedShelf = computed default, PATCH override wins, null clears back to computed", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  await seedCnOrderByBatch("TE-SHELF-1");
+  const itemId = await itemIdOf("TE-SHELF-1");
+  // Seed an order_data jsonb to verify passthrough fidelity.
+  await client.db.execute(
+    sql`UPDATE receiving_invoice_items_cn SET order_data = '{"upstream":true}'::jsonb WHERE id = ${itemId}`
+  );
+
+  // No override → the computed advisory suggestion (seed stock history for
+  // RK73B1JTTD181G is at A0102 — same expectation as the standard put-away
+  // task detail tests).
+  const computed = await getDetailItem(token, "TE-SHELF-1");
+  assert.equal(computed.suggestedShelf, "A0102");
+  assert.deepEqual(computed.orderData, { upstream: true });
+
+  // Set the override.
+  await patchItem(token, itemId, { suggestedShelf: "  A0999 " });
+  const overridden = await getDetailItem(token, "TE-SHELF-1");
+  assert.equal(overridden.suggestedShelf, "A0999"); // trimmed
+  assert.equal(overridden.additionalData?.suggestedShelf, "A0999");
+  assert.deepEqual(overridden.orderData, { upstream: true }); // untouched keys survive
+
+  // "" also clears.
+  await patchItem(token, itemId, { suggestedShelf: "" });
+  const cleared = await getDetailItem(token, "TE-SHELF-1");
+  assert.equal(cleared.suggestedShelf, "A0102"); // back to computed
+  assert.equal(cleared.additionalData?.suggestedShelf, undefined);
+
+  // Audit rows for the override set + clear.
+  const logs = await queryAll<{ metadata: { field: string; from: string | null; to: string | null } }>(
+    client.db,
+    sql`SELECT metadata FROM transaction_logs
+        WHERE entity_type = 'receiving_invoice_item_cn' AND entity_id = ${itemId}
+        ORDER BY created_date`
+  );
+  const shelfLogs = logs.filter((l) => l.metadata.field === "suggested_shelf");
+  assert.equal(shelfLogs.length, 2);
+  assert.deepEqual(
+    shelfLogs.map((l) => [l.metadata.from, l.metadata.to]),
+    [
+      [null, "A0999"],
+      ["A0999", null],
+    ]
+  );
 });

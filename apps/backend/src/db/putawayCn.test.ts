@@ -122,6 +122,22 @@ test("detail: items with remaining + lots; unknown id → 404", async () => {
   assert.equal(err.message, "put_away_task_cn_not_found");
 });
 
+test("detail: admin suggestedShelf override (additional_data) wins over the computed suggestion", async () => {
+  await reseed(client);
+  const { taskId } = await seedCnPutAwayWorld();
+  // Computed suggestion for this part (seed stock history) is "A0102"; the
+  // admin-set override must replace it and drop the computed reason/box.
+  await client.db.execute(
+    sql`UPDATE receiving_invoice_items_cn
+        SET additional_data = jsonb_build_object('suggestedShelf', 'A0999')
+        WHERE id = 'cn-item-pa-1'`
+  );
+  const detail = await getCnPutAwayTaskDetail(client.db, taskId);
+  assert.equal(detail.items[0].suggestedShelfCode, "A0999");
+  assert.equal(detail.items[0].suggestionReason, null);
+  assert.equal(detail.items[0].suggestedBoxId, null);
+});
+
 test("complete: partial put-away creates on-hand lot + ledger, task stays pending", async () => {
   await reseed(client);
   const { orderId, itemId, taskId } = await seedCnPutAwayWorld();

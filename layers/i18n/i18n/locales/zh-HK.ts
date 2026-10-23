@@ -407,6 +407,9 @@ export default {
       commitPrompt: "立即上架已掃描的 {count} 件？",
       commitDone: "已上架 {count} 件",
       taskDone: "任務完成 — 所有物品已上架",
+      scanToOpen: "掃描開啟上架任務",
+      scanToOpenPlaceholder: "掃描任務二維碼…",
+      scanToOpenInvalid: "無效的二維碼",
     },
     pendingPanel: {
       title: "待上架（{count}）",
@@ -1885,6 +1888,7 @@ export default {
         addItem: "新增明細",
         totalsMismatch: "合計不符：目前明細 Σ 箱數/數量 = {carton}/{qty}，工作表合計 = {sheet}。請核對後再送出。",
         detailTitle: "客戶收貨單 {batchNo}",
+        downloadExcel: "下載 Excel",
         putAway: "上架任務",
         arrivedAt: "收貨時間",
         arrivedBy: "收貨人",
@@ -1907,6 +1911,8 @@ export default {
           coo: "COO",
           cow: "COW",
           subInventory: "子庫",
+          suggestedShelf: "建議貨架",
+          putAwayStatus: "上架進度",
           totalQty: "總數量",
           totalCtn: "總箱數"
         },

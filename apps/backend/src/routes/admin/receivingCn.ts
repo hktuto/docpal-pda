@@ -91,12 +91,15 @@ adminReceivingCnRoute.get("/receiving-cn/orders/:batchNo/logs", async (c) => {
 });
 
 // Editable fields on one CN receiving invoice item (date code, lot code,
-// COO, COW, CTN no, sub-inventory) — mirrors the standard flow's
-// PATCH /admin/receiving-invoice-items/:id. `null` or "" clears a field;
-// absent keys stay unchanged; a non-null subInventory must exist in org_info
-// for the item's org. Returns the updated item row.
+// COO, COW, CTN no, sub-inventory, suggested shelf override) — mirrors the
+// standard flow's PATCH /admin/receiving-invoice-items/:id. `null` or ""
+// clears a field; absent keys stay unchanged; a non-null subInventory must
+// exist in org_info for the item's org. suggestedShelf persists inside
+// additional_data (override; cleared back to the computed suggestion with
+// null/""). Returns the updated item row.
 const CN_ITEM_EDITABLE = ["dateCode", "lotCode", "coo", "cow", "ctnNo"] as const;
 const CN_ITEM_SUB_INVENTORY = "subInventory";
+const CN_ITEM_SUGGESTED_SHELF = "suggestedShelf";
 
 // Empty bodies parse as {} (same convention as the flow routes).
 async function readJson<T>(c: Context): Promise<T> {
@@ -109,30 +112,33 @@ async function readJson<T>(c: Context): Promise<T> {
   }
 }
 
+function parseNullableString(body: Record<string, unknown>, key: string): string | null | undefined {
+  if (!(key in body)) return undefined;
+  const v = body[key];
+  if (v !== null && typeof v !== "string") throw new HTTPException(400, { message: `${key} must be a string` });
+  return v === null || v.trim() === "" ? null : v.trim();
+}
+
 adminReceivingCnRoute.patch("/receiving-cn/items/:id", async (c) => {
   const body = await readJson<Record<string, unknown>>(c);
   const fields: Record<string, string | null> = {};
   for (const k of CN_ITEM_EDITABLE) {
-    if (!(k in body)) continue;
-    const v = body[k];
-    if (v !== null && typeof v !== "string") throw new HTTPException(400, { message: `${k} must be a string` });
-    fields[k] = v === null || v.trim() === "" ? null : v.trim();
+    const parsed = parseNullableString(body, k);
+    if (parsed !== undefined) fields[k] = parsed;
   }
-  let subInventory: string | null | undefined = undefined;
-  if (CN_ITEM_SUB_INVENTORY in body) {
-    const v = body[CN_ITEM_SUB_INVENTORY];
-    if (v !== null && typeof v !== "string")
-      throw new HTTPException(400, { message: `${CN_ITEM_SUB_INVENTORY} must be a string` });
-    subInventory = v === null || v.trim() === "" ? null : v.trim();
-  }
-  if (Object.keys(fields).length === 0 && subInventory === undefined)
-    throw new HTTPException(400, { message: `at least one of ${[...CN_ITEM_EDITABLE, CN_ITEM_SUB_INVENTORY].join(", ")} is required` });
+  const subInventory = parseNullableString(body, CN_ITEM_SUB_INVENTORY);
+  const suggestedShelf = parseNullableString(body, CN_ITEM_SUGGESTED_SHELF);
+  if (Object.keys(fields).length === 0 && subInventory === undefined && suggestedShelf === undefined)
+    throw new HTTPException(400, {
+      message: `at least one of ${[...CN_ITEM_EDITABLE, CN_ITEM_SUB_INVENTORY, CN_ITEM_SUGGESTED_SHELF].join(", ")} is required`,
+    });
   return c.json(
     await updateCnReceivingItemFields(db, {
       itemId: c.req.param("id"),
       fields,
       actorId: actorFrom(c).id,
       subInventory,
+      suggestedShelf,
     }),
     200
   );
