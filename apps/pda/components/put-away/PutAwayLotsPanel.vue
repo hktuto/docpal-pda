@@ -1,6 +1,6 @@
 <template>
   <div class="lots-panel">
-    <h2 class="section-title">{{ $t('putAway.lotsPanel.title') }}</h2>
+    <!-- <h2 class="section-title">{{ $t('putAway.lotsPanel.title') }}</h2> -->
     <p v-if="groups.length === 0" class="empty">{{ $t('common.noLots') }}</p>
 
     <div
