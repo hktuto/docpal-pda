@@ -141,6 +141,15 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
   const rows = ref<ScanQueueRow[]>([]);
   const labelFormat = () => options?.dateCodeFormat?.value ?? "wwyy";
 
+  // Session-level guard against re-scanning an already-applied label: the
+  // unified picking page auto-applies every queued scan, and applyAll drops
+  // applied rows from `rows` — without remembering their raw values, scanning
+  // the same label twice would queue it again (a double-pick when qty still
+  // fits) or fall through to a confusing no_match. Failed rows are NOT
+  // recorded, so the operator can fix the cause, remove the row and re-scan
+  // the same label.
+  const appliedRaws = new Set<string>();
+
   const queuedRows = computed(() => rows.value.filter((r) => r.status !== "applied"));
 
   function queuedQtyForAllocation(allocationId: string, excludeKey?: string): number {
@@ -221,7 +230,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
     raw: string,
     source: ScanQueueRow["source"]
   ): { ok: boolean; message?: string; params?: Record<string, string> } {
-    if (rows.value.some((r) => r.status === "queued" && r.raw === raw)) {
+    if (appliedRaws.has(raw) || rows.value.some((r) => r.status === "queued" && r.raw === raw)) {
       return { ok: false, message: "duplicate" };
     }
     const qty = typeof parsed.qty === "number" ? parsed.qty : Number(parsed.qty);
@@ -344,7 +353,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
     raw: string,
     source: ScanQueueRow["source"]
   ): { ok: boolean; message?: string; params?: Record<string, string> } {
-    if (rows.value.some((r) => r.status === "queued" && r.raw === raw)) {
+    if (appliedRaws.has(raw) || rows.value.some((r) => r.status === "queued" && r.raw === raw)) {
       return { ok: false, message: "duplicate" };
     }
     const item = items.value.find((i) => i.id === itemId);
@@ -404,7 +413,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
     matches: { item: OrderItems[number]; allocation: PickingAllocation }[],
     raw: string
   ): { ok: boolean; message?: "duplicate" | "no_match"; count: number; qty: number } {
-    if (rows.value.some((r) => r.status === "queued" && r.raw === raw)) {
+    if (appliedRaws.has(raw) || rows.value.some((r) => r.status === "queued" && r.raw === raw)) {
       return { ok: false, message: "duplicate", count: 0, qty: 0 };
     }
     let count = 0;
@@ -502,6 +511,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
         try {
           await scanFn(row);
           row.status = "applied";
+          appliedRaws.add(row.raw);
           if (afterApply) await afterApply();
         } catch (e) {
           row.status = "failed";

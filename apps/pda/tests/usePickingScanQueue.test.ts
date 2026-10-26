@@ -210,6 +210,23 @@ describe('usePickingScanQueue', () => {
     expect(q.rows.value[0]).toMatchObject({ itemId: 'item-2', status: 'failed', error: 'Error: boom' });
   });
 
+  it('rejects re-scanning a label that already applied (auto-apply drops applied rows)', async () => {
+    const q = usePickingScanQueue(ref(makeItems()));
+    expect(q.addScan(qr('RK73H1JTTD1002F', 1000), ':A::101:X:L:S1:F', 'qr')).toEqual({ ok: true });
+    await q.applyAll(async () => {}, (e) => String(e));
+    expect(q.rows.value).toHaveLength(0); // applied rows are dropped
+    // The unified page auto-applies on every scan — without a session-level
+    // memory the second scan of the same label would queue again (double-pick)
+    // or fall through to no_match instead of reporting the duplicate.
+    expect(q.addScan(qr('RK73H1JTTD1002F', 1000), ':A::101:X:L:S1:F', 'qr')).toEqual({ ok: false, message: 'duplicate' });
+    // a FAILED apply does not consume the raw — the operator may re-scan after fixing
+    const q2 = usePickingScanQueue(ref(makeItems()));
+    q2.addScan(qr('RK73H1JTTD1002F', 1000), ':A::101:X:L:S1:F', 'qr');
+    await q2.applyAll(async () => { throw new Error('boom'); }, (e) => String(e));
+    q2.removeRow(q2.rows.value[0].key);
+    expect(q2.addScan(qr('RK73H1JTTD1002F', 1000), ':A::101:X:L:S1:F', 'qr')).toEqual({ ok: true });
+  });
+
   it('applyAll re-resolves stale allocation ids via afterApply', async () => {
     const items = ref(makeItems());
     const q = usePickingScanQueue(items);
