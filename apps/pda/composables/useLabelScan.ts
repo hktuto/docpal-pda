@@ -7,6 +7,7 @@ import {
 import { runScanMatcher, useScanMatchers, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
 import { I18nError } from '~/composables/i18nError';
 import { useErrorMessage } from '~/composables/errorMessage';
+import { useFlowSteps } from '~/composables/useFlowSteps';
 import { useWarehouse } from '~/composables/useWarehouse';
 import { parseAndIdentify, parseQrCapture, type CandidateOptions, type OcrParseResult, type RawOcrCapture, type OcrBarcode, type ParsedFields } from '~/utils/parseOcrScan';
 import { playScanError, playScanSuccess } from '~/utils/scanBeep';
@@ -124,6 +125,7 @@ export function useLabelScan() {
   const errorMessage = useErrorMessage();
   const matchers = useScanMatchers();
   const warehouse = useWarehouse();
+  const { dateCodeFormat } = useFlowSteps();
 
   async function processCapture(
     capture: LabelScanCapture,
@@ -146,6 +148,7 @@ export function useLabelScan() {
         targets: contextInput.targets ?? [],
         contextSupplierCode: contextInput.supplierCode,
         dateCodePeriods,
+        dateCodeFormat: dateCodeFormat.value,
       });
       console.log('[SCAN-TIME] parseQrCapture', (performance.now() - t2).toFixed(1), 'ms');
     } else {
@@ -203,6 +206,7 @@ export function useLabelScan() {
         contextSupplierCode: supplierCode,
         contextBrands,
         dateCodePeriods,
+        dateCodeFormat: dateCodeFormat.value,
       });
     }
 

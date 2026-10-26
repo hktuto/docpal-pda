@@ -490,6 +490,7 @@ export default {
     commitError: "错误：{message}",
     scanError: "无法解析扫描",
     duplicateSerial: "序列号 {serialNo} 已扫描过",
+    duplicateScan: "此标签已扫描过",
     searchPlaceholder: "搜索…",
     noMatch: "无匹配项",
     shelfClear: "清除货架",

@@ -125,6 +125,16 @@ test("decodeKoaDateCode: an empty periods list falls back to the built-in defaul
   assert.equal(decodeKoaDateCode("1907H686", [], ref), "3726"); // counter 19 → 2026-09, day 07 → 2026-09-07 → ISO week 37
 });
 
+test("decodeKoaDateCode: decode output follows the configured label dateCodeFormat", () => {
+  // Decode output is label format by contract (spec 2026-10-22) — under a
+  // "yyww" flow config the canonical YYWW must be pair-swapped from the
+  // default WWYY rendering, not hardcoded WWYY.
+  const ref = new Date(2026, 9, 16); // 2026-10-16
+  assert.equal(decodeKoaDateCode("1907H686", undefined, ref, "yyww"), "2637"); // week 37 of 2026
+  assert.equal(decodeKoaDateCode("1907H686", undefined, ref, "wwyy"), "3726");
+  assert.equal(decodeKoaDateCode("1907H686", [], ref, "yyww"), "2637"); // empty-table fallback + format
+});
+
 test("decodeYywwDateCode: YYWW → WWYY pair swap (iC-Haus DC)", () => {
   assert.equal(decodeYywwDateCode("2337"), "3723"); // 2023 week 37
   assert.equal(decodeYywwDateCode("2631"), "3126"); // 2026 week 31
@@ -135,6 +145,8 @@ test("decodeYywwDateCode: YYWW → WWYY pair swap (iC-Haus DC)", () => {
   assert.equal(decodeYywwDateCode("2300"), undefined); // week 00
   assert.equal(decodeYywwDateCode("2354"), undefined); // week 54
   assert.equal(decodeYywwDateCode("ABCD"), undefined); // non-digits
+  // under a "yyww" label format the YYWW input is already label format
+  assert.equal(decodeYywwDateCode("2337", "yyww"), "2337");
 });
 
 test("parseQrRaw: seeded KOA template parses raw and decodes koa_zeros qty", async () => {

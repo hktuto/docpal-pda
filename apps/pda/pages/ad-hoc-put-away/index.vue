@@ -179,7 +179,12 @@ const items = ref<AdHocPutAwayItem[]>([]);
 const batchDateCode = ref("");
 const batchLotCode = ref("");
 const committing = ref(false);
-const seenSerialNos = ref<Set<string>>(new Set());
+// Uniqueness guard: the full raw scan string (whole QR content) — supplier
+// serials alone (KOA "S601"…) repeat across parts/reels, so serial-only
+// dedupe both false-rejected different reels and missed same-label re-scans.
+// Falls back to the serial for captures without a raw QR value (OCR path).
+const seenScanKeys = ref<Set<string>>(new Set());
+const itemScanKeys = new Map<AdHocPutAwayItem, string>();
 
 // Scanner setup — useHardwareScanner manages its own lifecycle
 useHardwareScanner({
@@ -231,6 +236,7 @@ async function handleHardwareScan(code: string) {
     supplierTemplates: templates,
     contextBrands: [selectedBrand.value],
     dateCodePeriods,
+    dateCodeFormat: dateCodeFormat.value,
   });
   if (result.matched) {
     addItem({
@@ -244,7 +250,7 @@ async function handleHardwareScan(code: string) {
       serialNo: result.parsed.serialNo ?? null,
       orgId: 0,
       subInventoryCode: "",
-    });
+    }, code);
     playScanSuccess();
   } else {
     playScanError();
@@ -268,6 +274,7 @@ async function openScan() {
         supplierTemplates: templates,
         contextBrands: [selectedBrand.value],
         dateCodePeriods,
+        dateCodeFormat: dateCodeFormat.value,
       })
     : parseAndIdentify(
         { text: capture.text, barcodes },
@@ -286,7 +293,7 @@ async function openScan() {
       serialNo: result.parsed.serialNo ?? null,
       orgId: 0,
       subInventoryCode: "",
-    });
+    }, isQrOnly ? barcodes[0].value : undefined);
     playScanSuccess();
   } else {
     playScanError();
@@ -294,15 +301,25 @@ async function openScan() {
   }
 }
 
-function addItem(item: AdHocPutAwayItem) {
-  // Reject duplicate serial numbers within the current batch
-  if (item.serialNo && seenSerialNos.value.has(item.serialNo)) {
+function addItem(item: AdHocPutAwayItem, rawScan?: string) {
+  // Reject duplicate labels within the current batch: same reel scanned
+  // twice has an identical raw string; different reels only collide when
+  // every label field (incl. serial) is identical — indistinguishable by
+  // any label content.
+  const trimmed = rawScan?.trim();
+  const key = trimmed ? `raw:${trimmed}` : item.serialNo ? `serial:${item.serialNo}` : undefined;
+  if (key && seenScanKeys.value.has(key)) {
     playScanError();
-    showToast(t("adHocPutAway.duplicateSerial", { serialNo: item.serialNo }));
+    if (item.serialNo) {
+      showToast(t("adHocPutAway.duplicateSerial", { serialNo: item.serialNo }));
+    } else {
+      showToast(t("adHocPutAway.duplicateScan"));
+    }
     return;
   }
-  if (item.serialNo) {
-    seenSerialNos.value.add(item.serialNo);
+  if (key) {
+    seenScanKeys.value.add(key);
+    itemScanKeys.set(item, key);
   }
   // Apply current location if set
   if (selectedLocation.value) {
@@ -324,8 +341,10 @@ function addItem(item: AdHocPutAwayItem) {
 
 function removeItem(idx: number) {
   const [removed] = items.value.splice(idx, 1);
-  if (removed?.serialNo) {
-    seenSerialNos.value.delete(removed.serialNo);
+  const key = removed ? itemScanKeys.get(removed) : undefined;
+  if (removed && key) {
+    itemScanKeys.delete(removed);
+    seenScanKeys.value.delete(key);
   }
 }
 
@@ -371,7 +390,8 @@ async function confirmCommit() {
     });
     showToast(t("adHocPutAway.success", { count: items.value.length, shelf: selectedShelf.value }));
     items.value = [];
-    seenSerialNos.value.clear();
+    seenScanKeys.value.clear();
+    itemScanKeys.clear();
     selectedShelf.value = "";
   } catch (err) {
     const msg = err instanceof I18nError ? err.message : (err instanceof Error ? err.message : "unknown error");

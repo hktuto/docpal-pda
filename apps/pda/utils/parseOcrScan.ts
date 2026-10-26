@@ -1,4 +1,5 @@
 import type { SupplierQrcodeTemplate } from "~/services/types";
+import { toLabelDateCode, type DateCodeFormat } from "~/utils/dateCode";
 
 const QTY_ENCODING_KOA_ZEROS = "koa_zeros";
 const DATE_CODE_ENCODING_KOA_MONTH_COUNTER = "koa_month_counter";
@@ -754,7 +755,8 @@ function parsePeriodStart(periodStart: string): { year: number; month0: number }
 
 /**
  * Decode a KOA date-code field (template segment 5, e.g. "1625H713",
- * "5420Q156") to the system's WWYY date code. Take the leading digit run's
+ * "5420Q156") to the label date code (per the flow config `dateCodeFormat` —
+ * WWYY under the default "wwyy"; the YYWW pair swap under "yyww"). Take the leading digit run's
  * first 4 digits: the first 2 are a month counter mapped to a year/month
  * through the date_code_counter_periods rows (the rolling counter 10→99
  * restarts every 90 months — one forward row per cycle, e.g. 10 = 2025-12
@@ -768,7 +770,8 @@ function parsePeriodStart(periodStart: string): { year: number; month0: number }
 export function decodeKoaDateCode(
   raw: string,
   periods: DateCodePeriod[] = DEFAULT_KOA_PERIODS,
-  referenceDate: Date = new Date()
+  referenceDate: Date = new Date(),
+  dateCodeFormat: DateCodeFormat = "wwyy"
 ): string | undefined {
   // An empty fetched row list (GET /date-code-periods on a DB seeded before
   // the table existed) means "no rows at hand" — same as omitting the argument.
@@ -802,20 +805,23 @@ export function decodeKoaDateCode(
   const date = new Date(picked.getFullYear(), picked.getMonth(), day);
   const week = getIsoWeek(date);
   const isoYear = getIsoYear(date);
-  return `${String(week).padStart(2, "0")}${String(isoYear % 100).padStart(2, "0")}`;
+  // Canonical YYWW → label format at this out boundary (spec 2026-10-22).
+  const canonical = `${String(isoYear % 100).padStart(2, "0")}${String(week).padStart(2, "0")}`;
+  return toLabelDateCode(canonical, dateCodeFormat) ?? undefined;
 }
 
 /**
  * Decode a YYWW date-code field (iC-Haus DC, e.g. "2337" = year 2023 week 37)
- * to the system's WWYY date code by swapping the digit pairs ("2337" →
- * "3723"). Returns undefined for non-4-digit input or an invalid week.
+ * to the label date code (pair-swapped WWYY under the default "wwyy" label
+ * format; identity under "yyww"). Returns undefined for non-4-digit input or
+ * an invalid week.
  * Keep in sync with apps/backend/src/db/scanParse.ts decodeYywwDateCode.
  */
-export function decodeYywwDateCode(raw: string): string | undefined {
+export function decodeYywwDateCode(raw: string, dateCodeFormat: DateCodeFormat = "wwyy"): string | undefined {
   if (!/^\d{4}$/.test(raw)) return undefined;
   const week = Number(raw.slice(2, 4));
   if (week < 1 || week > 53) return undefined;
-  return `${raw.slice(2, 4)}${raw.slice(0, 2)}`;
+  return toLabelDateCode(raw, dateCodeFormat) ?? undefined;
 }
 
 function getQrTemplateRegex(template: string): RegExp | null {
@@ -853,13 +859,16 @@ export interface ParseQrCaptureOptions {
   /** Month-counter periods for koa_month_counter date-code decoding
    *  (GET /date-code-periods rows); defaults to DEFAULT_KOA_PERIODS. */
   dateCodePeriods?: DateCodePeriod[];
+  /** Flow-config dateCodeFormat ("wwyy" default | "yyww") — decoded date
+   *  codes are emitted in this label format (spec 2026-10-22 contract). */
+  dateCodeFormat?: DateCodeFormat;
 }
 
 export function parseQrCapture(
   qrValue: string,
   options: ParseQrCaptureOptions
 ): OcrParseResult {
-  const { supplierTemplates, targets = [], contextSupplierCode, contextBrands, dateCodePeriods } = options;
+  const { supplierTemplates, targets = [], contextSupplierCode, contextBrands, dateCodePeriods, dateCodeFormat = "wwyy" } = options;
   const targetArray = Array.isArray(targets) ? targets : [targets];
   const normalizedQr = qrValue.trim();
 
@@ -906,9 +915,9 @@ export function parseQrCapture(
     const rawDateCode = groups.dateCode || undefined;
     let dateCode: string | undefined;
     if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_KOA_MONTH_COUNTER) {
-      dateCode = rawLotCode ? decodeKoaDateCode(rawLotCode, dateCodePeriods) : undefined;
+      dateCode = rawLotCode ? decodeKoaDateCode(rawLotCode, dateCodePeriods, new Date(), dateCodeFormat) : undefined;
     } else if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_YYWW) {
-      dateCode = rawDateCode ? decodeYywwDateCode(rawDateCode) : undefined;
+      dateCode = rawDateCode ? decodeYywwDateCode(rawDateCode, dateCodeFormat) : undefined;
     } else {
       dateCode = rawDateCode;
     }

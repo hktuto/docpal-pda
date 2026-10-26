@@ -297,6 +297,14 @@ describe("decodeKoaDateCode", () => {
     expect(decodeKoaDateCode("18042421", [], REF_2026_10)).toBe("3226"); // counter 18 → 2026-08, day 04 → ISO week 32
     expect(decodeKoaDateCode("1907H686", [], REF_2026_10)).toBe("3726"); // counter 19 → 2026-09, day 07 → ISO week 37
   });
+
+  it("emits the configured label format (yyww config gets the YYWW pair swap)", () => {
+    // Decode output is label format by contract (spec 2026-10-22) — under a
+    // "yyww" flow config the canonical YYWW must be pair-swapped from the
+    // default WWYY rendering, not hardcoded WWYY.
+    expect(decodeKoaDateCode("1907H686", undefined, REF_2026_10, "yyww")).toBe("2637"); // week 37 of 2026
+    expect(decodeKoaDateCode("1907H686", undefined, REF_2026_10, "wwyy")).toBe("3726");
+  });
 });
 
 describe("parseQrCapture", () => {
@@ -319,6 +327,22 @@ describe("parseQrCapture", () => {
     expect(result.parsed.itemId).toBe("RK73H2ATTD2403F");
     expect(result.parsed.qty).toBe(25000);
     expect(result.parsed.lotCode).toBe("63048349");
+  });
+
+  it("emits decoded KOA date codes in the configured label format", () => {
+    const koaCounterTemplate = {
+      ...koaTemplate,
+      qrcodeDateCodeEncoding: "koa_month_counter" as const,
+    };
+    const raw = ":RK73H1ETTP4752F::253:M:1907H686:S601:KOA*RK73H1ETTP 4752F";
+    // Default wwyy: WWYY output.
+    expect(
+      parseQrCapture(raw, { supplierTemplates: [koaCounterTemplate], dateCodeFormat: "wwyy" }).parsed.dateCode
+    ).toBe("3726"); // counter 19 → 2026-09, day 07 → ISO week 37
+    // yyww flow config: pair-swapped label format.
+    expect(
+      parseQrCapture(raw, { supplierTemplates: [koaCounterTemplate], dateCodeFormat: "yyww" }).parsed.dateCode
+    ).toBe("2637");
   });
 
   it("returns no match when QR value does not fit any template", () => {

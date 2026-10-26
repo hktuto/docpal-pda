@@ -27,6 +27,13 @@ vi.mock('../composables/errorMessage', () => ({
   useErrorMessage: vi.fn(() => (e: unknown) => String(e)),
 }));
 
+// useLabelScan pulls useFlowSteps for the configured dateCodeFormat; its
+// module-level state needs Nuxt auto-imports, so stub the whole module
+// (same reason the other composable tests mock it).
+vi.mock('../composables/useFlowSteps', () => ({
+  useFlowSteps: vi.fn(() => ({ dateCodeFormat: { value: 'wwyy' } })),
+}));
+
 const { ocrResultToInput, parseBrowserScanPromptJson, buildRawCapture, parseBrowserScanPrompt } = await import('../composables/useLabelScan');
 
 describe('ocrResultToInput', () => {

@@ -126,7 +126,8 @@ function parsePeriodStart(periodStart: string): { year: number; month0: number }
 export function decodeKoaDateCode(
   raw: string,
   periods: DateCodePeriod[] = DEFAULT_KOA_PERIODS,
-  referenceDate: Date = new Date()
+  referenceDate: Date = new Date(),
+  dateCodeFormat: DateCodeFormat = "wwyy"
 ): string | undefined {
   // An empty table (request paths pass the date_code_counter_periods rows
   // verbatim) means "no rows at hand" — same as omitting the argument.
@@ -160,7 +161,9 @@ export function decodeKoaDateCode(
   const date = new Date(picked.getFullYear(), picked.getMonth(), day);
   const week = getIsoWeek(date);
   const isoYear = getIsoYear(date);
-  return `${String(week).padStart(2, "0")}${String(isoYear % 100).padStart(2, "0")}`;
+  // Canonical YYWW → label format at this out boundary (spec 2026-10-22).
+  const canonical = `${String(isoYear % 100).padStart(2, "0")}${String(week).padStart(2, "0")}`;
+  return toLabelDateCode(canonical, dateCodeFormat) ?? undefined;
 }
 
 /**
@@ -248,15 +251,16 @@ export function encodeKoaDateCodeRaw(
 
 /**
  * Decode a YYWW date-code field (iC-Haus DC, e.g. "2337" = year 2023 week 37)
- * to the system's WWYY date code by swapping the digit pairs ("2337" →
- * "3723"). Returns undefined for non-4-digit input or an invalid week.
+ * to the label date code (pair-swapped WWYY under the default "wwyy" label
+ * format; identity under "yyww"). Returns undefined for non-4-digit input or
+ * an invalid week.
  * Keep in sync with apps/pda/utils/parseOcrScan.ts decodeYywwDateCode.
  */
-export function decodeYywwDateCode(raw: string): string | undefined {
+export function decodeYywwDateCode(raw: string, dateCodeFormat: DateCodeFormat = "wwyy"): string | undefined {
   if (!/^\d{4}$/.test(raw)) return undefined;
   const week = Number(raw.slice(2, 4));
   if (week < 1 || week > 53) return undefined;
-  return `${raw.slice(2, 4)}${raw.slice(0, 2)}`;
+  return toLabelDateCode(raw, dateCodeFormat) ?? undefined;
 }
 
 /** Part-number comparison key: uppercase with all whitespace collapsed out.
@@ -302,7 +306,8 @@ export function parseQrRaw(
   template: string | null | undefined,
   qtyEncoding: string | null | undefined,
   dateCodeEncoding?: string | null,
-  dateCodePeriods?: DateCodePeriod[]
+  dateCodePeriods?: DateCodePeriod[],
+  dateCodeFormat: DateCodeFormat = "wwyy"
 ): ParsedScanFields {
   if (!template) return {};
   const regex = getQrTemplateRegex(template);
@@ -332,9 +337,9 @@ export function parseQrRaw(
   const rawDateCode = groups.dateCode || undefined;
   let dateCode: string | undefined;
   if (dateCodeEncoding === DATE_CODE_ENCODING_KOA_MONTH_COUNTER) {
-    dateCode = rawLotCode ? decodeKoaDateCode(rawLotCode, dateCodePeriods) : undefined;
+    dateCode = rawLotCode ? decodeKoaDateCode(rawLotCode, dateCodePeriods, new Date(), dateCodeFormat) : undefined;
   } else if (dateCodeEncoding === DATE_CODE_ENCODING_YYWW) {
-    dateCode = rawDateCode ? decodeYywwDateCode(rawDateCode) : undefined;
+    dateCode = rawDateCode ? decodeYywwDateCode(rawDateCode, dateCodeFormat) : undefined;
   } else {
     dateCode = rawDateCode;
   }

@@ -122,6 +122,7 @@ definePageMeta({ title: "meta.shelfExchange" });
 
 const { t } = useI18n();
 const warehouse = useWarehouse();
+const { dateCodeFormat } = useFlowSteps();
 const { showToast } = useToast();
 
 const loading = ref(true);
@@ -204,7 +205,7 @@ async function handleHardwareScan(code: string) {
 
   const templates = await getCachedSupplierQrTemplates(warehouse);
   const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
-  const result = parseQrCapture(code, { supplierTemplates: templates, dateCodePeriods });
+  const result = parseQrCapture(code, { supplierTemplates: templates, dateCodePeriods, dateCodeFormat: dateCodeFormat.value });
   if (!result.matched) {
     showToast(t("shelfExchange.errors.scanParse"));
     return false;
@@ -236,7 +237,7 @@ async function openScan() {
 
   const isQrOnly = barcodes.length === 1 && barcodes[0].format === "4" && !capture.imagePath;
   const result = isQrOnly
-    ? parseQrCapture(barcodes[0].value, { supplierTemplates: templates, dateCodePeriods })
+    ? parseQrCapture(barcodes[0].value, { supplierTemplates: templates, dateCodePeriods, dateCodeFormat: dateCodeFormat.value })
     : parseAndIdentify({ text: capture.text, barcodes }, []);
 
   if (!result.matched) {

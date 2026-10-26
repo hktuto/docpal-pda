@@ -9,6 +9,13 @@ vi.mock('vue', () => ({
   onUnmounted: () => {},
 }));
 
+// useScannerConfig pulls getCachedSupplierQrTemplates from useLabelScan,
+// which imports useFlowSteps (module-level state needs Nuxt auto-imports) —
+// stub it like the other composable tests do.
+vi.mock('~/composables/useFlowSteps', () => ({
+  useFlowSteps: () => ({ dateCodeFormat: { value: 'wwyy' } }),
+}));
+
 const { brandWhitelistUnion, withShelfSymbologies } = await import('~/composables/useScannerConfig');
 
 const templates = [

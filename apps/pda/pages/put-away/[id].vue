@@ -193,7 +193,7 @@ usePageHeader({
 
 const warehouse = useWarehouse();
 const { viewConfig } = useViewConfig();
-const { cnReceiving, loadFlowSteps } = useFlowSteps();
+const { cnReceiving, loadFlowSteps, dateCodeFormat } = useFlowSteps();
 
 // CN customer-receiving mode: the detail reads the CN task aggregate
 // (/put-away-cn/tasks/:id, normalized onto the standard types) and scanned
@@ -793,6 +793,7 @@ async function openScan(group: PutAwayItemGroup) {
             supplierTemplates: templates,
             targets: [group.partNo],
             dateCodePeriods,
+            dateCodeFormat: dateCodeFormat.value,
           })
         : parseAndIdentify({ text: capture.text, barcodes }, [group.partNo]);
       if (!result.matched) {

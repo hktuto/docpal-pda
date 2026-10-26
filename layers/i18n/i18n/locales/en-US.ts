@@ -490,6 +490,7 @@ export default {
     commitError: "Error: {message}",
     scanError: "Could not parse scan",
     duplicateSerial: "Serial {serialNo} already scanned",
+    duplicateScan: "This label has already been scanned",
     searchPlaceholder: "Search…",
     noMatch: "No match",
     shelfClear: "Clear shelf",

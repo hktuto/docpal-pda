@@ -9,7 +9,7 @@ import { emitEvent } from "./events.js";
 import { normalizePartNo, parseQrRaw } from "./scanParse.js";
 import { listDateCodePeriods } from "./dateCodePeriods.js";
 import { createPutAwayTaskTx } from "./putawaytasks.js";
-import { isStepEnabled, putAwayConfig, receivingSubInventoryRules, type SubInventoryRuleGroup } from "../config.js";
+import { isStepEnabled, putAwayConfig, receivingSubInventoryRules, dateCodeFormat, type SubInventoryRuleGroup } from "../config.js";
 import { logTransition } from "./picking.js";
 
 // ---------------------------------------------------------------------------
@@ -317,7 +317,7 @@ export async function scanReceivingOrder(
     const dateCodePeriods =
       ro.dateCodeEncoding === "koa_month_counter" ? await listDateCodePeriods(tx) : undefined;
     const parsed = input.raw
-      ? parseQrRaw(input.raw, ro.qrTemplate, ro.qtyEncoding, ro.dateCodeEncoding, dateCodePeriods)
+      ? parseQrRaw(input.raw, ro.qrTemplate, ro.qtyEncoding, ro.dateCodeEncoding, dateCodePeriods, dateCodeFormat())
       : {};
     const partNo = input.partNo ?? parsed.partNo ?? null;
     const qty = input.qty ?? parsed.qty ?? null;
