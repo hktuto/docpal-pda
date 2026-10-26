@@ -144,7 +144,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, toRaw } from "vue";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
@@ -341,9 +341,10 @@ function addItem(item: AdHocPutAwayItem, rawScan?: string) {
 
 function removeItem(idx: number) {
   const [removed] = items.value.splice(idx, 1);
-  const key = removed ? itemScanKeys.get(removed) : undefined;
-  if (removed && key) {
-    itemScanKeys.delete(removed);
+  const rawRemoved = removed ? toRaw(removed) : undefined;
+  const key = rawRemoved ? itemScanKeys.get(rawRemoved) : undefined;
+  if (rawRemoved && key) {
+    itemScanKeys.delete(rawRemoved);
     seenScanKeys.value.delete(key);
   }
 }
