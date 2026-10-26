@@ -96,6 +96,8 @@ export const ALL_TABLES = [
   "picking_items",
   "picking_orders",
   "allocations",
+  "allocation_snapshot_rows",
+  "allocation_snapshot_batches",
   "inventory_lot_sources",
   "inventory_lots",
   "shelf_box_items",

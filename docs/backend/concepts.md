@@ -161,6 +161,28 @@ Selection rules (confirmed with the business):
 > - Availability nets out locked orders' reservations: lot sources via
 >   `inventory_lots.allocated_qty`, receiving sources by subtracting the
 >   locked orders' allocation rows in the source query.
+>
+> UAT snapshot/restore (spec
+> `docs/superpowers/specs/2026-10-26-uat-allocation-snapshot-restore-design.md`):
+> in dev/UAT the nightly upstream inventory wipe/re-seed cascade-deletes
+> `allocations` without repairing the `allocated_qty` counters. An opt-in job
+> (`UAT_ALLOCATION_RECOVERY=on`) snapshots all allocation rows into the
+> FK-free `allocation_snapshot_*` tables at `ALLOCATE_BACKUP` (default
+> `17:45:00+0800`) and restores the latest snapshot at `ALLOCATE_RECOVER`
+> (default `08:00:00+0800`; both `HH:mm:ss±HHmm`) (`captureAllocationSnapshot` /
+> `restoreLatestAllocationSnapshot` in `apps/backend/src/db/allocationSnapshot.ts`;
+> manual equivalents `POST /admin/allocation/snapshot` / `/restore`). Restore
+> re-resolves items/sources by original id then stable business keys, touches
+> only open (`pending`/`picking`/`allocated`) unlocked orders, validates open
+> qty and source availability (never silently reduces qty), releases
+> conflicting automatic allocations with ledger rows, reports manual-pin
+> conflicts instead of stealing them, and re-inserts rows under their
+> ORIGINAL allocation UUID so retries are idempotent. Every restore finishes
+> with a set-wise reconciliation of ALL lot and picking-item `allocated_qty`
+> counters from current allocation rows (including unrestored rows) plus
+> `refreshAllocationStatus`. It runs through the serialized allocation runner
+> and does NOT trigger `allocateAll` afterwards — later recomputes keep their
+> existing behavior, including wiping non-manual rows.
 
 ## 7. Goods-verify tasks are generated at day end
 

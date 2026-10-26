@@ -267,6 +267,13 @@
       "when": 1792655000000,
       "tag": "0038_picking_status_split",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792980301641,
+      "tag": "0039_sticky_black_cat",
+      "breakpoints": true
     }
   ]
 }

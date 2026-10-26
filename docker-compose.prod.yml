@@ -73,6 +73,11 @@ services:
       # step kill-switch (e.g. "measuring,verify") still applies when FLOW_CONFIG is unset.
       FLOW_CONFIG: ${FLOW_CONFIG:-}
       FLOW_STEPS_DISABLED: ${FLOW_STEPS_DISABLED:-}
+      # UAT allocation snapshot/restore schedule. Times include their UTC offset,
+      # so no container TZ setting is required. Disabled unless explicitly on.
+      UAT_ALLOCATION_RECOVERY: ${UAT_ALLOCATION_RECOVERY:-off}
+      ALLOCATE_BACKUP: "${ALLOCATE_BACKUP:-17:45:00+0800}"
+      ALLOCATE_RECOVER: "${ALLOCATE_RECOVER:-08:00:00+0800}"
       # label-printing-center print service — the backend proxies /print/*
       # (printer list, template print, job status) to it. Default is the LAN
       # print host; override in .env when it moves.

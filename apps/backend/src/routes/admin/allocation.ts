@@ -7,6 +7,7 @@ import { allocateForPickingOrder, allocateForReceivingOrder, addManualPickingAll
 import { actorFrom } from "../../auth/middleware.js";
 import { reallocateReceivingItemDemand } from "../../db/receivingReallocate.js";
 import { allocatePickingItemFromSources, allocatePickingGroupFromSources, type AllocateFormRow } from "../../db/pickingAllocateForm.js";
+import { captureAllocationSnapshot, restoreLatestAllocationSnapshot } from "../../db/allocationSnapshot.js";
 
 // Manual allocation triggers for the admin console (spec
 // docs/superpowers/specs/2026-09-14-admin-allocation-buttons-design.md).
@@ -25,6 +26,16 @@ export const adminAllocationRoute = new Hono();
 // concurrent wipe/rebuild passes used to leave duplicate allocation rows.
 adminAllocationRoute.post("/allocation/run", async (c) => {
   const summary = await awaitAllocateAll(db, "admin run");
+  return c.json(summary);
+});
+
+adminAllocationRoute.post("/allocation/snapshot", async (c) => {
+  const summary = await captureAllocationSnapshot(db, actorFrom(c).id);
+  return c.json(summary);
+});
+
+adminAllocationRoute.post("/allocation/restore", async (c) => {
+  const summary = await restoreLatestAllocationSnapshot(db, actorFrom(c).id);
   return c.json(summary);
 });
 

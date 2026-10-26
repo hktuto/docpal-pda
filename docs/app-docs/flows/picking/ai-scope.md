@@ -605,6 +605,21 @@
 - `apps/backend/src/db/allocate.ts` — allocation engine: demands in
   `priority_seq` order, skips work-locked orders, open qty = `qty − Σ
   picking_packages`.
+- `apps/backend/src/db/allocationSnapshot.ts` +
+  `apps/backend/src/jobs/allocationSnapshot.ts` — UAT-only allocation
+  snapshot/restore (spec
+  `docs/superpowers/specs/2026-10-26-uat-allocation-snapshot-restore-design.md`):
+  opt-in via `UAT_ALLOCATION_RECOVERY=on`, daily capture at `ALLOCATE_BACKUP`
+  (default `17:45:00+0800`) / restore at `ALLOCATE_RECOVER` (default
+  `08:00:00+0800`; both `HH:mm:ss±HHmm`) into the FK-free `allocation_snapshot_*` tables
+  after the nightly upstream wipe; restore re-resolves by original id then
+  business keys, re-inserts under the original allocation UUID (idempotent),
+  releases conflicting automatic allocations with ledger rows, reports
+  manual-pin conflicts, and reconciles ALL `allocated_qty` counters +
+  `refreshAllocationStatus` afterwards (no `allocateAll`). Manual triggers:
+  `POST /admin/allocation/snapshot` / `POST /admin/allocation/restore` in
+  `apps/backend/src/routes/admin/allocation.ts`; restore persists the
+  structured per-row report on the batch.
 - `apps/backend/src/db/ingest.ts` — reusable sync apply layer for upstream
   picking orders (replaced the retired `PUT /picking-orders/:id` ingest route
   and the ElectricSQL consumer); a synced order change should trigger
@@ -660,6 +675,7 @@
 - `docs/superpowers/specs/2026-10-03-picking-scan-truth-and-aggregate-verify-design.md`
 - `docs/superpowers/specs/2026-10-02-excel-order-barcode-scan-to-open-design.md`
 - `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`
+- `docs/superpowers/specs/2026-10-26-uat-allocation-snapshot-restore-design.md`
 - `docs/superpowers/plans/2026-07-23-picking-priority-allocation.md`
 - `docs/superpowers/plans/2026-07-12-picking-execution.md`
 - `docs/superpowers/plans/2026-07-18-picking-scan-session.md`

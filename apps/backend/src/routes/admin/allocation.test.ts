@@ -2061,3 +2061,29 @@ test("transfer: 400 invalid_qty, 409 over_allocation and location_mismatch", asy
   assert.equal(lm.status, 409);
   assert.match(await lm.text(), /location_mismatch/);
 });
+
+test("admin allocation snapshot and restore triggers capture, restore, and report missing snapshots", async () => {
+  await reseed(client);
+  const missing = await req("/admin/allocation/restore", { method: "POST" });
+  assert.equal(missing.status, 404);
+  assert.match(await missing.text(), /allocation_snapshot_not_found/);
+  await allocateAll(client.db);
+
+  const snapshot = await req("/admin/allocation/snapshot", { method: "POST" });
+  assert.equal(snapshot.status, 200);
+  const captured = await snapshot.json();
+  assert.ok(captured.allocations > 0);
+  assert.equal(captured.snapshotDate, new Date().toLocaleDateString("en-CA"));
+
+  await client.db.execute(sql`DELETE FROM allocations`);
+  const restore = await req("/admin/allocation/restore", { method: "POST" });
+  assert.equal(restore.status, 200);
+  const restored = await restore.json();
+  assert.equal(restored.batchId, captured.batchId);
+  assert.equal(restored.total, captured.allocations);
+  assert.equal(restored.restored + restored.existing + restored.skipped, captured.allocations);
+
+  const retry = await req("/admin/allocation/restore", { method: "POST" });
+  assert.equal(retry.status, 200);
+  assert.equal((await retry.json()).restored, 0);
+});

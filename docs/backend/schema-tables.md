@@ -878,6 +878,56 @@ Note: CHECK `chk_allocations_source` requires at least one of
 `inventory_lot_id` / `receiving_invoice_item_id` / `receiving_order_id`;
 indexes on all four FK columns.
 
+# UAT allocation snapshots (`schema/allocationSnapshot.ts`)
+
+UAT-only safety net against the nightly upstream inventory wipe/re-seed
+(spec `docs/superpowers/specs/2026-10-26-uat-allocation-snapshot-restore-design.md`).
+Both tables are backend-local: snapshot rows deliberately have **no foreign
+keys to upstream-managed tables** (allocations, picking items, lots, receiving
+rows) so upstream deletes cannot cascade into them — every preserved id /
+business key is a plain text copy.
+
+## allocation_snapshot_batches
+
+One batch per local snapshot date (a same-day recapture replaces the earlier
+batch, cascade-deleting its rows).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Batch id (UUID) |
+| snapshot_date | date NOT NULL UNIQUE | Backend-local capture date |
+| captured_at | timestamp NOT NULL | Capture time |
+| restored_at | timestamp | Last restore time of this batch (NULL = never restored) |
+| report | jsonb | Structured restore report persisted by the latest restore (`AllocationRestoreSummary` — totals + per-row outcomes/reasons) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+## allocation_snapshot_rows
+
+One row per captured `allocations` row — the original allocation UUID, qty and
+manual flag plus the complete source identity needed to re-resolve the row
+after upstream re-seeding (ids first, then stable business keys).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Snapshot row id (UUID) |
+| batch_id | text NOT NULL FK → allocation_snapshot_batches(id) ON DELETE CASCADE | Owning batch |
+| allocation_id | text NOT NULL | Original `allocations.id` — reused on restore (idempotent retries) |
+| picking_item_id / picking_order_id | text NOT NULL | Original picking item/order ids (plain copies, no FK) |
+| picking_order_no / picking_part_no | text NOT NULL | Business-key fallbacks for re-matching |
+| picking_line_id / picking_line_number | bigint / integer | Upstream line id / line number fallbacks |
+| source_type | text NOT NULL | `inventory_lot` \| `receiving_invoice_item` \| `receiving_order` |
+| qty | integer NOT NULL | Reserved quantity |
+| manual | boolean NOT NULL | Original manual-pin flag |
+| inventory_lot_id | text | Original lot id (plain copy, no FK) |
+| source_part_no / date_code / lot_code / coo / cow / shelf_code / box_id / org_id / sub_inventory_code | text / integer | Full natural-lot key for re-matching an `inventory_lot` source |
+| receiving_invoice_item_id / receiving_order_id | text | Original receiving line/order ids (plain copies, no FK) |
+| receiving_batch_no / invoice_no / po_no / po_line / ctn_no | text | Business keys for re-matching a receiving source |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+Note: UNIQUE `(batch_id, allocation_id)`; index on `batch_id`.
+
 # Audit (`schema/audit.ts`)
 
 ## transaction_logs

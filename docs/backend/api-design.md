@@ -64,6 +64,8 @@ live in `concepts.md`; tables in `schema.md`.
 | Endpoint | Body → Response | Note |
 |---|---|---|
 | `POST /admin/allocation/run` | — → `allocateAll` summary | awaits the full-fleet recompute in the request (deliberately blocking — the admin clicked to wait) |
+| `POST /admin/allocation/snapshot` | — → `{batchId, snapshotDate, capturedAt, allocations}` | captures a snapshot of ALL picking `allocations` into `allocation_snapshot_batches`/`allocation_snapshot_rows` right now (`captureAllocationSnapshot` in `apps/backend/src/db/allocationSnapshot.ts`); one batch per backend-local date — a same-day recapture replaces the earlier batch. Part of the UAT allocation snapshot/restore safety net, spec `docs/superpowers/specs/2026-10-26-uat-allocation-snapshot-restore-design.md` |
+| `POST /admin/allocation/restore` | — → `{batchId, snapshotDate, restoredAt, total, restored, existing, skipped, releasedRows, releasedQty, manualConflicts, rows[]}` | restores the LATEST snapshot batch (`restoreLatestAllocationSnapshot`, routed through the serialized allocation runner): per row — re-resolve the picking item (original ids, then order_no/line-id/line-number/part fallbacks) and the source (original id, then full natural-lot / receiving business keys), skip non-`pending`/`picking`/`allocated` or work-locked orders, validate open qty + source availability, release conflicting AUTOMATIC allocations (RESERVE-release ledger `"snapshot restore: release"`; manual pins are never stolen — reported as `manual_conflict`), re-insert with the ORIGINAL allocation UUID (retries idempotent, existing rows report `existing`); afterwards set-wise reconciles ALL `inventory_lots.allocated_qty` / `picking_items.allocated_qty` counters from current allocation rows and refreshes order allocation statuses; does NOT run `allocateAll`. 404 `allocation_snapshot_not_found` when no batch exists. The summary is persisted on the batch (`report`, `restored_at`); emits `allocation.computed` (only on net change) + `allocation.finished` with `scope: "snapshot-restore"`. Same spec |
 | `POST /admin/picking-orders/:id/reallocate` | — → `{allocation}` (scoped summary incl. `partKeys`) | recompute scoped to the order's part keys (`allocateForPickingOrder`); 404 `picking_order_not_found`, 409 `order_not_open` unless pending/picking/allocated (an `allocated` order is force-included as a demand — the explicit repair path for a stale lock), 409 `lock_held` with `{error, holderId, holderName}` when a live PDA work lock is held. Spec `docs/superpowers/specs/2026-09-14-admin-allocation-buttons-design.md` |
 | `POST /admin/receiving-orders/:id/reallocate` | — → `{allocation}` (`null` on background fallback) | recompute scoped to the order's part keys (`allocateForReceivingOrder`, same core as confirm-arrival); 404 `receiving_order_not_found`, 409 `order_not_in_hand` unless the order is `in_hand`. Spec `docs/superpowers/specs/2026-09-14-admin-receiving-shipper-download-design.md` |
 | `DELETE /admin/picking-orders/:id/items/:itemId/allocations/:allocationId` | — → `{removed: 1, qty}` | deletes ONE allocation row (`removePickingAllocation`): releases the lot's `allocated_qty`, RESERVE-release ledger row, audit log, `allocation.computed` event; 404 `picking_order_not_found` / `picking_item_not_found` / `allocation_not_found`, 409 `lock_held`; **no order-status check**. Transient — the next recompute may re-allocate the item. Spec `docs/superpowers/specs/2026-09-15-admin-picking-item-actions-design.md` |
@@ -723,6 +725,23 @@ service to write into the business tables.
 
 Known caveat: NULL `receiving_invoice_items.sub_inventory_code` is defaulted by
 a rule Sean ships later.
+
+### UAT allocation recovery
+
+In dev/UAT the upstream service deletes and re-seeds inventory each night; the
+`allocations` FKs cascade those deletes but nothing repairs the
+`inventory_lots.allocated_qty` / `picking_items.allocated_qty` counters or the
+order allocation summaries. With `UAT_ALLOCATION_RECOVERY=on` (default off) the
+backend runs a daily job (`startAllocationSnapshotCron` in
+`apps/backend/src/jobs/allocationSnapshot.ts`, started from `src/server.ts`):
+snapshot all picking allocations at `ALLOCATE_BACKUP` (default `17:45:00+0800`),
+restore the latest snapshot at `ALLOCATE_RECOVER` (default `08:00:00+0800`) after
+the upstream refresh. Both settings use `HH:mm:ss±HHmm`, so scheduling is
+independent of the server time zone. There is no boot
+catch-up, so starting the backend after the upstream cleanup never overwrites a
+useful snapshot with an empty one. The same operations are exposed manually via
+`POST /admin/allocation/snapshot` / `POST /admin/allocation/restore`. Spec
+`docs/superpowers/specs/2026-10-26-uat-allocation-snapshot-restore-design.md`.
 
 ## Dev
 

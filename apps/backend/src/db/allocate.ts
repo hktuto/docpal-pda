@@ -1948,7 +1948,16 @@ async function runScopedAllocation(
 
 let allocateActive = false;
 let allocateQueued = false;
+let queuedAfter = "";
+let queuedRun: (db: AppDb) => Promise<unknown> = allocateAll;
+let activeRecomputeRun: ((db: AppDb) => Promise<unknown>) | null = null;
 const allocateWaiters: ((last: AllocationRunStatus["lastRun"]) => void)[] = [];
+const allocationTasks: {
+  after: string;
+  run: (db: AppDb) => Promise<unknown>;
+  resolve: (value: unknown) => void;
+  reject: (reason: unknown) => void;
+}[] = [];
 
 // In-memory status of the background runner, exposed via GET
 // /allocation/status so UIs can show a global "allocation running" indicator
@@ -1973,38 +1982,44 @@ const runState: { trigger: string | null; startedAt: string | null; lastRun: All
 export function getAllocationRunStatus(): AllocationRunStatus {
   return {
     running: allocateActive,
-    queued: allocateQueued,
+    queued: allocateQueued || allocationTasks.length > 0,
     trigger: runState.trigger,
     startedAt: runState.startedAt,
     lastRun: runState.lastRun,
   };
 }
 
-export function scheduleAllocateAll(
-  db: AppDb,
-  after: string,
-  run: (db: AppDb) => Promise<unknown> = allocateAll
-): void {
-  allocateQueued = true;
+function pumpAllocationRunner(db: AppDb): void {
   if (allocateActive) return;
   allocateActive = true;
   void (async () => {
-    while (allocateQueued) {
-      allocateQueued = false;
-      runState.trigger = after;
+    while (allocateQueued || allocationTasks.length > 0) {
+      const custom = allocationTasks.length > 0;
+      const task = custom
+        ? allocationTasks.shift()!
+        : {
+            after: queuedAfter,
+            run: queuedRun,
+            resolve: undefined,
+            reject: undefined,
+          };
+      if (!custom) allocateQueued = false;
+      activeRecomputeRun = custom ? null : task.run;
+      runState.trigger = task.after;
       runState.startedAt = new Date().toISOString();
       try {
         await emitEvent(db, {
           type: "allocation.started",
           topics: ["/picking-orders", "/receiving-orders"],
-          data: { trigger: after },
+          data: { trigger: task.after },
         });
       } catch (err) {
         console.error("allocation.started event failed", err);
       }
       const runStarted = Date.now();
       try {
-        const summary = (await run(db)) as AllocateSummary | undefined;
+        const summary = (await task.run(db)) as AllocateSummary | undefined;
+        task.resolve?.(summary);
         runState.lastRun = {
           demands: summary?.demands ?? 0,
           fullyAllocated: summary?.fullyAllocated ?? 0,
@@ -2015,25 +2030,50 @@ export function scheduleAllocateAll(
           perfectMatched: summary?.perfectMatched ?? 0,
           finishedAt: new Date().toISOString(),
           durationMs: Date.now() - runStarted,
-          trigger: after,
+          trigger: task.after,
         };
       } catch (err) {
-        console.error(`allocateAll after ${after} failed`, err);
+        if (task.reject) task.reject(err);
+        else console.error(`allocateAll after ${task.after} failed`, err);
       }
+      activeRecomputeRun = null;
     }
     allocateActive = false;
     runState.trigger = null;
     runState.startedAt = null;
-    // a trigger that landed between the last loop check and clearing the flag
-    // would otherwise be lost
-    if (allocateQueued) {
-      scheduleAllocateAll(db, after, run);
+    if (allocateQueued || allocationTasks.length > 0) {
+      pumpAllocationRunner(db);
     } else {
-      // Settled: flush awaitAllocateAll waiters with the last run's summary.
       const waiters = allocateWaiters.splice(0);
       for (const waiter of waiters) waiter(runState.lastRun);
     }
   })();
+}
+
+export function scheduleAllocateAll(
+  db: AppDb,
+  after: string,
+  run: (db: AppDb) => Promise<unknown> = allocateAll
+): void {
+  if (!allocateQueued) {
+    queuedAfter = after;
+    queuedRun = activeRecomputeRun ?? run;
+  }
+  allocateQueued = true;
+  pumpAllocationRunner(db);
+}
+
+/** Queue a distinct operation without coalescing it into allocation recomputes. */
+export function awaitAllocationTask<T>(db: AppDb, after: string, run: (db: AppDb) => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    allocationTasks.push({
+      after,
+      run,
+      resolve: resolve as (value: unknown) => void,
+      reject,
+    });
+    pumpAllocationRunner(db);
+  });
 }
 
 /**

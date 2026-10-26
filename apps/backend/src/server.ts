@@ -5,6 +5,7 @@ import { db } from "./db.js";
 import { pruneEvents } from "./db/events.js";
 import { startGoodsVerifyDayEndCron } from "./jobs/goodsVerifyDayEnd.js";
 import { startReceivingCnSyncCron } from "./jobs/receivingCnSync.js";
+import { startAllocationSnapshotCron } from "./jobs/allocationSnapshot.js";
 import { docpalBaseUrl } from "./config.js";
 import { logDocpalConnectivity } from "./auth/docpal.js";
 const port = Number(process.env.PORT ?? 3002);
@@ -33,3 +34,7 @@ startGoodsVerifyDayEndCron(db);
 // CN receiving workflow-status polling (RECEIVING_CN_SYNC=off to disable;
 // RECEIVING_CN_SYNC_INTERVAL_SEC sets the interval, default 120 s).
 startReceivingCnSyncCron(db);
+
+// UAT allocation recovery (UAT_ALLOCATION_RECOVERY=on; ALLOCATE_BACKUP /
+// ALLOCATE_RECOVER use HH:mm:ss±HHmm, defaulting to 17:45 / 08:00 at +0800).
+startAllocationSnapshotCron(db);

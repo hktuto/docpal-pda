@@ -152,6 +152,7 @@ API call touching N rows produces N events).
 | `transaction_logs` | Audit log — derivable; would double-report every mutation |
 | `inventory_transactions` | Stock ledger — derivable; would double-report every stock move |
 | `outdated_scan_warnings` | PDA-local scan warnings (spec 2026-10-07) — admin-local state, not synced upstream |
+| `allocation_snapshot_batches` / `allocation_snapshot_rows` | UAT-only allocation snapshot/restore safety net (spec 2026-10-26) — backend-local recovery state, deliberately FK-free so the nightly upstream wipe cannot cascade into it; not synced |
 
 (Seed/reset paths (`db:seed`, `POST /dev/reset`) set
 `SET LOCAL app.sync_events_off = 1` so demo reseeding does not flood the
@@ -178,3 +179,10 @@ emitted by `POST /admin/outdated-warnings/resolve-order` when it resolved
 anything, data `{orderKind, orderId, resolved, actorId}`. Both carry topics
 `["/admin/outdated-warnings", "/picking-orders"]` for picking warnings /
 `["/admin/outdated-warnings", "/receiving-orders"]` for put-away warnings.)
+The UAT allocation snapshot restore (spec
+`docs/superpowers/specs/2026-10-26-uat-allocation-snapshot-restore-design.md`)
+reuses the allocation events: after a restore it emits `allocation.computed`
+(topics `["/picking-orders", "/receiving-orders"]`, only when anything was
+restored or released) and always `allocation.finished`, both with data
+`{scope: "snapshot-restore", ...restore summary minus the per-row report}` —
+so open picking/receiving pages converge after the morning restore.
