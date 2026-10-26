@@ -40,6 +40,7 @@ import MeasureBox from "~/components/MeasureBox.vue";
 import EmptyState from "~/components/EmptyState.vue";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
+import { useFlowSteps } from "~/composables/useFlowSteps";
 import { useToast } from "~/composables/useToast";
 import type { VerifyTaskDetail } from "~/services/types";
 
@@ -89,12 +90,16 @@ const loadDetail = async () => {
   return { box: d.box, packages: d.packages };
 };
 
-// Mirrors the backend guard: the box closed AND every package fully
-// re-scanned (rescannedQty >= qty) before the verify pass can complete.
+// Mirrors the backend guard: every package fully re-scanned
+// (rescannedQty >= qty) before the verify pass can complete. The box must be
+// closed only when the measuring step is on — with measuring off the finish
+// spawned the task on the open box and completing closes it.
+const { flowSteps } = useFlowSteps();
 const canComplete = computed(() => {
   const d = detail.value;
   if (!d || d.task.status !== "pending") return false;
-  if (d.box.status !== "closed" || !d.packages.length) return false;
+  if (flowSteps.value.measuring && d.box.status !== "closed") return false;
+  if (!d.packages.length) return false;
   return d.packages.every((p) => (p.rescannedQty ?? 0) >= p.qty);
 });
 

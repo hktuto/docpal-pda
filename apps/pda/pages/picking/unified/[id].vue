@@ -162,7 +162,7 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const { showToast } = useToast();
-const { pickingShelfScan: shelfScanMode, dateCodeFormat } = useFlowSteps();
+const { flowSteps, pickingShelfScan: shelfScanMode, dateCodeFormat } = useFlowSteps();
 const { viewConfig } = useViewConfig();
 const { parseRawValue } = useLabelScan();
 
@@ -737,8 +737,13 @@ async function finish() {
   finishing.value = true;
   try {
     // Finish only flips the order — measuring follows the boxes, not the
-    // order, so there is nothing else to kick off here.
+    // order. With the measuring step off the finish spawned the boxes'
+    // verify tasks instead, so hand the operator straight over to verify.
     await warehouse.finishPickingOrder(orderId);
+    if (!flowSteps.value.measuring && flowSteps.value.verify) {
+      await navigateTo("/verify");
+      return;
+    }
     await load();
   } catch (e) {
     // 409 unresolved_outdated_warnings (spec 2026-10-07): the order stays

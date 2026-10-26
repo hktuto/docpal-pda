@@ -197,7 +197,9 @@ pickingRoute.post("/picking-orders/:id/claim-shelf-box", async (c) => {
 
 // Package verify-scan: credits body.qty (default: the package's remaining)
 // onto rescanned_qty. Open box → measuring-time `verified`; closed box with
-// a pending verify task → verify-step `verify_verified`.
+// a pending verify task → verify-step `verify_verified`. When the measuring
+// step is disabled the verify pass runs on the still-open box (the finish
+// spawned the task; verify completion closes the box).
 pickingRoute.post("/packages/:id/verify", async (c) => {
   const body = await readJson<{ qty?: number }>(c);
   await verifyPackage(db, { packageId: c.req.param("id"), actorId: actorFrom(c).id, qty: body.qty });

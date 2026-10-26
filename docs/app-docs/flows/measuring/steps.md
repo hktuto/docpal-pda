@@ -22,4 +22,4 @@ When every package is verified, the measurements form opens automatically (or ta
 
 ## 5. Closing completes the measuring
 
-There is no measuring task and no manual complete step: closing the box IS the measuring completion, and — when the verify step is enabled — a verify task is created for the box. Closed boxes leave the measuring list.
+There is no measuring task and no manual complete step: closing the box IS the measuring completion, and — when the verify step is enabled — a verify task is created for the box. Closed boxes leave the measuring list. (With the measuring step disabled in the flow config the close never happens: the picking finish spawns the box's verify task directly and the verify completion closes the box.)

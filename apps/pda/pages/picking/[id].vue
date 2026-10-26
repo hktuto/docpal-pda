@@ -84,6 +84,7 @@ import { badgeClass } from "~/composables/useStatusBadge";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { usePickingWorkLock } from "~/composables/usePickingWorkLock";
+import { useFlowSteps } from "~/composables/useFlowSteps";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useLabelScan, captureLabel, captureRawLabelValue, ocrResultToInput } from "~/composables/useLabelScan";
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
@@ -103,6 +104,7 @@ const route = useRoute();
 const orderId = route.params.id as string;
 const warehouse = useWarehouse();
 const { heldByOther } = usePickingWorkLock(orderId);
+const { flowSteps } = useFlowSteps();
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
@@ -449,8 +451,13 @@ async function finish() {
   finishing.value = true;
   try {
     // Finish only flips the order — measuring follows the boxes, not the
-    // order, so there is nothing else to kick off here.
+    // order. With the measuring step off the finish spawned the boxes'
+    // verify tasks instead, so hand the operator straight over to verify.
     await warehouse.finishPickingOrder(orderId);
+    if (!flowSteps.value.measuring && flowSteps.value.verify) {
+      await navigateTo("/verify");
+      return;
+    }
     await load();
   } catch (e) {
     // 409 unresolved_outdated_warnings (spec 2026-10-07): the order stays

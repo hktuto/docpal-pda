@@ -70,6 +70,6 @@ If the quantity is wrong, the item is damaged, or stock cannot be found, use the
 
 ## 6. Finish the order
 
-Boxing items does **not** finish the order by itself — the moment every line is fully picked and packed, a **Finish picking** button appears at the bottom of the page. Tap it to confirm the task is complete: the order turns picking-finished and its packed boxes move on to measuring. No task is created at finish — closing a box is the measuring completion, and each closed box gets its own verify task when the verify step is enabled.
+Boxing items does **not** finish the order by itself — the moment every line is fully picked and packed, a **Finish picking** button appears at the bottom of the page. Tap it to confirm the task is complete: the order turns picking-finished and its packed boxes move on to measuring. No task is created at finish — closing a box is the measuring completion, and each closed box gets its own verify task when the verify step is enabled. When the measuring step is turned off, the finish instead creates each open box's verify task right away and the app jumps straight to the **Verify** list.
 
 If the order has unresolved outdated date-code warnings (warning chip on the order), the **Finish picking** action is refused with the number of unresolved warnings. Ask an admin to resolve the order's warnings (admin console → Issues → Outdated warnings), then press **Finish picking** again.

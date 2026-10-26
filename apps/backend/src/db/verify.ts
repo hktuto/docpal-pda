@@ -4,13 +4,16 @@ import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs } from "./schema/index.js";
+import { isStepEnabled } from "../config.js";
 import { now } from "./now.js";
 
 // ---------------------------------------------------------------------------
 // Verify flow (box-scoped, 2026-08-11 design). A verify_tasks row is created
-// by closeShippingBox when the verify step is enabled — one pending task per
-// box. Verify is a second pass over that box: the worker re-scans every
-// package (verify_verified; the box may be re-opened via
+// when the verify step is enabled — one pending task per box — either by
+// closeShippingBox (measuring step on) or by finishPickingOrder on the
+// still-open box (measuring step off; the verify completion then closes the
+// box). Verify is a second pass over that box: the worker re-scans every
+// package (verify_verified; a closed box may be re-opened via
 // POST /shipping-boxes/:id/reopen, which resets both flags and keeps the task
 // pending), then completes. A box may hold packages from several picking
 // orders (cross-order packing) — order numbers are aggregated per box.
@@ -188,10 +191,13 @@ function suggestedNetWeightKg(
 // ---------------------------------------------------------------------------
 
 /**
- * Complete a box's verify task: the task must be pending, the box must be
- * closed, and every package in the box must be fully re-scanned
- * (`rescanned_qty >= qty`). Sets status 'completed' + transition log, then
- * flips every `picking_finished` order with packages in this box to
+ * Complete a box's verify task: the task must be pending and every package
+ * in the box must be fully re-scanned (`rescanned_qty >= qty`). With the
+ * measuring step enabled the box must already be closed (the measuring close
+ * spawned the task); with measuring disabled the finish spawned the task on
+ * the open box and this completion closes it (no weights/size — nothing is
+ * measured). Sets status 'completed' + transition log, then flips every
+ * `picking_finished` order with packages in this box to
  * `measuring_finished` when no other pending verify task remains for it
  * (spec 2026-10-22). No stock movement.
  */
@@ -205,17 +211,50 @@ export async function completeVerifyTask(db: AppDb, input: { taskId: string; act
     await assertActor(tx, input.actorId);
     if (task.status !== "pending") throw new HTTPException(409, { message: "verify_task_not_pending" });
 
-    const box = await queryGet<{ id: string; status: string }>(
+    const box = await queryGet<{ id: string; status: string; pickingOrderId: string | null; destinationCountry: string | null }>(
       tx,
-      sql`SELECT id, status FROM shipping_boxes WHERE id = ${task.shippingBoxId}`
+      sql`SELECT id, status, picking_order_id AS "pickingOrderId",
+                 destination_country AS "destinationCountry"
+          FROM shipping_boxes WHERE id = ${task.shippingBoxId}`
     );
-    if (!box || box.status !== "closed") throw new HTTPException(409, { message: "shipping_box_not_closed" });
+    // Measuring ON: the box must already be closed (measuring close spawns
+    // the task). Measuring OFF: the finish spawned the task on the open box
+    // and this completion closes it (no weights/size — nothing is measured).
+    const measuringOn = isStepEnabled("measuring");
+    if (!box || (measuringOn ? box.status !== "closed" : box.status !== "closed" && box.status !== "open")) {
+      throw new HTTPException(409, { message: "shipping_box_not_closed" });
+    }
 
     const notRescanned = await queryGet<{ id: string }>(
       tx,
       sql`SELECT id FROM picking_packages WHERE shipping_box_id = ${task.shippingBoxId} AND rescanned_qty < qty LIMIT 1`
     );
     if (notRescanned) throw new HTTPException(409, { message: "packages_not_all_rescanned" });
+
+    if (!measuringOn && box.status === "open") {
+      let dest = box.destinationCountry;
+      if (dest === null || dest.trim() === "") {
+        const order = await queryGet<{ st: string | null }>(
+          tx,
+          sql`SELECT ship_to AS st FROM picking_orders WHERE id = ${box.pickingOrderId}`
+        );
+        dest = order?.st ?? null;
+      }
+      await queryRun(
+        tx,
+        sql`UPDATE shipping_boxes SET status = 'closed', destination_country = ${dest}, last_update_date = ${now()} WHERE id = ${box.id}`
+      );
+      await tx.insert(transactionLogs).values({
+        id: newId(),
+        entityType: "shipping_box",
+        entityId: box.id,
+        fromState: "open",
+        toState: "closed",
+        actorId: input.actorId,
+        metadata: {},
+        createdDate: now(),
+      });
+    }
 
     await queryRun(tx, sql`UPDATE verify_tasks SET status = 'completed', last_update_date = ${now()} WHERE id = ${task.id}`);
     await tx.insert(transactionLogs).values({

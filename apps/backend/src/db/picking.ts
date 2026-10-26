@@ -2013,11 +2013,14 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
  * Verify-scan a package, crediting `input.qty` (default: the remaining
  * unscanned qty) onto `rescanned_qty`, capped at the package qty. Branching
  * on the package's box (box-scoped design):
- *  - box open (or box-less correction flow) → measuring-time scan; sets
+ *  - box open AND the measuring step is enabled → measuring-time scan; sets
  *    `verified` on first credit.
+ *  - box open with measuring disabled AND a pending verify task (spawned by
+ *    the picking finish) → verify-step re-scan on the still-open box (the
+ *    box closes at verify completion).
  *  - box closed AND a pending verify task exists for that box → verify-step
  *    re-scan; sets `verify_verified` AND `verified` on first credit.
- *  - box closed without a pending verify task → 409.
+ *  - no pending verify task on the verify path → 409.
  * 409 `package_already_verified` when the package is already fully rescanned.
  */
 export async function verifyPackage(db: AppDb, input: { packageId: string; actorId: string; qty?: number }): Promise<void> {
@@ -2046,7 +2049,15 @@ export async function verifyPackage(db: AppDb, input: { packageId: string; actor
     }
     const applied = Math.min(input.qty ?? remaining, remaining);
     const box = await loadShippingBox(tx, pkg.shippingBoxId);
-    if (box.status === "open") {
+    const verifyTask = await queryGet<{ id: string }>(
+      tx,
+      sql`SELECT id FROM verify_tasks WHERE shipping_box_id = ${box.id} AND status = 'pending'`
+    );
+    // Open box → measuring pass (also the reopened-box re-scan before
+    // re-close) — EXCEPT when the measuring step is disabled and the finish
+    // already spawned the box's pending verify task: then the open box runs
+    // the verify pass instead (the box closes at verify completion).
+    if (box.status === "open" && (isStepEnabled("measuring") || !verifyTask)) {
       if (remaining <= 0) throw new HTTPException(409, { message: "package_already_verified" });
       await queryRun(
         tx,
@@ -2062,10 +2073,6 @@ export async function verifyPackage(db: AppDb, input: { packageId: string; actor
       });
       return;
     }
-    const verifyTask = await queryGet<{ id: string }>(
-      tx,
-      sql`SELECT id FROM verify_tasks WHERE shipping_box_id = ${box.id} AND status = 'pending'`
-    );
     if (!verifyTask) throw new HTTPException(409, { message: "no_pending_measure_or_verify_task" });
     if (remaining <= 0) throw new HTTPException(409, { message: "package_already_verified" });
     await queryRun(
@@ -2420,10 +2427,13 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
 /**
  * Explicit finish (the ONLY way an order finishes since 2026-10-16 — boxing
  * never auto-finishes): all items fully picked (boxed) → order
- * 'picking_finished', work lock released. No task is created (box-scoped
- * design) — returns the finished order's id + status. Blocked with 409
- * unresolved_outdated_warnings while the order has unresolved outdated-scan
- * warnings (spec 2026-10-07).
+ * 'picking_finished', work lock released. With the measuring step on no task
+ * is created (box-scoped design — the box's verify task comes from
+ * closeShippingBox); with measuring OFF and verify ON the finish spawns the
+ * verify task on the order's still-open boxes instead (the box closes at
+ * verify completion). Returns the finished order's id + status. Blocked with
+ * 409 unresolved_outdated_warnings while the order has unresolved
+ * outdated-scan warnings (spec 2026-10-07).
  */
 export async function finishPickingOrder(
   db: AppDb,
@@ -2453,6 +2463,41 @@ export async function finishPickingOrder(
       toState: "picking_finished",
       actorId: input.actorId,
     });
+    // Measuring disabled + verify enabled: the box never goes through the
+    // measuring close, so the finish spawns the verify task directly on the
+    // still-open box (a cross-order box waits until every order in it is
+    // finished — the same gate as listMeasuringBoxes). The verify pass
+    // re-scans from zero; the box closes at verify completion.
+    if (!isStepEnabled("measuring") && isStepEnabled("verify")) {
+      const boxes = await queryAll<{ id: string }>(
+        tx,
+        sql`SELECT sb.id FROM shipping_boxes sb
+            WHERE sb.status = 'open'
+              AND EXISTS (
+                SELECT 1 FROM picking_packages pp
+                WHERE pp.shipping_box_id = sb.id AND pp.picking_order_id = ${order.id}
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM picking_packages pp2
+                JOIN picking_items pi2 ON pi2.id = pp2.picking_item_id
+                JOIN picking_orders po2 ON po2.id = pi2.picking_order_id
+                WHERE pp2.shipping_box_id = sb.id
+                  AND po2.status NOT IN ('picking_finished', 'measuring_finished', 'shipped')
+              )`
+      );
+      for (const box of boxes) {
+        await queryRun(
+          tx,
+          sql`INSERT INTO verify_tasks (id, shipping_box_id, status, created_date)
+              VALUES (${newId()}, ${box.id}, 'pending', ${now()})
+              ON CONFLICT (shipping_box_id) DO NOTHING`
+        );
+        await queryRun(
+          tx,
+          sql`UPDATE picking_packages SET rescanned_qty = 0, last_update_date = ${now()} WHERE shipping_box_id = ${box.id}`
+        );
+      }
+    }
     return { id: order.id, status: "picking_finished" };
   });
 }

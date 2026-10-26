@@ -28,7 +28,8 @@
   then close.
   The verify pass is a mandatory re-scan tracked by the mode-agnostic
   `picking_packages.rescanned_qty` counter (2026-10-03 aggregate design —
-  the close that spawns the verify task resets the credit to zero, so the
+  the close (or, with measuring off, the finish) that spawns the verify task
+  resets the credit to zero, so the
   verify pass re-scans from scratch; `verified`/`verify_verified` flags are
   still set per mode on first credit). Scanning works on **closed** boxes
   too (checking contents against the sealed box is the normal verify pass).
@@ -49,10 +50,19 @@
   `docs/superpowers/specs/2026-10-14-picking-scan-batch-validation-design.md`).
   `label_barcode` stays on the schema for
   traceability/display but no longer drives matching.
-- Complete the verify task once the box is closed and **every package is
-  fully re-scanned** (`rescanned_qty >= qty`) — 409
-  `packages_not_all_rescanned` otherwise; the page's complete button mirrors
-  this guard. The box then appears in the admin shipping feed.
+- Complete the verify task once **every package is fully re-scanned**
+  (`rescanned_qty >= qty`) — 409 `packages_not_all_rescanned` otherwise; the
+  page's complete button mirrors this guard. The box must be closed when the
+  measuring step is on (409 `shipping_box_not_closed`); with measuring off
+  the task sits on the still-open box and completing closes it (no
+  weights/size — nothing was measured). The box then appears in the admin
+  shipping feed.
+- Measuring-off chain: when `steps.measuring.enabled=false` and verify is
+  on, `finishPickingOrder` spawns the pending verify task directly on the
+  order's still-open boxes (a cross-order box waits until every order in it
+  is finished — the same gate as the measuring list) and resets the rescanned
+  credit; `verifyPackage` runs the verify pass on the open box; the PDA
+  finish navigates straight to `/verify`.
 - Flow-step config: `useFlowSteps` fetches `GET /config` once per login;
   `pages/index.vue` hides the tiles of disabled steps.
 
@@ -89,15 +99,20 @@
 - `apps/backend/src/routes/verify.ts` + `apps/backend/src/db/verify.ts` —
   `GET /verify-tasks?status=`, `GET /verify-tasks/:id`,
   `POST /verify-tasks/:id/complete` (guards: 404 `verify_task_not_found`,
-  409 `verify_task_not_pending`, 409 `shipping_box_not_closed`, 409
-  `packages_not_all_rescanned` until every package is re-scanned).
+  409 `verify_task_not_pending`, 409 `shipping_box_not_closed` (measuring
+  step on only), 409
+  `packages_not_all_rescanned` until every package is re-scanned; with
+  measuring off the completion closes the still-open box).
 - `apps/backend/src/db/picking.ts` — `closeShippingBox` spawns the box's
   pending verify task when the verify step is enabled (`ON CONFLICT DO
-  NOTHING`, and resets the packages' rescanned credit for the new pass);
+  NOTHING`, and resets the packages' rescanned credit for the new pass), and
+  `finishPickingOrder` does the same on the still-open box when the measuring
+  step is disabled;
   `reopenShippingBox` (box-scoped: requires THIS box's pending
   verify task, resets both verified flags + the credit); the `verifyPackage`
   closed-box branch setting `verify_verified` (409
-  `no_pending_measure_or_verify_task`).
+  `no_pending_measure_or_verify_task`) — also taken by an open box when
+  measuring is disabled and the task is pending.
 - `apps/backend/src/config.ts` (flow config from the `warehouse_config` row
   `"flow"`, `isStepEnabled`) +
   `apps/backend/src/routes/config.ts` (`GET /config`).

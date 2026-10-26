@@ -225,11 +225,15 @@
   was the receiving picking tab's placeholder Print button — the receiving
   picking tab is read-only info now; real printing will be added
   backend-side later.
-- Finish a picking order manually, or automatically when the last package
-  is boxed — finish just flips the order to `picking_finished`; no next-step
-  task is created (closing a box is the measuring completion, and the box's
-  verify task is spawned by `closeShippingBox`; the last verify task's
-  completion flips the order to `measuring_finished`).
+- Finish a picking order manually (the only finisher since 2026-10-16) —
+  finish flips the order to `picking_finished`; with the measuring step on no
+  next-step task is created (closing a box is the measuring completion, and
+  the box's verify task is spawned by `closeShippingBox`; the last verify
+  task's completion flips the order to `measuring_finished`). With measuring
+  disabled and verify enabled, the finish itself spawns the pending verify
+  task on the order's still-open boxes (a cross-order box waits until every
+  order in it is finished), the verify pass runs on the open box, and the
+  verify completion closes it; the PDA then navigates straight to `/verify`.
 - Supplier outdated date-code scan warnings (spec
   `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`):
   when a scan's label date code (post decode — label format, WWYY for

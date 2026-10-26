@@ -16,7 +16,7 @@ Use the Measuring flow once picking has packed items into shipping boxes **and t
 2. The operator selects a box — the page shows the box's packages with their verification progress. A box may contain packages from several picking orders (cross-order packing) and then appears under each order's group once *all* those orders are picking-complete.
 3. On the box page (a table of the box's packages) the operator scans each package's QR label to verify it; a per-row camera Scan button is the OCR fallback.
 4. Once all packages are verified, the operator records box size and net/gross weight (kg — the net weight is pre-filled from the part net-weight master and can be adjusted), then taps **Confirm box** — one action that saves and closes the box.
-5. Closing the box completes its measuring; when the verify step is enabled, a verify task is created for the box.
+5. Closing the box completes its measuring; when the verify step is enabled, a verify task is created for the box. (When the measuring step itself is turned off in the flow config, this whole flow is skipped — the picking finish creates the verify task on the still-open box, and completing the verify closes it.)
 
 ## Related guides
 

@@ -507,6 +507,115 @@ test("reopen: guards — open box 409 shipping_box_not_closed; no pending verify
   assert.equal(noVerify.message, "verify_task_not_pending");
 });
 
+// --- measuring step disabled: finish → verify on the open box ---------------------------
+
+/** SO-DEMO-0001 driven through pack + explicit finish only (no measuring). */
+async function finishedOrderWithOpenBox(): Promise<ClosedBoxFixture> {
+  const actorId = await actorIdOf();
+  await allocateAll(client.db);
+  const orderId = await pickingOrderIdOf("SO-DEMO-0001");
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F");
+  const item3 = await pickingItemIdOf(orderId, "RK73B1JTTD181G");
+  const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: await allocationIdOf(item1), qty: 1000 })).packageIds[0];
+  const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 500 })).packageIds[0];
+  const p3 = (await scanPickingItem(client.db, item3, { actorId, allocationId: await allocationIdOf(item3), qty: 300 })).packageIds[0];
+  const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
+  return { orderId, actorId, boxId: box.id, packageIds: [p1, p2, p3] };
+}
+
+test("measuring off: finish spawns the pending verify task on the still-open box and resets the re-scan credit", async () => {
+  await reset(["measuring"]);
+  const { orderId, boxId } = await finishedOrderWithOpenBox();
+
+  const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`);
+  assert.equal(order!.status, "picking_finished");
+  const box = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM shipping_boxes WHERE id = ${boxId}`);
+  assert.equal(box!.status, "open");
+  const task = await verifyTaskOf(boxId);
+  assert.equal(task?.status, "pending");
+  const credit = await queryGet<{ n: number }>(
+    client.db,
+    sql`SELECT COUNT(*)::int AS n FROM picking_packages WHERE shipping_box_id = ${boxId} AND rescanned_qty > 0`
+  );
+  assert.equal(credit!.n, 0);
+});
+
+test("measuring off: verify pass runs on the open box; completion closes the box and flips the order", async () => {
+  await reset(["measuring"]);
+  const { orderId, actorId, boxId, packageIds } = await finishedOrderWithOpenBox();
+  const task = (await verifyTaskOf(boxId))!;
+
+  // the open box is acceptable now — only the re-scan guard can fire
+  const notRescanned = await catchHttp(completeVerifyTask(client.db, { taskId: task.id, actorId }));
+  assert.equal(notRescanned.status, 409);
+  assert.equal(notRescanned.message, "packages_not_all_rescanned");
+
+  // open box + pending task + measuring off → verify branch (both flags)
+  await verifyPackage(client.db, { packageId: packageIds[0], actorId });
+  const flags = await queryGet<{ verified: boolean; verifyVerified: boolean }>(
+    client.db,
+    sql`SELECT verified, verify_verified AS "verifyVerified" FROM picking_packages WHERE id = ${packageIds[0]}`
+  );
+  assert.deepEqual(flags, { verified: true, verifyVerified: true });
+
+  await verifyPackage(client.db, { packageId: packageIds[1], actorId });
+  await verifyPackage(client.db, { packageId: packageIds[2], actorId });
+  await completeVerifyTask(client.db, { taskId: task.id, actorId });
+
+  assert.equal((await verifyTaskOf(boxId))!.status, "completed");
+  const box = await queryGet<{ status: string; destinationCountry: string | null }>(
+    client.db,
+    sql`SELECT status, destination_country AS "destinationCountry" FROM shipping_boxes WHERE id = ${boxId}`
+  );
+  assert.equal(box!.status, "closed"); // completion closes the box so it can ship
+  assert.equal(box!.destinationCountry, "ACME Electronics (HK)"); // ship_to fallback, same as closeShippingBox
+  const closeLog = await queryGet<{ fromState: string; toState: string }>(
+    client.db,
+    sql`SELECT from_state AS "fromState", to_state AS "toState" FROM transaction_logs
+        WHERE entity_type = 'shipping_box' AND entity_id = ${boxId} AND to_state = 'closed'`
+  );
+  assert.deepEqual(closeLog, { fromState: "open", toState: "closed" });
+  const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`);
+  assert.equal(order!.status, "measuring_finished");
+});
+
+test("measuring off: a cross-order box gets its verify task only once every order in it is finished", async () => {
+  await reset(["measuring"]);
+  const actorId = await actorIdOf();
+  const orderA = randomUUID();
+  const orderB = randomUUID();
+  const itemA = randomUUID();
+  const itemB = randomUUID();
+  const boxId = "BOX-S-XORDER-VERIFY";
+  await client.db.execute(sql`INSERT INTO picking_orders (id, order_no, status, created_date, last_update_date)
+      VALUES (${orderA}, 'SO-XORDER-A', 'picking', now(), now()),
+             (${orderB}, 'SO-XORDER-B', 'picking', now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, picked_qty, line_id, line_number, shipment_number, created_date, last_update_date)
+      VALUES (${itemA}, ${orderA}, 'RK73H1JTTD1002F', 100, 100, 9301, 1, 1, now(), now()),
+             (${itemB}, ${orderB}, 'RK73H1JTTD1002F', 50, 50, 9302, 1, 1, now(), now())`);
+  await client.db.execute(sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_date, last_update_date)
+      VALUES (${boxId}, ${orderA}, 'open', now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, rescanned_qty, shipping_box_id, created_date, last_update_date)
+      VALUES (${randomUUID()}, ${itemA}, ${orderA}, 'inventory_lot', 'xorder-src-1', 100, 100, ${boxId}, now(), now()),
+             (${randomUUID()}, ${itemB}, ${orderB}, 'inventory_lot', 'xorder-src-2', 50, 50, ${boxId}, now(), now())`);
+
+  // finishing A alone: B is still picking → no task yet
+  await finishPickingOrder(client.db, { pickingOrderId: orderA, actorId });
+  assert.equal(await verifyTaskOf(boxId), undefined);
+
+  // finishing B: every order in the box is finished → task + credit reset
+  await finishPickingOrder(client.db, { pickingOrderId: orderB, actorId });
+  assert.equal((await verifyTaskOf(boxId))?.status, "pending");
+  const credit = await queryGet<{ n: number }>(
+    client.db,
+    sql`SELECT COUNT(*)::int AS n FROM picking_packages WHERE shipping_box_id = ${boxId} AND rescanned_qty > 0`
+  );
+  assert.equal(credit!.n, 0);
+});
+
 // --- goods-verify step gate ------------------------------------------------------------
 
 test("goods-verify disabled → generate is a no-op", async () => {

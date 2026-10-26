@@ -136,9 +136,14 @@ const props = defineProps<{
 // verify → stay and re-scan).
 const emit = defineEmits<{ (e: "finished"): void }>();
 
+// The measurements modal is the measuring step's close flow: it opens in
+// measuring mode, or in verify mode for a reopened box — but never when the
+// measuring step is disabled (the verify completion closes the box instead).
+const canMeasure = computed(() => props.mode === 'measuring' || flowSteps.value.measuring);
+
 async function onScanApplied() {
   await load();
-  if (allVerified.value && box.value?.status === "open") {
+  if (canMeasure.value && allVerified.value && box.value?.status === "open") {
     measureOpen.value = true;
   }
 }
@@ -176,7 +181,7 @@ const {
 
 const matchers = useScanMatchers();
 const { parseRawValue } = useLabelScan();
-const { dateCodeFormat } = useFlowSteps();
+const { dateCodeFormat, flowSteps } = useFlowSteps();
 const verifying = ref(false);
 
 // Packages store canonical YYWW — render the date code in the label format
@@ -256,7 +261,7 @@ usePageHeader({
         to: `/picking/${b.pickingOrderId}`,
       });
     }
-    if (b.status === "open" && allVerified.value) {
+    if (b.status === "open" && allVerified.value && canMeasure.value) {
       list.push({
         key: "enter-measurements",
         label: t("actions.enterMeasurements"),
