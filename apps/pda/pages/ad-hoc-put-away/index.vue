@@ -91,7 +91,7 @@
         <div class="item-list">
           <div v-for="(item, idx) in items" :key="idx" class="item-card">
             <div class="item-card__main">
-              <span class="item-card__part">{{ item.partNo }}</span>
+              <span class="item-card__part">{{ item.wclItemNo ?? item.partNo }}</span>
               <span class="item-card__qty">{{ item.qty }} pcs</span>
             </div>
             <div class="item-card__meta">
