@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import { db } from "../../db.js";
 import { actorFrom } from "../../auth/middleware.js";
+import { cnReceiving } from "../../config.js";
 import { queryGet } from "../../db/query.js";
 import { sql } from "drizzle-orm";
 import {
@@ -24,6 +25,15 @@ import type { OrderLogsParams } from "../../db/receiving.js";
 // PDF routes are phase 2 (blocked on the DocPal OCR-result endpoint).
 
 export const adminReceivingCnRoute = new Hono();
+
+// The whole CN surface is config-gated: with the `receiving-cn` flow step off
+// (the default) every route 404s, matching the PDA /put-away-cn gating — a
+// warehouse runs either the standard or the CN flow, so the API stays
+// invisible until the admin enables the step.
+adminReceivingCnRoute.use("*", async (c, next) => {
+  if (!cnReceiving()) throw new HTTPException(404, { message: "not_found" });
+  await next();
+});
 
 // Tracking list, newest first. ?status= filters (repeatable), ?page=&pageSize=
 // for server paging → {rows, total}.

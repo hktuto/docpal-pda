@@ -11,6 +11,7 @@ import { sql } from "drizzle-orm";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { setupTestDb, reseed, TEST_DATABASE_URL, FAKE_DOCPAL_URL, type TestDb } from "../../db/test-helper.js";
+import { _setCnReceivingForTests, _resetFlowConfigForTests } from "../../config.js";
 import { queryAll, queryGet } from "../../db/query.js";
 import { transactionLogs } from "../../db/schema/index.js";
 import { completeCnPutAwayTx } from "../../db/putawayCn.js";
@@ -126,11 +127,13 @@ before(async () => {
   ({ app } = await import("../../index.js"));
   process.env.DOCPAL_WORKFLOW_TOKEN = WORKFLOW_TOKEN;
   process.env.DOCPAL_CN_EXCEL_WORKFLOW_ID = EXCEL_WORKFLOW_ID;
+  _setCnReceivingForTests(true); // the route guard 404s the whole surface when the step is off
 });
 
 after(() => {
   delete process.env.DOCPAL_WORKFLOW_TOKEN;
   delete process.env.DOCPAL_CN_EXCEL_WORKFLOW_ID;
+  _resetFlowConfigForTests();
   fakeServer.close();
 });
 
@@ -147,6 +150,27 @@ async function withWorkflowFake(fn: () => Promise<void>): Promise<void> {
 }
 
 // --- validation -------------------------------------------------------------------
+
+test("config gate: every /admin/receiving-cn route 404s while the receiving-cn step is off", async () => {
+  await reseed(client);
+  _setCnReceivingForTests(false);
+  try {
+    const token = await login("admin", "DocPalAdmin2026!");
+    const list = await app.request("/admin/receiving-cn", { headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(list.status, 404);
+    const orders = await app.request("/admin/receiving-cn/orders", { headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(orders.status, 404);
+    const upload = await app.request("/admin/receiving-cn/excel", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: uploadForm(VALID_PAYLOAD),
+    });
+    assert.equal(upload.status, 404);
+    assert.match(await upload.text(), /not_found/);
+  } finally {
+    _setCnReceivingForTests(true);
+  }
+});
 
 test("excel upload: missing file → 400 file_required", async () => {
   await reseed(client);

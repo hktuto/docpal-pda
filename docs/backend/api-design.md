@@ -146,6 +146,11 @@ admin uploads a customer receiving Excel (收貨確認及付款通知書), the c
 parses/verifies it client-side, and the backend forwards the original file +
 verified JSON to DocPal — file upload (document id), then a DocPal workflow
 kick (`src/docpalWorkflow.ts`, Bearer `DOCPAL_WORKFLOW_TOKEN`, upstream
+
+**Config gate:** every `/admin/receiving-cn*` route 404s (`not_found`) while
+the flow-config `receiving-cn` step is off (the default) — the API stays
+invisible until the admin enables the step, matching the PDA `/put-away-cn/*`
+gating.
 failure → 502 `docpal_workflow: ...`; kick-start failure after the upload
 deletes the attachment). One tracking row per upload in
 `receiving_cn_workflows`; a status cron (`src/jobs/receivingCnSync.ts`,
