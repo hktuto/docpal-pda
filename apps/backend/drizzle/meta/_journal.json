@@ -274,6 +274,13 @@
       "when": 1792980301641,
       "tag": "0039_sticky_black_cat",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792982400000,
+      "tag": "0040_ncc_lot_date_code",
+      "breakpoints": true
     }
   ]
 }

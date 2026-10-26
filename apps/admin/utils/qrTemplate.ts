@@ -173,6 +173,26 @@ export function decodeKoaDateCode(
   return `${String(week).padStart(2, "0")}${String(isoYear % 100).padStart(2, "0")}`;
 }
 
+/** NCC 13-digit lots display in 5–5–2 digit groups. */
+export function formatNccLotCode(raw: string): string {
+  return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-${raw.slice(5, 10)}-${raw.slice(10)}` : raw;
+}
+
+/** NCC lot prefix YMMDD → WWYY, resolving the year digit to the latest
+ *  matching year not after the scan year. Mirrors the backend/PDA decoder. */
+export function decodeNccDateCode(raw: string, referenceDate: Date = new Date()): string | undefined {
+  if (!/^\d{13}$/.test(raw)) return undefined;
+  const referenceYear = referenceDate.getUTCFullYear();
+  let year = Math.floor(referenceYear / 10) * 10 + Number(raw[0]);
+  if (year > referenceYear) year -= 10;
+  const month = Number(raw.slice(1, 3));
+  const day = Number(raw.slice(3, 5));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return undefined;
+  const { week, year: isoYear } = isoWeekYear(date);
+  return `${String(week).padStart(2, "0")}${String(isoYear % 100).padStart(2, "0")}`;
+}
+
 /** Editor entry point: stored config if present and recognized, else advanced
  *  mode over the raw (possibly legacy hand-written) regex. */
 export function detectMode(profile: {

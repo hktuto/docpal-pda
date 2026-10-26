@@ -84,21 +84,21 @@ VALUES
 
   -- NCC (supplier 23, HONGKONG CHEMI-CON LTD): fixed-width ITF reel barcode,
   -- all digits.
-  --   28-char: itemId(6) flag(3) lot(7) pack(3) qty(5) serial(4)  e.g. 2648786070782706002005000414 (qty 500)
+  --   28-char: itemId(6) lot(13) qty(5) serial(4)
+  --   e.g. 4553136091015970033005000048 -> lot 60910-59700-33, qty 500, serial 0048
   --   32-char (NCC_KTD, TND/TNR varistors): itemId(10) flag(3) lot(7) pack(2) qty(6) serial(4)
   --   e.g. 06711422706071038400210015000024 (qty 1500)
-  -- NOTE: itemId is the numeric NCC item code, NOT the full MPN — the barcode
-  -- carries no MPN. The old system resolved code -> MPN via dbo.RegItem
+  -- The 13-digit lot starts with YMMDD (60910 = 2026-09-10), decoded to the
+  -- ISO week date code by ncc_lot_ymmdd. itemId is the numeric NCC drawing
+  -- code, NOT the MPN. The old system resolved code -> MPN via dbo.RegItem
   -- (Secondary_Key -> Search_Key, e.g. 264878 -> EKZN101ETD271MK30S-R); the new
   -- system has no such lookup, so receiving-match relies on the upstream
   -- invoice lines carrying this code (or a future code->MPN mapping table).
-  -- Verified: 119/122 real scans parse exactly (2 warnings: one label-qty vs
-  -- recorded-qty discrepancy in the old data, one '000000' placeholder code).
   (
     '00000000-0000-7000-8000-000000009002', '23', NULL,
-    $re$^(?=.{28}$|.{32}$)(?<itemId>\d{6,10})\d{3}(?<lotCode>\d{7})\d{3}(?<qty>\d{5,6})(?<serialNo>\d{4})$$re$,
-    NULL, 'itf', NULL, NULL, ARRAY['ITF25'], ARRAY['NCC'],
-    'Restored from BVSDB RegPattern Id=165 (WHHK), 2026-08-13 backup; folds Id=167 NCC+KOA (identical layout) and Id=195 NCC_KTD (32-char, 10-digit item code). itemId is the NCC numeric item code — old system mapped it to the MPN via RegItem; no equivalent lookup exists in the new system. Verified vs 122 real ScannedItem raws.'
+    $re$^(?=.{28}$|.{32}$)(?<itemId>\d{6,10})(?:\d{3})?(?<lotCode>\d{7,13})\d{3}(?<qty>\d{5,6})(?<serialNo>\d{4})$$re$,
+    NULL, 'itf', NULL, 'ncc_lot_ymmdd', ARRAY['ITF25'], ARRAY['NCC'],
+    'Restored from BVSDB RegPattern Id=165 (WHHK), 2026-08-13 backup; folds Id=167 NCC+KOA and Id=195 NCC_KTD (32-char). Corrected 2026-10-26: 28-char layout is drawing(6) + lot(13) + qty(5) + serial(4); lot prefix YMMDD derives the ISO week date code. itemId is the NCC numeric drawing code, not the MPN.'
   ),
 
   -- COPAL (supplier 19915, NIDEC(H.K.)CO.,LIMITED): fixed-width 111-char reel

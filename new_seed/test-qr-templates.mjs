@@ -75,6 +75,26 @@ function decodeKoaDateCode(raw) {
   const week = Math.ceil(((dd.getTime() - jan1.getTime()) / 86400000 + 1) / 7);
   return `${String(week).padStart(2, "0")}${String(dd.getUTCFullYear() % 100).padStart(2, "0")}`;
 }
+// Keep in sync with decodeNccDateCode / formatNccLotCode in scanParse.ts.
+function decodeNccDateCode(raw) {
+  if (!/^\d{13}$/.test(raw)) return undefined;
+  const now = new Date();
+  let year = Math.floor(now.getFullYear() / 10) * 10 + Number(raw[0]);
+  if (year > now.getFullYear()) year -= 10;
+  const month = Number(raw.slice(1, 3));
+  const day = Number(raw.slice(3, 5));
+  const d = new Date(year, month - 1, day);
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return undefined;
+  const dd = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dow = dd.getUTCDay() || 7;
+  dd.setUTCDate(dd.getUTCDate() + 4 - dow);
+  const jan1 = new Date(Date.UTC(dd.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((dd.getTime() - jan1.getTime()) / 86400000 + 1) / 7);
+  return `${String(week).padStart(2, "0")}${String(dd.getUTCFullYear() % 100).padStart(2, "0")}`;
+}
+function formatNccLotCode(raw) {
+  return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-${raw.slice(5, 10)}-${raw.slice(10)}` : raw;
+}
 function parseQrRaw(raw, template, qtyEncoding, dateCodeEncoding) {
   if (!template) return {};
   let regex;
@@ -94,13 +114,15 @@ function parseQrRaw(raw, template, qtyEncoding, dateCodeEncoding) {
       if (Number.isInteger(n) && n > 0) qty = n;
     }
   }
+  const rawLotCode = groups.lotCode || groups.dateCode || undefined;
   let dateCode = groups.dateCode ?? undefined;
-  if (dateCode && dateCodeEncoding === "koa_month_counter") dateCode = decodeKoaDateCode(dateCode);
+  if (dateCodeEncoding === "koa_month_counter") dateCode = rawLotCode ? decodeKoaDateCode(rawLotCode) : undefined;
+  if (dateCodeEncoding === "ncc_lot_ymmdd") dateCode = rawLotCode ? decodeNccDateCode(rawLotCode) : undefined;
   return {
     partNo: normalizePartNo(groups.itemId),
     qty,
     dateCode,
-    lotCode: groups.lotCode ?? undefined,
+    lotCode: dateCodeEncoding === "ncc_lot_ymmdd" && rawLotCode ? formatNccLotCode(rawLotCode) : rawLotCode,
     serialNo: groups.serialNo ?? undefined,
     __groups: groups,
   };
@@ -124,16 +146,17 @@ const TEMPLATES = {
   },
   // Restored from RegPattern Id=165 (NCC) + Id=167 (NCC+KOA, identical layout)
   // + Id=195 (NCC_KTD, 10-char item code). Fixed-width ITF reel barcode.
-  // 28-char: itemId(6) f(3) lot(7) pack(3) qty(5) serial(4)
+  // 28-char: itemId(6) lot(13) qty(5) serial(4); lot prefix = YMMDD.
   // 32-char (KTD/TND varistors): itemId(10) f(3) lot(7) pack(2) qty(6) serial(4)
-  // — one regex: greedy itemId\\d{6,10} + length lookahead lands both; for the
-  // 32-char form the qty group takes the last 5 digits of the zero-padded
+  // — the length lookahead plus optional 3-digit flag lands both layouts; for
+  // the 32-char form the qty group takes the last 5 digits of the zero-padded
   // 6-digit qty (same numeric value; qty >= 100000 on a KTD label would break).
   NCC: {
     qtyEncoding: null,
+    dateCodeEncoding: "ncc_lot_ymmdd",
     qrType: "itf",
     template:
-      "^(?=.{28}$|.{32}$)(?<itemId>\\d{6,10})\\d{3}(?<lotCode>\\d{7})\\d{3}(?<qty>\\d{5,6})(?<serialNo>\\d{4})$",
+      "^(?=.{28}$|.{32}$)(?<itemId>\\d{6,10})(?:\\d{3})?(?<lotCode>\\d{7,13})\\d{3}(?<qty>\\d{5,6})(?<serialNo>\\d{4})$",
   },
   // Restored from RegPattern Id=156 (COPAL). Fixed-width 111-char label.
   // itemId = printed part name; OHM-spec parts keep the resistance code in a

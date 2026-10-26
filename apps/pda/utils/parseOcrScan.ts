@@ -4,6 +4,7 @@ import { toLabelDateCode, type DateCodeFormat } from "~/utils/dateCode";
 const QTY_ENCODING_KOA_ZEROS = "koa_zeros";
 const DATE_CODE_ENCODING_KOA_MONTH_COUNTER = "koa_month_counter";
 const DATE_CODE_ENCODING_YYWW = "yyww";
+const DATE_CODE_ENCODING_NCC_LOT_YMMDD = "ncc_lot_ymmdd";
 const qrTemplateRegexCache = new Map<string, RegExp | null>();
 
 /** A single barcode or QR code returned by the native scanner. */
@@ -824,6 +825,31 @@ export function decodeYywwDateCode(raw: string, dateCodeFormat: DateCodeFormat =
   return toLabelDateCode(raw, dateCodeFormat) ?? undefined;
 }
 
+/** Format a 13-digit NCC lot as its printed 5–5–2 digit groups. */
+export function formatNccLotCode(raw: string): string {
+  return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-${raw.slice(5, 10)}-${raw.slice(10)}` : raw;
+}
+
+/** Decode the 13-digit NCC lot's YMMDD prefix to an ISO week date code.
+ *  The one-digit year resolves to the latest matching year not after the scan
+ *  year. Keep in sync with apps/backend/src/db/scanParse.ts decodeNccDateCode. */
+export function decodeNccDateCode(
+  raw: string,
+  referenceDate: Date = new Date(),
+  dateCodeFormat: DateCodeFormat = "wwyy"
+): string | undefined {
+  if (!/^\d{13}$/.test(raw)) return undefined;
+  const referenceYear = referenceDate.getFullYear();
+  let year = Math.floor(referenceYear / 10) * 10 + Number(raw[0]);
+  if (year > referenceYear) year -= 10;
+  const month = Number(raw.slice(1, 3));
+  const day = Number(raw.slice(3, 5));
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return undefined;
+  const canonical = `${String(getIsoYear(date) % 100).padStart(2, "0")}${String(getIsoWeek(date)).padStart(2, "0")}`;
+  return toLabelDateCode(canonical, dateCodeFormat) ?? undefined;
+}
+
 function getQrTemplateRegex(template: string): RegExp | null {
   if (qrTemplateRegexCache.has(template)) {
     return qrTemplateRegexCache.get(template)!;
@@ -905,12 +931,10 @@ export function parseQrCapture(
       }
     }
 
-    // KOA: segment 5 is the raw lot code (e.g. "1625H713"); the WWYY date code
-    // is derived from it via koa_month_counter. Older templates may still name
-    // the same segment dateCode — treat that as the lot code too. When both
+    // KOA and NCC derive the date from the raw lot. Older templates may still
+    // name KOA's segment dateCode — treat that as the lot code too. When both
     // groups exist (iC-Haus: AC = lot, DC = date), the date decodes from the
-    // dateCode group. Without a date-code encoding the dateCode group passes
-    // through raw. Empty segment (::) yields "" — normalize to undefined.
+    // dateCode group. Without an encoding the dateCode group passes through.
     const rawLotCode = (groups.lotCode || groups.dateCode) ?? undefined;
     const rawDateCode = groups.dateCode || undefined;
     let dateCode: string | undefined;
@@ -918,16 +942,21 @@ export function parseQrCapture(
       dateCode = rawLotCode ? decodeKoaDateCode(rawLotCode, dateCodePeriods, new Date(), dateCodeFormat) : undefined;
     } else if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_YYWW) {
       dateCode = rawDateCode ? decodeYywwDateCode(rawDateCode, dateCodeFormat) : undefined;
+    } else if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_NCC_LOT_YMMDD) {
+      dateCode = rawLotCode ? decodeNccDateCode(rawLotCode, new Date(), dateCodeFormat) : undefined;
     } else {
       dateCode = rawDateCode;
     }
+    const lotCode = supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_NCC_LOT_YMMDD && rawLotCode
+      ? formatNccLotCode(rawLotCode)
+      : rawLotCode;
 
     return {
       matched: true,
       parsed: {
         itemId: normalizedItemId,
         qty,
-        lotCode: rawLotCode,
+        lotCode,
         dateCode,
         coo: groups.coo ?? undefined,
         cow: groups.cow ?? undefined,
@@ -937,7 +966,7 @@ export function parseQrCapture(
       options: {
         itemIds: [normalizedItemId],
         qtys: qty !== undefined ? [qty] : [],
-        lotCodes: rawLotCode ? [rawLotCode] : [],
+        lotCodes: lotCode ? [lotCode] : [],
         dateCodes: dateCode ? [dateCode] : [],
         coos: groups.coo ? [groups.coo] : [],
         cows: groups.cow ? [groups.cow] : [],

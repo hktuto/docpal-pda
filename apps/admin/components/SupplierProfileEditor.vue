@@ -4,6 +4,8 @@ import {
   parseWithRegex,
   decodeKoaQty,
   decodeKoaDateCode,
+  decodeNccDateCode,
+  formatNccLotCode,
   detectMode,
   FIELD_ROLES,
   type QrTemplateConfig,
@@ -55,6 +57,7 @@ const dateCodeEncoding = ref(props.profile?.dateCodeEncoding ?? "");
 const dateCodeEncodingOptions = computed(() => [
   { value: "", label: t("admin.pages.supplierProfile.dateCodePlain") },
   { value: "koa_month_counter", label: t("admin.pages.supplierProfile.dateCodeKoa") },
+  { value: "ncc_lot_ymmdd", label: t("admin.pages.supplierProfile.dateCodeNcc") },
 ]);
 // Counter→month periods for the koa_month_counter preview decode; falls back
 // to DEFAULT_DATE_CODE_PERIODS in qrTemplate.ts when unavailable.
@@ -214,7 +217,16 @@ function displayDateCode(raw: string | undefined): string {
     const decoded = decodeKoaDateCode(raw, koaPeriods.value);
     return decoded !== undefined ? `${decoded} (${t("admin.pages.supplierProfile.koaFormat")})` : raw;
   }
+  if (dateCodeEncoding.value === "ncc_lot_ymmdd") {
+    const decoded = decodeNccDateCode(raw);
+    return decoded !== undefined ? `${decoded} (${t("admin.pages.supplierProfile.nccFormat")})` : raw;
+  }
   return raw;
+}
+
+function displayLotCode(raw: string | undefined): string {
+  if (raw === undefined) return "";
+  return dateCodeEncoding.value === "ncc_lot_ymmdd" ? formatNccLotCode(raw) : raw;
 }
 
 const previewRows = computed(() => {
@@ -226,10 +238,11 @@ const previewRows = computed(() => {
       rows.push({ label: t(`admin.pages.supplierProfile.preview.${labelKey}`), value: display(v) });
     }
   };
+  const previewDateCode = p.dateCode ?? (dateCodeEncoding.value === "ncc_lot_ymmdd" ? p.lotCode : undefined);
   push("itemId", p.itemId);
   push("qty", p.qty, displayQty);
-  push("lotCode", p.lotCode);
-  push("dateCode", p.dateCode, displayDateCode);
+  push("lotCode", p.lotCode, displayLotCode);
+  push("dateCode", previewDateCode, displayDateCode);
   push("coo", p.coo);
   push("cow", p.cow);
   push("serialNo", p.serialNo);
