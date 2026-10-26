@@ -11,66 +11,97 @@
     <div class="modal">
       <div class="modal__header">
         <h3 id="picking-scan-review-title">{{ $t('picking.scanSession.reviewTitle') }}</h3>
-        <button type="button" class="modal__close" :aria-label="$t('labelScanReviewModal.close')" @click="close">×</button>
+        <button type="button" class="modal__close" :aria-label="$t('labelScanReviewModal.close')" :disabled="applying" @click="close">×</button>
       </div>
 
       <div class="modal__body">
         <p class="subtitle">{{ $t('picking.scanSession.reviewSubtitle') }}</p>
 
-        <form class="form" @submit.prevent="confirm">
-          <label class="field">
-            <span>{{ $t('labelScanReviewModal.partNo') }}</span>
-            <select v-model="editable.partNo">
-              <option value="">{{ $t('labelScanReviewModal.placeholderPartNo') }}</option>
-              <option v-for="opt in partNoOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>{{ $t('labelScanReviewModal.qty') }}</span>
-            <input @focus="selectAll" v-model.number="editable.qty" type="number" min="1" step="1" inputmode="numeric" :placeholder="$t('labelScanReviewModal.placeholderQty')" />
-            <CandidateChips
-              v-model="qtyChipValue"
-              :candidates="options.qtys.map(String)"
-              :label="$t('labelScanReviewModal.qty')"
-            />
-          </label>
-          <label class="field">
-            <span>{{ $t('labelScanReviewModal.dateCode') }}</span>
-            <input @focus="selectAll" v-model="editable.dateCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderDateCode')" />
-            <CandidateChips
-              v-model="editable.dateCode"
-              :candidates="options.dateCodes"
-              :label="$t('labelScanReviewModal.dateCode')"
-            />
-          </label>
-          <label class="field">
-            <span>{{ $t('labelScanReviewModal.lotCode') }}</span>
-            <input @focus="selectAll" v-model="editable.lotCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderLotCode')" />
-            <CandidateChips
-              v-model="editable.lotCode"
-              :candidates="options.lotCodes"
-              :label="$t('labelScanReviewModal.lotCode')"
-            />
-          </label>
-          <label class="field">
-            <span>{{ $t('labelScanReviewModal.coo') }}</span>
-            <CountrySelect v-model="editable.coo" :candidates="options.coos" :placeholder="$t('labelScanReviewModal.placeholderCoo')" :empty-label="$t('labelScanReviewModal.noCoo')" />
-          </label>
-          <label class="field">
-            <span>{{ $t('labelScanReviewModal.cow') }}</span>
-            <CountrySelect v-model="editable.cow" :candidates="options.cows" :placeholder="$t('labelScanReviewModal.placeholderCow')" :empty-label="$t('labelScanReviewModal.noCow')" />
-          </label>
-        </form>
+        <div class="items">
+          <section
+            v-for="(row, index) in editableRows"
+            :key="row.id"
+            class="item-card"
+            :class="{ 'item-card--done': statusOf(index)?.ok, 'item-card--failed': statusOf(index) && !statusOf(index)?.ok }"
+          >
+            <div class="item-card__header">
+              <strong>{{ index + 1 }}</strong>
+              <span v-if="statusOf(index)?.ok" class="status-ok">✓</span>
+              <button
+                v-else
+                type="button"
+                class="row-remove"
+                :aria-label="$t('scanReview.multiRemove')"
+                :disabled="applying"
+                @click="removeRow(index)"
+              >×</button>
+            </div>
+
+            <fieldset class="item-fields" :disabled="statusOf(index)?.ok || applying">
+              <label class="field">
+                <span>{{ $t('labelScanReviewModal.partNo') }}</span>
+                <select v-model="row.parsed.partNo">
+                  <option value="">{{ $t('labelScanReviewModal.placeholderPartNo') }}</option>
+                  <option v-for="opt in partNoOptions(row)" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>{{ $t('labelScanReviewModal.qty') }}</span>
+                <input v-model.number="row.parsed.qty" type="number" min="1" step="1" inputmode="numeric" :placeholder="$t('labelScanReviewModal.placeholderQty')" @focus="selectAll" />
+                <CandidateChips
+                  show-single
+                  :model-value="String(row.parsed.qty)"
+                  :candidates="row.options.qtys.map(String)"
+                  :label="$t('labelScanReviewModal.qty')"
+                  @update:model-value="setQty(row, $event)"
+                />
+              </label>
+              <label class="field">
+                <span>{{ $t('labelScanReviewModal.dateCode') }}</span>
+                <input v-model="row.parsed.dateCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderDateCode')" @focus="selectAll" />
+                <CandidateChips
+                  show-single
+                  v-model="row.parsed.dateCode"
+                  :candidates="row.options.dateCodes"
+                  :label="$t('labelScanReviewModal.dateCode')"
+                />
+              </label>
+              <label class="field">
+                <span>{{ $t('labelScanReviewModal.lotCode') }}</span>
+                <input v-model="row.parsed.lotCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderLotCode')" @focus="selectAll" />
+                <CandidateChips
+                  show-single
+                  v-model="row.parsed.lotCode"
+                  :candidates="row.options.lotCodes"
+                  :label="$t('labelScanReviewModal.lotCode')"
+                />
+              </label>
+              <label class="field">
+                <span>{{ $t('labelScanReviewModal.coo') }}</span>
+                <CountrySelect v-model="row.parsed.coo" :candidates="row.options.coos" :placeholder="$t('labelScanReviewModal.placeholderCoo')" :empty-label="$t('labelScanReviewModal.noCoo')" />
+              </label>
+              <label class="field">
+                <span>{{ $t('labelScanReviewModal.cow') }}</span>
+                <CountrySelect v-model="row.parsed.cow" :candidates="row.options.cows" :placeholder="$t('labelScanReviewModal.placeholderCow')" :empty-label="$t('labelScanReviewModal.noCow')" />
+              </label>
+            </fieldset>
+            <p v-if="statusOf(index) && !statusOf(index)?.ok" class="error">{{ statusOf(index)?.message }}</p>
+          </section>
+        </div>
+
+        <button type="button" class="btn btn--secondary add-item" :disabled="applying" @click="addRow">
+          {{ $t('scanReview.addItem') }}
+        </button>
 
         <div class="actions">
-          <button type="button" class="btn btn--secondary" @click="emit('retake')">
+          <button type="button" class="btn btn--secondary" :disabled="applying" @click="emit('retake')">
             {{ $t('labelScanReviewModal.retake') }}
           </button>
-          <button type="button" class="btn btn--secondary" @click="close">
+          <button type="button" class="btn btn--secondary" :disabled="applying" @click="close">
             {{ $t('labelScanReviewModal.cancel') }}
           </button>
-          <button type="button" class="btn" :disabled="!valid" @click="confirm">
-            {{ $t('picking.scanSession.addToQueue') }}
+          <button type="button" class="btn" :disabled="!canApply" @click="apply">
+            {{ pendingRows.length === 1 ? $t('picking.scanSession.addToQueue') : $t('scanReview.multiAdd', { count: pendingRows.length }) }}
           </button>
         </div>
       </div>
@@ -82,72 +113,116 @@
 import CandidateChips from "~/components/CandidateChips.vue";
 import CountrySelect from "~/components/CountrySelect.vue";
 import type { OcrInput } from "~/utils/ocrNormalize";
-import type { CandidateOptions } from "~/utils/parseOcrScan";
+import type { CandidateOptions, ScanMultiRowResult } from "~/utils/parseOcrScan";
+
+type ReviewRow = { parsed: OcrInput; options: CandidateOptions };
+type EditableReviewRow = ReviewRow & { id: number };
 
 const props = defineProps<{
   modelValue: boolean;
-  parsed: OcrInput;
-  options: CandidateOptions;
-  /** The picking order's part numbers — the possible scan targets. */
+  rows: ReviewRow[];
   partNos: string[];
+  results: ScanMultiRowResult[] | null;
+  applying: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "update:modelValue", value: boolean): void;
-  (e: "confirm", parsed: OcrInput): void;
+  (e: "apply", rows: { row: OcrInput; index: number; rowId: number }[]): void;
+  (e: "remove", index: number): void;
   (e: "retake"): void;
 }>();
 
-// COO/COW default to empty — the operator picks explicitly from the country
-// dropdown; the OCR-parsed values stay available there as extra options.
-const editable = ref<OcrInput>({ ...props.parsed, coo: "", cow: "" });
+let nextRowId = 0;
+
+function cloneRows(rows: ReviewRow[]): EditableReviewRow[] {
+  return rows.map((row) => ({
+    id: nextRowId++,
+    parsed: { ...row.parsed, coo: "", cow: "" },
+    options: row.options,
+  }));
+}
+
+const editableRows = ref<EditableReviewRow[]>(cloneRows(props.rows));
 
 watch(
-  () => props.parsed,
-  (v) => {
-    editable.value = { ...v, coo: "", cow: "" };
+  () => props.rows,
+  (rows) => {
+    editableRows.value = cloneRows(rows);
   }
 );
 
-// Part-no select: the order's parts plus the parsed value / OCR candidates
-// that are not on the order (kept as raw extras so nothing is blanked).
-const partNoOptions = computed(() => {
+function statusOf(index: number): ScanMultiRowResult | undefined {
+  return props.results?.find((result) => result.index === index);
+}
+
+function partNoOptions(row: ReviewRow) {
   const values = [...new Set(props.partNos.filter(Boolean))];
   const extras = [...new Set(
-    [editable.value.partNo, ...props.options.itemIds]
-      .map((v) => (v == null ? "" : String(v).trim()))
-      .filter((v) => v !== "" && !values.includes(v))
+    [row.parsed.partNo, ...row.options.itemIds]
+      .map((value) => (value == null ? "" : String(value).trim()))
+      .filter((value) => value !== "" && !values.includes(value))
   )];
-  return [...values, ...extras].map((v) => ({ value: v, label: v }));
-});
+  return [...values, ...extras].map((value) => ({ value, label: value }));
+}
 
-const qtyChipValue = computed({
-  get: () => String(editable.value.qty),
-  set: (v) => {
-    if (v === "") {
-      editable.value.qty = "";
-    } else {
-      const n = Number(v);
-      editable.value.qty = Number.isNaN(n) ? "" : n;
-    }
-  },
-});
+function setQty(row: ReviewRow, value: string) {
+  if (value === "") {
+    row.parsed.qty = "";
+    return;
+  }
+  const qty = Number(value);
+  row.parsed.qty = Number.isNaN(qty) ? "" : qty;
+}
 
-const valid = computed(
-  () =>
-    editable.value.partNo.trim().length > 0 &&
-    typeof editable.value.qty === "number" &&
-    Number.isInteger(editable.value.qty) &&
-    editable.value.qty > 0
+function validRow(row: ReviewRow): boolean {
+  return row.parsed.partNo.trim().length > 0 &&
+    typeof row.parsed.qty === "number" &&
+    Number.isInteger(row.parsed.qty) &&
+    row.parsed.qty > 0;
+}
+
+const pendingRows = computed(() =>
+  editableRows.value
+    .map((row, index) => ({ row, index }))
+    .filter(({ index }) => !statusOf(index)?.ok)
 );
 
-function confirm() {
-  if (!valid.value) return;
-  emit("confirm", { ...editable.value });
+const canApply = computed(() =>
+  !props.applying && pendingRows.value.length > 0 && pendingRows.value.every(({ row }) => validRow(row))
+);
+
+function emptyOptions(): CandidateOptions {
+  return { itemIds: [], qtys: [], coos: [], dateCodes: [], lotCodes: [], cows: [] };
+}
+
+function addRow() {
+  editableRows.value.push({
+    id: nextRowId++,
+    parsed: { partNo: "", qty: "", dateCode: "", lotCode: "", coo: "", cow: "" },
+    options: emptyOptions(),
+  });
+}
+
+function removeRow(index: number) {
+  editableRows.value.splice(index, 1);
+  emit("remove", index);
+}
+
+function apply() {
+  if (!canApply.value) return;
+  emit(
+    "apply",
+    pendingRows.value.map(({ row, index }) => ({
+      row: { ...row.parsed },
+      index,
+      rowId: row.id,
+    }))
+  );
 }
 
 function close() {
-  emit("update:modelValue", false);
+  if (!props.applying) emit("update:modelValue", false);
 }
 
 function selectAll(event: FocusEvent) {
@@ -174,7 +249,7 @@ function selectAll(event: FocusEvent) {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   width: 100%;
-  max-width: calc(100vw - 2rem);
+  max-width: min(38rem, calc(100vw - 2rem));
   max-height: 90vh;
   overflow-y: auto;
 }
@@ -191,7 +266,8 @@ function selectAll(event: FocusEvent) {
   margin: 0;
 }
 
-.modal__close {
+.modal__close,
+.row-remove {
   background: transparent;
   border: none;
   font-size: 1.5rem;
@@ -210,10 +286,44 @@ function selectAll(event: FocusEvent) {
   margin: 0 0 1rem;
 }
 
-.form {
+.items {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.item-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+}
+
+.item-card--done {
+  background: rgba(22, 163, 74, 0.08);
+  border-color: #16a34a;
+}
+
+.item-card--failed {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: #dc2626;
+}
+
+.item-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.item-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
 }
 
 .field {
@@ -237,6 +347,22 @@ function selectAll(event: FocusEvent) {
   font-size: 0.9375rem;
 }
 
+.status-ok {
+  color: #16a34a;
+  font-weight: 700;
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.875rem;
+  margin: 0.75rem 0 0;
+}
+
+.add-item {
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
 .actions {
   display: flex;
   gap: 0.5rem;
@@ -257,7 +383,9 @@ function selectAll(event: FocusEvent) {
   cursor: pointer;
 }
 
-.btn:disabled {
+.btn:disabled,
+.modal__close:disabled,
+.row-remove:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

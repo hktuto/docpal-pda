@@ -99,23 +99,14 @@
       <PickingScanReviewModal
         v-if="review"
         :model-value="reviewOpen"
-        :parsed="review.parsed"
-        :options="review.options"
+        :rows="review.rows"
         :part-nos="orderPartNos"
+        :results="reviewResults"
+        :applying="reviewApplying"
         @update:model-value="onReviewClosed"
-        @confirm="onReviewConfirm"
+        @apply="onApplyReview"
+        @remove="onReviewRowRemoved"
         @retake="onReviewRetake"
-      />
-
-      <ScanMultiItemModal
-        v-if="multiReview"
-        :model-value="multiOpen"
-        :rows="multiReview.rows"
-        :part-nos="orderPartNos"
-        :results="multiResults"
-        @update:model-value="onMultiClosed"
-        @apply="onApplyMulti"
-        @remove="onMultiRowRemoved"
       />
 
       <PickFromBoxDialog
@@ -142,11 +133,9 @@ import { useFlowSteps } from "~/composables/useFlowSteps";
 import { captureLabel, ocrResultToInput, useLabelScan } from "~/composables/useLabelScan";
 import { badgeClass } from "~/composables/useStatusBadge";
 import {
-  extractMultiItemRows,
-  parseAndIdentify,
+  extractPickingScanDrafts,
   type CandidateOptions,
   type OcrBarcode,
-  type ScanMultiRow,
   type ScanMultiRowResult,
 } from "~/utils/parseOcrScan";
 import { playScanComplete, playScanError, playScanSuccess } from "~/utils/scanBeep";
@@ -159,7 +148,6 @@ import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
 import PickingScanReviewModal from "~/components/picking/PickingScanReviewModal.vue";
 import PickFromBoxDialog from "~/components/picking/PickFromBoxDialog.vue";
 import PickingUnifiedItems from "~/components/picking/PickingUnifiedItems.vue";
-import ScanMultiItemModal from "~/components/ScanMultiItemModal.vue";
 import type { OcrInput } from "~/utils/ocrNormalize";
 import type { PickingOrderDetail } from "~/services/types";
 import type { ScanSessionResult } from "~/composables/usePickingScanSession";
@@ -197,13 +185,13 @@ const ocrCapturing = ref(false);
 const scanIntoBoxId = ref<string | null>(null);
 const scanningIntoBox = ref(false);
 
-// OCR review state: a single parsed record opens the confirm form; a label
-// that parses into 2+ item rows opens the multi-item table instead.
-const review = ref<{ parsed: OcrInput; options: CandidateOptions; raw: string } | null>(null);
+const review = ref<{
+  rows: { parsed: OcrInput; options: CandidateOptions }[];
+  raw: string;
+} | null>(null);
 const reviewOpen = ref(false);
-const multiReview = ref<{ rows: ScanMultiRow[]; raw: string } | null>(null);
-const multiOpen = ref(false);
-const multiResults = ref<ScanMultiRowResult[] | null>(null);
+const reviewResults = ref<ScanMultiRowResult[] | null>(null);
+const reviewApplying = ref(false);
 
 // The scan session (queue as a transient in-flight buffer, sticky shelf
 // context, pick-from-box dialog, carton auto-queue) — spec
@@ -343,7 +331,6 @@ useHardwareScanner({
     !ocrCapturing.value &&
     !completed.value &&
     !reviewOpen.value &&
-    !multiOpen.value &&
     !heldByOther.value &&
     !!order.value,
   onScan: async (rawValue: string) => await deliverScan(rawValue),
@@ -370,27 +357,18 @@ async function captureOcr() {
       await deliverScan(barcodes[0].value);
       return;
     }
-    const targets = orderPartNos.value;
-    // A label whose items table lists several parts parses into 2+ rows:
-    // open the multi-item table so the operator can edit every row.
-    const multiRows = extractMultiItemRows(capture.text, targets);
-    if (multiRows.length >= 2) {
-      multiReview.value = {
-        rows: multiRows.map((r) => ({ partNo: r.partNo, qty: r.qty ?? null })),
-        raw: capture.text,
-      };
-      multiResults.value = null;
-      multiOpen.value = true;
-      playScanSuccess();
-      return;
-    }
-    // Single record: pop the confirm form with the OCR candidates as chips.
-    const parsedResult = parseAndIdentify({ text: capture.text, barcodes }, targets);
+    const drafts = extractPickingScanDrafts(
+      { text: capture.text, barcodes },
+      orderPartNos.value
+    );
     review.value = {
-      parsed: ocrResultToInput(parsedResult.parsed),
-      options: parsedResult.options,
+      rows: drafts.map((draft) => ({
+        parsed: ocrResultToInput(draft.parsed),
+        options: draft.options,
+      })),
       raw: capture.text,
     };
+    reviewResults.value = null;
     reviewOpen.value = true;
     playScanSuccess();
   } catch (e) {
@@ -401,77 +379,60 @@ async function captureOcr() {
   }
 }
 
-async function onReviewConfirm(parsed: OcrInput) {
-  if (!review.value) return;
-  const result = await session.handleParsed(parsed, review.value.raw, "ocr");
-  reviewOpen.value = false;
-  review.value = null;
-  if (result.ok) showToast(t("common.scanSuccess"));
-  else showToast(t(`picking.scanSession.${result.message}`));
+async function onApplyReview(entries: { row: OcrInput; index: number; rowId: number }[]) {
+  if (!review.value || reviewApplying.value) return;
+  reviewApplying.value = true;
+  const raw = review.value.raw;
+  const results: ScanMultiRowResult[] = [];
+  try {
+    for (const { row, index, rowId } of entries) {
+      const result = await session.handleParsed(
+        row,
+        `${raw} [row ${rowId}]`,
+        "ocr"
+      );
+      results.push({
+        index,
+        ok: result.ok,
+        message: result.ok ? undefined : t(`picking.scanSession.${result.message}`),
+      });
+    }
+    const merged = new Map<number, ScanMultiRowResult>();
+    for (const result of reviewResults.value ?? []) merged.set(result.index, result);
+    for (const result of results) merged.set(result.index, result);
+    reviewResults.value = [...merged.values()];
+    if (reviewResults.value.every((result) => result.ok)) {
+      reviewOpen.value = false;
+      review.value = null;
+      reviewResults.value = null;
+      showToast(t("common.scanSuccess"));
+    }
+  } catch (e) {
+    showToast(errorMessage(e));
+  } finally {
+    reviewApplying.value = false;
+  }
 }
 
 function onReviewRetake() {
   reviewOpen.value = false;
   review.value = null;
+  reviewResults.value = null;
   captureOcr();
 }
 
 function onReviewClosed(v: boolean) {
   reviewOpen.value = v;
-  if (!v) review.value = null;
-}
-
-async function onApplyMulti(entries: { row: ScanMultiRow; index: number }[]) {
-  if (!multiReview.value) return;
-  const raw = multiReview.value.raw;
-  const results: ScanMultiRowResult[] = [];
-  for (const { row, index } of entries) {
-    // Suffix the raw per part so the queue's duplicate-raw guard treats each
-    // row of one multi-item label as a distinct scan.
-    const result = await session.handleParsed(
-      {
-        partNo: row.partNo,
-        qty: row.qty ?? "",
-        dateCode: "",
-        lotCode: "",
-        coo: "",
-        cow: "",
-      },
-      `${raw} [${row.partNo}]`,
-      "ocr"
-    );
-    results.push({
-      index,
-      ok: result.ok,
-      message: result.ok ? undefined : t(`picking.scanSession.${result.message}`),
-    });
-  }
-  // Merge with earlier results (replacing by index) so locked rows stay marked.
-  const merged = new Map<number, ScanMultiRowResult>();
-  for (const r of multiResults.value ?? []) merged.set(r.index, r);
-  for (const r of results) merged.set(r.index, r);
-  multiResults.value = [...merged.values()];
-  if (multiResults.value.every((r) => r.ok)) {
-    multiOpen.value = false;
-    multiReview.value = null;
-    multiResults.value = null;
-    showToast(t("common.scanSuccess"));
-  }
-}
-
-function onMultiClosed(v: boolean) {
-  multiOpen.value = v;
   if (!v) {
-    multiReview.value = null;
-    multiResults.value = null;
+    review.value = null;
+    reviewResults.value = null;
   }
 }
 
-/** A removed row shifts later row indices — keep stored results aligned. */
-function onMultiRowRemoved(index: number) {
-  multiResults.value = (multiResults.value ?? [])
-    .filter((r) => r.index !== index)
-    .map((r) => (r.index > index ? { ...r, index: r.index - 1 } : r));
+function onReviewRowRemoved(index: number) {
+  reviewResults.value = (reviewResults.value ?? [])
+    .filter((result) => result.index !== index)
+    .map((result) => (result.index > index ? { ...result, index: result.index - 1 } : result));
 }
 
 // Auto-apply: every queued scan is sent right away (no Confirm button).

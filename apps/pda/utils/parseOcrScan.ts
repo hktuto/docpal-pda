@@ -597,7 +597,8 @@ export interface ScanMultiRowResult {
  */
 export function extractMultiItemRows(
   text: string,
-  targets: string[]
+  targets: string[],
+  minMatchScore = 0
 ): MultiItemRow[] {
   // Thousands separators would split "36,000" into useless tokens.
   const cleaned = text.replace(/(\d),(\d{3})\b/g, "$1$2");
@@ -607,7 +608,8 @@ export function extractMultiItemRows(
   for (const line of cleaned.split(/\r?\n/)) {
     if (!line.trim()) continue;
     const partNoCandidates = extractPartNoCandidates(line, []);
-    const matches = findBestItemMatches(normalizedTargets, partNoCandidates);
+    const matches = findBestItemMatches(normalizedTargets, partNoCandidates)
+      .filter((target) => scoreTargetMatch(target, partNoCandidates) >= minMatchScore);
     const partNo = matches[0];
     if (!partNo || rows.has(partNo)) continue;
 
@@ -616,6 +618,72 @@ export function extractMultiItemRows(
   }
 
   return [...rows.values()];
+}
+
+export interface PickingScanDraft {
+  parsed: ParsedFields;
+  options: CandidateOptions;
+}
+
+function mergeCandidateOptions(
+  primary: CandidateOptions,
+  fallback: CandidateOptions,
+  partNo: string
+): CandidateOptions {
+  const merge = <T>(values: T[], fallbackValues: T[]) => [...new Set([...values, ...fallbackValues])];
+  return {
+    itemIds: merge([partNo, ...primary.itemIds], fallback.itemIds),
+    qtys: merge(primary.qtys, fallback.qtys),
+    coos: merge(primary.coos, fallback.coos),
+    dateCodes: merge(primary.dateCodes, fallback.dateCodes),
+    lotCodes: merge(primary.lotCodes, fallback.lotCodes),
+    cows: merge(primary.cows, fallback.cows),
+  };
+}
+
+/** Build the full-form picking review drafts. Strong line matches become
+ * separate items; line fields are defaults and whole-label fields are only
+ * fallback candidates. Fewer than two strong rows keeps whole-label parsing. */
+export function extractPickingScanDrafts(
+  capture: RawOcrCapture,
+  targets: string[]
+): PickingScanDraft[] {
+  const whole = parseAndIdentify(capture, targets);
+  const strongRows = extractMultiItemRows(capture.text, targets, 80);
+  if (strongRows.length < 2) return [{ parsed: whole.parsed, options: whole.options }];
+
+  const cleaned = capture.text.replace(/(\d),(\d{3})\b/g, "$1$2");
+  const normalizedTargets = targets.map(normalizeText);
+  const seen = new Set<string>();
+  const drafts: PickingScanDraft[] = [];
+
+  for (const line of cleaned.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const partNoCandidates = extractPartNoCandidates(line, []);
+    const matches = findBestItemMatches(normalizedTargets, partNoCandidates)
+      .filter((target) => scoreTargetMatch(target, partNoCandidates) >= 80);
+    const partNo = matches[0];
+    if (!partNo || seen.has(partNo)) continue;
+    seen.add(partNo);
+
+    const lineResult = parseAndIdentify({ text: line, barcodes: [] }, targets);
+    const lineOptions = {
+      ...lineResult.options,
+      dateCodes: lineResult.options.dateCodes.filter(
+        (code) => code !== String(lineResult.parsed.qty)
+      ),
+    };
+    drafts.push({
+      parsed: {
+        ...lineResult.parsed,
+        itemId: partNo,
+        dateCode: lineOptions.dateCodes[0],
+      },
+      options: mergeCandidateOptions(lineOptions, whole.options, partNo),
+    });
+  }
+
+  return drafts;
 }
 
 export function decodeKoaQty(encoded: string): number | undefined {

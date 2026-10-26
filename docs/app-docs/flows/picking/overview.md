@@ -18,9 +18,7 @@ Use the Picking flow when a picking order is ready and stock has been allocated.
 
 2. The operator selects a picking order. The order opens on the **unified
    picking page** — one screen that combines the order detail and the scan
-   session. (This page is new and under evaluation: the older detail and scan
-   pages are still reachable at `/picking/:id` and `/picking/scan/:id` until
-   it replaces them.)
+   session. The deprecated separate scan page has been removed.
 
    ![Picking detail](./assets/picking-detail.png)
 3. The page shows the order's parts as a single list. Each collapsed row

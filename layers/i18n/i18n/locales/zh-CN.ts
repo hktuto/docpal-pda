@@ -617,7 +617,8 @@ export default {
     multiTitle: "标签上有多个项目",
     multiSubtitle: "扫描的标签列出多个项目。请检查并编辑每一行，然后加入。",
     multiAdd: "加入 {count} 个项目",
-    multiRemove: "移除该行"
+    multiRemove: "移除该项目",
+    addItem: "添加项目"
   },
   outdatedWarning: {
     title: "日期码过期",

@@ -83,15 +83,6 @@ describe('usePickingWorkLock', () => {
     expect(releaseMock).toHaveBeenCalledWith('ORDER-1');
   });
 
-  it('keeps the lock when moving between the detail and scan pages of the same order', async () => {
-    const lock = mount();
-    await vi.advanceTimersByTimeAsync(0);
-
-    currentRoute.value.path = '/picking/scan/ORDER-1';
-    unmount();
-    expect(releaseMock).not.toHaveBeenCalled();
-  });
-
   it('keeps the lock when moving to the unified detail page of the same order', async () => {
     const lock = mount();
     await vi.advanceTimersByTimeAsync(0);

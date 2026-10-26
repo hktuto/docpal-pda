@@ -11,8 +11,8 @@ const REFRESH_INTERVAL_MS = 3 * 60 * 1000; // backend expires locks 10 min after
  * While the calling page is mounted it holds the server-side lock on the
  * picking order, so allocateAll leaves that order's allocations untouched:
  * acquire on mount, refresh every 3 min, best-effort keepalive release on
- * unmount/pagehide. Moving between the order's detail page and its
- * scan-session page (same order) keeps the lock — both pages hold it.
+ * unmount/pagehide. Moving between the order's legacy and unified detail
+ * pages (same order) keeps the lock — both pages hold it.
  *
  * `heldByOther` carries the holder's display name when a 409 lock_held comes
  * back; the page should render read-only in that case.
@@ -62,12 +62,10 @@ export function usePickingWorkLock(orderId: string) {
     }
     window.removeEventListener("pagehide", onPageHide);
     // During router navigation currentRoute already points at the target —
-    // keep the lock when moving between this order's pages (detail ⇄ scan ⇄
-    // unified detail).
+    // keep the lock when moving between this order's legacy and unified pages.
     const target = router.currentRoute.value.path;
     if (
       target === `/picking/${orderId}` ||
-      target === `/picking/scan/${orderId}` ||
       target === `/picking/unified/${orderId}`
     ) {
       return;

@@ -11,7 +11,6 @@ Page and component locations mapped to source files.
 | Home / Menu | `/` | `pages/index.vue` |
 | Picking list | `/picking` | `pages/picking/index.vue` |
 | Picking detail | `/picking/:id` | `pages/picking/[id].vue` or equivalent |
-| Picking scan session ("checkout") | `/picking/scan/:id` | `pages/picking/scan/[id].vue` |
 | Picking unified detail + scan (evaluation build; what the picking list currently opens) | `/picking/unified/:id` | `pages/picking/unified/[id].vue` |
 | Receiving list | `/receiving` | `pages/receiving/index.vue` |
 | Receiving detail | `/receiving/:id` | `pages/receiving/[id].vue` or equivalent |
@@ -58,8 +57,8 @@ Page and component locations mapped to source files.
 | LabelScanReviewModal | `components/LabelScanReviewModal.vue` |
 | ReceivingScanReviewModal | `components/receiving/ReceivingScanReviewModal.vue` |
 | ReceivingScanMultiItemModal | `components/receiving/ReceivingScanMultiItemModal.vue` |
-| PickingScanReviewModal | `components/picking/PickingScanReviewModal.vue` |
-| ScanMultiItemModal | `components/ScanMultiItemModal.vue` |
+| PickingScanReviewModal (unified one/many-item full-form OCR review with add/remove and per-item results) | `components/picking/PickingScanReviewModal.vue` |
+| ScanMultiItemModal (put-away part/qty table) | `components/ScanMultiItemModal.vue` |
 | BoxMeasurementsModal | `components/BoxMeasurementsModal.vue` |
 | ReportIssueModal | `components/ReportIssueModal.vue` |
 | PickingIssueReportModal | `components/PickingIssueReportModal.vue` |
@@ -134,7 +133,8 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Country list cache for the review modal's COO/COW dropdowns (`GET /admin/countries`) | `composables/useCountryList.ts` |
 | Picking page work lock (acquire/refresh/release + held-by state) | `composables/usePickingWorkLock.ts` |
 | Scanner symbology scope (per-supplier whitelist apply/restore) | `composables/useScannerConfig.ts` + native `apps/pda/android/.../ScannerConfigPlugin.java` |
-| OCR/QR parser and candidate extraction | `utils/parseOcrScan.ts` |
+| Picking one/many-item OCR review (full fields, add/remove, per-item results) | `components/picking/PickingScanReviewModal.vue` |
+| OCR/QR parser and candidate extraction (picking drafts via `extractPickingScanDrafts`) | `utils/parseOcrScan.ts` |
 | Mismatch form validation (pure) | `utils/mismatch.ts` |
 
 - `composables/useLabelScan.ts` — orchestrates native scan; in browsers falls back to `window.prompt()` + JSON.

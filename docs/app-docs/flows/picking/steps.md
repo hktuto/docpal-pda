@@ -8,7 +8,7 @@ From the home screen, tap **Picking**. The list shows the picking orders release
 
 ## 2. Select a picking order
 
-Tap the order you want to work on. The **unified picking page** opens — one screen that combines the order detail and the scan session (new page, under evaluation: the older detail and scan pages still exist at `/picking/:id` and `/picking/scan/:id` until it replaces them). The order number and status badge show in the app header; the horizontal-dots menu at the top right holds the order details (customer, delivery date, PO, ship-to, …). Everything — reviewing lines, scanning, boxing, confirming — happens on this page; there is no separate scan page to open.
+Tap the order you want to work on. The **unified picking page** opens — one screen that combines the order detail and the scan session. The order number and status badge show in the app header; the horizontal-dots menu at the top right holds the order details (customer, delivery date, PO, ship-to, …). Everything — reviewing lines, scanning, boxing, confirming — happens on this page; there is no separate scan page to open.
 
 Opening an order locks it to you: while your page is open, the system will not re-shuffle that order's allocations. The lock releases when you leave the page (or expires after 10 minutes if the app is closed). If a banner says the order is "being picked by" a coworker, the page is read-only — pick a different order or ask them to leave it.
 
@@ -32,7 +32,7 @@ The order's boxes are listed in the **Boxes** section below the item list.
 
 ## 4. Pick each line
 
-The hardware scanner is live whenever the order is open — aim and scan. The **OCR / camera** button in the sticky footer at the bottom captures a label photo instead (a single-record label opens the usual confirm form with candidate chips; a label whose table lists several parts opens the multi-row table). Each successful scan is **recorded immediately** — there is no Confirm button: the picked quantity is recorded, the allocation is reduced or removed, and the new package appears under the part's **Unboxed packages**:
+The hardware scanner is live whenever the order is open — aim and scan. The **OCR / camera** button in the sticky footer captures a label photo instead. Every capture opens the same review list, whether one or several items are detected. Each item has the full editable form (part number, quantity, date code, lot code, COO and COW) with OCR candidates where available. Use **Add item** for a missing line or **Remove** for an unwanted line, then apply the reviewed items. Each successful scan is **recorded immediately** — there is no separate Confirm button: the picked quantity is recorded, the allocation is reduced or removed, and the new package appears under the part's **Unboxed packages**:
 
 - The app re-resolves what is still left to pick after each scan — the office's allocations may shift between scans.
 - A scan that fails to apply stays listed in the part's **Pending scans** section with its error message — **Remove** it (or fix the cause) and scan again.

@@ -617,7 +617,8 @@ export default {
     multiTitle: "標籤上有多個項目",
     multiSubtitle: "掃描的標籤列出多個項目。請檢查並編輯每一行，然後加入。",
     multiAdd: "加入 {count} 個項目",
-    multiRemove: "移除該行"
+    multiRemove: "移除該項目",
+    addItem: "新增項目"
   },
   outdatedWarning: {
     title: "日期碼過期",

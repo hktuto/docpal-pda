@@ -308,7 +308,7 @@ usePageHeader({
 });
 
 function goScan() {
-  return navigateTo(`/picking/scan/${orderId}`);
+  return navigateTo(`/picking/unified/${orderId}`);
 }
 
 async function load() {

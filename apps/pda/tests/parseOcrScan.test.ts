@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decodeKoaDateCode, decodeKoaQty, extractMultiItemRows, parseAndIdentify, parseQrCapture } from '../utils/parseOcrScan';
+import { decodeKoaDateCode, decodeKoaQty, extractMultiItemRows, extractPickingScanDrafts, parseAndIdentify, parseQrCapture } from '../utils/parseOcrScan';
 
 describe('parseAndIdentify', () => {
   it('matches a part number from a barcode value', () => {
@@ -570,5 +570,101 @@ describe("extractMultiItemRows", () => {
     const rows = extractMultiItemRows("RN412ESTTE2703F50", targets);
 
     expect(rows).toEqual([{ partNo: "RN412ESTTE2703F50", qty: undefined }]);
+  });
+});
+
+describe("extractPickingScanDrafts", () => {
+  it("keeps whole-label parsing and all fields for a single item", () => {
+    const drafts = extractPickingScanDrafts(
+      {
+        text: [
+          "PART: RK73B1JTTD181G",
+          "QTY: 5000",
+          "DATE CODE: 2544",
+          "LOT: VTCJ9X17324-0134",
+          "COO: JP",
+          "COW: CN",
+        ].join("\n"),
+        barcodes: [],
+      },
+      ["RK73B1JTTD181G"]
+    );
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0].parsed).toMatchObject({
+      itemId: "RK73B1JTTD181G",
+      qty: 5000,
+      dateCode: "2544",
+      lotCode: "VTCJ9X17324-0134",
+      coo: "JP",
+      cow: "CN",
+    });
+  });
+
+  it("parses every field from each line of a multi-item label", () => {
+    const drafts = extractPickingScanDrafts(
+      {
+        text: [
+          "RN412ESTTE2703F50 QTY: 3000 DATE CODE: 2544 LOT: LOT-A1 COO: JP COW: CN",
+          "SR732BTTDR365F QTY: 20000 DATE CODE: 2610 LOT: LOT-B2 COO: MY COW: TH",
+        ].join("\n"),
+        barcodes: [],
+      },
+      ["RN412ESTTE2703F50", "SR732BTTDR365F"]
+    );
+
+    expect(drafts).toHaveLength(2);
+    expect(drafts[0].parsed).toMatchObject({
+      itemId: "RN412ESTTE2703F50",
+      qty: 3000,
+      dateCode: "2544",
+      lotCode: "LOT-A1",
+      coo: "JP",
+      cow: "CN",
+    });
+    expect(drafts[1].parsed).toMatchObject({
+      itemId: "SR732BTTDR365F",
+      qty: 20000,
+      dateCode: "2610",
+      lotCode: "LOT-B2",
+      coo: "MY",
+      cow: "TH",
+    });
+  });
+
+  it("offers whole-label fields as candidates without copying them to every row", () => {
+    const drafts = extractPickingScanDrafts(
+      {
+        text: [
+          "DATE CODE: 2544",
+          "LOT: HEADERLOT1",
+          "RN412ESTTE2703F50 QTY: 3000",
+          "SR732BTTDR365F QTY: 20000",
+        ].join("\n"),
+        barcodes: [],
+      },
+      ["RN412ESTTE2703F50", "SR732BTTDR365F"]
+    );
+
+    expect(drafts).toHaveLength(2);
+    for (const draft of drafts) {
+      expect(draft.parsed.dateCode).toBeUndefined();
+      expect(draft.parsed.lotCode).toBeUndefined();
+      expect(draft.options.dateCodes).toContain("2544");
+      expect(draft.options.lotCodes).toContain("HEADERLOT1");
+    }
+  });
+
+  it("does not create an extra picking row from a substring-only match", () => {
+    const drafts = extractPickingScanDrafts(
+      {
+        text: "PART: OTHER123 QTY: 10\nTRACE RK73B1JTTD181G",
+        barcodes: [],
+      },
+      ["OTHER123", "181G"]
+    );
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0].parsed.itemId).toBe("OTHER123");
   });
 });

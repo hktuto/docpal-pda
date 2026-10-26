@@ -286,8 +286,8 @@ export default {
           item_not_on_shelf: "This item has no stock on the scanned shelf",
           matchConfirm: "Scanned qty matches the order — confirm and save now?",
           invalid: "Could not read a valid part and quantity",
-          reviewTitle: "Confirm scanned item",
-          reviewSubtitle: "Check the OCR result and edit any field before adding it to the list.",
+          reviewTitle: "Review scanned items",
+          reviewSubtitle: "Check every OCR item and edit any field before adding them to the list.",
           addToQueue: "Add to list",
           heldBy: "This order is being picked by {name} — scanning disabled"
         },
@@ -617,7 +617,8 @@ export default {
     multiTitle: "Multiple items on label",
     multiSubtitle: "The scanned label lists several items. Review and edit each row, then add them.",
     multiAdd: "Add {count} items",
-    multiRemove: "Remove row"
+    multiRemove: "Remove item",
+    addItem: "Add item"
   },
   outdatedWarning: {
     title: "Outdated date code",

@@ -24,13 +24,14 @@ const props = defineProps<{
   modelValue: string;
   candidates: string[];
   label: string;
+  showSingle?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "update:modelValue", value: string): void;
 }>();
 
-const showChips = computed(() => props.candidates.length > 1);
+const showChips = computed(() => props.candidates.length > 1 || (props.showSingle && props.candidates.length === 1));
 </script>
 
 <style scoped>

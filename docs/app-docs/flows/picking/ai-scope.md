@@ -80,13 +80,13 @@
   `docs/superpowers/specs/2026-09-17-date-code-display-template-design.md`,
   formatter `apps/admin/utils/dateCodeDisplay.ts` via
   `composables/useDateCodeDisplay.ts`); grouping/merge keys stay raw.
-- Scan-to-pick ("checkout" scan session): one Scan button per picking order
-  opens `/picking/scan/:id`. The hardware scanner is armed only on that page;
-  each QR scan is validated client-side (part matches an order item, qty fits
-  the aggregated remaining of all same-part lines — consumed FIFO across
-  lines and their allocations, minus already-queued qty — duplicate raw QR
-  rejected) and appended to a local queue table — no per-scan
-  confirm/review. QR parsing tries the order-brand-matching supplier
+- Scan-to-pick on the unified detail page (`/picking/unified/:id`; the
+  deprecated `/picking/scan/:id` page was removed 2026-10-26): the hardware
+  scanner is armed on that page; each QR scan is validated client-side (part
+  matches an order item, qty fits the aggregated remaining of all same-part
+  lines — consumed FIFO across lines and their allocations, minus
+  already-queued qty — duplicate raw QR rejected) and appended to the
+  transient auto-apply queue — no per-scan confirm/review. QR parsing tries the order-brand-matching supplier
   templates first (`supplier_profiles.brands` vs the items' `parts.brand`,
   rest as fallback), and part matching is space-insensitive and accepts both the
   label's part no (`itemId`) and its WCL item no (template `wclItemNo` group,
@@ -115,21 +115,23 @@
   match, label qty must fit the allocation's remaining; distinct
   `part_not_in_box` / `qty_exceeds` toasts). Scanning another box/shelf
   barcode switches the dialog to it; scanning a carton closes it and queues
-  the carton. An OCR button captures a label with the
-  camera: a capture
-  that parses into a single record opens a confirm form
-  (`PickingScanReviewModal` — editable fields with OCR candidate chips),
-  while a multi-item label (2+ rows via `extractMultiItemRows`) opens an
-  editable table (`PickingScanMultiItemModal`) whose rows are added to the
-  queue row-by-row. The queue table aggregates scans of the same part +
-  batch fields (lot/date/coo/cow) into one row with the total qty — a label
-  may legitimately span several same-part lines (e.g. 25000 against lines of
-  10000 + 20000); the queue keeps one row per (line, allocation) portion and
-  Confirm still applies each portion individually, so the backend's per-line
-  cap holds. Confirm
-  batch-applies the queue sequentially via
-  `POST /picking-items/:id/scan {allocationId, qty, ...batch overrides}`;
-  failed rows stay in the list with their error. Hardware-scan (QR) rows also
+  the carton. The OCR button captures a label with the camera and always opens
+  `PickingScanReviewModal`: one list of full-form item cards for one or many
+  items (part, qty, date/lot, COO/COW + candidate chips), with Add item,
+  Remove, Retake and per-item apply results. `extractPickingScanDrafts` uses
+  whole-label parsing for fewer than two strong (score ≥80) line matches;
+  substring-only score-50 matches do not create extra rows. For multi-item
+  labels it parses full defaults per line and appends whole-label values as
+  candidates without copying them blindly to every item. Operators can add
+  same-part rows; raw duplicate keys include a stable draft row id that does
+  not change when another row is removed. The queue
+  aggregates scans of the same part + batch fields (lot/date/coo/cow) into one
+  row with the total qty — a label may legitimately span several same-part
+  lines (e.g. 25000 against lines of 10000 + 20000); the queue keeps one row
+  per (line, allocation) portion and auto-apply sends each portion individually
+  via `POST /picking-items/:id/scan {allocationId, qty, ...batch overrides}`,
+  so the backend's per-line cap holds. Failed rows stay in the list with their
+  error. Hardware-scan (QR) rows also
   send the raw scan string as `barcode`, which the backend stores verbatim as
   `picking_packages.label_barcode` on every portion row the scan creates —
   since the 2026-10-03 aggregate-verify design this string is
@@ -179,14 +181,12 @@
   pre-checks at scan time (cached `GET /picking-shelf-stock` with the order
   id — the backend resolves the scope server-side; zero stock on
   the pending shelf → "item not on this shelf" toast, scan dropped), while
-  require-any accepts the scan and lets the confirm 409 catch it. OCR capture
-  in the require-* modes needs the sticky shelf context first — the button
-  stays disabled until a shelf/box scan sets the banner (the context is sent
-  with every Confirm POST); one confirmed OCR record queues exactly like one
-  hardware scan. When the queued scans cover every part group's remaining
-  required qty (server scanned + queued ≥ required for all), the page plays a
-  rising two-tone cue and prompts once to confirm/save immediately
-  (`orderMatched` watch → `window.confirm` → `confirm()`).
+  require-any accepts the scan and lets the auto-apply 409 catch it. OCR
+  capture is not pre-blocked: after review, each item requires the sticky shelf
+  context only when its matched source is lot-sourced; dock/receiving sources
+  need no shelf. Every applied scan POST carries the shelf/box context. When
+  the queue has drained and every part group is fully scanned, the page plays
+  the completion cue; saving is already complete and finishing stays manual.
   Mode edited on the admin flow-config page.
   Launched from the picking
   detail page (the receiving order's picking tab is read-only and no longer
@@ -491,9 +491,9 @@
   arriving mid-drain apply exactly once, and the scanner is not gated on
   `applying`; undo a mis-scan via the package's Remove scan. The picking list row,
   `utils/orderScanRoute.ts` and the work-lock keep-lock check currently
-  resolve to `/picking/unified/:id`; `pages/picking/[id].vue` and
-  `pages/picking/scan/[id].vue` stay untouched until the Stage-2 swap
-  (spec §8). The collapsed-row line 2 format is selected by
+  resolve to `/picking/unified/:id`; the legacy `pages/picking/[id].vue`
+  remains during evaluation, while the deprecated separate scan page is
+  removed. The collapsed-row line 2 format is selected by
   `pdaViewConfig.pickingDetail.collapsedStyle` (`allocations` — the new
   chips format, default — or `fields` — the old itemFields meta line),
   validated only on `pickingDetail`.
@@ -520,22 +520,18 @@
   sticky search,
   status filter, batch issue report dialog; refresh button, debounced
   server-side search and multi-status/allocation filters).
-- `pages/picking/[id].vue` — detail page (items/allocations/packages,
+- `pages/picking/[id].vue` — legacy detail page (items/allocations/packages,
   boxes, logs; title, status badge and order info rows in the app header via
   `composables/usePageHeader.ts`; the Scan action is the `ScanFab`
-  floating button navigating to the scan session, shown only while the
+  floating button navigating to the unified page, shown only while the
   order is actionable; the Finish button is the sticky bottom-bar
   confirmation shown once every item is fully boxed).
-- `pages/picking/scan/[id].vue` — scan-session ("checkout") page: armed
-  hardware scanner, OCR capture button (single-record confirm form /
-  multi-item table review before queueing), local queue table, Confirm
-  batch-apply, leave guard.
 - `pages/picking/unified/[id].vue` — evaluation unified page: header via
   `usePageHeader` (title/badge/info rows), issue + work-lock +
   whole-box + shelf-context banners, the scan router (`deliverScan` — armed
   scan-into-box → pick-from-box → session routing, kinds mapped to
-  beeps/toasts), OCR capture (QR passthrough / multi-item table / single
-  review form), auto-apply drain (`watch(queuedCount)` → `confirm()`) with
+  beeps/toasts), OCR capture (QR passthrough / unified one-or-many full-form
+  review), auto-apply drain (`watch(queuedCount)` → `confirm()`) with
   `allocation_changed` re-resolve + `unresolved_outdated_warnings` handling,
   `completed` success cue, leave guard. The **Finish picking** button lives
   in the fixed bottom bar (`unified-footer`) next to the OCR button and
@@ -553,11 +549,11 @@
 - `utils/pickingUnifiedItems.ts` — pure collapsed-row format + pending
   aggregation (`unifiedCollapsedMeta`, `allocationChipLabel`,
   `pendingScanGroups`; tests in `tests/pickingUnifiedItems.test.ts`).
-- `components/picking/PickingScanReviewModal.vue` — single-record OCR
-  confirm form (editable fields + candidate chips, retake).
-- `components/ScanMultiItemModal.vue` — shared multi-item OCR label
-  table (part select + qty per row, per-row add results; also used by the
-  put-away detail page).
+- `components/picking/PickingScanReviewModal.vue` — unified one/many-item OCR
+  review: full-form item cards, candidate chips, add/remove, retake and
+  per-item apply results.
+- `components/ScanMultiItemModal.vue` — put-away multi-item OCR label table
+  (part select + qty per row, per-row add results; no longer used by picking).
 - `composables/usePickingScanQueue.ts` — the session queue + client-side
   validation (tests in `tests/usePickingScanQueue.test.ts`).
 - `composables/usePickingWorkLock.ts` — page work lock acquire/3-min
@@ -653,6 +649,7 @@
 - `docs/superpowers/specs/2026-07-18-picking-scan-session-design.md`
 - `docs/superpowers/specs/2026-10-12-picking-unified-detail-scan-design.md`
 - `docs/superpowers/specs/2026-10-14-picking-scan-batch-validation-design.md`
+- `docs/superpowers/specs/2026-10-26-picking-ocr-unified-review-design.md`
 - `docs/superpowers/specs/2026-07-19-box-label-print-preprinted-id-design.md`
 - `docs/superpowers/specs/2026-07-23-picking-priority-allocation-design.md`
 - `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`
