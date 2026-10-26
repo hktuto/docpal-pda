@@ -702,6 +702,9 @@ export function decodeKoaDateCode(
   periods: DateCodePeriod[] = DEFAULT_KOA_PERIODS,
   referenceDate: Date = new Date()
 ): string | undefined {
+  // An empty fetched row list (GET /date-code-periods on a DB seeded before
+  // the table existed) means "no rows at hand" — same as omitting the argument.
+  if (!periods.length) periods = DEFAULT_KOA_PERIODS;
   const digits = raw.match(/^\d+/)?.[0];
   if (!digits || digits.length < 4) return undefined;
   const counter = Number(digits.slice(0, 2));

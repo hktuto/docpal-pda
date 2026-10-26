@@ -128,6 +128,9 @@ export function decodeKoaDateCode(
   periods: DateCodePeriod[] = DEFAULT_KOA_PERIODS,
   referenceDate: Date = new Date()
 ): string | undefined {
+  // An empty table (request paths pass the date_code_counter_periods rows
+  // verbatim) means "no rows at hand" — same as omitting the argument.
+  if (!periods.length) periods = DEFAULT_KOA_PERIODS;
   const digits = raw.match(/^\d+/)?.[0];
   if (!digits || digits.length < 4) return undefined;
   const counter = Number(digits.slice(0, 2));
@@ -218,6 +221,9 @@ export function encodeKoaDateCodeRaw(
   periods: DateCodePeriod[] = DEFAULT_KOA_PERIODS
 ): string | undefined {
   if (!dateCode || !/^\d{4}$/.test(dateCode)) return undefined;
+  // Empty period row list (date_code_counter_periods) = "no rows at hand",
+  // same as omitting the argument — fall back to the built-in defaults.
+  if (!periods.length) periods = DEFAULT_KOA_PERIODS;
   const week = Number(dateCode.slice(0, 2));
   const yy = Number(dateCode.slice(2, 4));
   if (week < 1 || week > 53) return undefined;

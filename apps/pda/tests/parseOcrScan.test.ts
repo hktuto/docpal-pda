@@ -289,6 +289,14 @@ describe("decodeKoaDateCode", () => {
     expect(decodeKoaDateCode("0523X", undefined, REF_2026_08)).toBeUndefined(); // counter 05 — outside 10..99
     expect(decodeKoaDateCode("5429", undefined, REF_2026_10)).toBeUndefined(); // day 29 > 28 days in 2022-02
   });
+
+  it("falls back to the built-in defaults when the periods list is empty", () => {
+    // GET /date-code-periods returns [] on a DB seeded before the table
+    // existed — that must behave like omitting the argument, not like "no
+    // period covers this counter" (which silently dropped the date code).
+    expect(decodeKoaDateCode("18042421", [], REF_2026_10)).toBe("3226"); // counter 18 → 2026-08, day 04 → ISO week 32
+    expect(decodeKoaDateCode("1907H686", [], REF_2026_10)).toBe("3726"); // counter 19 → 2026-09, day 07 → ISO week 37
+  });
 });
 
 describe("parseQrCapture", () => {

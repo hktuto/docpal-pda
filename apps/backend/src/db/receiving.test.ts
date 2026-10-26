@@ -115,6 +115,16 @@ test("decodeKoaDateCode: rolling month counter + day → ISO week WWYY", () => {
   assert.equal(decodeKoaDateCode("0523X", undefined, ref), undefined); // counter 05 in no period
 });
 
+test("decodeKoaDateCode: an empty periods list falls back to the built-in defaults", () => {
+  // Request paths pass the date_code_counter_periods rows verbatim; a DB
+  // seeded before the table existed returns [] — that must behave like
+  // omitting the argument, not like "no period covers this counter" (which
+  // silently dropped the date code on KOA scans).
+  const ref = new Date(2026, 9, 16); // 2026-10-16
+  assert.equal(decodeKoaDateCode("18042421", [], ref), "3226"); // counter 18 → 2026-08, day 04 → 2026-08-04 → ISO week 32
+  assert.equal(decodeKoaDateCode("1907H686", [], ref), "3726"); // counter 19 → 2026-09, day 07 → 2026-09-07 → ISO week 37
+});
+
 test("decodeYywwDateCode: YYWW → WWYY pair swap (iC-Haus DC)", () => {
   assert.equal(decodeYywwDateCode("2337"), "3723"); // 2023 week 37
   assert.equal(decodeYywwDateCode("2631"), "3126"); // 2026 week 31
