@@ -670,15 +670,37 @@ describe('backendWarehouse picking flow', () => {
     expect(JSON.parse(lastCall().init.body as string)).toEqual({ barcode: 'ABC-123', boxId: 'BOX-H-1' });
   });
 
-  it('finishPickingOrder POSTs the finish verb and returns the order status', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ id: 'po1', status: 'picking_finished' }));
+  it('finishPickingOrder POSTs the finish verb and returns the order status + labelingPending', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 'po1', status: 'picking_finished', labelingPending: true }));
 
     const result = await service().finishPickingOrder('po1');
 
     expect(lastCall().url).toBe(`${BASE_URL}/picking-orders/po1/finish`);
     expect(lastCall().init.method).toBe('POST');
     expect(JSON.parse(lastCall().init.body as string)).toEqual({});
-    expect(result).toEqual({ id: 'po1', status: 'picking_finished' });
+    expect(result).toEqual({ id: 'po1', status: 'picking_finished', labelingPending: true });
+  });
+
+  it('getLabelingOrders GETs the labeling queue with paging/search params', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ rows: [], total: 0 }));
+
+    const page = await service().getLabelingOrders();
+    expect(lastCall().url).toBe(`${BASE_URL}/labeling-orders`);
+    expect(lastCall().init.method).toBe('GET');
+    expect(page).toEqual({ rows: [], total: 0 });
+
+    await service().getLabelingOrders({ search: 'SO-1', limit: 50, offset: 50 });
+    expect(lastCall().url).toBe(`${BASE_URL}/labeling-orders?search=SO-1&limit=50&offset=50`);
+  });
+
+  it('finishLabeling POSTs the labeling-finish verb', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 'po1', status: 'picking_finished', labelingPending: false }));
+
+    const result = await service().finishLabeling('po1');
+
+    expect(lastCall().url).toBe(`${BASE_URL}/picking-orders/po1/labeling-finish`);
+    expect(lastCall().init.method).toBe('POST');
+    expect(result).toEqual({ id: 'po1', status: 'picking_finished', labelingPending: false });
   });
 
   it('reportPickingOrderIssues POSTs per-order entries and returns id arrays', async () => {

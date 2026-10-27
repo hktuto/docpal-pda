@@ -36,6 +36,12 @@ export const pickingOrders = pgTable(
     allocationStatus: text("allocation_status").notNull().default("unallocated"),
     shippedAt: timestamp("shipped_at", { mode: "date" }),
     shippedBy: text("shipped_by").references(() => users.id),
+    // Labeling stage (待贴标签, spec 2026-10-28-picking-labeling-step-design.md):
+    // set at picking finish when the labeling step is on and the order matches
+    // a label print rule; cleared by labeling finish / admin status override.
+    labelingPending: boolean("labeling_pending").notNull().default(false),
+    labelingDoneAt: timestamp("labeling_done_at", { mode: "date" }),
+    labelingDoneBy: text("labeling_done_by"),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },

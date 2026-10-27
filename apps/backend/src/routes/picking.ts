@@ -11,8 +11,10 @@ import {
   closeShippingBox,
   createShippingBox,
   finishPickingOrder,
+  finishLabeling,
   getPickingOrderDetail,
   getPickingShelfStock,
+  listLabelingOrders,
   listPickingOrders,
   releaseWorkLock,
   removePackageFromBox,
@@ -326,6 +328,30 @@ pickingRoute.post("/picking-orders/:id/resolve-issue", async (c) => {
 pickingRoute.post("/picking-orders/:id/finish", async (c) => {
   const result = await finishPickingOrder(db, { pickingOrderId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json(result, 200);
+});
+
+// Labeling finish (spec 2026-10-28-picking-labeling-step-design.md): clears
+// the order's labeling stage and runs the deferred post-finish progression.
+pickingRoute.post("/picking-orders/:id/labeling-finish", async (c) => {
+  const result = await finishLabeling(db, { pickingOrderId: c.req.param("id"), actorId: actorFrom(c).id });
+  return c.json(result, 200);
+});
+
+// Labeling queue: picking-finished orders still pending labeling, scoped like
+// the picking list; ?search= + ?limit=/?offset= page server-side.
+pickingRoute.get("/labeling-orders", async (c) => {
+  const limit = Number(c.req.query("limit"));
+  const offset = Number(c.req.query("offset"));
+  const scope = await getUserScope(db, actorFrom(c).username);
+  return c.json(
+    await listLabelingOrders(db, {
+      search: c.req.query("search"),
+      limit: Number.isNaN(limit) ? undefined : limit,
+      offset: Number.isNaN(offset) ? undefined : offset,
+      scope,
+    }),
+    200
+  );
 });
 
 // Page-driven work lock: acquire/refresh while the order page is open

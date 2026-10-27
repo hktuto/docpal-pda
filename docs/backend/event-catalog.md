@@ -186,3 +186,10 @@ reuses the allocation events: after a restore it emits `allocation.computed`
 restored or released) and always `allocation.finished`, both with data
 `{scope: "snapshot-restore", ...restore summary minus the per-row report}` —
 so open picking/receiving pages converge after the morning restore.
+
+The picking labeling stage (spec
+`docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`):
+`picking.labeling_finished` — emitted by
+`POST /picking-orders/:id/labeling-finish` after it clears the order's
+`labeling_pending`, topics `["/picking-orders", "/labeling-orders"]`, so the
+PDA labeling queue and picking pages converge.

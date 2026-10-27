@@ -14,6 +14,8 @@ import type {
   PickingOrderDetail,
   PickingWorkLock,
   LabelPrintRuleMatch,
+  LabelingOrderListQuery,
+  LabelingOrderRow,
   ScanPickingItemInput,
   PickingShelfStockQuery,
   ShippingBoxUpdateInput,
@@ -374,8 +376,23 @@ export function createBackendWarehouseService(
     },
     // Explicit finish: all items fully boxed → order finished. Boxing the
     // last package also auto-finishes (no task is created either way).
-    async finishPickingOrder(id: string): Promise<{ id: string; status: string }> {
+    // labelingPending (spec 2026-10-28): true when the order entered the
+    // labeling stage — the PDA routes the operator to /labeling/[id].
+    async finishPickingOrder(id: string): Promise<{ id: string; status: string; labelingPending: boolean }> {
       return client.post(`/picking-orders/${id}/finish`, {});
+    },
+    // Labeling queue (spec 2026-10-28): picking_finished orders awaiting
+    // their labels; labeling-finish clears the stage (409
+    // labeling_not_pending when already done).
+    async getLabelingOrders(query?: LabelingOrderListQuery): Promise<ListPage<LabelingOrderRow>> {
+      return client.get("/labeling-orders", {
+        search: query?.search,
+        limit: query?.limit,
+        offset: query?.offset,
+      });
+    },
+    async finishLabeling(orderId: string): Promise<{ id: string; status: string; labelingPending: boolean }> {
+      return client.post(`/picking-orders/${orderId}/labeling-finish`, {});
     },
     // Batch issue report: per-order entries (the dialog's shared fields are
     // already folded into each entry by the caller).

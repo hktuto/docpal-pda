@@ -14,7 +14,7 @@ import {
   type PdaViewListKey,
 } from "./listRowTemplate";
 
-export const PDA_VIEW_LIST_KEYS: PdaViewListKey[] = [...PDA_LIST_KEYS, "stock-search"];
+export const PDA_VIEW_LIST_KEYS: PdaViewListKey[] = [...PDA_LIST_KEYS, "stock-search", "labeling"];
 
 export interface PdaListViewConfig {
   title: string;
@@ -57,6 +57,8 @@ export interface PdaViewConfig {
 export const PDA_LIST_CHIP_FIELDS: Record<PdaViewListKey, string[]> = {
   receiving: ["status", "remaining_items", "pending_picking_orders", "none"],
   picking: ["status", "allocation_status", "working_by_name", "none"],
+  // Labeling (spec 2026-10-28): the picking order-field chips + labelCount.
+  labeling: ["status", "allocation_status", "working_by_name", "labelCount", "none"],
   "put-away": ["status", "unboxed_items", "received_items", "none"],
   "goods-verify": ["status", "verified_by", "none"],
   verify: ["box_status", "package_count", "verify_verified_count", "none"],
@@ -90,6 +92,7 @@ export const DEFAULT_PDA_VIEW_CONFIG: PdaViewConfig = {
   lists: {
     receiving: { title: "[name]", meta: ["[supplier_name] · [delivery_date]"], chip: "status" },
     picking: { title: "[order_no]", meta: ["[customer_code] · [po_no]"], chip: "status" },
+    labeling: { title: "[order_no]", meta: ["[customer_code] · [ship_to]"], chip: "labelCount" },
     "put-away": { title: "[batch_no]", meta: ["[supplier_name]"], chip: "status" },
     "goods-verify": { title: "[wcl_item_no]", meta: ["[shelf_code] · [box_id]"], chip: "status" },
     verify: { title: "[shipping_box_id]", meta: ["[order_nos] · [destination_country]"], chip: "box_status" },
@@ -165,6 +168,7 @@ export type ListChipSpec =
 const STATUS_LABEL_FN: Record<PdaViewListKey, NonNullable<Extract<ListChipSpec, { kind: "status" }>["labelFn"]>> = {
   receiving: "receiving",
   picking: "picking",
+  labeling: "picking",
   "put-away": "putAway",
   "goods-verify": "goodsVerify",
   verify: "box",
@@ -203,6 +207,11 @@ export function viewListChip(
       const name = row.workingByName;
       return name ? { kind: "label", labelKey: "picking.lockedBy", params: { name }, cls: "badge--pending" } : null;
     }
+    // Labeling list (spec 2026-10-28): the live matched label count.
+    case "labelCount":
+      return num(row, "labelCount") > 0
+        ? { kind: "label", labelKey: "labeling.labelsChip", params: { count: num(row, "labelCount") }, cls: "badge--pending" }
+        : null;
     case "verified_by": {
       const name = row.verifiedBy;
       return name ? { kind: "label", labelKey: "viewConfig.chips.verifiedBy", params: { name }, cls: "badge--clear" } : null;

@@ -18,12 +18,13 @@ This manual explains the warehouse PDA demo app for **operators and trainers**, 
 Start with [Concepts → Overview](./concepts/overview.md) and the [User Menu](./user-menu/index.md), then follow the flow you need:
 
 1. [Picking](./flows/picking/overview.md)
-2. [Receiving](./flows/receiving/overview.md)
-3. [Put-away](./flows/put-away/overview.md)
-4. [Measuring](./flows/measuring/overview.md)
-5. [Verify](./flows/verify/overview.md)
-6. [Goods verify](./flows/goods-verify/overview.md)
-7. [Stock Search](./flows/stock-search/overview.md)
+2. [Labeling](./flows/labeling/overview.md)
+3. [Receiving](./flows/receiving/overview.md)
+4. [Put-away](./flows/put-away/overview.md)
+5. [Measuring](./flows/measuring/overview.md)
+6. [Verify](./flows/verify/overview.md)
+7. [Goods verify](./flows/goods-verify/overview.md)
+8. [Stock Search](./flows/stock-search/overview.md)
 
 ## For AI agents
 

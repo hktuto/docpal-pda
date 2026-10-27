@@ -4,7 +4,7 @@ Measuring is the process of verifying a shipping box's contents and recording it
 
 ## When to use it
 
-Use the Measuring flow once picking has packed items into shipping boxes **and the picking order is confirmed complete** (the operator tapped Complete Picking on the picking order). There is no measuring task: the list shows the open shipping boxes that contain packages, grouped by picking order, and closing a box *is* the measuring completion. Boxes whose picking is still in progress stay off the list.
+Use the Measuring flow once picking has packed items into shipping boxes **and the picking order is confirmed complete** (the operator tapped Complete Picking on the picking order). There is no measuring task: the list shows the open shipping boxes that contain packages, grouped by picking order, and closing a box *is* the measuring completion. Boxes whose picking is still in progress stay off the list, and so do boxes of an order waiting in the [Labeling](../labeling/overview.md) queue (待貼標籤) until its labeling is finished.
 
 ## Concept
 

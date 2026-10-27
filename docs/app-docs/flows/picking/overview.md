@@ -32,7 +32,7 @@ Use the Picking flow when a picking order is ready and stock has been allocated.
    immediately (no Confirm step; the sticky footer holds the OCR/camera
    button) — or by expanding a row and assigning packages to boxes by hand.
 5. Optional: the operator can scan a supplier label to auto-match and apply a pick (OCR-assisted picking).
-6. When all lines are picked and packed, the operator confirms with the **Finish picking** button — only then does the picking order reach `picking_finished` and the packed boxes move on to measuring (whose completion sets `measuring_finished`).
+6. When all lines are picked and packed, the operator confirms with the **Finish picking** button — only then does the picking order reach `picking_finished` and the packed boxes move on to measuring (whose completion sets `measuring_finished`). Orders matching a label print rule first pass through the [Labeling](../labeling/overview.md) stage — their boxes stay held until labeling is finished.
 
 **Outdated date-code warnings:** if a scanned label's date code is older than the supplier's outdated limit (set per supplier in the admin console), the scan still succeeds but the app shows an alert and flags the order with a warning chip. The order cannot finish — the manual **Finish** action is refused — until an admin resolves the order's warnings in the admin console; the operator then presses Finish again.
 

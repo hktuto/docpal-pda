@@ -401,6 +401,33 @@ export interface LabelPrintRuleMatch {
   printTemplateId: string;
 }
 
+// ------------------------------------------------------------------
+// Labeling (待贴标签) — the stage between picking finish and
+// measuring/verify (spec 2026-10-28-picking-labeling-step-design.md).
+// GET /labeling-orders lists picking_finished orders with
+// labeling_pending; labelMatches are the LIVE rule matches per row.
+// ------------------------------------------------------------------
+
+export interface LabelingOrderListQuery {
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** GET /labeling-orders row. */
+export interface LabelingOrderRow {
+  id: string;
+  orderNo: string;
+  pickingOrderType: string | null;
+  customerCode: string | null;
+  shipTo: string | null;
+  deliveryDate: string | null;
+  itemCount: number;
+  totalQty: number;
+  labelMatches: LabelPrintRuleMatch[];
+  lastUpdateDate: string;
+}
+
 export interface PickingAllocationLot {
   id: string;
   shelfCode: string | null;
@@ -523,6 +550,12 @@ export interface PickingOrderDetail {
   lastUpdateDate: string;
   /** Unresolved outdated-scan warnings on the order (spec 2026-10-07). */
   outdatedWarningCount: number;
+  /** Labeling stage state (spec 2026-10-28). Optional — backends predating
+   *  the labeling step omit the fields. */
+  labelingPending?: boolean;
+  labelingDoneAt?: string | null;
+  labelingDoneBy?: string | null;
+  labelingDoneByName?: string | null;
   items: PickingItem[];
   boxes: PickingBox[];
   suggestedBox: SuggestedShelfBox | null;
@@ -930,6 +963,7 @@ export type FlowStep =
   | "receiving-cn"
   | "put-away"
   | "picking"
+  | "labeling"
   | "goods-verify"
   | "measuring"
   | "verify"

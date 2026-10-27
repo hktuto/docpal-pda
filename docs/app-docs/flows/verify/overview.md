@@ -4,7 +4,7 @@ Verify is a second check of a shipping box: another worker re-scans every item i
 
 ## When to use it
 
-Use the Verify flow when a verify task was created for a box (one task per box — created on box close, or at picking finish on the still-open box when the measuring step is off). The step can be turned off entirely in the flow config (`steps.verify.enabled=false` in the `warehouse_config` row `"flow"`; legacy `FLOW_STEPS_DISABLED` still works, deprecated) — then no verify tasks are created, closed boxes go straight to shipping, and the Verify tile is hidden.
+Use the Verify flow when a verify task was created for a box (one task per box — created on box close, or at labeling finish / picking finish on the still-open box when the measuring step is off; a labeling-pending order's tasks wait for its labeling to clear — see [Labeling](../labeling/overview.md)). The step can be turned off entirely in the flow config (`steps.verify.enabled=false` in the `warehouse_config` row `"flow"`; legacy `FLOW_STEPS_DISABLED` still works, deprecated) — then no verify tasks are created, closed boxes go straight to shipping, and the Verify tile is hidden.
 
 ## Concept
 

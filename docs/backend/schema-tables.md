@@ -501,6 +501,9 @@ upstream database — the sync/dedup key is the caller-supplied UUID `id`
 | allocation_status | text NOT NULL DEFAULT 'unallocated' | Order-level allocation summary: `unallocated` / `partial` / `allocated` — recomputed at the end of every `allocateAll` tx for `pending`/`picking`/`allocated` orders from Σ `allocated_qty` vs Σ open (`qty` − Σ `picking_packages.qty`); `allocated` includes the fully-picked (Σ open = 0) edge; `skip`/`issue`/`picking_finished`/`measuring_finished`/`shipped` keep their last value |
 | shipped_at | timestamp | When the order was marked shipped |
 | shipped_by | text FK → users(id) | User who marked the order shipped |
+| labeling_pending | boolean NOT NULL DEFAULT false | Labeling stage (spec `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`): set at picking finish when the `labeling` step is enabled and the order matches ≥ 1 active `label_print_rules` row; cleared by `POST /picking-orders/:id/labeling-finish` or an admin status override; holds the order's boxes out of measuring/verify |
+| labeling_done_at | timestamp | When the labeling stage was cleared (NULL while pending / never queued) |
+| labeling_done_by | text | User who cleared the labeling stage |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 

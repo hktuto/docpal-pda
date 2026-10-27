@@ -147,6 +147,7 @@ import {
 } from "~/utils/parseOcrScan";
 import { playScanComplete, playScanError, playScanSuccess } from "~/utils/scanBeep";
 import { rawCode } from "~/utils/text";
+import { resolvePickingFinishRoute } from "~/utils/labeling";
 import { ApiError } from "~/services/apiClient";
 import EmptyState from "~/components/EmptyState.vue";
 import InlineSpinner from "~/components/InlineSpinner.vue";
@@ -202,16 +203,18 @@ const reviewResults = ref<ScanMultiRowResult[] | null>(null);
 const reviewApplying = ref(false);
 
 // Post-finish label-print prompt (spec 2026-10-27): after a successful finish
-// the matching label print rules open in a prompt; the measuring-off redirect
-// to /verify waits until the prompt closes.
+// the matching label print rules open in a prompt; the post-finish route
+// (labeling detail when the order entered the labeling stage, else the
+// measuring-off /verify jump — spec 2026-10-28) waits until the prompt closes.
 const printPromptOpen = ref(false);
 const printPromptMatches = ref<LabelPrintRuleMatch[]>([]);
-const verifyAfterPrintPrompt = ref(false);
+const routeAfterPrintPrompt = ref<string | null>(null);
 
 watch(printPromptOpen, (open) => {
-  if (!open && verifyAfterPrintPrompt.value) {
-    verifyAfterPrintPrompt.value = false;
-    void navigateTo("/verify");
+  if (!open && routeAfterPrintPrompt.value) {
+    const target = routeAfterPrintPrompt.value;
+    routeAfterPrintPrompt.value = null;
+    void navigateTo(target);
   }
 });
 
@@ -761,9 +764,17 @@ async function finish() {
     // Finish only flips the order — measuring follows the boxes, not the
     // order. With the measuring step off the finish spawned the boxes'
     // verify tasks instead, so hand the operator straight over to verify.
-    await warehouse.finishPickingOrder(orderId);
+    // labelingPending (spec 2026-10-28): the order waits in the labeling
+    // queue — route to its labeling detail instead (the verify chain is
+    // held backend-side until labeling is done).
+    const result = await warehouse.finishPickingOrder(orderId);
     await load();
-    const navigateToVerify = !flowSteps.value.measuring && flowSteps.value.verify;
+    const postFinishRoute = resolvePickingFinishRoute({
+      labelingPending: result.labelingPending === true,
+      measuringEnabled: flowSteps.value.measuring,
+      verifyEnabled: flowSteps.value.verify,
+      orderId,
+    });
     // Best-effort label-print prompt — a rules-fetch failure never blocks
     // finishing (spec 2026-10-27).
     let matches: LabelPrintRuleMatch[] = [];
@@ -774,12 +785,12 @@ async function finish() {
     }
     if (matches.length > 0) {
       printPromptMatches.value = matches;
-      verifyAfterPrintPrompt.value = navigateToVerify;
+      routeAfterPrintPrompt.value = postFinishRoute;
       printPromptOpen.value = true;
       return;
     }
-    if (navigateToVerify) {
-      await navigateTo("/verify");
+    if (postFinishRoute) {
+      await navigateTo(postFinishRoute);
       return;
     }
   } catch (e) {

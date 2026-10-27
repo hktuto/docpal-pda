@@ -93,6 +93,12 @@ export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | 
   issueReportedAt: string | null;
   issueReportedBy: string | null;
   issueReportedByName: string | null;
+  /** Labeling stage state (spec 2026-10-28). Optional — backends predating
+   *  the labeling step omit the fields. */
+  labelingPending?: boolean;
+  labelingDoneAt?: string | null;
+  labelingDoneBy?: string | null;
+  labelingDoneByName?: string | null;
   items: PickingItemRow[];
   boxes: { id: string; status: string; boxSize: string | null; grossWeight: number | null; netWeight: number | null; destinationCountry: string | null; packageCount: number; shippedAt: string | null }[];
 }

@@ -20,6 +20,7 @@ const steps = ref<Record<FlowStep, boolean>>({
   "receiving-cn": false, // opt-in CN flow — backend default disabled, no home tile
   "put-away": true,
   picking: true,
+  labeling: true,
   "goods-verify": true,
   measuring: true,
   verify: true,

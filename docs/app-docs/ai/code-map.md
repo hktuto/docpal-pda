@@ -12,6 +12,8 @@ Page and component locations mapped to source files.
 | Picking list | `/picking` | `pages/picking/index.vue` |
 | Picking detail | `/picking/:id` | `pages/picking/[id].vue` or equivalent |
 | Picking unified detail + scan (evaluation build; what the picking list currently opens) | `/picking/unified/:id` | `pages/picking/unified/[id].vue` |
+| Labeling list (待貼標籤 queue — finished picking orders pending labels) | `/labeling` | `pages/labeling/index.vue` |
+| Labeling detail (rule print list + Finish labeling) | `/labeling/:id` | `pages/labeling/[id].vue` (embeds `components/picking/LabelPrintRulesPanel.vue`) |
 | Receiving list | `/receiving` | `pages/receiving/index.vue` |
 | Receiving detail | `/receiving/:id` | `pages/receiving/[id].vue` or equivalent |
 | Put-away list (dual-source: standard tasks, or CN tasks when the `cnReceiving` flag from `useFlowSteps` is on) | `/put-away` | `pages/put-away/index.vue` |
@@ -83,6 +85,7 @@ Page and component locations mapped to source files.
 | Unified items list (evaluation — collapsed progress/allocation-chip rows, expanded pending/box/line/allocation views) | `components/picking/PickingUnifiedItems.vue` |
 | Unified scan-session routing (queue, sticky shelf context, pick-from-box, carton auto-queue, confirm with re-resolve) | `composables/usePickingScanSession.ts` |
 | Unified collapsed-row format + pending aggregation (pure, unit-tested) | `utils/pickingUnifiedItems.ts` (`unifiedCollapsedMeta`, `allocationChipLabel`, `pendingScanGroups`) |
+| Label print prompt modal (picking finish) + shared per-rule print panel (also the labeling detail body) | `components/picking/LabelPrintPrompt.vue`, `components/picking/LabelPrintRulesPanel.vue` |
 
 ## Measuring / Verify
 
@@ -191,6 +194,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `POST /receiving-orders/:id/confirm-arrival`, `POST /receiving-orders/:id/scan` | `apps/backend/src/routes/receiving.ts` |
 | `GET|POST|PATCH /receiving-invoice-items/:id/mismatch`, `POST .../mismatch/confirm|cancel` | `apps/backend/src/routes/receiving.ts` |
 | `GET /picking-orders`, `GET /picking-orders/:id`, `POST /picking-orders/:id/finish`, `POST /picking-orders/report-issues` | `apps/backend/src/routes/picking.ts` |
+| `POST /picking-orders/:id/labeling-finish`, `GET /labeling-orders` (labeling stage; `finishLabeling`/`listLabelingOrders`/`advanceAfterPickingFinish` in `src/db/picking.ts`) | `apps/backend/src/routes/picking.ts` |
 | `POST /picking-items/:id/scan`, `/packages/:id*` verbs, `/shipping-boxes/:id*` lifecycle | `apps/backend/src/routes/picking.ts` |
 | `GET /put-away/candidates`, `GET /put-away-tasks`, `GET /put-away-tasks/:id`, `POST /receiving-orders/:id/put-away-scans`, `DELETE /put-away-scans/:scanId`, `/shelf-boxes*` lifecycle (create / cancel / assign-scan / remove-scan / add-all-unboxed / close) | `apps/backend/src/routes/putaway.ts` |
 | `GET /put-away-cn/tasks`, `GET /put-away-cn/tasks/:id`, `POST /put-away-cn/tasks/:id/complete` (CN put-away variant — 404 unless flow-config `cnReceiving` is true) | `apps/backend/src/routes/putawayCn.ts` |

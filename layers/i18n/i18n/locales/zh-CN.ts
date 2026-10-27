@@ -21,7 +21,9 @@ export default {
     stockSearch: "库存查询",
     adHocPutAway: "临时上架",
     shelfExchange: "货架调拨",
-    settings: "设置"
+    settings: "设置",
+    labeling: "待贴标签",
+    labelingDetail: "贴标签详情"
   },
   actions: {
     scan: "扫描",
@@ -108,6 +110,7 @@ export default {
     menu: {
       receiving: { title: "收货" },
       picking: { title: "拣货" },
+      labeling: { title: "待贴标签" },
       putAway: { title: "上架" },
       goodsVerify: { title: "盘点" },
       measuring: { title: "测量" },
@@ -116,6 +119,17 @@ export default {
       adHocPutAway: { title: "临时上架" },
       shelfExchange: { title: "货架调拨" }
     }
+  },
+  labeling: {
+    title: "待贴标签",
+    searchPlaceholder: "按订单号或客户搜索…",
+    empty: "没有待贴标签的订单",
+    labelsChip: "{count} 个标签",
+    finish: "完成贴标签",
+    confirmFinish: "确认订单 {orderNo} 已完成贴标签？",
+    finished: "贴标签已完成",
+    alreadyDone: "该订单已完成贴标签",
+    noLongerMatch: "标签打印规则已不再匹配此订单 — 请直接完成贴标签以继续。"
   },
   login: {
     brand: "DocPal",
@@ -874,7 +888,8 @@ export default {
     invalid_date: "日期无效",
     network_error: "网络错误，请检查连接后重试。",
     unresolved_outdated_warnings: "此订单有 {count} 条未解决的日期码过期警告 — 请先联系管理员解决，再完成订单。",
-    box_coo_mismatch: "箱内已有产地（COO）为 {coos} 的货品 — 请将相同产地的货品装入同一箱。"
+    box_coo_mismatch: "箱内已有产地（COO）为 {coos} 的货品 — 请将相同产地的货品装入同一箱。",
+    labeling_not_pending: "此订单不在待贴标签状态"
   },
   status: {
     receiving: {
@@ -1657,6 +1672,9 @@ export default {
         deliveryDate: "交货日期",
         deliveryDateFrom: "交货日期从",
         deliveryDateTo: "交货日期至",
+        labeling: "贴标签",
+        labelingPending: "待贴标签（拣货完成起）",
+        labelingDone: "贴标签已于 {at} 由 {by} 完成",
         items: "明细数",
         pickedTotal: "已拣 / 总数",
         allocation: "分配状态",
@@ -2184,6 +2202,7 @@ export default {
           "goods-verify": "盘点",
           measuring: "量箱",
           verify: "复核",
+          labeling: "待贴标签",
           "stock-search": "库存查询",
           "shelf-exchange": "货架调拨"
         },
@@ -2278,6 +2297,7 @@ export default {
         pages: {
           receiving: "收货",
           picking: "拣货",
+          labeling: "待贴标签",
           putAway: "上架",
           goodsVerify: "盘点",
           verify: "复核",
@@ -2304,6 +2324,7 @@ export default {
           package_count: "箱件数量",
           verify_verified_count: "已核对箱件",
           verified_count: "已核对数量",
+          labelCount: "标签数量",
           none: "无（隐藏标签）"
         },
         pdaGrouping: "默认分组",
@@ -2391,7 +2412,9 @@ export default {
           verify_verified_count: "已核对箱件",
           verified_count: "已核对数量",
           description: "描述",
-          on_hand_qty: "在手数量"
+          on_hand_qty: "在手数量",
+          picking_order_type: "订单类型",
+          labelCount: "标签数量"
         },
         saved: "已保存。"
       },

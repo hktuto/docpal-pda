@@ -56,7 +56,8 @@ export async function listMeasuringBoxes(db: AppDb): Promise<MeasuringOrderGroup
           JOIN picking_items pi2 ON pi2.id = pp2.picking_item_id
           JOIN picking_orders po2 ON po2.id = pi2.picking_order_id
           WHERE pp2.shipping_box_id = sb.id
-            AND po2.status NOT IN ('picking_finished', 'measuring_finished', 'shipped')
+            AND (po2.status NOT IN ('picking_finished', 'measuring_finished', 'shipped')
+                 OR po2.labeling_pending = true)
         )
       GROUP BY sb.id
       ORDER BY sb.created_date DESC, sb.id DESC

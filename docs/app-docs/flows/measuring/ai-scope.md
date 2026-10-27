@@ -5,7 +5,11 @@
 - List the open shipping boxes that contain packages **whose picking orders
   are all picking-complete** (`picking_finished`/`measuring_finished`/`shipped`
   — the order's explicit
-  Finish on the picking detail page), grouped by picking order (box-scoped —
+  Finish on the picking detail page) **and have cleared the labeling stage**
+  (`labeling_pending = false` — a labeling-pending order keeps its boxes off
+  this list until `POST /picking-orders/:id/labeling-finish`; spec
+  `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`, see
+  [Labeling](../labeling/ai-scope.md)), grouped by picking order (box-scoped —
   no measuring task exists; specs
   `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`,
   `docs/superpowers/specs/2026-10-20-measuring-post-picking-list-design.md`).
@@ -107,6 +111,7 @@
 
 - `docs/backend/api-design.md` §Measuring
 - `docs/superpowers/specs/2026-10-20-measuring-post-picking-list-design.md`
+- `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`
 - `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`
 - `docs/superpowers/specs/2026-10-03-picking-scan-truth-and-aggregate-verify-design.md`
 - `docs/superpowers/specs/2026-10-14-picking-scan-batch-validation-design.md`

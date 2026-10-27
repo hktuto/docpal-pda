@@ -9,7 +9,7 @@ import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 const flow = useFlowApi();
 const { t } = useI18n();
 
-const STEPS = ["receiving", "receiving-cn", "put-away", "picking", "goods-verify", "measuring", "verify", "stock-search", "shelf-exchange"] as const;
+const STEPS = ["receiving", "receiving-cn", "put-away", "picking", "labeling", "goods-verify", "measuring", "verify", "stock-search", "shelf-exchange"] as const;
 
 /** Steps that default to OFF (missing config row → disabled until an admin
  *  enables them). Everything else defaults to ON. */

@@ -62,7 +62,14 @@
   order's still-open boxes (a cross-order box waits until every order in it
   is finished — the same gate as the measuring list) and resets the rescanned
   credit; `verifyPackage` runs the verify pass on the open box; the PDA
-  finish navigates straight to `/verify`.
+  finish navigates straight to `/verify`. When the order entered the
+  **labeling stage** at finish (spec
+  `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`), this
+  spawn is deferred until the labeling finish — the shared
+  `advanceAfterPickingFinish` helper runs it from `finishLabeling`, with the
+  cross-order gate additionally requiring every order in the box to have
+  cleared labeling (`labeling_pending = false`; see
+  [Labeling](../labeling/ai-scope.md)).
 - Flow-step config: `useFlowSteps` fetches `GET /config` once per login;
   `pages/index.vue` hides the tiles of disabled steps.
 
@@ -140,6 +147,7 @@
 - `docs/superpowers/specs/2026-10-02-picking-scan-label-record-design.md`
 - `docs/superpowers/specs/2026-10-03-picking-scan-truth-and-aggregate-verify-design.md`
 - `docs/superpowers/specs/2026-10-14-picking-scan-batch-validation-design.md`
+- `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`
 - `docs/superpowers/specs/2026-07-28-verify-step-and-flow-step-config-design.md`
 - `docs/superpowers/specs/2026-07-28-measuring-verify-refinements-design.md`
 - `docs/backend/api-design.md` §Verify

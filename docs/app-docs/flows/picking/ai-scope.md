@@ -244,14 +244,27 @@
   task on the order's still-open boxes (a cross-order box waits until every
   order in it is finished), the verify pass runs on the open box, and the
   verify completion closes it; the PDA then navigates straight to `/verify`.
+  **Labeling stage** (spec
+  `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`): when
+  the `labeling` flow step is enabled and the order matches ≥ 1 active
+  `label_print_rules` row at finish, the finish instead sets
+  `labeling_pending = true`, returns `labelingPending: true`, and DEFERS the
+  measuring-off verify-task spawn — the order queues on the PDA `/labeling`
+  pages (see [Labeling](../labeling/ai-scope.md)) and its boxes stay out of
+  measuring/verify until `POST /picking-orders/:id/labeling-finish` clears
+  the flag (or an admin status override clears it). The PDA finish keeps the
+  immediate print prompt, then navigates to `/labeling/[id]` instead of
+  `/verify`.
 - Label print prompt after finish (spec
   `docs/superpowers/specs/2026-10-27-picking-finish-label-print-prompt-design.md`):
   a successful finish fetches `GET /picking-orders/:id/label-print-rules`
   (`resolveLabelPrintRulesForOrder` — active rules, priority asc, first match
   per `label_type`) and, on matches, opens
   `components/picking/LabelPrintPrompt.vue` (per-rule Print + job polling /
-  Print all / Skip; the deferred `/verify` navigation waits for the prompt to
-  close; fetch/print errors only toast). Params come from
+  Print all / Skip — the per-rule rows are the shared
+  `components/picking/LabelPrintRulesPanel.vue`, also embedded by the
+  labeling detail page; the deferred `/verify` / `/labeling/[id]` navigation
+  waits for the prompt to close; fetch/print errors only toast). Params come from
   `utils/labelPrintParams.ts` (per-label-type superset of the print-service
   template fields), printed via `utils/print.ts` over the `/print/*` proxy
   with the template's default printer. Reprint: "Print labels" header action
@@ -616,8 +629,10 @@
   `/packages/:id` verbs,
   `/shipping-boxes/:id*` lifecycle (incl. `POST /shipping-boxes/:id/scan`
   cross-order scan-to-box), `POST /picking-orders/:id/finish`
-  (→ `{id, status}`, no task), `POST /picking-orders/report-issues`,
+  (→ `{id, status, labelingPending}`), `POST /picking-orders/report-issues`,
   `POST /picking-orders/:id/resolve-issue`,
+  `POST /picking-orders/:id/labeling-finish` + `GET /labeling-orders` (the
+  labeling stage — see [Labeling](../labeling/ai-scope.md)),
   `POST`/`DELETE /picking-orders/:id/work-lock`, `POST /picking-orders/reorder`.
 - `apps/backend/src/db/outdated.ts` — supplier outdated date-code warnings:
   `checkPartScanOutdated` (brand→profile lookup + age check on the
@@ -703,6 +718,8 @@
 - `docs/superpowers/specs/2026-10-02-excel-order-barcode-scan-to-open-design.md`
 - `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`
 - `docs/superpowers/specs/2026-10-26-uat-allocation-snapshot-restore-design.md`
+- `docs/superpowers/specs/2026-10-27-picking-finish-label-print-prompt-design.md`
+- `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md` (+ [Labeling AI scope](../labeling/ai-scope.md))
 - `docs/superpowers/plans/2026-07-23-picking-priority-allocation.md`
 - `docs/superpowers/plans/2026-07-12-picking-execution.md`
 - `docs/superpowers/plans/2026-07-18-picking-scan-session.md`

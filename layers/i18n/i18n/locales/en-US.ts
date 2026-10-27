@@ -21,7 +21,9 @@ export default {
     stockSearch: "Stock Search",
     adHocPutAway: "Ad-hoc Put-away",
     shelfExchange: "Shelf Exchange",
-    settings: "Settings"
+    settings: "Settings",
+    labeling: "Labeling",
+    labelingDetail: "Labeling Detail"
   },
   actions: {
     scan: "Scan",
@@ -108,6 +110,7 @@ export default {
     menu: {
       receiving: { title: "Receiving" },
       picking: { title: "Picking" },
+      labeling: { title: "Labeling" },
       putAway: { title: "Put-away" },
       goodsVerify: { title: "Goods Verify" },
       measuring: { title: "Measuring" },
@@ -116,6 +119,17 @@ export default {
       adHocPutAway: { title: "Ad-hoc Put-away" },
       shelfExchange: { title: "Shelf Exchange" }
     }
+  },
+  labeling: {
+    title: "Labeling",
+    searchPlaceholder: "Search by order no or customer…",
+    empty: "No orders waiting for labels",
+    labelsChip: "{count} label(s)",
+    finish: "Finish labeling",
+    confirmFinish: "Mark order {orderNo} as labeled?",
+    finished: "Labeling finished",
+    alreadyDone: "Labeling was already finished",
+    noLongerMatch: "Label print rules no longer match this order — mark labeling done to continue."
   },
   login: {
     brand: "DocPal",
@@ -874,7 +888,8 @@ export default {
     invalid_date: "Invalid date",
     network_error: "Network error. Please check your connection and try again.",
     unresolved_outdated_warnings: "This order has {count} unresolved outdated date-code warning(s) — ask an admin to resolve them before finishing.",
-    box_coo_mismatch: "This box already holds items with COO {coos} — pack items with the same COO in one box."
+    box_coo_mismatch: "This box already holds items with COO {coos} — pack items with the same COO in one box.",
+    labeling_not_pending: "This order is not waiting for labeling"
   },
   status: {
     receiving: {
@@ -1658,6 +1673,9 @@ export default {
         deliveryDate: "Delivery Date",
         deliveryDateFrom: "Delivery from",
         deliveryDateTo: "Delivery to",
+        labeling: "Labeling",
+        labelingPending: "Labeling pending (since picking finish)",
+        labelingDone: "Labeling done {at} by {by}",
         items: "Items",
         pickedTotal: "Picked / Total",
         allocation: "Allocation",
@@ -2187,6 +2205,7 @@ export default {
           "goods-verify": "Goods Verify",
           measuring: "Measuring",
           verify: "Verify",
+          labeling: "Labeling",
           "stock-search": "Stock Search",
           "shelf-exchange": "Shelf Exchange"
         },
@@ -2281,6 +2300,7 @@ export default {
         pages: {
           receiving: "Receiving",
           picking: "Picking",
+          labeling: "Labeling",
           putAway: "Put-away",
           goodsVerify: "Goods verify",
           verify: "Verify",
@@ -2307,6 +2327,7 @@ export default {
           package_count: "Package count",
           verify_verified_count: "Verified packages",
           verified_count: "Verified count",
+          labelCount: "Label count",
           none: "None (hide chip)"
         },
         pdaGrouping: "Default grouping",
@@ -2394,7 +2415,9 @@ export default {
           verify_verified_count: "Verified packages",
           verified_count: "Verified count",
           description: "Description",
-          on_hand_qty: "On-hand qty"
+          on_hand_qty: "On-hand qty",
+          picking_order_type: "Order type",
+          labelCount: "Label count"
         },
         saved: "Saved."
       },

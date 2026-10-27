@@ -1449,7 +1449,7 @@ test("work lock: finishing the order clears the lock", async () => {
   await client.db.execute(sql`UPDATE picking_items SET picked_qty = 5 WHERE id = ${itemId}`);
 
   const result = await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
-  assert.deepEqual(result, { id: orderId, status: "picking_finished" });
+  assert.deepEqual(result, { id: orderId, status: "picking_finished", labelingPending: false });
   const row = await queryGet<{ w: string | null }>(
     client.db,
     sql`SELECT working_by AS w FROM picking_orders WHERE id = ${orderId}`

@@ -19,7 +19,8 @@ import { type PdaViewListKey } from '~/utils/listRowTemplate'
 
 // PDA view editor (spec docs/superpowers/specs/2026-10-04-pda-app-rewrite-design.md):
 // the pdaViewConfig flow-config key — per-page PDA view config: list rows
-// (title / meta[1-2] / chip) for the six flow lists + stock-search, and the
+// (title / meta[1-2] / chip) for the six flow lists + stock-search + labeling
+// (spec 2026-10-28), and the
 // row/expanded field allow-lists + default grouping for the
 // receiving/picking/put-away detail pages. Supersedes the deprecated
 // pdaListTemplates (the backend migrates legacy per-list customizations when a
@@ -33,6 +34,7 @@ const { t } = useI18n();
 const PDA_LIST_PAGE_I18N: Record<PdaViewListKey, string> = {
   receiving: "receiving",
   picking: "picking",
+  labeling: "labeling",
   "put-away": "putAway",
   "goods-verify": "goodsVerify",
   verify: "verify",
@@ -122,6 +124,16 @@ const PDA_SAMPLE_FULL: Record<PdaViewListKey, Record<string, unknown>> = {
     description: "Hex screw M4x20",
     onHandQty: 1240,
   },
+  labeling: {
+    orderNo: "SO-100234",
+    pickingOrderType: "SO",
+    customerCode: "CUST-01",
+    shipTo: "Hong Kong",
+    deliveryDate: "2026-09-22",
+    itemCount: 8,
+    totalQty: 120,
+    labelCount: 2,
+  },
 };
 
 const PDA_SAMPLE_PARTIAL: Record<PdaViewListKey, Record<string, unknown>> = {
@@ -131,6 +143,7 @@ const PDA_SAMPLE_PARTIAL: Record<PdaViewListKey, Record<string, unknown>> = {
   "goods-verify": { partNo: "PN-001" },
   verify: { shippingBoxId: "BOX-HK-001" },
   measuring: { boxId: "BOX-HK-001" },
+  labeling: { orderNo: "SO-100234" },
   "stock-search": { partNo: "PN-001" },
 };
 

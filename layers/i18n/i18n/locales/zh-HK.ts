@@ -21,7 +21,9 @@ export default {
     stockSearch: "庫存查詢",
     adHocPutAway: "臨時上架",
     shelfExchange: "貨架調撥",
-    settings: "設定"
+    settings: "設定",
+    labeling: "待貼標籤",
+    labelingDetail: "貼標籤詳情"
   },
   actions: {
     scan: "掃描",
@@ -108,6 +110,7 @@ export default {
     menu: {
       receiving: { title: "收貨" },
       picking: { title: "揀貨" },
+      labeling: { title: "待貼標籤" },
       putAway: { title: "上架" },
       goodsVerify: { title: "查貨" },
       measuring: { title: "測量" },
@@ -116,6 +119,17 @@ export default {
       adHocPutAway: { title: "臨時上架" },
       shelfExchange: { title: "貨架調撥" }
     }
+  },
+  labeling: {
+    title: "待貼標籤",
+    searchPlaceholder: "按訂單號或客戶搜尋…",
+    empty: "沒有待貼標籤的訂單",
+    labelsChip: "{count} 個標籤",
+    finish: "完成貼標籤",
+    confirmFinish: "確認訂單 {orderNo} 已完成貼標籤？",
+    finished: "貼標籤已完成",
+    alreadyDone: "該訂單已完成貼標籤",
+    noLongerMatch: "標籤打印規則已不再符合此訂單 — 請直接完成貼標籤以繼續。"
   },
   login: {
     brand: "DocPal",
@@ -874,7 +888,8 @@ export default {
     invalid_date: "日期無效",
     network_error: "網絡錯誤，請檢查連接後重試。",
     unresolved_outdated_warnings: "此訂單有 {count} 條未解決的日期碼過期警告 — 請先聯絡管理員解決，再完成訂單。",
-    box_coo_mismatch: "箱內已有產地（COO）為 {coos} 的貨品 — 請將相同產地的貨品裝入同一箱。"
+    box_coo_mismatch: "箱內已有產地（COO）為 {coos} 的貨品 — 請將相同產地的貨品裝入同一箱。",
+    labeling_not_pending: "此訂單不在待貼標籤狀態"
   },
   status: {
     receiving: {
@@ -1657,6 +1672,9 @@ export default {
         deliveryDate: "交貨日期",
         deliveryDateFrom: "交貨日期由",
         deliveryDateTo: "交貨日期至",
+        labeling: "貼標籤",
+        labelingPending: "待貼標籤（揀貨完成起）",
+        labelingDone: "貼標籤已於 {at} 由 {by} 完成",
         items: "明細數",
         pickedTotal: "已揀 / 總數",
         allocation: "分配狀態",
@@ -2184,6 +2202,7 @@ export default {
           "goods-verify": "查貨",
           measuring: "度箱",
           verify: "覆核",
+          labeling: "待貼標籤",
           "stock-search": "庫存查詢",
           "shelf-exchange": "貨架調撥"
         },
@@ -2278,6 +2297,7 @@ export default {
         pages: {
           receiving: "收貨",
           picking: "揀貨",
+          labeling: "待貼標籤",
           putAway: "上架",
           goodsVerify: "查貨",
           verify: "覆核",
@@ -2304,6 +2324,7 @@ export default {
           package_count: "箱件數量",
           verify_verified_count: "已核對箱件",
           verified_count: "已核對數量",
+          labelCount: "標籤數量",
           none: "無（隱藏標籤）"
         },
         pdaGrouping: "預設分組",
@@ -2391,7 +2412,9 @@ export default {
           verify_verified_count: "已核對箱件",
           verified_count: "已核對數量",
           description: "描述",
-          on_hand_qty: "在手數量"
+          on_hand_qty: "在手數量",
+          picking_order_type: "訂單類型",
+          labelCount: "標籤數量"
         },
         saved: "已儲存。"
       },

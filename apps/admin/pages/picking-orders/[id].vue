@@ -651,6 +651,18 @@ const {
     <template v-else-if="order">
       <div class="detail-grid">
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.status") }}</div><div class="dd">{{ $t(`status.picking.${order.status}`) }}</div></div>
+        <div v-if="order.labelingPending || order.labelingDoneAt">
+          <div class="dt">{{ $t("admin.pages.pickingOrders.labeling") }}</div>
+          <div class="dd">
+            <template v-if="order.labelingPending">{{ $t("admin.pages.pickingOrders.labelingPending") }}</template>
+            <template v-else>
+              {{ $t("admin.pages.pickingOrders.labelingDone", {
+                at: order.labelingDoneAt ? formatDateTime(order.labelingDoneAt) : "—",
+                by: order.labelingDoneByName ?? order.labelingDoneBy ?? "—",
+              }) }}
+            </template>
+          </div>
+        </div>
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.customer") }}</div><div class="dd">{{ order.customerCode ?? "—" }}</div></div>
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.poNo") }}</div><div class="dd">{{ order.poNo ?? "—" }}</div></div>
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.type") }}</div><div class="dd">{{ order.pickingOrderType ?? "—" }}</div></div>

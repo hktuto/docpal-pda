@@ -69,9 +69,10 @@ export function docpalCnExcelWorkflowId(): string | undefined {
   return process.env.DOCPAL_CN_EXCEL_WORKFLOW_ID?.trim() || undefined;
 }
 
-/** DocPal workflow definition id for the CN receiving PDF upload (phase 2). */
+/** DocPal workflow definition id for the CN receiving PDF upload (phase 2).
+ *  Falls back to the excel id — both phases kick the same workflow definition. */
 export function docpalCnPdfWorkflowId(): string | undefined {
-  return process.env.DOCPAL_CN_PDF_WORKFLOW_ID?.trim() || undefined;
+  return process.env.DOCPAL_CN_PDF_WORKFLOW_ID?.trim() || docpalCnExcelWorkflowId();
 }
 
 /** Env kill-switch for the CN receiving workflow-status cron (RECEIVING_CN_SYNC=off). */
@@ -199,6 +200,7 @@ export const FLOW_STEPS = [
   "receiving-cn",
   "put-away",
   "picking",
+  "labeling",
   "goods-verify",
   "measuring",
   "verify",
@@ -339,8 +341,10 @@ export function defaultPdaListTemplates(): PdaListTemplates {
 }
 
 /** PDA list pages addressable by pdaViewConfig.lists — the six pdaListTemplates
- *  lists plus stock-search (spec 2026-10-04-pda-app-rewrite-design.md). */
-export const PDA_VIEW_LIST_KEYS = [...PDA_LIST_KEYS, "stock-search"] as const;
+ *  lists plus stock-search (spec 2026-10-04-pda-app-rewrite-design.md) and the
+ *  labeling queue (spec 2026-10-28-picking-labeling-step-design.md; labeling
+ *  never had a legacy pdaListTemplates entry). */
+export const PDA_VIEW_LIST_KEYS = [...PDA_LIST_KEYS, "stock-search", "labeling"] as const;
 export type PdaViewListKey = (typeof PDA_VIEW_LIST_KEYS)[number];
 
 /** Fully-resolved view config for one PDA list row. meta holds 1–2 templates. */
@@ -395,6 +399,7 @@ export const PDA_LIST_CHIP_FIELDS: Record<PdaViewListKey, readonly string[]> = {
   verify: ["box_status", "package_count", "verify_verified_count", "none"],
   measuring: ["status", "package_count", "verified_count", "none"],
   "stock-search": ["none"],
+  labeling: ["status", "allocation_status", "working_by_name", "labelCount", "none"],
 };
 
 /** Item/expanded field allow-lists per detail page. */
@@ -427,6 +432,7 @@ export function defaultPdaViewConfig(): PdaViewConfig {
     ]),
   ) as Record<PdaViewListKey, PdaListViewConfig>;
   lists["stock-search"] = { title: "[wcl_item_no]", meta: ["[part_no]"], chip: "none" };
+  lists["labeling"] = { title: "[order_no]", meta: ["[customer_code] · [ship_to]"], chip: "labelCount" };
   return {
     lists,
     receivingDetail: {

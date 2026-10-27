@@ -295,6 +295,13 @@
       "when": 1793089075454,
       "tag": "0042_ablic_yyyymm_date_code",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1793118703850,
+      "tag": "0043_legal_wendell_vaughn",
+      "breakpoints": true
     }
   ]
 }

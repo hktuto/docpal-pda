@@ -14,6 +14,7 @@ import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
 import { userScopeCondition, type UserScopeEntry } from "./user-scope.js";
 import { normalizePartNo } from "./scanParse.js";
 import { matchSubInventoryRule } from "./receiving.js";
+import { resolveLabelPrintRulesForOrder, type LabelPrintRuleMatch } from "./labelPrint.js";
 import {
   assertNoUnresolvedOutdatedWarnings,
   checkPartScanOutdated,
@@ -719,6 +720,63 @@ export async function listPickingOrders(
 }
 
 // ---------------------------------------------------------------------------
+// Labeling queue (spec 2026-10-28-picking-labeling-step-design.md): picking-
+// finished orders whose labeling stage is still pending. labelMatches are
+// resolved LIVE per row (rules are few, lists are small) so the list can show
+// the label count even when the rules were edited after the finish snapshot.
+// ---------------------------------------------------------------------------
+
+export interface LabelingOrderRow {
+  id: string;
+  orderNo: string;
+  pickingOrderType: string | null;
+  customerCode: string | null;
+  shipTo: string | null;
+  deliveryDate: Date | null;
+  itemCount: number;
+  totalQty: number;
+  labelMatches: LabelPrintRuleMatch[];
+  lastUpdateDate: Date;
+}
+
+export async function listLabelingOrders(
+  db: AppDb,
+  opts?: { search?: string; limit?: number; offset?: number; scope?: UserScopeEntry[] | null }
+): Promise<{ rows: LabelingOrderRow[]; total: number }> {
+  const search = opts?.search?.trim();
+  const rows = await queryAll<Omit<LabelingOrderRow, "labelMatches"> & { total: number }>(
+    db,
+    sql`
+      SELECT
+        po.id, po.order_no AS "orderNo",
+        po.picking_order_type AS "pickingOrderType",
+        po.customer_code AS "customerCode", po.ship_to AS "shipTo",
+        po.delivery_date AS "deliveryDate",
+        COUNT(pi.id)::int AS "itemCount",
+        COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
+        po.last_update_date AS "lastUpdateDate",
+        COUNT(*) OVER ()::int AS "total"
+      FROM picking_orders po
+      LEFT JOIN picking_items pi ON pi.picking_order_id = po.id
+      WHERE po.status = 'picking_finished' AND po.labeling_pending = true
+      ${search ? sql`AND (po.order_no ILIKE ${"%" + search + "%"} OR po.customer_code ILIKE ${"%" + search + "%"} OR po.ship_to ILIKE ${"%" + search + "%"})` : sql``}
+      ${pickingOrderOrgFilter(sql`po.org_id`, sql`po.sub_inventory_code`, sql`po.picking_order_type`, opts?.scope)}
+      GROUP BY po.id
+      ORDER BY po.last_update_date DESC, po.order_no
+      ${opts?.limit && opts.limit > 0 ? sql`LIMIT ${opts.limit} OFFSET ${opts.offset ?? 0}` : sql``}
+    `
+  );
+  const total = rows[0]?.total ?? 0;
+  const withMatches = await Promise.all(
+    rows.map(async ({ total: _total, ...row }) => ({
+      ...row,
+      labelMatches: (await resolveLabelPrintRulesForOrder(db, row.id)).matches,
+    }))
+  );
+  return { rows: withMatches, total };
+}
+
+// ---------------------------------------------------------------------------
 // Page-driven work lock (design: docs/superpowers/specs/2026-07-23-picking-
 // priority-allocation-design.md). A PDA holding the picking order open keeps
 // its allocations from being wiped by allocateAll; the lock expires
@@ -830,6 +888,11 @@ export interface PickingOrderRow {
   issueReportedByName: string | null;
   /** Unresolved outdated-scan warnings (spec 2026-10-07); 0 = none. */
   outdatedWarningCount: number;
+  /** Labeling stage state (spec 2026-10-28-picking-labeling-step-design.md). */
+  labelingPending: boolean;
+  labelingDoneAt: Date | null;
+  labelingDoneBy: string | null;
+  labelingDoneByName: string | null;
   createdDate: Date;
   lastUpdateDate: Date;
 }
@@ -989,10 +1052,14 @@ export async function getPickingOrderDetail(
         ru.display_name AS "issueReportedByName",
         (SELECT COUNT(*)::int FROM outdated_scan_warnings osw
          WHERE osw.order_kind = 'picking' AND osw.order_id = po.id AND osw.resolved_at IS NULL) AS "outdatedWarningCount",
+        po.labeling_pending AS "labelingPending",
+        po.labeling_done_at AS "labelingDoneAt", po.labeling_done_by AS "labelingDoneBy",
+        lu.display_name AS "labelingDoneByName",
         po.created_date AS "createdDate", po.last_update_date AS "lastUpdateDate"
       FROM picking_orders po
       LEFT JOIN users w ON w.id = po.working_by
       LEFT JOIN users ru ON ru.id = po.issue_reported_by
+      LEFT JOIN users lu ON lu.id = po.labeling_done_by
       WHERE po.id = ${orderId}
       ${pickingOrderOrgFilter(sql`po.org_id`, sql`po.sub_inventory_code`, sql`po.picking_order_type`, scope)}
     `
@@ -2432,6 +2499,51 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
 }
 
 /**
+ * Post-picking-finish progression, shared by finishPickingOrder and
+ * finishLabeling (labeling defers it — spec
+ * 2026-10-28-picking-labeling-step-design.md). Measuring on → nothing to
+ * spawn (the box surfaces in listMeasuringBoxes once no member order is
+ * labeling-pending); measuring disabled + verify enabled → spawn the verify
+ * task directly on the order's still-open boxes (a cross-order box waits
+ * until every order in it is finished AND clear of labeling — the same gate
+ * as listMeasuringBoxes). The verify pass re-scans from zero; the box closes
+ * at verify completion.
+ */
+async function advanceAfterPickingFinish(tx: DbOrTx, orderId: string): Promise<void> {
+  if (!isStepEnabled("measuring") && isStepEnabled("verify")) {
+    const boxes = await queryAll<{ id: string }>(
+      tx,
+      sql`SELECT sb.id FROM shipping_boxes sb
+          WHERE sb.status = 'open'
+            AND EXISTS (
+              SELECT 1 FROM picking_packages pp
+              WHERE pp.shipping_box_id = sb.id AND pp.picking_order_id = ${orderId}
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM picking_packages pp2
+              JOIN picking_items pi2 ON pi2.id = pp2.picking_item_id
+              JOIN picking_orders po2 ON po2.id = pi2.picking_order_id
+              WHERE pp2.shipping_box_id = sb.id
+                AND (po2.status NOT IN ('picking_finished', 'measuring_finished', 'shipped')
+                     OR po2.labeling_pending = true)
+            )`
+    );
+    for (const box of boxes) {
+      await queryRun(
+        tx,
+        sql`INSERT INTO verify_tasks (id, shipping_box_id, status, created_date)
+            VALUES (${newId()}, ${box.id}, 'pending', ${now()})
+            ON CONFLICT (shipping_box_id) DO NOTHING`
+      );
+      await queryRun(
+        tx,
+        sql`UPDATE picking_packages SET rescanned_qty = 0, last_update_date = ${now()} WHERE shipping_box_id = ${box.id}`
+      );
+    }
+  }
+}
+
+/**
  * Explicit finish (the ONLY way an order finishes since 2026-10-16 — boxing
  * never auto-finishes): all items fully picked (boxed) → order
  * 'picking_finished', work lock released. With the measuring step on no task
@@ -2445,7 +2557,7 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
 export async function finishPickingOrder(
   db: AppDb,
   input: { pickingOrderId: string; actorId: string }
-): Promise<{ id: string; status: string }> {
+): Promise<{ id: string; status: string; labelingPending: boolean }> {
   return db.transaction(async (tx) => {
     const order = await loadOrderForWrite(tx, input.pickingOrderId);
     assertOrderWritable(order);
@@ -2470,42 +2582,75 @@ export async function finishPickingOrder(
       toState: "picking_finished",
       actorId: input.actorId,
     });
-    // Measuring disabled + verify enabled: the box never goes through the
-    // measuring close, so the finish spawns the verify task directly on the
-    // still-open box (a cross-order box waits until every order in it is
-    // finished — the same gate as listMeasuringBoxes). The verify pass
-    // re-scans from zero; the box closes at verify completion.
-    if (!isStepEnabled("measuring") && isStepEnabled("verify")) {
-      const boxes = await queryAll<{ id: string }>(
-        tx,
-        sql`SELECT sb.id FROM shipping_boxes sb
-            WHERE sb.status = 'open'
-              AND EXISTS (
-                SELECT 1 FROM picking_packages pp
-                WHERE pp.shipping_box_id = sb.id AND pp.picking_order_id = ${order.id}
-              )
-              AND NOT EXISTS (
-                SELECT 1 FROM picking_packages pp2
-                JOIN picking_items pi2 ON pi2.id = pp2.picking_item_id
-                JOIN picking_orders po2 ON po2.id = pi2.picking_order_id
-                WHERE pp2.shipping_box_id = sb.id
-                  AND po2.status NOT IN ('picking_finished', 'measuring_finished', 'shipped')
-              )`
-      );
-      for (const box of boxes) {
-        await queryRun(
-          tx,
-          sql`INSERT INTO verify_tasks (id, shipping_box_id, status, created_date)
-              VALUES (${newId()}, ${box.id}, 'pending', ${now()})
-              ON CONFLICT (shipping_box_id) DO NOTHING`
-        );
-        await queryRun(
-          tx,
-          sql`UPDATE picking_packages SET rescanned_qty = 0, last_update_date = ${now()} WHERE shipping_box_id = ${box.id}`
-        );
+    // Labeling stage (spec 2026-10-28-picking-labeling-step-design.md): with
+    // the step on and ≥1 matching label print rule, the order enters the
+    // labeling queue (snapshot at finish) and the measuring-off/verify-on
+    // progression is deferred to labeling finish.
+    let labelingPending = false;
+    if (isStepEnabled("labeling")) {
+      const { matches } = await resolveLabelPrintRulesForOrder(tx, order.id);
+      if (matches.length > 0) {
+        labelingPending = true;
+        await queryRun(tx, sql`UPDATE picking_orders SET labeling_pending = true, last_update_date = ${now()} WHERE id = ${order.id}`);
+        await logTransition(tx, {
+          entityType: "picking_order",
+          entityId: order.id,
+          fromState: "picking_finished",
+          toState: "labeling_pending",
+          actorId: input.actorId,
+          metadata: { ruleIds: matches.map((m) => m.ruleId) },
+        });
       }
     }
-    return { id: order.id, status: "picking_finished" };
+    if (!labelingPending) {
+      await advanceAfterPickingFinish(tx, order.id);
+    }
+    return { id: order.id, status: "picking_finished", labelingPending };
+  });
+}
+
+/**
+ * Labeling finish (spec 2026-10-28-picking-labeling-step-design.md): clears
+ * labeling_pending on a picking_finished order, audits who/when, then runs
+ * the deferred post-finish progression (the measuring gate clears on its own;
+ * measuring-off + verify-on spawns the box verify tasks here). Any operator
+ * may finish labeling (shared packing-bench task — no work-lock check).
+ */
+export async function finishLabeling(
+  db: AppDb,
+  input: { pickingOrderId: string; actorId: string }
+): Promise<{ id: string; status: string; labelingPending: boolean }> {
+  return db.transaction(async (tx) => {
+    const order = await queryGet<{ id: string; status: string; labelingPending: boolean }>(
+      tx,
+      sql`SELECT id, status, labeling_pending AS "labelingPending" FROM picking_orders WHERE id = ${input.pickingOrderId}`
+    );
+    if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+    await assertActor(tx, input.actorId);
+    if (order.status !== "picking_finished" || !order.labelingPending) {
+      throw new HTTPException(409, { message: "labeling_not_pending" });
+    }
+    const at = now();
+    await queryRun(
+      tx,
+      sql`UPDATE picking_orders
+          SET labeling_pending = false, labeling_done_at = ${at}, labeling_done_by = ${input.actorId}, last_update_date = ${at}
+          WHERE id = ${order.id}`
+    );
+    await logTransition(tx, {
+      entityType: "picking_order",
+      entityId: order.id,
+      fromState: "labeling_pending",
+      toState: "labeling_done",
+      actorId: input.actorId,
+    });
+    await advanceAfterPickingFinish(tx, order.id);
+    await emitEvent(tx, {
+      type: "picking.labeling_finished",
+      topics: ["/picking-orders", "/labeling-orders"],
+      data: { orderId: order.id, actorId: input.actorId },
+    });
+    return { id: order.id, status: "picking_finished", labelingPending: false };
   });
 }
 
@@ -2723,6 +2868,8 @@ const ALLOCATION_HOLDING_STATUSES = new Set(["pending", "picking", "allocated"])
  *  - the PDA work lock is always force-cleared (the override "steals" it);
  *  - leaving `shipped` clears shipped_at/shipped_by; entering `shipped`
  *    stamps them with the admin actor; leaving `issue` clears the issue fields.
+ *  - any override clears labeling_pending (labeling_done_at/by stay as
+ *    historical audit; spec 2026-10-28-picking-labeling-step-design.md).
  *  No-op (changed: false, no audit/event) when the status is already the target.
  *  No recompute is scheduled by the caller: closing releases the order's own
  *  allocations above, and reopening stays unallocated until the admin runs
@@ -2834,6 +2981,7 @@ export async function overridePickingOrderStatus(
           SET status = ${status},
               working_by = NULL,
               working_at = NULL,
+              labeling_pending = false,
               shipped_at = ${shippedAtVal},
               shipped_by = ${shippedByVal},
               issue_reason = ${issueVal(sql`issue_reason`)},

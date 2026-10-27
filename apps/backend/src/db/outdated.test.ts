@@ -316,7 +316,7 @@ test("picking finish: 409 unresolved_outdated_warnings while unresolved; succeed
   assert.deepEqual(resolvedEvents[0].topics, ["/admin/outdated-warnings", "/picking-orders"]);
 
   const done = await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
-  assert.deepEqual(done, { id: orderId, status: "picking_finished" });
+  assert.deepEqual(done, { id: orderId, status: "picking_finished", labelingPending: false });
 
   // idempotent re-resolve: nothing stamped, no second event
   assert.deepEqual(await resolveOrderOutdatedWarnings(client.db, { orderKind: "picking", orderId, actorId }), { resolved: 0 });
@@ -360,7 +360,7 @@ test("picking manual finish: held while a warning is unresolved; resolve + expli
   await resolveOrderOutdatedWarnings(client.db, { orderKind: "picking", orderId, actorId });
   assert.equal((await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`))!.status, "picking");
   const done = await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
-  assert.deepEqual(done, { id: orderId, status: "picking_finished" });
+  assert.deepEqual(done, { id: orderId, status: "picking_finished", labelingPending: false });
 });
 
 // --- put-away scan ----------------------------------------------------------------
