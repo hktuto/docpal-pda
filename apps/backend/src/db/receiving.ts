@@ -294,11 +294,12 @@ export async function scanReceivingOrder(
       qrTemplate: string | null;
       qtyEncoding: string | null;
       dateCodeEncoding: string | null;
+      brands: string[] | null;
     }>(
       tx,
       sql`SELECT ro.id, ro.status, ro.date_code AS "dateCode",
                  sp.qr_template AS "qrTemplate", sp.qty_encoding AS "qtyEncoding",
-                 sp.date_code_encoding AS "dateCodeEncoding"
+                 sp.date_code_encoding AS "dateCodeEncoding", sp.brands
           FROM receiving_orders ro
           LEFT JOIN suppliers s ON s.code = ro.supplier_code
           LEFT JOIN supplier_profiles sp ON sp.supplier_code = s.code
@@ -317,7 +318,7 @@ export async function scanReceivingOrder(
     const dateCodePeriods =
       ro.dateCodeEncoding === "koa_month_counter" ? await listDateCodePeriods(tx) : undefined;
     const parsed = input.raw
-      ? parseQrRaw(input.raw, ro.qrTemplate, ro.qtyEncoding, ro.dateCodeEncoding, dateCodePeriods, dateCodeFormat())
+      ? parseQrRaw(input.raw, ro.qrTemplate, ro.qtyEncoding, ro.dateCodeEncoding, dateCodePeriods, dateCodeFormat(), ro.brands)
       : {};
     const partNo = input.partNo ?? parsed.partNo ?? null;
     const qty = input.qty ?? parsed.qty ?? null;
@@ -341,18 +342,29 @@ export async function scanReceivingOrder(
     );
 
     // The label may carry the part as the bare MPN (itemId) and/or the WCL
-    // item no (wclItemNo group, e.g. KOA reel labels) — either may match an
-    // item's part_no or wcl_item_no. normalizePartNo strips all whitespace.
-    const norms = new Set(
-      [partNo, parsed.wclItemNo ?? null]
-        .filter((v): v is string => v !== null)
-        .map((v) => normalizePartNo(v))
-    );
-    const matches = norms.size
-      ? items.filter((it) =>
-          [it.partNo, it.wclItemNo, it.partWclItemNo].some((v) => v !== null && norms.has(normalizePartNo(v)))
-        )
+    // item no (wclItemNo group, e.g. KOA reel labels — or derived as
+    // "<brand>/<mpn>" for single-brand profiles like ABLIC, see
+    // deriveWclItemNo). WCL-item-no preference: when the scan carries a
+    // wclItemNo and ≥1 item matches it, only those match — part_no is NOT
+    // unique (the same MPN can sit under several WCL item numbers), so the
+    // bare partNo alone cannot disambiguate same-part lines. With no wcl
+    // match the fallback is the union of both keys. normalizePartNo strips
+    // all whitespace. Mirrors filterScannedPartMatches on the PDA.
+    const scannedWcl = parsed.wclItemNo ? normalizePartNo(parsed.wclItemNo) : null;
+    const itemKeys = (it: ScanItemRow) => [it.partNo, it.wclItemNo, it.partWclItemNo];
+    let matches = scannedWcl
+      ? items.filter((it) => itemKeys(it).some((v) => v !== null && normalizePartNo(v) === scannedWcl))
       : [];
+    if (matches.length === 0) {
+      const norms = new Set(
+        [partNo, parsed.wclItemNo ?? null]
+          .filter((v): v is string => v !== null)
+          .map((v) => normalizePartNo(v))
+      );
+      matches = norms.size
+        ? items.filter((it) => itemKeys(it).some((v) => v !== null && norms.has(normalizePartNo(v))))
+        : [];
+    }
     if (matches.length === 0) {
       throw matchConflict({ message: "no_match", candidates: items.map(toCandidate) });
     }

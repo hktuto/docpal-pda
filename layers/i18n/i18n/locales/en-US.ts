@@ -1424,6 +1424,7 @@ export default {
         dateCodePlain: "Plain value",
         dateCodeKoa: "KOA style — month counter + week (e.g. 1723L789 → 2326)",
         dateCodeNcc: "NCC style — lot prefix YMMDD (e.g. 60910… → 3726)",
+        dateCodeYyyymm: "YYYYMM month — anchored on the 15th (e.g. 202606 → 2526)",
         outdatedLimitMonths: "Outdated limit (months)",
         outdatedLimitPlaceholder: "12",
         outdatedLimitHint: "Picking / put-away scans with a date code older than this many months raise an outdated warning. Leave empty for no check.",

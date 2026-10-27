@@ -5,6 +5,7 @@ const QTY_ENCODING_KOA_ZEROS = "koa_zeros";
 const DATE_CODE_ENCODING_KOA_MONTH_COUNTER = "koa_month_counter";
 const DATE_CODE_ENCODING_YYWW = "yyww";
 const DATE_CODE_ENCODING_NCC_LOT_YMMDD = "ncc_lot_ymmdd";
+const DATE_CODE_ENCODING_YYYYMM_MIDMONTH = "yyyymm_midmonth";
 const qrTemplateRegexCache = new Map<string, RegExp | null>();
 
 /** A single barcode or QR code returned by the native scanner. */
@@ -830,6 +831,24 @@ export function formatNccLotCode(raw: string): string {
   return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-0${raw.slice(5, 11)}-${raw.slice(11)}` : raw;
 }
 
+/**
+ * Decode a YYYYMM month date code (ABLIC/SII $-reel labels, e.g. "202606")
+ * to the label date code (WWYY under the default "wwyy" label format). The
+ * label carries no day — the convention anchors the month on the 15th
+ * ("202606" → 2026-06-15 → ISO week 25 → WWYY "2526"). Returns undefined for
+ * non-6-digit input or an invalid month.
+ * Keep in sync with apps/backend/src/db/scanParse.ts decodeYyyymmMidmonthDateCode.
+ */
+export function decodeYyyymmMidmonthDateCode(raw: string, dateCodeFormat: DateCodeFormat = "wwyy"): string | undefined {
+  if (!/^\d{6}$/.test(raw)) return undefined;
+  const year = Number(raw.slice(0, 4));
+  const month = Number(raw.slice(4, 6));
+  if (month < 1 || month > 12) return undefined;
+  const date = new Date(year, month - 1, 15);
+  const canonical = `${String(getIsoYear(date) % 100).padStart(2, "0")}${String(getIsoWeek(date)).padStart(2, "0")}`;
+  return toLabelDateCode(canonical, dateCodeFormat) ?? undefined;
+}
+
 /** Decode the 13-digit NCC lot's YMMDD prefix to an ISO week date code.
  *  The one-digit year resolves to the latest matching year not after the scan
  *  year. Keep in sync with apps/backend/src/db/scanParse.ts decodeNccDateCode. */
@@ -944,12 +963,23 @@ export function parseQrCapture(
       dateCode = rawDateCode ? decodeYywwDateCode(rawDateCode, dateCodeFormat) : undefined;
     } else if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_NCC_LOT_YMMDD) {
       dateCode = rawLotCode ? decodeNccDateCode(rawLotCode, new Date(), dateCodeFormat) : undefined;
+    } else if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_YYYYMM_MIDMONTH) {
+      dateCode = rawDateCode ? decodeYyyymmMidmonthDateCode(rawDateCode, dateCodeFormat) : undefined;
     } else {
       dateCode = rawDateCode;
     }
     const lotCode = supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_NCC_LOT_YMMDD && rawLotCode
       ? formatNccLotCode(rawLotCode)
       : rawLotCode;
+
+    // Labels that print only the bare MPN (no wclItemNo group — ABLIC/SII
+    // $-reel QRs) still reach parts.wcl_item_no when the profile covers
+    // exactly one brand: derive "<brand>/<mpn>" (ABLIC parts are stored as
+    // "ABLIC/S-812C33AMC-C2NT2U"). Multi-brand/unknown-brand profiles skip
+    // the derivation. Keep in sync with apps/backend/src/db/scanParse.ts
+    // deriveWclItemNo.
+    const wclItemNo = groups.wclItemNo ||
+      (supplier.brands?.length === 1 ? `${supplier.brands[0]}/${groups.itemId}` : undefined);
 
     return {
       matched: true,
@@ -960,7 +990,7 @@ export function parseQrCapture(
         dateCode,
         coo: groups.coo ?? undefined,
         cow: groups.cow ?? undefined,
-        wclItemNo: groups.wclItemNo ?? undefined,
+        wclItemNo,
         serialNo: groups.serialNo ?? undefined,
       },
       options: {

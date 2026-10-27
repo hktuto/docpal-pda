@@ -1,6 +1,6 @@
 import { computed, ref, type Ref } from "vue";
 import { normalize, normalizeCode, type OcrInput } from "~/utils/ocrNormalize";
-import { normalizePartNo } from "~/utils/text";
+import { normalizePartNo, filterScannedPartMatches } from "~/utils/text";
 import { compareDateCodes, toCanonicalDateCode, toLabelDateCode, type DateCodeFormat } from "~/utils/dateCode";
 import type { PickingAllocation, PickingOrderDetail } from "~/services/types";
 
@@ -175,13 +175,23 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
     );
   }
 
+  /**
+   * The order lines a scan may hit, with WCL-item-no preference: a scanned
+   * wclItemNo (template group or the single-brand derivation, e.g. ABLIC)
+   * narrows the pool to the lines carrying that WCL item no — part_no is not
+   * unique across WCL item numbers, so the bare MPN alone cannot
+   * disambiguate same-part lines of different brands.
+   */
+  function matchingItems(scanned: { partNo: string; wclItemNo?: string }): OrderItems[number][] {
+    return filterScannedPartMatches(items.value, (item) => [item.partNo, item.wclItemNo], scanned);
+  }
+
   function findTarget(
     parsed: { partNo: string; wclItemNo?: string },
     qty: number,
     excludeKey?: string
   ): { item: OrderItems[number]; allocation: PickingAllocation } | null {
-    for (const item of items.value) {
-      if (!partMatches(item, parsed)) continue;
+    for (const item of matchingItems(parsed)) {
       for (const allocation of item.allocations ?? []) {
         if (allocation.qty <= 0) continue;
         const remaining = allocation.qty - queuedQtyForAllocation(allocation.id, excludeKey);
@@ -210,8 +220,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
   ): { item: OrderItems[number]; allocation: PickingAllocation; qty: number }[] | null {
     const portions: { item: OrderItems[number]; allocation: PickingAllocation; qty: number }[] = [];
     let remaining = qty;
-    for (const item of items.value) {
-      if (!partMatches(item, parsed)) continue;
+    for (const item of matchingItems(parsed)) {
       for (const allocation of item.allocations ?? []) {
         if (allocation.qty <= 0) continue;
         const available = allocation.qty - queuedQtyForAllocation(allocation.id);

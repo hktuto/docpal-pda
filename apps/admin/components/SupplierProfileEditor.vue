@@ -5,6 +5,7 @@ import {
   decodeKoaQty,
   decodeKoaDateCode,
   decodeNccDateCode,
+  decodeYyyymmMidmonthDateCode,
   formatNccLotCode,
   detectMode,
   FIELD_ROLES,
@@ -58,6 +59,7 @@ const dateCodeEncodingOptions = computed(() => [
   { value: "", label: t("admin.pages.supplierProfile.dateCodePlain") },
   { value: "koa_month_counter", label: t("admin.pages.supplierProfile.dateCodeKoa") },
   { value: "ncc_lot_ymmdd", label: t("admin.pages.supplierProfile.dateCodeNcc") },
+  { value: "yyyymm_midmonth", label: t("admin.pages.supplierProfile.dateCodeYyyymm") },
 ]);
 // Counter→month periods for the koa_month_counter preview decode; falls back
 // to DEFAULT_DATE_CODE_PERIODS in qrTemplate.ts when unavailable.
@@ -220,6 +222,10 @@ function displayDateCode(raw: string | undefined): string {
   if (dateCodeEncoding.value === "ncc_lot_ymmdd") {
     const decoded = decodeNccDateCode(raw);
     return decoded !== undefined ? `${decoded} (${t("admin.pages.supplierProfile.nccFormat")})` : raw;
+  }
+  if (dateCodeEncoding.value === "yyyymm_midmonth") {
+    const decoded = decodeYyyymmMidmonthDateCode(raw);
+    return decoded !== undefined ? `${decoded} (${t("admin.pages.supplierProfile.dateCodeYyyymm")})` : raw;
   }
   return raw;
 }

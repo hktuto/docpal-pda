@@ -7,7 +7,7 @@ import type {
   PutAwayExpectedItem,
   MeasuringPackage,
 } from '~/services/types';
-import { rawCode, normalizePartNo } from '~/utils/text';
+import { rawCode, normalizePartNo, filterScannedPartMatches } from '~/utils/text';
 import { findPutAwayTargets } from '~/utils/putAwayScan';
 import { matchAggregatePackages } from '~/utils/measuringAggregateMatch';
 
@@ -198,12 +198,14 @@ export function useScanMatchers(): ScanMatchers {
         .map((v) => normalizePartNo(v));
       if (scannedKeys.length === 0) return { type: 'none' };
       // Same-part group: the label matches when ANY member line's part keys
-      // match; the qty may span several lines, split FIFO per line.
-      const items = putAwayItems.filter((item) =>
-        [item.partNo, item.wclItemNo]
-          .filter((v): v is string => !!v)
-          .map((v) => normalizePartNo(v))
-          .some((k) => scannedKeys.includes(k))
+      // match; the qty may span several lines, split FIFO per line. A scanned
+      // wclItemNo (template group or the single-brand derivation, e.g. ABLIC)
+      // narrows the group to the lines carrying that WCL item no (part_no is
+      // not unique across WCL item numbers).
+      const items = filterScannedPartMatches(
+        putAwayItems,
+        (item) => [item.partNo, item.wclItemNo],
+        { partNo: parsed.partNo, wclItemNo: parsed.wclItemNo }
       );
       if (items.length === 0) return error('scanned_part_does_not_match_item');
 

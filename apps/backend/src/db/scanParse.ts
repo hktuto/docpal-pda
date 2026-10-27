@@ -17,6 +17,7 @@ const QTY_ENCODING_KOA_ZEROS = "koa_zeros";
 export const DATE_CODE_ENCODING_KOA_MONTH_COUNTER = "koa_month_counter";
 export const DATE_CODE_ENCODING_YYWW = "yyww";
 export const DATE_CODE_ENCODING_NCC_LOT_YMMDD = "ncc_lot_ymmdd";
+export const DATE_CODE_ENCODING_YYYYMM_MIDMONTH = "yyyymm_midmonth";
 const qrTemplateRegexCache = new Map<string, RegExp | null>();
 
 /** Fields extracted from a raw scan by a supplier QR template. */
@@ -269,6 +270,24 @@ export function formatNccLotCode(raw: string): string {
   return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-0${raw.slice(5, 11)}-${raw.slice(11)}` : raw;
 }
 
+/**
+ * Decode a YYYYMM month date code (ABLIC/SII $-reel labels, e.g. "202606")
+ * to the label date code (WWYY under the default "wwyy" label format). The
+ * label carries no day — the convention anchors the month on the 15th
+ * ("202606" → 2026-06-15 → ISO week 25 → WWYY "2526"). Returns undefined for
+ * non-6-digit input or an invalid month.
+ * Keep in sync with apps/pda/utils/parseOcrScan.ts decodeYyyymmMidmonthDateCode.
+ */
+export function decodeYyyymmMidmonthDateCode(raw: string, dateCodeFormat: DateCodeFormat = "wwyy"): string | undefined {
+  if (!/^\d{6}$/.test(raw)) return undefined;
+  const year = Number(raw.slice(0, 4));
+  const month = Number(raw.slice(4, 6));
+  if (month < 1 || month > 12) return undefined;
+  const date = new Date(year, month - 1, 15);
+  const canonical = `${String(getIsoYear(date) % 100).padStart(2, "0")}${String(getIsoWeek(date)).padStart(2, "0")}`;
+  return toLabelDateCode(canonical, dateCodeFormat) ?? undefined;
+}
+
 /** Decode the 13-digit NCC lot's YMMDD prefix to an ISO week date code.
  *  The one-digit year resolves to the latest matching year not after the scan
  *  year. Keep in sync with apps/pda/utils/parseOcrScan.ts decodeNccDateCode. */
@@ -315,6 +334,16 @@ function getQrTemplateRegex(template: string): RegExp | null {
   }
 }
 
+/** Labels that print only the bare MPN (no WCL item no segment — ABLIC/SII
+ *  $-reel QRs) still reach parts.wcl_item_no when the supplier profile covers
+ *  exactly one brand: the WCL item no is "<brand>/<mpn>" (ABLIC parts are
+ *  stored as "ABLIC/S-812C33AMC-C2NT2U"). Multi-brand or unknown-brand
+ *  profiles skip the derivation — the bare partNo stays the only match key.
+ *  Keep in sync with apps/pda/utils/parseOcrScan.ts parseQrCapture. */
+export function deriveWclItemNo(itemId: string, brands?: string[] | null): string | undefined {
+  return brands?.length === 1 ? `${brands[0]}/${itemId}` : undefined;
+}
+
 /**
  * Apply a supplier QR template to a raw scan value. The template is a regex
  * with named groups: `itemId` (required), `qty`, `dateCode`, `lotCode`,
@@ -326,6 +355,9 @@ function getQrTemplateRegex(template: string): RegExp | null {
  * 'ncc_lot_ymmdd' → decodeNccDateCode; otherwise passed through raw).
  * Templates without a `serialNo` group simply yield no serial
  * (older templates, other suppliers) — unknown groups are ignored.
+ * When the template has no `wclItemNo` group, `brands` (the supplier
+ * profile's brand list) drives the single-brand derivation — see
+ * deriveWclItemNo.
  */
 export function parseQrRaw(
   raw: string,
@@ -333,7 +365,8 @@ export function parseQrRaw(
   qtyEncoding: string | null | undefined,
   dateCodeEncoding?: string | null,
   dateCodePeriods?: DateCodePeriod[],
-  dateCodeFormat: DateCodeFormat = "wwyy"
+  dateCodeFormat: DateCodeFormat = "wwyy",
+  brands?: string[] | null
 ): ParsedScanFields {
   if (!template) return {};
   const regex = getQrTemplateRegex(template);
@@ -366,6 +399,8 @@ export function parseQrRaw(
     dateCode = rawDateCode ? decodeYywwDateCode(rawDateCode, dateCodeFormat) : undefined;
   } else if (dateCodeEncoding === DATE_CODE_ENCODING_NCC_LOT_YMMDD) {
     dateCode = rawLotCode ? decodeNccDateCode(rawLotCode, new Date(), dateCodeFormat) : undefined;
+  } else if (dateCodeEncoding === DATE_CODE_ENCODING_YYYYMM_MIDMONTH) {
+    dateCode = rawDateCode ? decodeYyyymmMidmonthDateCode(rawDateCode, dateCodeFormat) : undefined;
   } else {
     dateCode = rawDateCode;
   }
@@ -380,6 +415,6 @@ export function parseQrRaw(
     coo: groups.coo ?? undefined,
     cow: groups.cow ?? undefined,
     serialNo: groups.serialNo ?? undefined,
-    wclItemNo: groups.wclItemNo ?? undefined,
+    wclItemNo: groups.wclItemNo || deriveWclItemNo(groups.itemId, brands),
   };
 }

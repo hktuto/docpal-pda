@@ -193,6 +193,18 @@ export function decodeNccDateCode(raw: string, referenceDate: Date = new Date())
   return `${String(week).padStart(2, "0")}${String(isoYear % 100).padStart(2, "0")}`;
 }
 
+/** YYYYMM month date code (ABLIC/SII $-reel labels) → WWYY, anchored on the
+ *  15th of the month ("202606" → 2026-06-15 → ISO week 25 → "2526"). Mirrors
+ *  the backend/PDA decoder (date_code_encoding 'yyyymm_midmonth'). */
+export function decodeYyyymmMidmonthDateCode(raw: string): string | undefined {
+  if (!/^\d{6}$/.test(raw)) return undefined;
+  const year = Number(raw.slice(0, 4));
+  const month = Number(raw.slice(4, 6));
+  if (month < 1 || month > 12) return undefined;
+  const { week, year: isoYear } = isoWeekYear(new Date(Date.UTC(year, month - 1, 15)));
+  return `${String(week).padStart(2, "0")}${String(isoYear % 100).padStart(2, "0")}`;
+}
+
 /** Editor entry point: stored config if present and recognized, else advanced
  *  mode over the raw (possibly legacy hand-written) regex. */
 export function detectMode(profile: {

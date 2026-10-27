@@ -1,5 +1,5 @@
 import { normalize, normalizeCode } from '~/utils/ocrNormalize';
-import { normalizePartNo } from '~/utils/text';
+import { normalizePartNo, filterScannedPartMatches } from '~/utils/text';
 import type { MeasuringPackage } from '~/services/types';
 
 export interface AggregateCredit {
@@ -66,12 +66,16 @@ export function matchAggregatePackages(
   const coo = scanCoo(scan);
   const cow = scanCow(scan);
 
-  const eligible = packages.filter((pkg) => {
-    if (targetPackageId && pkg.id !== targetPackageId) return false;
-    const pkgKeys = [pkg.partNo, pkg.wclItemNo]
-      .filter((v): v is string => !!v)
-      .map((v) => normalizePartNo(v));
-    if (!scannedKeys.some((k) => pkgKeys.includes(k))) return false;
+  // Part pool with WCL-item-no preference: a scanned wclItemNo (template
+  // group or the single-brand derivation, e.g. ABLIC) narrows to the packages
+  // carrying that WCL item no — part_no is not unique across WCL item
+  // numbers, so the bare MPN alone cannot disambiguate.
+  const partPool = filterScannedPartMatches(
+    packages.filter((pkg) => !targetPackageId || pkg.id === targetPackageId),
+    (pkg) => [pkg.partNo, pkg.wclItemNo],
+    scan
+  );
+  const eligible = partPool.filter((pkg) => {
     // Batch anchor: the pick-time scanned value when present, else the stored
     // source snapshot (legacy rows).
     const pkgDateCode = (pkg.scannedDateCode ?? pkg.dateCode) ? normalizeCode(pkg.scannedDateCode ?? pkg.dateCode ?? "") : "";

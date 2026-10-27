@@ -24,6 +24,22 @@ function pkg(
 }
 
 describe("matchAggregatePackages", () => {
+  it("prefers the WCL item no when one part no sits under two WCL item numbers", () => {
+    // parts.part_no is not unique — a scanned wclItemNo (template group or
+    // the single-brand derivation, e.g. ABLIC/<mpn>) narrows the pool.
+    const packages = [
+      pkg("ablic", 3000, { partNo: "S-812C33AMC-C2NT2U", wclItemNo: "ABLIC/S-812C33AMC-C2NT2U" }),
+      pkg("other", 1000, { partNo: "S-812C33AMC-C2NT2U", wclItemNo: "OTHER/S-812C33AMC-C2NT2U" }),
+    ];
+    expect(
+      matchAggregatePackages(packages, { partNo: "S-812C33AMC-C2NT2U", wclItemNo: "ABLIC/S-812C33AMC-C2NT2U", qty: 3000 })
+    ).toEqual({ qty: 3000, credits: [{ packageId: "ablic", qty: 3000 }] });
+    // a wclItemNo that matches nothing falls back to the union of both keys
+    expect(
+      matchAggregatePackages(packages, { partNo: "S-812C33AMC-C2NT2U", wclItemNo: "NOPE/X", qty: 1000 })
+    ).toEqual({ qty: 1000, credits: [{ packageId: "ablic", qty: 1000 }] });
+  });
+
   it("credits the scan qty FIFO across identical-label packages (3 × 10k)", () => {
     const packages = [pkg("a", 10000), pkg("b", 10000), pkg("c", 10000)];
     expect(matchAggregatePackages(packages, { partNo: "PART-1", qty: 10000 })).toEqual({

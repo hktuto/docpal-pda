@@ -63,6 +63,12 @@ const COPAL_TEMPLATE = String.raw`^\d{12}\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:
 // SII/ABLIC: $-delimited reel QR, e.g.
 //   1$S-5743NBH1A-M3T4U$3000$VM3F6XA1761-0367$S-5743NBH1A-M3T4U$202607$67352039027
 // fields: 1 $ MPN $ qty $ lot $ MPN-repeat $ yyyymm $ serial.
+// The label prints no WCL item no — the single-brand `brands` list drives the
+// "<brand>/<mpn>" wclItemNo derivation at parse time (spec
+// docs/superpowers/specs/2026-10-27-scan-single-brand-wcl-item-no-derivation-design.md).
+// dateCodeEncoding 'yyyymm_midmonth': the YYYYMM month is anchored on the
+// 15th and decoded to the week date code ("202607" → 2026-07-15 → WWYY
+// "2926").
 const SII_TEMPLATE = String.raw`^1\$[^$]+\$(?<qty>\d+)\$(?<lotCode>[^$]+)\$(?<itemId>[^$]+)\$(?<dateCode>\d{6})\$(?<serialNo>[^$]+?)\s*$`;
 
 // TE Connectivity: MH10.8.2 DataMatrix (GS=\x1d, RS=\x1e, EOT=\x04):
@@ -133,6 +139,7 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
     supplierCode: "70915", // SII SEMICONDUCTOR HONG KONG LIMITED
     qrTemplate: SII_TEMPLATE,
     qrType: "qr",
+    dateCodeEncoding: "yyyymm_midmonth",
     barcodeTypes: ["QR CODE"],
     brands: ["SII"],
     remark:
@@ -142,6 +149,7 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
     supplierCode: "84915", // ABLIC HONG KONG LTD.
     qrTemplate: SII_TEMPLATE,
     qrType: "qr",
+    dateCodeEncoding: "yyyymm_midmonth",
     barcodeTypes: ["QR CODE"],
     brands: ["ABLIC"],
     remark:

@@ -124,7 +124,9 @@ VALUES
   -- e.g. 1$S-5743NBH1A-M3T4U$3000$VM3F6XA1761-0367$S-5743NBH1A-M3T4U$202607$67352039027
   -- fields: 1 $ MPN $ qty $ lot $ MPN-repeat $ yyyymm $ serial.
   -- itemId = field 4 (the old Primary_Key); field 1 is the same MPN except on
-  -- U3/U4 tape-variant labels. dateCode = field 5 (YYYYMM).
+  -- U3/U4 tape-variant labels. dateCode = field 5 (YYYYMM — decoded to the
+  -- week date code anchored on the 15th via date_code_encoding
+  -- 'yyyymm_midmonth').
   -- The scanned parts exist in the parts master under brand 'ABLIC' (SII was
   -- renamed ABLIC); the same template is also attached to supplier 84915
   -- (ABLIC HONG KONG LTD.) below.
@@ -132,7 +134,7 @@ VALUES
   (
     '00000000-0000-7000-8000-000000009004', '70915', NULL,
     $re$^1\$[^$]+\$(?<qty>\d+)\$(?<lotCode>[^$]+)\$(?<itemId>[^$]+)\$(?<dateCode>\d{6})\$(?<serialNo>[^$]+?)\s*$$re$,
-    NULL, 'qr', NULL, NULL, ARRAY['QR CODE'], ARRAY['SII'],
+    NULL, 'qr', NULL, 'yyyymm_midmonth', ARRAY['QR CODE'], ARRAY['SII'],
     'Restored from BVSDB RegPattern Id=173 (WHHK), 2026-08-13 backup. itemId = field 4 (old Primary_Key; field 1 carries the same MPN except U3/U4 variants). Scanned parts are under brand ABLIC in the parts master (SII renamed ABLIC); same template also attached to supplier 84915. Verified vs 114 real ScannedItem raws.'
   ),
 
@@ -140,7 +142,7 @@ VALUES
   (
     '00000000-0000-7000-8000-000000009007', '84915', NULL,
     $re$^1\$[^$]+\$(?<qty>\d+)\$(?<lotCode>[^$]+)\$(?<itemId>[^$]+)\$(?<dateCode>\d{6})\$(?<serialNo>[^$]+?)\s*$$re$,
-    NULL, 'qr', NULL, NULL, ARRAY['QR CODE'], ARRAY['ABLIC'],
+    NULL, 'qr', NULL, 'yyyymm_midmonth', ARRAY['QR CODE'], ARRAY['ABLIC'],
     'Restored from BVSDB RegPattern Id=173 (WHHK), 2026-08-13 backup — same $-delimited reel QR template as supplier 70915 (SII); SII was renamed ABLIC. Verified vs 114 real ScannedItem raws.'
   ),
 

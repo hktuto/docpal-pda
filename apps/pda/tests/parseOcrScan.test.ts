@@ -374,6 +374,42 @@ describe("parseQrCapture", () => {
     expect(result.parsed.wclItemNo).toBe("KOA/SR732ERTTDR200F");
   });
 
+  it("derives the WCL item no from a single-brand profile when the template has no wclItemNo group (ABLIC $ reel)", () => {
+    const ablicTemplate = {
+      code: "84915",
+      qrcodeTemplate: String.raw`^1\$[^$]+\$(?<qty>\d+)\$(?<lotCode>[^$]+)\$(?<itemId>[^$]+)\$(?<dateCode>\d{6})\$(?<serialNo>[^$]+?)\s*$`,
+      qrcodeQtyEncoding: null,
+      qrcodeDateCodeEncoding: "yyyymm_midmonth" as const,
+      brands: ["ABLIC"],
+    };
+    const result = parseQrCapture(
+      "1$S-812C33AMC-C2NT2U$3000$VM5F6XA0033-0308$S-812C33AMC-C2NT2U$202606$66VM1953007          ",
+      { supplierTemplates: [ablicTemplate] }
+    );
+    expect(result.matched).toBe(true);
+    expect(result.parsed.itemId).toBe("S-812C33AMC-C2NT2U");
+    expect(result.parsed.qty).toBe(3000);
+    expect(result.parsed.lotCode).toBe("VM5F6XA0033-0308");
+    // yyyymm_midmonth: "202606" → 2026-06-15 → ISO week 25 → WWYY "2526"
+    expect(result.parsed.dateCode).toBe("2526");
+    expect(result.parsed.serialNo).toBe("66VM1953007");
+    // ABLIC parts are stored as wcl_item_no "ABLIC/<mpn>"; the label prints
+    // no WCL item no, so the single-brand profile derives it.
+    expect(result.parsed.wclItemNo).toBe("ABLIC/S-812C33AMC-C2NT2U");
+  });
+
+  it("does not derive a WCL item no for multi-brand or brand-less profiles", () => {
+    const makeTemplate = (brands?: string[]) => ({
+      code: "X",
+      qrcodeTemplate: String.raw`^1\$[^$]+\$(?<qty>\d+)\$(?<lotCode>[^$]+)\$(?<itemId>[^$]+)\$(?<dateCode>\d{6})\$(?<serialNo>[^$]+?)\s*$`,
+      qrcodeQtyEncoding: null,
+      brands,
+    });
+    const raw = "1$S-812C33AMC-C2NT2U$3000$VM5F6XA0033-0308$S-812C33AMC-C2NT2U$202606$66VM1953007";
+    expect(parseQrCapture(raw, { supplierTemplates: [makeTemplate(undefined)] }).parsed.wclItemNo).toBeUndefined();
+    expect(parseQrCapture(raw, { supplierTemplates: [makeTemplate(["COPAL", "NIDEC"])] }).parsed.wclItemNo).toBeUndefined();
+  });
+
   it("matches KOA label with empty lotCode segment", () => {
     const koaWclTemplate = {
       code: "32",

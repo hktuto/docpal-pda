@@ -28,7 +28,14 @@
   `POST /receiving-orders/:id/scan`; on a 409 `{message, candidates}`
   (`no_match` / `multiple_matches`) the review modal lets the operator pick
   a candidate and resend with an explicit `{partNo, qty}` (the raw rides
-  along so serial dedup still applies).
+  along so serial dedup still applies). Templates without a `wclItemNo`
+  group derive it as `<brand>/<itemId>` when the order's supplier profile
+  covers exactly one brand (e.g. ABLIC → `ABLIC/<mpn>`), and a scanned WCL
+  item no that matches any item narrows the match pool to those items
+  (part_no is not unique across WCL item numbers). ABLIC/SII YYYYMM month
+  date codes decode to the week code anchored on the 15th
+  (`date_code_encoding = 'yyyymm_midmonth'`, e.g. `202606` → `2526`; spec
+  `docs/superpowers/specs/2026-10-27-scan-single-brand-wcl-item-no-derivation-design.md`).
 - NCC 28-digit ITF labels parse as drawing(6) + lot(13) + qty(5) + serial(4).
   The lot is returned in 5–7–2 groups (`6030912801026` → `60309-0128010-26`),
   and its leading `YMMDD` is decoded to the ISO week date code by the backend

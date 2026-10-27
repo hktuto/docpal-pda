@@ -288,6 +288,13 @@
       "when": 1793065894000,
       "tag": "0041_ncc_fixed_width",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1793089075454,
+      "tag": "0042_ablic_yyyymm_date_code",
+      "breakpoints": true
     }
   ]
 }

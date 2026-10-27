@@ -96,6 +96,13 @@
   e.g. KOA segment 7) against the item's `part_no`/`wcl_item_no`
   (`normalizePartNo` in `apps/pda/utils/text.ts`; spec
   `docs/superpowers/specs/2026-09-29-picking-scan-wcl-item-no-matching-design.md`).
+  Templates without a `wclItemNo` group derive it as `<brand>/<itemId>` when
+  the matched profile covers exactly one brand (ABLIC labels print only the
+  bare MPN; parts are stored as `ABLIC/<mpn>`), and a scanned WCL item no that
+  matches any line narrows the candidate pool to those lines (part_no is not
+  unique across WCL item numbers) — `filterScannedPartMatches` in
+  `apps/pda/utils/text.ts`; spec
+  `docs/superpowers/specs/2026-10-27-scan-single-brand-wcl-item-no-derivation-design.md`).
   The page also restricts the hardware decoder to the order brands'
   `barcode_types` union (`useBrandSymbologyScope`; any unmapped brand = no
   restriction, full set restored on page leave), but the shelf/box QR

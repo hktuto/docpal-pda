@@ -1424,6 +1424,7 @@ export default {
         dateCodePlain: "原值",
         dateCodeKoa: "KOA 格式 — 月份計數 + 週數（例如 1723L789 → 2326）",
         dateCodeNcc: "NCC 格式 — 批號前綴 YMMDD（例如 60910… → 3726）",
+        dateCodeYyyymm: "YYYYMM 月份 — 以當月 15 日為準（例如 202606 → 2526）",
         outdatedLimitMonths: "過期期限（月）",
         outdatedLimitPlaceholder: "12",
         outdatedLimitHint: "揀貨／上架掃描時，日期碼早於此月數的標籤會產生過期警告。留空表示不檢查。",

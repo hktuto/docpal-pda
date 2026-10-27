@@ -5,8 +5,9 @@ import { inArray, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
-import { decodeKoaDateCode, decodeKoaQty, decodeYywwDateCode, normalizePartNo, parseQrRaw } from "./scanParse.js";
+import { decodeKoaDateCode, decodeKoaQty, decodeYywwDateCode, decodeYyyymmMidmonthDateCode, normalizePartNo, parseQrRaw } from "./scanParse.js";
 import { builtinSupplierProfiles } from "./seed-supplier-profiles.js";
+import { insertReceivingOrder } from "./test-fixtures.js";
 import { _setReceivingSubInventoryRulesForTests } from "../config.js";
 import {
   cancelReceivingItemMismatch,
@@ -282,6 +283,47 @@ test("parseQrRaw: admin editor config builds a matching-equivalent KOA regex", a
   assert.equal(outer.lotCode, "63048349");
 });
 
+test("parseQrRaw: ABLIC $-reel QR derives wclItemNo from the single-brand prefix", () => {
+  const profile = builtinSupplierProfiles.find((p) => p.supplierCode === "84915");
+  assert.ok(profile?.qrTemplate);
+  // Real label shape: 1 $ MPN $ qty $ lot $ MPN-repeat $ yyyymm $ serial
+  // (trailing spaces tolerated). The MPN-repeat segment is the itemId.
+  const raw = "1$S-812C33AMC-C2NT2U$3000$VM5F6XA0033-0308$S-812C33AMC-C2NT2U$202606$66VM1953007          ";
+  const parsed = parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding ?? null, profile.dateCodeEncoding ?? null, undefined, "wwyy", profile.brands);
+  assert.equal(parsed.partNo, "S-812C33AMC-C2NT2U");
+  assert.equal(parsed.qty, 3000);
+  assert.equal(parsed.lotCode, "VM5F6XA0033-0308");
+  // yyyymm_midmonth: "202606" → 2026-06-15 → ISO week 25 → WWYY "2526"
+  assert.equal(parsed.dateCode, "2526");
+  assert.equal(parsed.serialNo, "66VM1953007");
+  // ABLIC parts are stored as wcl_item_no "ABLIC/<mpn>"; the label prints no
+  // WCL item no, so the single-brand profile derives it.
+  assert.equal(parsed.wclItemNo, "ABLIC/S-812C33AMC-C2NT2U");
+
+  // Without the profile brands there is nothing to derive from.
+  assert.equal(parseQrRaw(raw, profile.qrTemplate, null).wclItemNo, undefined);
+  // Multi-brand profiles never derive (the prefix would be ambiguous).
+  assert.equal(parseQrRaw(raw, profile.qrTemplate, null, null, undefined, "wwyy", ["COPAL", "NIDEC"]).wclItemNo, undefined);
+  // An explicit wclItemNo group always wins over the derivation.
+  const koa = builtinSupplierProfiles.find((p) => p.supplierCode === "32")!;
+  const koaParsed = parseQrRaw(":SR732ERTTDR200F::153:K:19077387:S002:KOA/SR732ERTTDR200F:13FSJ564:01", koa.qrTemplate, koa.qtyEncoding ?? null, koa.dateCodeEncoding ?? null, undefined, "wwyy", koa.brands);
+  assert.equal(koaParsed.wclItemNo, "KOA/SR732ERTTDR200F");
+});
+
+test("decodeYyyymmMidmonthDateCode: YYYYMM anchored on the 15th → ISO week", () => {
+  // 2026-06-15 is the Monday of ISO week 25; 2026-07-15 → week 29.
+  assert.equal(decodeYyyymmMidmonthDateCode("202606"), "2526");
+  assert.equal(decodeYyyymmMidmonthDateCode("202607"), "2926");
+  assert.equal(decodeYyyymmMidmonthDateCode("202601"), "0326");
+  // yyww label format: pair-swapped (canonical YYWW passes through).
+  assert.equal(decodeYyyymmMidmonthDateCode("202606", "yyww"), "2625");
+  // invalid
+  assert.equal(decodeYyyymmMidmonthDateCode("202613"), undefined); // month 13
+  assert.equal(decodeYyyymmMidmonthDateCode("202600"), undefined); // month 00
+  assert.equal(decodeYyyymmMidmonthDateCode("20266"), undefined); // too short
+  assert.equal(decodeYyyymmMidmonthDateCode("ABCDEF"), undefined);
+});
+
 test("parseQrRaw: no template / no match / invalid regex → {}", () => {
   assert.deepEqual(parseQrRaw("whatever", null, null), {});
   assert.deepEqual(
@@ -416,6 +458,69 @@ test("scan: raw QR template parse applies receipt (KOA order)", async () => {
   assert.equal(other.partNo, "RK73H1JTTD2202F");
   assert.equal(other.receivedQty, 100);
   assert.equal(other.serialNo, "602-B");
+});
+
+test("scan: ABLIC raw QR matches via the derived brand-prefixed wcl_item_no", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("operator");
+
+  // parts.part_no is NOT unique: the same MPN sits under two WCL item
+  // numbers. The ABLIC $-reel QR carries only the bare MPN, so the
+  // single-brand profile derivation (ABLIC/<mpn>) must land the scan on the
+  // ABLIC line — the bare partNo alone would hit both lines (multiple_matches).
+  await client.db.execute(
+    sql`INSERT INTO suppliers (id, code, name) VALUES (${randomUUID()}, '84915', 'ABLIC HONG KONG LTD.') ON CONFLICT (code) DO NOTHING`
+  );
+  // the demo/test world seeds only the KOA profiles — attach the built-in
+  // ABLIC profile (template + brands) to the supplier.
+  const ablicProfile = builtinSupplierProfiles.find((p) => p.supplierCode === "84915")!;
+  await client.db.execute(
+    sql`INSERT INTO supplier_profiles (id, supplier_code, qr_template, date_code_encoding, brands)
+        VALUES (${randomUUID()}, '84915', ${ablicProfile.qrTemplate}, ${ablicProfile.dateCodeEncoding ?? null}, ${`{${(ablicProfile.brands ?? []).join(",")}}`}::text[])
+        ON CONFLICT (supplier_code) DO NOTHING`
+  );
+  await client.db.execute(
+    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no) VALUES
+        (${randomUUID()}, 'ABLIC', 'S-812C33AMC-C2NT2U', 'ABLIC/S-812C33AMC-C2NT2U'),
+        (${randomUUID()}, 'OTHER', 'S-812C33AMC-C2NT2U', 'OTHER/S-812C33AMC-C2NT2U')
+        ON CONFLICT (wcl_item_no) DO NOTHING`
+  );
+  const orderId = await insertReceivingOrder(client.db, "ABLIC-SCAN-1", {
+    order: { supplierCode: "84915" },
+    invoices: [
+      {
+        invoiceNo: "INV-ABLIC-1",
+        items: [
+          { partNo: "S-812C33AMC-C2NT2U", wclItemNo: "ABLIC/S-812C33AMC-C2NT2U", lineQty: 3000 },
+          { partNo: "S-812C33AMC-C2NT2U", wclItemNo: "OTHER/S-812C33AMC-C2NT2U", lineQty: 1000 },
+        ],
+      },
+    ],
+  });
+
+  const item = await scanReceivingOrder(client.db, orderId, {
+    actorId,
+    raw: "1$S-812C33AMC-C2NT2U$3000$VM5F6XA0033-0308$S-812C33AMC-C2NT2U$202606$66VM1953007",
+  });
+  assert.equal(item.wclItemNo, "ABLIC/S-812C33AMC-C2NT2U");
+  assert.equal(item.receivedQty, 3000);
+  assert.equal(item.serialNo, "66VM1953007");
+
+  // the YYYYMM month date code is decoded to the week code (anchored on the
+  // 15th): "202606" → 2026-06-15 → ISO week 25 → WWYY "2526"
+  const txn = await queryGet<{ dateCode: string | null }>(
+    client.db,
+    sql`SELECT date_code AS "dateCode" FROM inventory_transactions
+        WHERE receiving_invoice_item_id = ${item.id} AND txn_type = 'RECEIVE_TO_DOCK'`
+  );
+  assert.equal(txn!.dateCode, "2526");
+
+  // the other same-part line stays untouched
+  const other = await queryGet<{ receivedQty: number }>(
+    client.db,
+    sql`SELECT received_qty AS "receivedQty" FROM receiving_invoice_items WHERE wcl_item_no = 'OTHER/S-812C33AMC-C2NT2U'`
+  );
+  assert.equal(other!.receivedQty, 0);
 });
 
 test("scan: 409 when qty exceeds the remaining qty", async () => {

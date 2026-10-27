@@ -89,6 +89,50 @@ describe('usePickingScanQueue', () => {
     expect(q.rows.value[0]).toMatchObject({ itemId: 'item-koa', allocationId: 'alloc-koa', qty: 15000 });
   });
 
+  it('prefers the WCL item no when one part no sits under two WCL item numbers (ABLIC derivation)', () => {
+    // parts.part_no is NOT unique — the same MPN can appear under several
+    // WCL item numbers. The ABLIC scan carries the bare MPN plus the derived
+    // "ABLIC/<mpn>" wclItemNo; it must hit only the ABLIC line.
+    const items = [
+      {
+        id: 'item-ablic',
+        partNo: 'S-812C33AMC-C2NT2U',
+        wclItemNo: 'ABLIC/S-812C33AMC-C2NT2U',
+        qty: 3000,
+        pickedQty: 0,
+        allocatedQty: 3000,
+        allocations: [
+          { id: 'alloc-ablic', qty: 3000, lot: null, receivingInvoiceItemId: 'ri-a', receivingOrderId: 'ro-1', boxId: null },
+        ],
+        packages: [],
+        transitionLogs: [],
+      },
+      {
+        id: 'item-other',
+        partNo: 'S-812C33AMC-C2NT2U',
+        wclItemNo: 'OTHER/S-812C33AMC-C2NT2U',
+        qty: 1000,
+        pickedQty: 0,
+        allocatedQty: 1000,
+        allocations: [
+          { id: 'alloc-other', qty: 1000, lot: null, receivingInvoiceItemId: 'ri-o', receivingOrderId: 'ro-1', boxId: null },
+        ],
+        packages: [],
+        transitionLogs: [],
+      },
+    ] as unknown as Items;
+    const q = usePickingScanQueue(ref(items));
+    const res = q.addScan(
+      { partNo: 'S-812C33AMC-C2NT2U', wclItemNo: 'ABLIC/S-812C33AMC-C2NT2U', qty: 3000, dateCode: '202606', lotCode: 'VM5F6XA0033-0308', coo: '', cow: '' },
+      '1$S-812C33AMC-C2NT2U$3000$VM5F6XA0033-0308$S-812C33AMC-C2NT2U$202606$66VM1953007',
+      'qr'
+    );
+    expect(res).toEqual({ ok: true });
+    expect(q.rows.value[0]).toMatchObject({ itemId: 'item-ablic', allocationId: 'alloc-ablic', qty: 3000 });
+    // the OTHER line is untouched — no cross-brand split
+    expect(q.rows.value).toHaveLength(1);
+  });
+
   it('matches a space-stripped bare part no against a spaced master part no', () => {
     const items = [
       {
