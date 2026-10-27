@@ -24,9 +24,12 @@ import {
 // Picking-order org visibility, split by picking_order_type:
 //   invoice → the flow config's allowedOrgIds AND the caller's exact
 //             (org_id, sub_inventory_code) scope pairs;
-//   tn      → ignore the order's org: visible whenever the caller's scope
-//             includes ANY sub-inventory under TN_ORG_ID (unscoped callers
-//             see all transfers);
+//   tn      → transfers belong to the org, not to one store (spec
+//             2026-10-27-picking-tn-org-aware-visibility-design.md): visible
+//             when the caller's scope covers ANY sub-inventory of the ORDER's
+//             org, or ANY sub-inventory of TN_ORG_ID (NCI keeps a global view
+//             of all transfers); a NULL-org tn order is visible to every
+//             scoped caller; unscoped callers see all transfers;
 //   NULL    → unfiltered (freshly synced orders carry no type yet).
 // `AND (...)` fragment for interpolation after a WHERE.
 const TN_ORG_ID = 143;
@@ -37,8 +40,11 @@ function pickingOrderOrgFilter(orgCol: SQL, subCol: SQL, typeCol: SQL, scope?: U
   const invoice = invoiceConds.length
     ? sql`(${typeCol} = 'invoice' AND ${sql.join(invoiceConds, sql` AND `)})`
     : sql`${typeCol} = 'invoice'`;
-  const tnInScope = !scope || scope.length === 0 || scope.some((e) => e.orgId === TN_ORG_ID);
-  const tn = tnInScope ? sql`${typeCol} = 'tn'` : sql`FALSE`;
+  const scopeOrgIds = scope?.length ? [...new Set(scope.map((e) => e.orgId))] : [];
+  const globalTn = scopeOrgIds.length === 0 || scopeOrgIds.includes(TN_ORG_ID);
+  const tn = globalTn
+    ? sql`${typeCol} = 'tn'`
+    : sql`(${typeCol} = 'tn' AND (${orgCol} IS NULL OR ${inArray(orgCol, scopeOrgIds)}))`;
   return sql`AND (${typeCol} IS NULL OR ${invoice} OR ${tn})`;
 }
 
@@ -596,7 +602,8 @@ export interface PickingOrderListRow {
  *  admin-reorderable) unless a PICKING_LIST_SORTS `sort` key is given — the
  *  default order then becomes the tiebreaker tail. Org visibility splits by
  *  picking_order_type — see pickingOrderOrgFilter (invoice → allowedOrgIds +
- *  `opts.scope`, tn → caller's scope has any org-143 store, order org ignored,
+ *  `opts.scope`, tn → caller's scope covers any store of the order's org or
+ *  any org-143 store (org-aware, spec 2026-10-27),
  *  NULL → unfiltered). */
 /** Default row order — also the tiebreaker tail for stable pagination when a
  *  sort key is active. */

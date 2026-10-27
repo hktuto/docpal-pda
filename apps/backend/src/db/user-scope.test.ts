@@ -169,9 +169,11 @@ test("GET /picking-orders + /:id are scoped by the actor's profile", async () =>
 // --- picking type-split visibility (invoice / tn / NULL) ---------------------
 
 // pickingOrderOrgFilter: invoice orders get allowedOrgIds + the exact
-// (org, sub) scope pairs; tn (transfer) orders ignore the order's org and
-// are visible whenever the caller's scope includes ANY sub-inventory of
-// org 143; NULL-typed orders are always visible.
+// (org, sub) scope pairs; tn (transfer) orders are org-aware (spec
+// 2026-10-27-picking-tn-org-aware-visibility-design.md) — visible when the
+// caller's scope covers ANY sub-inventory of the order's org, or ANY
+// sub-inventory of org 143 (global transfer view); NULL-typed orders are
+// always visible.
 test("picking visibility splits by picking_order_type (invoice / tn / NULL)", async () => {
   await reseed(client);
   _setAllowedOrgIdsForTests([]);
@@ -190,31 +192,36 @@ test("picking visibility splits by picking_order_type (invoice / tn / NULL)", as
   const invoiceOut = await mk("SO-VIS-INV-OUT", "invoice", 2, "WSTORE1");
   const tn143 = await mk("SO-VIS-TN-143", "tn", 143, "store1");
   const tnOtherOrg = await mk("SO-VIS-TN-2", "tn", 2, "STORE1");
+  const tn220 = await mk("SO-VIS-TN-220", "tn", 220, "THTH1");
   const nullType = await mk("SO-VIS-NULL", null, 220, "THHK2");
 
   const visible = async (scope?: { orgId: number; code: string }[] | null) =>
     (await listPickingOrders(client.db, { scope })).rows.map((r) => r.id).sort();
 
-  // Invoice scope: exact pairs only. tn: hidden without any org-143 pair.
-  assert.deepEqual(await visible(STORE1), [invoiceIn, nullType].sort());
-  // Any 143 pair shows ALL tn orders — the order's own org is ignored.
+  // Invoice scope: exact pairs only. tn: org-aware — the scope covers the
+  // order's org (any store), so the org-2 transfer shows but 143/220 don't.
+  assert.deepEqual(await visible(STORE1), [invoiceIn, tnOtherOrg, nullType].sort());
+  // A 220-store scope sees the org-220 transfer (any 220 store covers it) —
+  // not the org-2 or org-143 ones.
+  assert.deepEqual(await visible([{ orgId: 220, code: "THTH1" }]), [tn220, nullType].sort());
+  // Any 143 pair keeps the global view: ALL tn orders, order orgs ignored.
   assert.deepEqual(
     await visible([{ orgId: 143, code: "store1" }]),
-    [nullType, tn143, tnOtherOrg].sort()
+    [nullType, tn143, tnOtherOrg, tn220].sort()
   );
   assert.deepEqual(
     await visible([{ orgId: 143, code: "OSWF (MCI)" }]),
-    [nullType, tn143, tnOtherOrg].sort()
+    [nullType, tn143, tnOtherOrg, tn220].sort()
   );
   // Unrestricted caller: everything.
   assert.deepEqual(
     await visible(null),
-    [invoiceIn, invoiceOut, nullType, tn143, tnOtherOrg].sort()
+    [invoiceIn, invoiceOut, nullType, tn143, tnOtherOrg, tn220].sort()
   );
 
   // allowedOrgIds filters invoice orders only; tn and NULL bypass it.
   _setAllowedOrgIdsForTests([99]);
-  assert.deepEqual(await visible(null), [nullType, tn143, tnOtherOrg].sort());
+  assert.deepEqual(await visible(null), [nullType, tn143, tnOtherOrg, tn220].sort());
   _setAllowedOrgIdsForTests([]);
 
   // Detail reads follow the same rule (404 = hidden).
@@ -222,7 +229,10 @@ test("picking visibility splits by picking_order_type (invoice / tn / NULL)", as
   assert.equal((await getPickingOrderDetail(client.db, tn143, [{ orgId: 143, code: "store1" }])).id, tn143);
   assert.equal((await getPickingOrderDetail(client.db, tnOtherOrg, [{ orgId: 143, code: "store1" }])).id, tnOtherOrg);
   assert.equal((await getPickingOrderDetail(client.db, nullType, WSTORE1)).id, nullType);
-  await assert.rejects(getPickingOrderDetail(client.db, tnOtherOrg, STORE1), /picking_order_not_found/);
+  // Org-aware: the order's own org in scope (any store) opens the detail.
+  assert.equal((await getPickingOrderDetail(client.db, tnOtherOrg, STORE1)).id, tnOtherOrg);
+  assert.equal((await getPickingOrderDetail(client.db, tn220, [{ orgId: 220, code: "THHK2" }])).id, tn220);
+  await assert.rejects(getPickingOrderDetail(client.db, tn220, STORE1), /picking_order_not_found/);
 });
 
 // --- receiving routes ----------------------------------------------------------

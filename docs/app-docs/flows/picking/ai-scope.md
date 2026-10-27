@@ -14,10 +14,13 @@
   The predicate splits by `picking_order_type`
   (`pickingOrderOrgFilter` in `apps/backend/src/db/picking.ts`): only
   `invoice` orders get the allowedOrgIds + exact-pair scope filter; `tn`
-  (transfer) orders ignore the order's org entirely — visible whenever the
-  caller's scope includes ANY sub-inventory of org 143 (unscoped callers see
-  all transfers); orders with NULL type (freshly synced, no type
-  yet) are always visible.
+  (transfer) orders are org-aware (spec
+  `docs/superpowers/specs/2026-10-27-picking-tn-org-aware-visibility-design.md`)
+  — visible when the caller's scope covers ANY sub-inventory of the ORDER's
+  org (transfers belong to the org, not to one store; NULL-org transfers stay
+  visible to every scoped caller), or ANY sub-inventory of org 143 (NCI keeps
+  a global view of all transfers); unscoped callers see all transfers. Orders
+  with NULL type (freshly synced, no type yet) are always visible.
 - Order statuses `allocated` and `skip` (spec
   `docs/superpowers/specs/2026-09-22-picking-allocated-skip-status-design.md`):
   the full lifecycle is `pending → allocated → picking → picking_finished →
