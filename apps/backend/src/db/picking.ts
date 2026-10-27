@@ -1390,7 +1390,10 @@ export async function getPickingShelfStock(
               WHERE pi.picking_order_id = ${order.id}
                 AND (${inArray(sql`pi.part_no`, partKeys)}
                      OR ${inArray(sql`p.part_no`, partKeys)}
-                     OR ${inArray(sql`p.wcl_item_no`, partKeys)})
+                     OR ${inArray(sql`p.wcl_item_no`, partKeys)}
+                     OR ${inArray(unwrappedCol(sql`pi.part_no`), unwrappedKeys)}
+                     OR ${inArray(unwrappedCol(sql`p.part_no`), unwrappedKeys)}
+                     OR ${inArray(unwrappedCol(sql`p.wcl_item_no`), unwrappedKeys)})
               ORDER BY pi.created_date, pi.id
               LIMIT 1`
         )
