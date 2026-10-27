@@ -28,6 +28,7 @@ import {
   type PickingIssueEntry,
 } from "../db/picking.js";
 import { scheduleAllocateAll } from "../db/allocate.js";
+import { resolveLabelPrintRulesForOrder } from "../db/labelPrint.js";
 import { actorFrom } from "../auth/middleware.js";
 import { getUserScope } from "../db/user-scope.js";
 
@@ -106,6 +107,12 @@ pickingRoute.post("/picking-orders/reorder", async (c) => {
 pickingRoute.get("/picking-orders/:id", async (c) => {
   const scope = await getUserScope(db, actorFrom(c).username);
   return c.json(await getPickingOrderDetail(db, c.req.param("id"), scope), 200);
+});
+
+// Label-print rules matching this order (picking-finish print prompt):
+// first active rule by ascending priority per label_type.
+pickingRoute.get("/picking-orders/:id/label-print-rules", async (c) => {
+  return c.json(await resolveLabelPrintRulesForOrder(db, c.req.param("id")), 200);
 });
 
 // Shelf presence check (flow config pickingShelfScan require-match): stock of

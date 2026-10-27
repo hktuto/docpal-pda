@@ -73,6 +73,13 @@
         @add-to-box="addToBox"
         @remove-from-box="removeFromBox"
       />
+
+      <LabelPrintPrompt
+        v-if="order"
+        v-model:open="printPromptOpen"
+        :order="order"
+        :matches="printPromptMatches"
+      />
     </template>
   </div>
 </template>
@@ -93,8 +100,11 @@ import { ApiError } from "~/services/apiClient";
 import PickingBoxesSection, { type BoxContentEntry } from "~/components/picking/PickingBoxesSection.vue";
 import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
 import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
+import LabelPrintPrompt from "~/components/picking/LabelPrintPrompt.vue";
 import ScanFab from "~/components/ScanFab.vue";
+import type { PageHeaderAction } from "~/composables/usePageHeader";
 import type {
+  LabelPrintRuleMatch,
   PickingOrderDetail,
 } from "~/services/types";
 
@@ -129,6 +139,40 @@ const { parseRawValue } = useLabelScan();
 const scanningBox = ref(false);
 const scanIntoBoxId = ref<string | null>(null);
 const scanningIntoBox = ref(false);
+
+// Post-finish label-print prompt (spec 2026-10-27): after a successful finish
+// the matching label print rules open in a prompt; the measuring-off redirect
+// to /verify waits until the prompt closes. The same prompt is re-openable
+// from the "Print labels" header action on a finished order.
+const printPromptOpen = ref(false);
+const printPromptMatches = ref<LabelPrintRuleMatch[]>([]);
+const printPromptLoading = ref(false);
+const verifyAfterPrintPrompt = ref(false);
+
+watch(printPromptOpen, (open) => {
+  if (!open && verifyAfterPrintPrompt.value) {
+    verifyAfterPrintPrompt.value = false;
+    void navigateTo("/verify");
+  }
+});
+
+async function openPrintPrompt() {
+  if (!order.value || printPromptLoading.value) return;
+  printPromptLoading.value = true;
+  try {
+    const matches = await warehouse.getPickingLabelPrintRules(orderId);
+    if (matches.length === 0) {
+      showToast(t("picking.printLabels.noMatchingRules"));
+      return;
+    }
+    printPromptMatches.value = matches;
+    printPromptOpen.value = true;
+  } catch (e) {
+    showToast(errorMessage(e));
+  } finally {
+    printPromptLoading.value = false;
+  }
+}
 
 // Cross-order packing: with a box armed ("scan into box"), item barcode
 // scans from ANY order pick straight into that box (404
@@ -307,6 +351,20 @@ usePageHeader({
     if (o.workingByName) rows.push({ label: t("picking.detail.lockedBy"), value: o.workingByName });
     return rows;
   },
+  actions: () => {
+    const o = order.value;
+    if (!o) return [];
+    const list: PageHeaderAction[] = [];
+    if (["picking_finished", "measuring_finished", "shipped"].includes(o.status)) {
+      list.push({
+        key: "print-labels",
+        label: t("picking.printLabels.title"),
+        disabled: printPromptLoading.value,
+        onClick: openPrintPrompt,
+      });
+    }
+    return list;
+  },
 });
 
 function goScan() {
@@ -454,11 +512,26 @@ async function finish() {
     // order. With the measuring step off the finish spawned the boxes'
     // verify tasks instead, so hand the operator straight over to verify.
     await warehouse.finishPickingOrder(orderId);
-    if (!flowSteps.value.measuring && flowSteps.value.verify) {
+    await load();
+    const navigateToVerify = !flowSteps.value.measuring && flowSteps.value.verify;
+    // Best-effort label-print prompt — a rules-fetch failure never blocks
+    // finishing (spec 2026-10-27).
+    let matches: LabelPrintRuleMatch[] = [];
+    try {
+      matches = await warehouse.getPickingLabelPrintRules(orderId);
+    } catch (e) {
+      showToast(errorMessage(e));
+    }
+    if (matches.length > 0) {
+      printPromptMatches.value = matches;
+      verifyAfterPrintPrompt.value = navigateToVerify;
+      printPromptOpen.value = true;
+      return;
+    }
+    if (navigateToVerify) {
       await navigateTo("/verify");
       return;
     }
-    await load();
   } catch (e) {
     // 409 unresolved_outdated_warnings (spec 2026-10-07): the order stays
     // open — toast the count and reload so the header warning chip shows.

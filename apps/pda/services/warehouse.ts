@@ -13,6 +13,7 @@ import type {
   PickingOrderListRow,
   PickingOrderDetail,
   PickingWorkLock,
+  LabelPrintRuleMatch,
   ScanPickingItemInput,
   PickingShelfStockQuery,
   ShippingBoxUpdateInput,
@@ -77,6 +78,9 @@ export interface WarehouseService {
   // verbs are shared with the receiving picking tab and the measuring flow.
   getPickingOrders(query?: PickingOrderListQuery): Promise<ListPage<PickingOrderListRow>>;
   getPickingOrder(id: string): Promise<PickingOrderDetail>;
+  // Label-print rules matching a finished picking order (spec 2026-10-27;
+  // first-match-wins per label type, at most one carton/item_box/item match).
+  getPickingLabelPrintRules(orderId: string): Promise<LabelPrintRuleMatch[]>;
   scanPickingItem(
     itemId: string,
     input: ScanPickingItemInput

@@ -391,6 +391,16 @@ export interface PickingWorkLock {
   workingBy: string;
 }
 
+/** One label-print-rule match for a finished picking order
+ *  (GET /picking-orders/:id/label-print-rules → {matches}) — first-match-wins
+ *  per label type (spec 2026-10-27). */
+export interface LabelPrintRuleMatch {
+  ruleId: string;
+  name: string;
+  labelType: "carton" | "item_box" | "item";
+  printTemplateId: string;
+}
+
 export interface PickingAllocationLot {
   id: string;
   shelfCode: string | null;
@@ -434,6 +444,13 @@ export interface PickingPackage {
   shippingBoxId: string | null;
   sourceType: string;
   sourceId: string;
+  /** Pick-time scanned batch fields (2026-10-14) — when present these are the
+   *  physical label's values and win over the source snapshot above (same
+   *  rule as verify re-scan matching). Optional: legacy rows omit them. */
+  scannedDateCode?: string | null;
+  scannedLotCode?: string | null;
+  scannedCoo?: string | null;
+  scannedCow?: string | null;
 }
 
 export interface PickingItem {

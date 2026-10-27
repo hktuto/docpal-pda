@@ -295,6 +295,23 @@ export default {
       pendingTitle: "待确认扫描（未提交）",
       pending: "待确认"
     },
+    printLabels: {
+      title: "打印标签",
+      subtitle: "订单 {orderNo}",
+      labelTypes: {
+        carton: "箱标签",
+        item_box: "物料盒标签",
+        item: "物料标签"
+      },
+      labelsCount: "{count} 张标签",
+      print: "打印",
+      printAll: "全部打印",
+      skip: "跳过",
+      printing: "打印中…",
+      printed: "已打印",
+      printFailed: "打印失败——点击重试",
+      noMatchingRules: "此订单没有符合的标签打印规则"
+    },
     itemsSection: {
       title: "明细",
       part: "料号",

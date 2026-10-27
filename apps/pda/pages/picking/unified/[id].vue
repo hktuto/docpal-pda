@@ -115,6 +115,13 @@
         :entries="boxPickEntries"
         @close="session.closeBoxPick"
       />
+
+      <LabelPrintPrompt
+        v-if="order"
+        v-model:open="printPromptOpen"
+        :order="order"
+        :matches="printPromptMatches"
+      />
     </template>
   </div>
 </template>
@@ -148,8 +155,9 @@ import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
 import PickingScanReviewModal from "~/components/picking/PickingScanReviewModal.vue";
 import PickFromBoxDialog from "~/components/picking/PickFromBoxDialog.vue";
 import PickingUnifiedItems from "~/components/picking/PickingUnifiedItems.vue";
+import LabelPrintPrompt from "~/components/picking/LabelPrintPrompt.vue";
 import type { OcrInput } from "~/utils/ocrNormalize";
-import type { PickingOrderDetail } from "~/services/types";
+import type { LabelPrintRuleMatch, PickingOrderDetail } from "~/services/types";
 import type { ScanSessionResult } from "~/composables/usePickingScanSession";
 
 definePageMeta({ title: "meta.pickingDetail" });
@@ -192,6 +200,20 @@ const review = ref<{
 const reviewOpen = ref(false);
 const reviewResults = ref<ScanMultiRowResult[] | null>(null);
 const reviewApplying = ref(false);
+
+// Post-finish label-print prompt (spec 2026-10-27): after a successful finish
+// the matching label print rules open in a prompt; the measuring-off redirect
+// to /verify waits until the prompt closes.
+const printPromptOpen = ref(false);
+const printPromptMatches = ref<LabelPrintRuleMatch[]>([]);
+const verifyAfterPrintPrompt = ref(false);
+
+watch(printPromptOpen, (open) => {
+  if (!open && verifyAfterPrintPrompt.value) {
+    verifyAfterPrintPrompt.value = false;
+    void navigateTo("/verify");
+  }
+});
 
 // The scan session (queue as a transient in-flight buffer, sticky shelf
 // context, pick-from-box dialog, carton auto-queue) — spec
@@ -740,11 +762,26 @@ async function finish() {
     // order. With the measuring step off the finish spawned the boxes'
     // verify tasks instead, so hand the operator straight over to verify.
     await warehouse.finishPickingOrder(orderId);
-    if (!flowSteps.value.measuring && flowSteps.value.verify) {
+    await load();
+    const navigateToVerify = !flowSteps.value.measuring && flowSteps.value.verify;
+    // Best-effort label-print prompt — a rules-fetch failure never blocks
+    // finishing (spec 2026-10-27).
+    let matches: LabelPrintRuleMatch[] = [];
+    try {
+      matches = await warehouse.getPickingLabelPrintRules(orderId);
+    } catch (e) {
+      showToast(errorMessage(e));
+    }
+    if (matches.length > 0) {
+      printPromptMatches.value = matches;
+      verifyAfterPrintPrompt.value = navigateToVerify;
+      printPromptOpen.value = true;
+      return;
+    }
+    if (navigateToVerify) {
       await navigateTo("/verify");
       return;
     }
-    await load();
   } catch (e) {
     // 409 unresolved_outdated_warnings (spec 2026-10-07): the order stays
     // open — toast the count and reload so the header warning chip shows.

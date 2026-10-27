@@ -295,6 +295,23 @@ export default {
       pendingTitle: "待確認掃描（未提交）",
       pending: "待確認"
     },
+    printLabels: {
+      title: "列印標籤",
+      subtitle: "訂單 {orderNo}",
+      labelTypes: {
+        carton: "箱標籤",
+        item_box: "物料盒標籤",
+        item: "物料標籤"
+      },
+      labelsCount: "{count} 張標籤",
+      print: "列印",
+      printAll: "全部列印",
+      skip: "略過",
+      printing: "列印中…",
+      printed: "已列印",
+      printFailed: "列印失敗——點擊重試",
+      noMatchingRules: "此訂單沒有符合的標籤列印規則"
+    },
     itemsSection: {
       title: "項目",
       part: "料號",

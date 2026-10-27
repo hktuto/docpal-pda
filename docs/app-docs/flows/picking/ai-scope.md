@@ -234,6 +234,19 @@
   task on the order's still-open boxes (a cross-order box waits until every
   order in it is finished), the verify pass runs on the open box, and the
   verify completion closes it; the PDA then navigates straight to `/verify`.
+- Label print prompt after finish (spec
+  `docs/superpowers/specs/2026-10-27-picking-finish-label-print-prompt-design.md`):
+  a successful finish fetches `GET /picking-orders/:id/label-print-rules`
+  (`resolveLabelPrintRulesForOrder` — active rules, priority asc, first match
+  per `label_type`) and, on matches, opens
+  `components/picking/LabelPrintPrompt.vue` (per-rule Print + job polling /
+  Print all / Skip; the deferred `/verify` navigation waits for the prompt to
+  close; fetch/print errors only toast). Params come from
+  `utils/labelPrintParams.ts` (per-label-type superset of the print-service
+  template fields), printed via `utils/print.ts` over the `/print/*` proxy
+  with the template's default printer. Reprint: "Print labels" header action
+  on `pages/picking/[id].vue` for `picking_finished`/`measuring_finished`/
+  `shipped` orders.
 - Supplier outdated date-code scan warnings (spec
   `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`):
   when a scan's label date code (post decode — label format, WWYY for

@@ -295,6 +295,23 @@ export default {
       pendingTitle: "Pending scans (unconfirmed)",
       pending: "pending"
     },
+    printLabels: {
+      title: "Print labels",
+      subtitle: "Order {orderNo}",
+      labelTypes: {
+        carton: "Carton label",
+        item_box: "Item box label",
+        item: "Item label"
+      },
+      labelsCount: "{count} label(s)",
+      print: "Print",
+      printAll: "Print all",
+      skip: "Skip",
+      printing: "Printing…",
+      printed: "Printed",
+      printFailed: "Failed — tap to retry",
+      noMatchingRules: "No label print rules match this order"
+    },
     itemsSection: {
       title: "Items",
       part: "Part",

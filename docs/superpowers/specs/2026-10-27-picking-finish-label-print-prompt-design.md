@@ -1,6 +1,10 @@
 # Picking-finish label print prompt — design
 
-Status: DRAFT (pending review — not implemented)
+Status: implemented (2026-10-27; open questions resolved in
+`docs/superpowers/plans/2026-10-27-picking-finish-label-print-prompt.md`
+§Decisions — Q1: first-match-wins per label type; Q2: generic per-label-type
+params superset, no per-template registry in v1; Q3: template default
+printer; Q4: prompt right after finish + reprint header action)
 Date: 2026-10-27
 
 ## Summary

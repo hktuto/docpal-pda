@@ -13,6 +13,7 @@ import type {
   PickingOrderListRow,
   PickingOrderDetail,
   PickingWorkLock,
+  LabelPrintRuleMatch,
   ScanPickingItemInput,
   PickingShelfStockQuery,
   ShippingBoxUpdateInput,
@@ -247,6 +248,12 @@ export function createBackendWarehouseService(
     },
     async getPickingOrder(id: string): Promise<PickingOrderDetail> {
       return client.get(`/picking-orders/${id}`);
+    },
+    async getPickingLabelPrintRules(orderId: string): Promise<LabelPrintRuleMatch[]> {
+      const res = await client.get<{ matches: LabelPrintRuleMatch[] }>(
+        `/picking-orders/${orderId}/label-print-rules`
+      );
+      return res.matches;
     },
     // The one canonical scan-to-pick (covers lot and receiving-area sources;
     // the old applyOcrPick path is gone). Null batch fields are omitted so the
