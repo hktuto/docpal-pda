@@ -173,9 +173,9 @@ export function decodeKoaDateCode(
   return `${String(week).padStart(2, "0")}${String(isoYear % 100).padStart(2, "0")}`;
 }
 
-/** NCC 13-digit lots display in 5–5–2 digit groups. */
+/** NCC 13-digit lots display in 5–7–2 digit groups. */
 export function formatNccLotCode(raw: string): string {
-  return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-${raw.slice(5, 10)}-${raw.slice(10)}` : raw;
+  return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-0${raw.slice(5, 11)}-${raw.slice(11)}` : raw;
 }
 
 /** NCC lot prefix YMMDD → WWYY, resolving the year digit to the latest

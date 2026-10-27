@@ -93,7 +93,7 @@ function decodeNccDateCode(raw) {
   return `${String(week).padStart(2, "0")}${String(dd.getUTCFullYear() % 100).padStart(2, "0")}`;
 }
 function formatNccLotCode(raw) {
-  return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-${raw.slice(5, 10)}-${raw.slice(10)}` : raw;
+  return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-0${raw.slice(5, 11)}-${raw.slice(11)}` : raw;
 }
 function parseQrRaw(raw, template, qtyEncoding, dateCodeEncoding) {
   if (!template) return {};
@@ -148,15 +148,14 @@ const TEMPLATES = {
   // + Id=195 (NCC_KTD, 10-char item code). Fixed-width ITF reel barcode.
   // 28-char: itemId(6) lot(13) qty(5) serial(4); lot prefix = YMMDD.
   // 32-char (KTD/TND varistors): itemId(10) f(3) lot(7) pack(2) qty(6) serial(4)
-  // — the length lookahead plus optional 3-digit flag lands both layouts; for
-  // the 32-char form the qty group takes the last 5 digits of the zero-padded
-  // 6-digit qty (same numeric value; qty >= 100000 on a KTD label would break).
+  // Remaining-length assertions keep the two layouts from backtracking into
+  // each other (a 28-char item code is exactly 6 digits, not 6–10).
   NCC: {
     qtyEncoding: null,
     dateCodeEncoding: "ncc_lot_ymmdd",
     qrType: "itf",
     template:
-      "^(?=.{28}$|.{32}$)(?<itemId>\\d{6,10})(?:\\d{3})?(?<lotCode>\\d{7,13})\\d{3}(?<qty>\\d{5,6})(?<serialNo>\\d{4})$",
+      "^(?=.{28}$|.{32}$)(?<itemId>\\d{6}(?=.{22}$)|\\d{10}(?=.{22}$))(?:(?<=^.{10})\\d{3})?(?<lotCode>\\d{13}(?=.{9}$)|\\d{7}(?=.{12}$))(?:\\d{2}(?=.{10}$))?(?<qty>\\d{5,6})(?<serialNo>\\d{4})$",
   },
   // Restored from RegPattern Id=156 (COPAL). Fixed-width 111-char label.
   // itemId = printed part name; OHM-spec parts keep the resistance code in a

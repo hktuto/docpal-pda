@@ -203,6 +203,25 @@ test("parseQrRaw: KOA reel label carries the WCL item no in segment 7", async ()
   assert.equal(trailing.wclItemNo, "KOA/SR732ERTTDR200F");
 });
 
+test("parseQrRaw: NCC 28-digit label keeps drawing and lot boundaries", () => {
+  const profile = builtinSupplierProfiles.find((p) => p.supplierCode === "23");
+  assert.ok(profile?.qrTemplate);
+  const raw = "5928846030912801026002000460";
+  const parsed = parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding, undefined, "yyww");
+  assert.equal(parsed.partNo, "592884");
+  assert.equal(parsed.qty, 200);
+  assert.equal(parsed.lotCode, "60309-0128010-26");
+  assert.equal(parsed.dateCode, "2611"); // 2026-03-09 → ISO week 11
+  assert.equal(parsed.serialNo, "0460");
+  assert.equal(parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding).dateCode, "1126");
+
+  const ktd = parseQrRaw("06711422706071038400210015000024", profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);
+  assert.equal(ktd.partNo, "0671142270");
+  assert.equal(ktd.qty, 1500);
+  assert.equal(ktd.lotCode, "1038400");
+  assert.equal(ktd.serialNo, "0024");
+});
+
 test("parseQrRaw: iC-Haus builtin template parses the Versandetikett JSON QR", () => {
   const profile = builtinSupplierProfiles.find((p) => p.supplierCode === "20");
   assert.ok(profile?.qrTemplate);

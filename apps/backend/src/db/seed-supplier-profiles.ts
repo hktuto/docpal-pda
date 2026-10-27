@@ -48,11 +48,11 @@ const KOA_TEMPLATE = String.raw`^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+)
 // NCC (Chemi-Con): fixed-width ITF reel barcode, all digits.
 //   28-char: itemId(6) lot(13) qty(5) serial(4)
 //   32-char (NCC_KTD): itemId(10) flag(3) lot(7) pack(2) qty(6) serial(4)
-// The 13-digit lot starts with YMMDD (60910 = 2026-09-10), decoded by
-// dateCodeEncoding 'ncc_lot_ymmdd', and is returned as 60910-59700-33.
+// The 13-digit lot starts with YMMDD (60309 = 2026-03-09), decoded by
+// dateCodeEncoding 'ncc_lot_ymmdd', and is returned as 60309-0128010-26.
 // itemId is the numeric NCC drawing code, NOT the MPN — the barcode carries no
 // MPN; the old system mapped code -> MPN via dbo.RegItem (no equivalent here).
-const NCC_TEMPLATE = String.raw`^(?=.{28}$|.{32}$)(?<itemId>\d{6,10})(?:\d{3})?(?<lotCode>\d{7,13})\d{3}(?<qty>\d{5,6})(?<serialNo>\d{4})$`;
+const NCC_TEMPLATE = String.raw`^(?=.{28}$|.{32}$)(?<itemId>\d{6}(?=.{22}$)|\d{10}(?=.{22}$))(?:(?<=^.{10})\d{3})?(?<lotCode>\d{13}(?=.{9}$)|\d{7}(?=.{12}$))(?:\d{2}(?=.{10}$))?(?<qty>\d{5,6})(?<serialNo>\d{4})$`;
 
 // COPAL: fixed-width 111-char reel label, e.g.
 //   234101510021                CJS-1200TB1                             2000  2071  C6E      605220557MMJ805615383C
@@ -120,7 +120,7 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
     barcodeTypes: ["ITF25"],
     brands: ["NCC"],
     remark:
-      "Restored from BVSDB RegPattern Id=165 (WHHK), 2026-08-13 backup; folds Id=167 NCC+KOA and Id=195 NCC_KTD (32-char). Corrected 2026-10-26: 28-char layout is drawing(6) + lot(13) + qty(5) + serial(4); lot prefix YMMDD derives the ISO week date code. itemId is the NCC numeric drawing code, not the MPN.",
+      "Restored from BVSDB RegPattern Id=165 (WHHK), 2026-08-13 backup; folds Id=167 NCC+KOA and Id=195 NCC_KTD (32-char). Corrected 2026-10-27: fixed 28/32-char boundary backtracking; 28-char layout is drawing(6) + lot(13) + qty(5) + serial(4); lot prefix YMMDD derives the ISO week date code and the lot renders in 5-7-2 groups. itemId is the NCC numeric drawing code, not the MPN.",
   },
   {
     supplierCode: "19915", // NIDEC(H.K.)CO.,LIMITED (COPAL)

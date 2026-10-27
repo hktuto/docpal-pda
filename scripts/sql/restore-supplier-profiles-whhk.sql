@@ -85,10 +85,10 @@ VALUES
   -- NCC (supplier 23, HONGKONG CHEMI-CON LTD): fixed-width ITF reel barcode,
   -- all digits.
   --   28-char: itemId(6) lot(13) qty(5) serial(4)
-  --   e.g. 4553136091015970033005000048 -> lot 60910-59700-33, qty 500, serial 0048
+  --   e.g. 5928846030912801026002000460 -> lot 60309-0128010-26, qty 200, serial 0460
   --   32-char (NCC_KTD, TND/TNR varistors): itemId(10) flag(3) lot(7) pack(2) qty(6) serial(4)
   --   e.g. 06711422706071038400210015000024 (qty 1500)
-  -- The 13-digit lot starts with YMMDD (60910 = 2026-09-10), decoded to the
+  -- The 13-digit lot starts with YMMDD (60309 = 2026-03-09), decoded to the
   -- ISO week date code by ncc_lot_ymmdd. itemId is the numeric NCC drawing
   -- code, NOT the MPN. The old system resolved code -> MPN via dbo.RegItem
   -- (Secondary_Key -> Search_Key, e.g. 264878 -> EKZN101ETD271MK30S-R); the new
@@ -96,9 +96,9 @@ VALUES
   -- invoice lines carrying this code (or a future code->MPN mapping table).
   (
     '00000000-0000-7000-8000-000000009002', '23', NULL,
-    $re$^(?=.{28}$|.{32}$)(?<itemId>\d{6,10})(?:\d{3})?(?<lotCode>\d{7,13})\d{3}(?<qty>\d{5,6})(?<serialNo>\d{4})$$re$,
+    $re$^(?=.{28}$|.{32}$)(?<itemId>\d{6}(?=.{22}$)|\d{10}(?=.{22}$))(?:(?<=^.{10})\d{3})?(?<lotCode>\d{13}(?=.{9}$)|\d{7}(?=.{12}$))(?:\d{2}(?=.{10}$))?(?<qty>\d{5,6})(?<serialNo>\d{4})$$re$,
     NULL, 'itf', NULL, 'ncc_lot_ymmdd', ARRAY['ITF25'], ARRAY['NCC'],
-    'Restored from BVSDB RegPattern Id=165 (WHHK), 2026-08-13 backup; folds Id=167 NCC+KOA and Id=195 NCC_KTD (32-char). Corrected 2026-10-26: 28-char layout is drawing(6) + lot(13) + qty(5) + serial(4); lot prefix YMMDD derives the ISO week date code. itemId is the NCC numeric drawing code, not the MPN.'
+    'Restored from BVSDB RegPattern Id=165 (WHHK), 2026-08-13 backup; folds Id=167 NCC+KOA and Id=195 NCC_KTD (32-char). Corrected 2026-10-27: fixed 28/32-char boundary backtracking; 28-char layout is drawing(6) + lot(13) + qty(5) + serial(4); lot prefix YMMDD derives the ISO week date code and the lot renders in 5-7-2 groups. itemId is the NCC numeric drawing code, not the MPN.'
   ),
 
   -- COPAL (supplier 19915, NIDEC(H.K.)CO.,LIMITED): fixed-width 111-char reel

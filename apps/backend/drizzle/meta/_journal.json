@@ -281,6 +281,13 @@
       "when": 1792982400000,
       "tag": "0040_ncc_lot_date_code",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793065894000,
+      "tag": "0041_ncc_fixed_width",
+      "breakpoints": true
     }
   ]
 }

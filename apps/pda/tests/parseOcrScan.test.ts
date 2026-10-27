@@ -396,6 +396,30 @@ describe("parseQrCapture", () => {
     expect(result.parsed.wclItemNo).toBe("KOA+RK73H1ETTP 1001F");
   });
 
+  it("parses the NCC drawing, full lot, and YMMDD date code without backtracking", () => {
+    const nccTemplate = {
+      code: "23",
+      qrcodeTemplate: "^(?=.{28}$|.{32}$)(?<itemId>\\d{6}(?=.{22}$)|\\d{10}(?=.{22}$))(?:(?<=^.{10})\\d{3})?(?<lotCode>\\d{13}(?=.{9}$)|\\d{7}(?=.{12}$))(?:\\d{2}(?=.{10}$))?(?<qty>\\d{5,6})(?<serialNo>\\d{4})$",
+      qrcodeQtyEncoding: null,
+      qrcodeDateCodeEncoding: "ncc_lot_ymmdd" as const,
+      brands: ["NCC"],
+    };
+    const raw = "5928846030912801026002000460";
+    const result = parseQrCapture(raw, {
+      supplierTemplates: [nccTemplate],
+      contextBrands: ["NCC"],
+      dateCodeFormat: "yyww",
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.parsed.itemId).toBe("592884");
+    expect(result.parsed.qty).toBe(200);
+    expect(result.parsed.lotCode).toBe("60309-0128010-26");
+    expect(result.parsed.dateCode).toBe("2611"); // 2026-03-09 → ISO week 11
+    expect(result.parsed.serialNo).toBe("0460");
+    expect(parseQrCapture(raw, { supplierTemplates: [nccTemplate] }).parsed.dateCode).toBe("1126");
+  });
+
   it("parses an iC-Haus JSON Versandetikett QR (key-order independent)", () => {
     const ichausTemplate = {
       code: "20",

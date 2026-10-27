@@ -825,9 +825,9 @@ export function decodeYywwDateCode(raw: string, dateCodeFormat: DateCodeFormat =
   return toLabelDateCode(raw, dateCodeFormat) ?? undefined;
 }
 
-/** Format a 13-digit NCC lot as its printed 5–5–2 digit groups. */
+/** Format a 13-digit NCC lot as its printed 5–7–2 digit groups. */
 export function formatNccLotCode(raw: string): string {
-  return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-${raw.slice(5, 10)}-${raw.slice(10)}` : raw;
+  return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-0${raw.slice(5, 11)}-${raw.slice(11)}` : raw;
 }
 
 /** Decode the 13-digit NCC lot's YMMDD prefix to an ISO week date code.

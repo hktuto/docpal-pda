@@ -30,12 +30,13 @@
   a candidate and resend with an explicit `{partNo, qty}` (the raw rides
   along so serial dedup still applies).
 - NCC 28-digit ITF labels parse as drawing(6) + lot(13) + qty(5) + serial(4).
-  The lot is returned in 5–5–2 groups (`6091015970033` → `60910-59700-33`),
+  The lot is returned in 5–7–2 groups (`6030912801026` → `60309-0128010-26`),
   and its leading `YMMDD` is decoded to the ISO week date code by the backend
   and PDA `ncc_lot_ymmdd` decoders. The one-digit year resolves to the latest
-  matching year not after the scan year. The 32-digit NCC_KTD layout is
-  unchanged; drawing-number-to-item-number lookup is not implemented (spec
-  `docs/superpowers/specs/2026-10-26-ncc-lot-date-code-design.md`).
+  matching year not after the scan year. Fixed-width assertions prevent the
+  28- and 32-digit templates from backtracking into each other; NCC_KTD parsing
+  is preserved, and drawing-number-to-item-number lookup is not implemented
+  (spec `docs/superpowers/specs/2026-10-26-ncc-lot-date-code-design.md`).
 - Multi-item labels (e.g. a carton label whose items table lists several
   parts): the client parses the raw capture into one row per item
   (`extractMultiItemRows` in `utils/parseOcrScan.ts`) before posting; 2+
