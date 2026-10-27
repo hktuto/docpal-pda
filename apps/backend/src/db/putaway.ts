@@ -745,10 +745,13 @@ async function computeShelfSuggestions(
   //    (affinity pairs are org-scoped: sub-inventory codes repeat across orgs)
   const missing = partNos.filter((p) => !suggestions.has(p));
   if (missing.length > 0) {
+    // typeof guard: legacy rows double-encoded the scopes as a jsonb string,
+    // and jsonb_array_elements errors on scalars — skip those shelves.
     const taggedShelf = await queryGet<{ code: string }>(
       db,
       sql`SELECT code FROM shelves
-          WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(sub_inventory_scopes) e
+          WHERE jsonb_typeof(sub_inventory_scopes) = 'array'
+            AND EXISTS (SELECT 1 FROM jsonb_array_elements(sub_inventory_scopes) e
                         WHERE (e->>'orgId')::int = ${orgId} AND e->>'code' = ${subInventoryCode})
           ORDER BY code LIMIT 1`
     );

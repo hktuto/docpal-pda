@@ -242,6 +242,46 @@ test("detail: sub-inventory-shelf fallback when the part has no stock history", 
   }
 });
 
+test("detail: a shelf with a malformed (scalar) sub_inventory_scopes is skipped, not a 500", async () => {
+  await reseed(client);
+  _setPutAwayConfigForTests({ autoCreateTasks: true });
+  try {
+    // Legacy double-encoded row: scopes stored as a jsonb STRING — observed on
+    // real data 2026-10-27; jsonb_array_elements errors on scalars, which 500'd
+    // the whole put-away aggregate before the typeof guard.
+    await client.db.execute(
+      sql`UPDATE shelves SET sub_inventory_scopes = to_jsonb('[{"orgId":2,"code":"STORE1"}]'::text) WHERE code = 'A0405'`
+    );
+    const actorId = await actorIdOf("operator");
+    await client.db.execute(
+      sql`INSERT INTO parts (id, brand, part_no, wcl_item_no) VALUES ('test-part-new-2', 'DAITO', 'ZZZ-NEW-PART-2', 'WCL/ZZZ-NEW-PART-2')`
+    );
+    await insertReceivingOrder(client.db, "04958212", {
+      order: { supplierCode: "DAITO", deliveryDate: "2026-07-29", dateCode: "2610" },
+      invoices: [
+        {
+          invoiceNo: "INV-04958212-01",
+          wclCompanyName: "WCL Components Ltd",
+          totalQty: 100,
+          totalCtn: 1,
+          items: [{ partNo: "ZZZ-NEW-PART-2", poNo: "PO-DAI-998", poLine: "1", lineQty: 100, dateCode: "2610", orgId: 2, subInventoryCode: "STORE1" }],
+        },
+      ],
+    });
+    const orderId = await orderIdOf("04958212");
+    await confirmReceivingArrival(client.db, orderId, actorId);
+
+    const task = await taskOf(orderId);
+    const detail = await getPutAwayTaskDetail(client.db, task!.id);
+    assert.equal(detail.items.length, 1);
+    // the malformed shelf is skipped — no suggestion, no error
+    assert.equal(detail.items[0].suggestedShelfCode, null);
+    assert.equal(detail.items[0].suggestionReason, null);
+  } finally {
+    _setPutAwayConfigForTests({ autoCreateTasks: false });
+  }
+});
+
 test("detail: suggestShelf=off suppresses the hint", async () => {
   await reseed(client);
   _setPutAwayConfigForTests({ autoCreateTasks: true, suggestShelf: "off" });
