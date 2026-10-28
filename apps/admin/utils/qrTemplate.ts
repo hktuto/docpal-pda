@@ -205,6 +205,16 @@ export function decodeYyyymmMidmonthDateCode(raw: string): string | undefined {
   return `${String(week).padStart(2, "0")}${String(isoYear % 100).padStart(2, "0")}`;
 }
 
+/** TE Connectivity 5-digit YYWWD date code (DC field, e.g. "26374" = 2026
+ *  week 37 day 4) → WWYY with the day digit dropped ("3726"). Mirrors the
+ *  backend/PDA decoder (date_code_encoding 'yywwd'). */
+export function decodeYywwdDateCode(raw: string): string | undefined {
+  if (!/^\d{5}$/.test(raw)) return undefined;
+  const week = Number(raw.slice(2, 4));
+  if (week < 1 || week > 53) return undefined;
+  return `${raw.slice(2, 4)}${raw.slice(0, 2)}`;
+}
+
 /** Editor entry point: stored config if present and recognized, else advanced
  *  mode over the raw (possibly legacy hand-written) regex. */
 export function detectMode(profile: {

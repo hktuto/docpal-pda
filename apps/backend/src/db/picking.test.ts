@@ -2258,14 +2258,38 @@ test("scan shelf-scan mode require-any: deducts the scanned shelf's lot; 409s", 
     assert.equal(origLot!.totalQty, 900); // only the A0101 scan above
     assert.equal(origLot!.allocatedQty, 700);
 
-    // label batch fields must match the candidate lot when the label carries
-    // them — the scanned label code arrives in the label format ("0126" =
-    // wk01/2026) and is canonicalized ("2601") before the lot match
-    const batchMiss = await catchHttp(
-      scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 50, shelfCode: "A0102", dateCode: "9999" })
+    // label batch fields vs the candidate lot: the scanned date code must not
+    // be NEWER than the lot's (equal-or-earlier passes; unparseable codes
+    // skip), and the label's lot code must match unless the lot's own
+    // lot_code is empty — the scanned label code arrives in the label format
+    // ("0126" = wk01/2026) and is canonicalized ("2601") before the compare
+    const newerDate = await catchHttp(
+      scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 50, shelfCode: "A0102", dateCode: "0226" })
     );
-    assert.equal(batchMiss.status, 409);
-    assert.equal(batchMiss.message, "no_stock_at_location");
+    assert.equal(newerDate.status, 409);
+    assert.equal(newerDate.message, "no_stock_at_location");
+    // unparseable scanned date code → check skipped
+    await scanPickingItem(client.db, itemId, {
+      actorId,
+      allocationId: alloc.id,
+      qty: 10,
+      shelfCode: "A0102",
+      dateCode: "9999",
+    });
+    // earlier scanned date code (canonical "2553" < lot "2601") → passes
+    await scanPickingItem(client.db, itemId, {
+      actorId,
+      allocationId: alloc.id,
+      qty: 10,
+      shelfCode: "A0102",
+      dateCode: "5325",
+    });
+    // lot_code mismatch still 409s when the lot carries one
+    const lotMiss = await catchHttp(
+      scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 10, shelfCode: "A0102", lotCode: "LOTHER" })
+    );
+    assert.equal(lotMiss.status, 409);
+    assert.equal(lotMiss.message, "no_stock_at_location");
     await scanPickingItem(client.db, itemId, {
       actorId,
       allocationId: alloc.id,
@@ -2274,7 +2298,22 @@ test("scan shelf-scan mode require-any: deducts the scanned shelf's lot; 409s", 
       dateCode: "0126",
       lotCode: "L2601X",
     });
-    assert.equal((await allocationOf(itemId)).qty, 650);
+    assert.equal((await allocationOf(itemId)).qty, 630);
+
+    // a lot whose synced lot_code is empty never rejects the label's lot code
+    const blankLotId = randomUUID();
+    await client.db.execute(
+      sql`INSERT INTO inventory_lots (id, part_no, wcl_item_no, date_code, lot_code, coo, cow, shelf_code, org_id, sub_inventory_code, total_qty, allocated_qty, created_date, last_update_date)
+          VALUES (${blankLotId}, 'RK73H1JTTD1002F', 'RK73H1JTTD1002F', '2602', '', 'JP', 'JP', 'A0104', 2, 'STORE1', 300, 0, now(), now())`
+    );
+    await scanPickingItem(client.db, itemId, {
+      actorId,
+      allocationId: alloc.id,
+      qty: 25,
+      shelfCode: "A0104",
+      lotCode: "ANY-LABEL-LOT",
+    });
+    assert.equal((await allocationOf(itemId)).qty, 605);
   } finally {
     _setPickingShelfScanForTests("off");
   }

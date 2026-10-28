@@ -479,6 +479,30 @@ describe("parseQrCapture", () => {
     expect(result.parsed.lotCode).toBe("IRZ4248_6"); // AC = lot code
   });
 
+  it("parses a TE datamatrix with yywwd encoding (5-digit DC, day dropped)", () => {
+    const teTemplate = {
+      code: "15915",
+      qrcodeTemplate:
+        "^\\[\\)>[\\x1d\\x1e\\xA0]?06[\\x1d\\xA0]LT(?<serialNo>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]PN(?<itemId>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]RV[^\\x1d\\xA0]*[\\x1d\\xA0]QT(?<qty>\\d+)[\\x1d\\xA0]PO[^\\x1d\\xA0]*[\\x1d\\xA0]BT(?<lotCode>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]BX[^\\x1d\\xA0]+[\\x1d\\xA0]DC(?<dateCode>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1e\\x04]*$",
+      qrcodeQtyEncoding: null,
+      qrcodeDateCodeEncoding: "yywwd" as const,
+      brands: ["TE"],
+    };
+    const raw =
+      "[)>\x1e06\x1dLT3S550200578934\x1dPN1376348-1\x1dRVF\x1dQT5000\x1dPO200234935045\x1dBT26374N\x1dBX1\x1dDC26374\x1e\x04";
+    const result = parseQrCapture(raw, { supplierTemplates: [teTemplate], contextBrands: ["TE"] });
+    expect(result.matched).toBe(true);
+    expect(result.parsed.itemId).toBe("1376348-1");
+    expect(result.parsed.qty).toBe(5000);
+    expect(result.parsed.dateCode).toBe("3726"); // DC "26374" → wk37/2026, day dropped, WWYY
+    expect(result.parsed.lotCode).toBe("26374N");
+    expect(result.parsed.serialNo).toBe("3S550200578934");
+    // yyww flow config: pair-swapped label format
+    expect(
+      parseQrCapture(raw, { supplierTemplates: [teTemplate], contextBrands: ["TE"], dateCodeFormat: "yyww" }).parsed.dateCode
+    ).toBe("2637");
+  });
+
   it("prefers brand-matching templates when contextBrands is given", () => {
     const genericTemplate = {
       code: "GENERIC",

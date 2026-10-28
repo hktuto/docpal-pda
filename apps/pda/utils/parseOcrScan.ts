@@ -4,6 +4,7 @@ import { toLabelDateCode, type DateCodeFormat } from "~/utils/dateCode";
 const QTY_ENCODING_KOA_ZEROS = "koa_zeros";
 const DATE_CODE_ENCODING_KOA_MONTH_COUNTER = "koa_month_counter";
 const DATE_CODE_ENCODING_YYWW = "yyww";
+const DATE_CODE_ENCODING_YYWWD = "yywwd";
 const DATE_CODE_ENCODING_NCC_LOT_YMMDD = "ncc_lot_ymmdd";
 const DATE_CODE_ENCODING_YYYYMM_MIDMONTH = "yyyymm_midmonth";
 const qrTemplateRegexCache = new Map<string, RegExp | null>();
@@ -52,6 +53,9 @@ export interface OcrParseResult {
   parsed: ParsedFields;
   options: CandidateOptions;
   raw: RawOcrCapture;
+  /** The supplier template that matched (QR path only) — manual receiving
+   *  derives the task's single brand from it. */
+  supplier?: { code: string; brands?: string[] };
 }
 
 const COUNTRY_NAME_TO_CODE: Record<string, string> = {
@@ -826,6 +830,19 @@ export function decodeYywwDateCode(raw: string, dateCodeFormat: DateCodeFormat =
   return toLabelDateCode(raw, dateCodeFormat) ?? undefined;
 }
 
+/**
+ * Decode a TE Connectivity 5-digit YYWWD date code (DC field, e.g. "26374" =
+ * year 2026 week 37 day 4) to the label date code — the trailing day digit is
+ * dropped and the YYWW pair renders in the label format (pair-swapped WWYY
+ * under the default "wwyy"; identity under "yyww"). Returns undefined for
+ * non-5-digit input or an invalid week.
+ * Keep in sync with apps/backend/src/db/scanParse.ts decodeYywwdDateCode.
+ */
+export function decodeYywwdDateCode(raw: string, dateCodeFormat: DateCodeFormat = "wwyy"): string | undefined {
+  if (!/^\d{5}$/.test(raw)) return undefined;
+  return decodeYywwDateCode(raw.slice(0, 4), dateCodeFormat);
+}
+
 /** Format a 13-digit NCC lot as its printed 5–7–2 digit groups. */
 export function formatNccLotCode(raw: string): string {
   return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-0${raw.slice(5, 11)}-${raw.slice(11)}` : raw;
@@ -961,6 +978,8 @@ export function parseQrCapture(
       dateCode = rawLotCode ? decodeKoaDateCode(rawLotCode, dateCodePeriods, new Date(), dateCodeFormat) : undefined;
     } else if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_YYWW) {
       dateCode = rawDateCode ? decodeYywwDateCode(rawDateCode, dateCodeFormat) : undefined;
+    } else if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_YYWWD) {
+      dateCode = rawDateCode ? decodeYywwdDateCode(rawDateCode, dateCodeFormat) : undefined;
     } else if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_NCC_LOT_YMMDD) {
       dateCode = rawLotCode ? decodeNccDateCode(rawLotCode, new Date(), dateCodeFormat) : undefined;
     } else if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_YYYYMM_MIDMONTH) {
@@ -1002,6 +1021,7 @@ export function parseQrCapture(
         cows: groups.cow ? [groups.cow] : [],
       },
       raw: { text: qrValue, barcodes: [] },
+      supplier: { code: supplier.code, brands: supplier.brands },
     };
   }
 

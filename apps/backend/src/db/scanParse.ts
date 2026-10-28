@@ -16,6 +16,7 @@ import { toLabelDateCode, type DateCodeFormat } from "./dateCode.js";
 const QTY_ENCODING_KOA_ZEROS = "koa_zeros";
 export const DATE_CODE_ENCODING_KOA_MONTH_COUNTER = "koa_month_counter";
 export const DATE_CODE_ENCODING_YYWW = "yyww";
+export const DATE_CODE_ENCODING_YYWWD = "yywwd";
 export const DATE_CODE_ENCODING_NCC_LOT_YMMDD = "ncc_lot_ymmdd";
 export const DATE_CODE_ENCODING_YYYYMM_MIDMONTH = "yyyymm_midmonth";
 const qrTemplateRegexCache = new Map<string, RegExp | null>();
@@ -265,6 +266,19 @@ export function decodeYywwDateCode(raw: string, dateCodeFormat: DateCodeFormat =
   return toLabelDateCode(raw, dateCodeFormat) ?? undefined;
 }
 
+/**
+ * Decode a TE Connectivity 5-digit YYWWD date code (DC field, e.g. "26374" =
+ * year 2026 week 37 day 4) to the label date code — the trailing day digit is
+ * dropped and the YYWW pair renders in the label format (pair-swapped WWYY
+ * under the default "wwyy"; identity under "yyww"). Returns undefined for
+ * non-5-digit input or an invalid week.
+ * Keep in sync with apps/pda/utils/parseOcrScan.ts decodeYywwdDateCode.
+ */
+export function decodeYywwdDateCode(raw: string, dateCodeFormat: DateCodeFormat = "wwyy"): string | undefined {
+  if (!/^\d{5}$/.test(raw)) return undefined;
+  return decodeYywwDateCode(raw.slice(0, 4), dateCodeFormat);
+}
+
 /** Format a 13-digit NCC lot as its printed 5–7–2 digit groups. */
 export function formatNccLotCode(raw: string): string {
   return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-0${raw.slice(5, 11)}-${raw.slice(11)}` : raw;
@@ -397,6 +411,8 @@ export function parseQrRaw(
     dateCode = rawLotCode ? decodeKoaDateCode(rawLotCode, dateCodePeriods, new Date(), dateCodeFormat) : undefined;
   } else if (dateCodeEncoding === DATE_CODE_ENCODING_YYWW) {
     dateCode = rawDateCode ? decodeYywwDateCode(rawDateCode, dateCodeFormat) : undefined;
+  } else if (dateCodeEncoding === DATE_CODE_ENCODING_YYWWD) {
+    dateCode = rawDateCode ? decodeYywwdDateCode(rawDateCode, dateCodeFormat) : undefined;
   } else if (dateCodeEncoding === DATE_CODE_ENCODING_NCC_LOT_YMMDD) {
     dateCode = rawLotCode ? decodeNccDateCode(rawLotCode, new Date(), dateCodeFormat) : undefined;
   } else if (dateCodeEncoding === DATE_CODE_ENCODING_YYYYMM_MIDMONTH) {

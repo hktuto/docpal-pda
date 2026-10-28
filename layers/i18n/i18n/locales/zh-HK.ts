@@ -22,6 +22,7 @@ export default {
     adHocPutAway: "臨時上架",
     shelfExchange: "貨架調撥",
     settings: "設定",
+    manualReceiving: "手動收貨",
     labeling: "待貼標籤",
     labelingDetail: "貼標籤詳情"
   },
@@ -117,7 +118,8 @@ export default {
       verify: { title: "覆核" },
       stockSearch: { title: "庫存查詢" },
       adHocPutAway: { title: "臨時上架" },
-      shelfExchange: { title: "貨架調撥" }
+      shelfExchange: { title: "貨架調撥" },
+      manualReceiving: { title: "手動收貨" }
     }
   },
   labeling: {
@@ -130,6 +132,39 @@ export default {
     finished: "貼標籤已完成",
     alreadyDone: "該訂單已完成貼標籤",
     noLongerMatch: "標籤打印規則已不再符合此訂單 — 請直接完成貼標籤以繼續。"
+  },
+  manualReceiving: {
+    title: "手動收貨",
+    addOrderNo: "新增訂單號",
+    addOrderNoPlaceholder: "輸入訂單號",
+    confirm: "確定",
+    edit: "修改",
+    delete: "刪除",
+    finish: "完成",
+    finishScan: "完成掃描",
+    scannedTo: "掃描到 {orderNo}",
+    noOrders: "尚未新增訂單號 — 請先在上方新增。",
+    noScannedItems: "尚未掃描任何貨品。",
+    duplicateOrderNo: "此訂單號已在任務中。",
+    duplicateLabel: "此標籤已掃描過。",
+    noPartNo: "無法從標籤讀取料號。",
+    mixedBrand: "此任務已鎖定品牌 {brand} — 不同品牌的標籤請另開任務。",
+    brandRequired: "無法識別品牌 — 請先掃描一張能匹配供應商模板的標籤。",
+    invalidItem: "必須填寫料號及正整數數量。",
+    editOrderNo: "修改訂單號",
+    editItem: "修改貨品",
+    confirmDiscard: "放棄此手動收貨任務？所有已輸入的訂單及貨品將會刪除。",
+    confirmFinish: "確定完成此手動收貨任務？系統會建立收貨單及上架任務。",
+    submitted: "手動收貨已完成。",
+    fields: {
+      partNo: "料號",
+      wclItemNo: "WCL 料號",
+      qty: "數量",
+      dateCode: "Date Code",
+      lotCode: "Lot Code",
+      coo: "COO",
+      cow: "COW"
+    }
   },
   login: {
     brand: "DocPal",
@@ -1440,6 +1475,7 @@ export default {
         dateCodeKoa: "KOA 格式 — 月份計數 + 週數（例如 1723L789 → 2326）",
         dateCodeNcc: "NCC 格式 — 批號前綴 YMMDD（例如 60910… → 3726）",
         dateCodeYyyymm: "YYYYMM 月份 — 以當月 15 日為準（例如 202606 → 2526）",
+        dateCodeYywwd: "TE 格式 — YYWW + 日期位（例如 26374 → 3726）",
         outdatedLimitMonths: "過期期限（月）",
         outdatedLimitPlaceholder: "12",
         outdatedLimitHint: "揀貨／上架掃描時，日期碼早於此月數的標籤會產生過期警告。留空表示不檢查。",
@@ -1915,10 +1951,10 @@ export default {
         },
         stepUpload: "選擇檔案",
         stepVerify: "核對資料",
-        uploadHint: "選擇客戶收貨確認 Excel（.xls / .xlsx），系統會在瀏覽器內解讀內容。",
-        dropHint: "…或將 Excel 檔案拖放到此處",
-        invalidFileType: "只接受 .xls / .xlsx Excel 檔案。",
-        pickFile: "選擇 Excel 檔案",
+        uploadHint: "選擇已掃描的客戶收貨確認 PDF — DocPal 會在流程中透過 OCR 解讀內容。",
+        dropHint: "…或將 PDF 檔案拖放到此處",
+        invalidFileType: "只接受 .pdf 檔案。",
+        pickFile: "選擇 PDF 檔案",
         noSheet: "檔案內找不到工作表。",
         noItems: "解析不到任何收貨明細 — 請確認檔案格式正確。",
         partNotFound: "零件主檔中不存在",

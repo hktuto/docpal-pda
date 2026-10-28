@@ -22,6 +22,7 @@ export default {
     adHocPutAway: "Ad-hoc Put-away",
     shelfExchange: "Shelf Exchange",
     settings: "Settings",
+    manualReceiving: "Manual Receiving",
     labeling: "Labeling",
     labelingDetail: "Labeling Detail"
   },
@@ -117,7 +118,8 @@ export default {
       verify: { title: "Verify" },
       stockSearch: { title: "Stock Search" },
       adHocPutAway: { title: "Ad-hoc Put-away" },
-      shelfExchange: { title: "Shelf Exchange" }
+      shelfExchange: { title: "Shelf Exchange" },
+      manualReceiving: { title: "Manual Receiving" }
     }
   },
   labeling: {
@@ -130,6 +132,39 @@ export default {
     finished: "Labeling finished",
     alreadyDone: "Labeling was already finished",
     noLongerMatch: "Label print rules no longer match this order — mark labeling done to continue."
+  },
+  manualReceiving: {
+    title: "Manual Receiving",
+    addOrderNo: "Add order no.",
+    addOrderNoPlaceholder: "Enter order no.",
+    confirm: "Confirm",
+    edit: "Edit",
+    delete: "Delete",
+    finish: "Finish",
+    finishScan: "Done Scanning",
+    scannedTo: "Scanning into {orderNo}",
+    noOrders: "No order numbers yet — add one above to start.",
+    noScannedItems: "No items scanned yet.",
+    duplicateOrderNo: "This order no. is already in the task.",
+    duplicateLabel: "This label was already scanned.",
+    noPartNo: "Could not read a part number from the label.",
+    mixedBrand: "This task is locked to brand {brand} — scan other brands in a separate task.",
+    brandRequired: "Brand unknown — scan a label that matches a supplier template first.",
+    invalidItem: "A part no. and a positive whole-number qty are required.",
+    editOrderNo: "Edit order no.",
+    editItem: "Edit item",
+    confirmDiscard: "Discard this manual receiving task? All staged orders and items will be lost.",
+    confirmFinish: "Finish this manual receiving task? The receiving order and its put-away task will be created.",
+    submitted: "Manual receiving completed.",
+    fields: {
+      partNo: "Part No.",
+      wclItemNo: "WCL Item No.",
+      qty: "Qty",
+      dateCode: "Date Code",
+      lotCode: "Lot Code",
+      coo: "COO",
+      cow: "COW"
+    }
   },
   login: {
     brand: "DocPal",
@@ -1440,6 +1475,7 @@ export default {
         dateCodeKoa: "KOA style — month counter + week (e.g. 1723L789 → 2326)",
         dateCodeNcc: "NCC style — lot prefix YMMDD (e.g. 60910… → 3726)",
         dateCodeYyyymm: "YYYYMM month — anchored on the 15th (e.g. 202606 → 2526)",
+        dateCodeYywwd: "TE style — YYWW + day digit (e.g. 26374 → 3726)",
         outdatedLimitMonths: "Outdated limit (months)",
         outdatedLimitPlaceholder: "12",
         outdatedLimitHint: "Picking / put-away scans with a date code older than this many months raise an outdated warning. Leave empty for no check.",
@@ -1917,10 +1953,10 @@ export default {
         },
         stepUpload: "Pick File",
         stepVerify: "Verify",
-        uploadHint: "Pick the customer receiving confirmation Excel (.xls / .xlsx) — it is decoded in your browser.",
-        dropHint: "…or drag & drop the Excel file here",
-        invalidFileType: "Only .xls / .xlsx Excel files are accepted.",
-        pickFile: "Pick Excel File",
+        uploadHint: "Pick the scanned customer receiving confirmation PDF — DocPal OCR will extract the data in the workflow.",
+        dropHint: "…or drag & drop the PDF file here",
+        invalidFileType: "Only .pdf files are accepted.",
+        pickFile: "Pick PDF File",
         noSheet: "The file contains no worksheet.",
         noItems: "No receiving items could be parsed — check the file format.",
         partNotFound: "Not in parts master",

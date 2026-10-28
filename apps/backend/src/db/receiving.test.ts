@@ -242,6 +242,25 @@ test("parseQrRaw: iC-Haus builtin template parses the Versandetikett JSON QR", (
   assert.equal(reordered.serialNo, "20260929-4");
 });
 
+test("parseQrRaw: TE datamatrix with yywwd encoding decodes the 5-digit DC", () => {
+  // TE Connectivity ASC MH10 datamatrix: DC is YYWW + day digit ("26374" =
+  // 2026 week 37 day 4) — decoded to the label format, day dropped.
+  const template =
+    "^\\[\\)>[\\x1d\\x1e\\xA0]?06[\\x1d\\xA0]LT(?<serialNo>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]PN(?<itemId>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]RV[^\\x1d\\xA0]*[\\x1d\\xA0]QT(?<qty>\\d+)[\\x1d\\xA0]PO[^\\x1d\\xA0]*[\\x1d\\xA0]BT(?<lotCode>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]BX[^\\x1d\\xA0]+[\\x1d\\xA0]DC(?<dateCode>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1e\\x04]*$";
+  const raw =
+    "[)>\x1e06\x1dLT3S550200578934\x1dPN1376348-1\x1dRVF\x1dQT5000\x1dPO200234935045\x1dBT26374N\x1dBX1\x1dDC26374\x1e\x04";
+  const parsed = parseQrRaw(raw, template, null, "yywwd");
+  assert.equal(parsed.partNo, "1376348-1");
+  assert.equal(parsed.qty, 5000);
+  assert.equal(parsed.dateCode, "3726"); // "26374" → wk37/2026, day dropped, WWYY
+  assert.equal(parsed.lotCode, "26374N");
+  assert.equal(parsed.serialNo, "3S550200578934");
+  // yyww label format: identity, no pair swap
+  assert.equal(parseQrRaw(raw, template, null, "yywwd", undefined, "yyww").dateCode, "2637");
+  // without the encoding the raw 5-digit code passes through unchanged
+  assert.equal(parseQrRaw(raw, template, null, null).dateCode, "26374");
+});
+
 test("parseQrRaw: apps-web KOA template variant (empty subId segment)", () => {
   // Verbatim from apps/web/tests/parseOcrScan.test.ts — no serialNo group:
   // older templates are tolerated and simply yield no serial.
