@@ -17,6 +17,18 @@
         <p class="menu-card__title">{{ $t('home.menu.receiving.title') }}</p>
       </NuxtLink>
 
+      <NuxtLink v-if="cnReceiving" to="/manual-receiving" class="menu-card">
+        <div class="menu-card__icon menu-card__icon--manual-receiving">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+            <path d="m3.3 7 8.7 5 8.7-5"/>
+            <path d="M12 22V12"/>
+            <path d="m8 11 2 2 4-4"/>
+          </svg>
+        </div>
+        <p class="menu-card__title">{{ $t('home.menu.manualReceiving.title') }}</p>
+      </NuxtLink>
+
       <NuxtLink v-if="flowSteps['put-away']" to="/put-away" class="menu-card">
         <div class="menu-card__icon menu-card__icon--putaway">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -38,9 +50,6 @@
         </div>
         <p class="menu-card__title">{{ $t('home.menu.picking.title') }}</p>
       </NuxtLink>
-
-
-
 
       <NuxtLink v-if="flowSteps.labeling" to="/labeling" class="menu-card">
         <div class="menu-card__icon menu-card__icon--labeling">
@@ -132,7 +141,7 @@ const { t } = useI18n();
 useHead({ title: t("meta.warehouse") });
 
 const { currentUser } = useAuth();
-const { flowSteps } = useFlowSteps();
+const { flowSteps, cnReceiving } = useFlowSteps();
 </script>
 
 <style scoped>
@@ -210,6 +219,7 @@ const { flowSteps } = useFlowSteps();
 .menu-card__icon--stock-search { background: linear-gradient(135deg, #ec4899, #db2777); }
 .menu-card__icon--adhoc-putaway { background: linear-gradient(135deg, #f97316, #ea580c); }
 .menu-card__icon--shelf-exchange { background: linear-gradient(135deg, #0d9488, #0f766e); }
+.menu-card__icon--manual-receiving { background: linear-gradient(135deg, #14b8a6, #0d9488); }
 
 .menu-card__title {
   margin: 0;

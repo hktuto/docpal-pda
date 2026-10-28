@@ -12,7 +12,15 @@ const props = defineProps<{
   modelValue: string;
   ariaLabel?: string;
 }>();
-const emit = defineEmits<{ "update:modelValue": [string] }>();
+// commit = the value is final (a suggestion was picked, or the input blurred
+// after edits) — the detail page's inline edit saves on it instead of on
+// every keystroke. pick carries the full option so the caller can also apply
+// the matched part_no alongside the wcl_item_no.
+const emit = defineEmits<{
+  "update:modelValue": [string];
+  commit: [string];
+  pick: [PartOption];
+}>();
 const { t } = useI18n();
 const flow = useFlowApi();
 
@@ -64,7 +72,8 @@ function onInput(event: Event) {
 
 function scheduleSearch(raw: string, showPanel: boolean) {
   clearTimeout(searchTimer);
-  const q = raw.trim();
+
+  const q = raw?.trim();
   if (!q) {
     options.value = [];
     unknown.value = false;
@@ -98,14 +107,30 @@ function scheduleSearch(raw: string, showPanel: boolean) {
 // Validate prefilled values (excel decode / added rows) without popping panels.
 onMounted(() => scheduleSearch(props.modelValue, false));
 
+// The last value this instance committed (pick or blur) — blur only commits
+// when the value changed since. (Panel picks use mousedown.prevent, so the
+// input keeps focus and pick() owns the commit there.)
+let lastCommitted = props.modelValue;
+
 function pick(option: PartOption) {
   emit("update:modelValue", option.wclItemNo);
   unknown.value = false;
   open.value = false;
+  lastCommitted = option.wclItemNo;
+  emit("pick", option);
+  emit("commit", option.wclItemNo);
 }
 
 function close() {
   open.value = false;
+}
+
+function onBlur() {
+  open.value = false;
+  if (props.modelValue !== lastCommitted) {
+    lastCommitted = props.modelValue;
+    emit("commit", props.modelValue);
+  }
 }
 
 function onDocumentClick(event: MouseEvent) {
@@ -136,6 +161,7 @@ onBeforeUnmount(() => {
       :aria-invalid="unknown || undefined"
       autocomplete="off"
       @input="onInput"
+      @blur="onBlur"
       @keydown.escape="close"
     />
     <Teleport to="body">

@@ -60,14 +60,18 @@
   decoder is restricted to the supplier profile's `barcode_types` (when set),
   so other symbologies on multi-barcode labels don't decode at all; restored
   on page leave (`useSupplierSymbologyScope`, xcheng/Movfast devices only).
-- Customer receiving order upload (CN warehouses; spec
+- Customer receiving (CN warehouses; spec
   `docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`) —
-  a separate admin-side world, not the PDA receiving flow: the admin uploads
-  a customer receiving Excel (收貨確認及付款通知書) on
-  `apps/admin/pages/receiving-cn/new.vue` (parsed client-side by
-  `apps/admin/utils/cnReceivingExcel.ts`, verified/edited in the wizard,
-  submitted multipart to `POST /admin/receiving-cn/excel`), the backend
-  forwards file + verified JSON to DocPal
+  a separate world from the standard receiving flow, with two intake paths:
+  (a) PDA manual receiving 手動收貨 (spec
+  `docs/superpowers/specs/2026-10-27-manual-receiving-pda-design.md`) — the
+  operator stages order numbers + label-scan items on
+  `apps/pda/pages/manual-receiving/index.vue` and commits via
+  `POST /receiving-cn/manual-receipts`, which writes `receiving_orders_cn`
+  (in_hand) + one invoice per order number + items + the CN put-away task in
+  one tx; (b) admin PDF upload (phase 2) on
+  `apps/admin/pages/receiving-cn/new.vue` → `POST /admin/receiving-cn/pdf` —
+  the backend forwards the file to DocPal
   (`apps/backend/src/docpalWorkflow.ts` — one configured
   `DOCPAL_WORKFLOW_TOKEN` for all workflow/file calls, the real admin sent as
   the workflow creator) and tracks the workflow in `receiving_cn_workflows`

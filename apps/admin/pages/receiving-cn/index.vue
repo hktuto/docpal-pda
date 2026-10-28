@@ -79,8 +79,29 @@ async function load() {
     error.value = e.message;
   } finally {
     loading.value = false;
+    syncPolling();
   }
 }
+
+// While any upload is still waiting for its synced order (a pending row —
+// e.g. right after a pdf upload), poll the list every 10 s; the interval is
+// cleared as soon as every workflow has its record back (or the page exits).
+const POLL_INTERVAL_MS = 10_000;
+let pollTimer: ReturnType<typeof setInterval> | undefined;
+
+function syncPolling() {
+  const hasPending = rows.value.some((r) => r.kind === "pending");
+  if (hasPending && !pollTimer) {
+    pollTimer = setInterval(() => {
+      if (!loading.value) load();
+    }, POLL_INTERVAL_MS);
+  } else if (!hasPending && pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = undefined;
+  }
+}
+
+onBeforeUnmount(() => clearInterval(pollTimer));
 
 watch(pagination, load);
 

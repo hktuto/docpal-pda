@@ -818,11 +818,46 @@ export interface CnPutAwayCompleteItem {
   boxId?: string | null;
 }
 
+// ------------------------------------------------------------------
+// CN manual receiving (手動收貨) — POST /receiving-cn/manual-receipts (spec
+// 2026-10-27-manual-receiving-pda-design): the PDA stages the task locally and
+// commits it in one call; the backend writes the _cn order (in_hand) + one
+// invoice per order number + items + the CN put-away task.
+
+/** One scanned label item within a manual-receiving order. */
+export interface CnManualReceiptItem {
+  partNo: string;
+  qty: number;
+  /** Client-resolved parts key from the label parse. */
+  wclItemNo?: string;
+  /** Task brand from the matched supplier template (drives the invoice no). */
+  brand?: string;
+  dateCode?: string;
+  lotCode?: string;
+  coo?: string;
+  cow?: string;
+  ctnNo?: string;
+  supplierCode?: string;
+  /** The scanned label text — traceability only. */
+  raw?: string;
+}
+
+/** One order number (訂單號) with its scanned items → po_no on the items. */
+export interface CnManualReceiptOrder {
+  orderNo: string;
+  items: CnManualReceiptItem[];
+}
+
+export interface CnManualReceiptResult {
+  id: string;
+  batchNo: string;
+  putAwayTaskId: string;
+}
+
 /** POST /shelf-boxes response (a real, non-staging box). */
 export interface ShelfBox {
   id: string;
-  receivingOrderId: string | null;
-  shelfCode: string | null;
+  receivingOrderId: string | null;  shelfCode: string | null;
   status: string;
   createdDate: string;
 }

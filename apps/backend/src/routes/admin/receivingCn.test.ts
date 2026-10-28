@@ -23,6 +23,7 @@ let app: (typeof import("../../index.js"))["app"];
 
 const WORKFLOW_TOKEN = "workflow-service-token";
 const EXCEL_WORKFLOW_ID = "cn-excel-def-1";
+const PDF_WORKFLOW_ID = "cn-pdf-def-1";
 
 // --- fake DocPal workflow server ----------------------------------------------
 
@@ -127,12 +128,14 @@ before(async () => {
   ({ app } = await import("../../index.js"));
   process.env.DOCPAL_WORKFLOW_TOKEN = WORKFLOW_TOKEN;
   process.env.DOCPAL_CN_EXCEL_WORKFLOW_ID = EXCEL_WORKFLOW_ID;
+  process.env.DOCPAL_CN_PDF_WORKFLOW_ID = PDF_WORKFLOW_ID;
   _setCnReceivingForTests(true); // the route guard 404s the whole surface when the step is off
 });
 
 after(() => {
   delete process.env.DOCPAL_WORKFLOW_TOKEN;
   delete process.env.DOCPAL_CN_EXCEL_WORKFLOW_ID;
+  delete process.env.DOCPAL_CN_PDF_WORKFLOW_ID;
   _resetFlowConfigForTests();
   fakeServer.close();
 });
@@ -325,6 +328,120 @@ test("excel upload: startProcess failure deletes the orphaned attachment → 502
   } finally {
     fake.startFails = false;
   }
+});
+
+// --- pdf upload (phase 2) ------------------------------------------------------
+
+function pdfForm(opts: { withFile?: boolean; name?: string; type?: string } = {}): FormData {
+  const form = new FormData();
+  if (opts.withFile !== false) {
+    form.append(
+      "file",
+      new Blob(["%PDF-1.4 fake"], { type: opts.type ?? "application/pdf" }),
+      opts.name ?? "TE扫描原件1.pdf"
+    );
+  }
+  return form;
+}
+
+async function postPdf(token: string, form: FormData) {
+  return app.request("/admin/receiving-cn/pdf", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+}
+
+test("pdf upload: missing file → 400 file_required", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  const res = await postPdf(token, pdfForm({ withFile: false }));
+  assert.equal(res.status, 400);
+  assert.match(await res.text(), /file_required/);
+});
+
+test("pdf upload: non-pdf file → 400 invalid_file_type", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  const res = await postPdf(token, pdfForm({ name: "TE20261010-2.xls", type: "application/vnd.ms-excel" }));
+  assert.equal(res.status, 400);
+  assert.match(await res.text(), /invalid_file_type/);
+});
+
+test("pdf upload: definition id unset → 500 docpal_workflow_definition_not_configured", async (t) => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  // The pdf id falls back to the excel id — both must be unset for the 500.
+  delete process.env.DOCPAL_CN_PDF_WORKFLOW_ID;
+  delete process.env.DOCPAL_CN_EXCEL_WORKFLOW_ID;
+  t.after(() => {
+    process.env.DOCPAL_CN_PDF_WORKFLOW_ID = PDF_WORKFLOW_ID;
+    process.env.DOCPAL_CN_EXCEL_WORKFLOW_ID = EXCEL_WORKFLOW_ID;
+  });
+  await withWorkflowFake(async () => {
+    const res = await postPdf(token, pdfForm());
+    assert.equal(res.status, 500);
+    assert.match(await res.text(), /docpal_workflow_definition_not_configured/);
+  });
+});
+
+test("pdf upload: upload + kick → 201 tracking row; kick carries pdfFiles and no excel_result_data", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  fake.requests = []; // the fake accumulates across tests — ignore earlier kicks
+  await withWorkflowFake(async () => {
+    const res = await postPdf(token, pdfForm());
+    assert.equal(res.status, 201);
+    const { id } = (await res.json()) as { id: string };
+
+    const row = await queryGet<{
+      phase: string;
+      status: string;
+      invoiceNo: string | null;
+      supplier: string | null;
+      filename: string;
+      docpalDocumentId: string;
+      docpalProcessId: string;
+      batchNo: string;
+      createdBy: string;
+      payload: Record<string, unknown>;
+    }>(
+      client.db,
+      sql`SELECT phase, status, invoice_no AS "invoiceNo", supplier, filename,
+                 docpal_document_id AS "docpalDocumentId", docpal_process_id AS "docpalProcessId",
+                 batch_no AS "batchNo", created_by AS "createdBy", payload
+          FROM receiving_cn_workflows WHERE id = ${id}`
+    );
+    assert.equal(row!.phase, "pdf");
+    assert.equal(row!.status, "workflow_running");
+    assert.equal(row!.invoiceNo, null); // unknown until the OCR/verify step
+    assert.equal(row!.supplier, null);
+    assert.equal(row!.filename, "TE扫描原件1.pdf");
+    assert.equal(row!.docpalDocumentId, "doc-1");
+    assert.equal(row!.docpalProcessId, "proc-1");
+    assert.match(row!.batchNo, /^TE-\d{8}-01$/); // pdf uploads number like manual receipts
+    assert.equal(row!.createdBy, "admin");
+    assert.deepEqual(row!.payload, {}); // no verified payload in phase 2
+
+    // The workflow kick carried the file entry under pdfFiles (the DocPal
+    // contract), the batch_no correlation key, and the creator variables.
+    const startReq = fake.requests.find((r) => r.method === "POST" && r.url === "/oniflow/api/v1/processes");
+    assert.ok(startReq);
+    const startBody = JSON.parse(startReq!.body);
+    assert.equal(startBody.definition_id, PDF_WORKFLOW_ID);
+    assert.equal(startBody.start_user_id, "admin");
+    assert.equal(startBody.variables.start_user_id, "admin");
+    assert.equal(startBody.variables.__system__user_creator_id, "admin");
+    assert.equal(startBody.variables.__system__user_creator_name, "Demo Admin");
+    assert.equal(startBody.variables.batch_no, row!.batchNo);
+    assert.equal(startBody.variables.excelFiles, undefined);
+    assert.equal(startBody.variables.excel_result_data, undefined);
+    const pdf = startBody.variables.pdfFiles?.[0];
+    assert.ok(pdf);
+    assert.equal(pdf.id, "doc-1");
+    assert.equal(pdf.file_name, "TE扫描原件1.pdf");
+    assert.equal(pdf.mime_type, "application/pdf");
+    assert.equal(pdf.extension, "pdf");
+    assert.equal(pdf.response.data.id, "doc-1");
+    assert.equal(pdf.response.data.fileContent.mime_type, "application/pdf");
+    assert.equal(pdf.response.data.fileContentExtension, "pdf");
+  });
 });
 
 // --- list / detail ------------------------------------------------------------------
@@ -956,6 +1073,252 @@ test("order detail: suggestedShelf = computed default, PATCH override wins, null
     [
       [null, "A0999"],
       ["A0999", null],
+    ]
+  );
+});
+
+// --- pdf batch numbering + pending prepare + admin confirm ------------------------
+
+/** Seed a PENDING CN order (the pdf path before the admin confirm): no arrival
+ *  stamp, item received_qty 0, po_no as given. */
+async function seedPendingCnOrder(batchNo: string, poNo: string): Promise<{ orderId: string; itemId: string }> {
+  const orderId = `cn-order-${batchNo}`;
+  const itemId = `cn-item-${batchNo}`;
+  await client.db.execute(
+    sql`INSERT INTO receiving_orders_cn (id, batch_no, status, delivery_date, org_id)
+        VALUES (${orderId}, ${batchNo}, 'pending', '2026-10-10', 2)`
+  );
+  await client.db.execute(
+    sql`INSERT INTO receiving_invoices_cn (id, receiving_order_id, invoice_no, total_qty, org_id)
+        VALUES (${`cn-inv-${batchNo}`}, ${orderId}, ${batchNo}, 100, 2)`
+  );
+  await client.db.execute(
+    sql`INSERT INTO receiving_invoice_items_cn (id, receiving_invoice_id, part_no, wcl_item_no, po_no, line_qty, received_qty, org_id, sub_inventory_code)
+        VALUES (${itemId}, ${`cn-inv-${batchNo}`}, 'RK73B1JTTD181G', 'WCL/181G', ${poNo}, 100, 0, 2, 'STORE1')`
+  );
+  return { orderId, itemId };
+}
+
+/** The po_no prefix rules write org/sub pairs the item FK needs in org_info. */
+async function seedDerivedOrgInfoPairs() {
+  for (const [id, orgId, sub] of [
+    ["test-orginfo-cn-1", 14, "GZSZ"],
+    ["test-orginfo-cn-2", 7, "SZSZ1"],
+  ] as const) {
+    await client.db.execute(
+      sql`INSERT INTO org_info (id, org_id, secondary_inventory_name) VALUES (${id}, ${orgId}, ${sub})
+          ON CONFLICT ON CONSTRAINT org_info_org_subinv_unique DO NOTHING`
+    );
+  }
+}
+
+test("pdf upload: batch_no numbers TE-yyyymmdd-seq, continuing the shared namespace", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  const ymd = new Date().toLocaleDateString("sv-SE").replaceAll("-", ""); // local YYYYMMDD
+  // A same-day TE number already taken elsewhere in the namespace (a synced
+  // order) — the next pdf upload continues after it.
+  await client.db.execute(
+    sql`INSERT INTO receiving_orders_cn (id, batch_no, status, delivery_date, org_id)
+        VALUES ('cn-order-seq-taken', ${`TE-${ymd}-04`}, 'in_hand', '2026-10-10', 2)`
+  );
+  fake.requests = [];
+  await withWorkflowFake(async () => {
+    const res = await postPdf(token, pdfForm());
+    assert.equal(res.status, 201);
+    const { id } = (await res.json()) as { id: string };
+    const row = await queryGet<{ batchNo: string }>(
+      client.db,
+      sql`SELECT batch_no AS "batchNo" FROM receiving_cn_workflows WHERE id = ${id}`
+    );
+    assert.equal(row!.batchNo, `TE-${ymd}-05`);
+  });
+});
+
+test("order detail prepare: pending order — items re-derived from po_no, arrival stamped; in_hand untouched", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  await seedDerivedOrgInfoPairs();
+  await seedPendingCnOrder("TE-PREP-1", "329063176T3"); // → org 14 / GZSZ
+
+  const res = await app.request("/admin/receiving-cn/orders/TE-PREP-1", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(res.status, 200);
+  const detail = (await res.json()) as {
+    order: { status: string; arrivedAt: string | null; arrivedBy: string | null };
+    items: { poNo: string; orgId: number; subInventoryCode: string }[];
+  };
+  assert.equal(detail.order.status, "pending"); // prepare does NOT confirm
+  assert.ok(detail.order.arrivedAt);
+  const adminId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'admin'`))!.id;
+  assert.equal(detail.order.arrivedBy, adminId);
+  assert.equal(detail.items[0].orgId, 14);
+  assert.equal(detail.items[0].subInventoryCode, "GZSZ");
+
+  // A non-pending order is left alone.
+  await seedCnOrderByBatch("TE-PREP-2");
+  const before = await queryGet<{ arrivedAt: string }>(
+    client.db,
+    sql`SELECT arrived_at AS "arrivedAt" FROM receiving_orders_cn WHERE batch_no = 'TE-PREP-2'`
+  );
+  const res2 = await app.request("/admin/receiving-cn/orders/TE-PREP-2", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(res2.status, 200);
+  const after = await queryGet<{ arrivedAt: string }>(
+    client.db,
+    sql`SELECT arrived_at AS "arrivedAt" FROM receiving_orders_cn WHERE batch_no = 'TE-PREP-2'`
+  );
+  assert.equal(new Date(after!.arrivedAt).getTime(), new Date(before!.arrivedAt).getTime());
+});
+
+test("confirm: pending → in_hand + received fill + put-away task; 409 when not pending; 404 unknown", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  await seedDerivedOrgInfoPairs();
+  await seedPendingCnOrder("TE-CONF-1", "329063176T3");
+
+  const res = await app.request("/admin/receiving-cn/orders/TE-CONF-1/confirm", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { id: string; batchNo: string; putAwayTaskId: string | null };
+  assert.equal(body.batchNo, "TE-CONF-1");
+  assert.ok(body.putAwayTaskId);
+
+  const order = await queryGet<{ status: string; arrivedAt: string | null; arrivedBy: string | null }>(
+    client.db,
+    sql`SELECT status, arrived_at AS "arrivedAt", arrived_by AS "arrivedBy"
+        FROM receiving_orders_cn WHERE batch_no = 'TE-CONF-1'`
+  );
+  assert.equal(order!.status, "in_hand");
+  assert.ok(order!.arrivedAt);
+  assert.ok(order!.arrivedBy);
+  const item = await queryGet<{ receivedQty: number; orgId: number; subInventoryCode: string }>(
+    client.db,
+    sql`SELECT received_qty AS "receivedQty", org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
+        FROM receiving_invoice_items_cn WHERE id = 'cn-item-TE-CONF-1'`
+  );
+  assert.equal(item!.receivedQty, 100); // filled from line_qty
+  assert.equal(item!.orgId, 14); // po_no cleanup ran on confirm too
+  assert.equal(item!.subInventoryCode, "GZSZ");
+  const task = await queryGet<{ orgId: number; subInventoryCode: string; status: string }>(
+    client.db,
+    sql`SELECT org_id AS "orgId", sub_inventory_code AS "subInventoryCode", status
+        FROM put_away_tasks_cn WHERE receiving_order_cn_id = 'cn-order-TE-CONF-1'`
+  );
+  assert.deepEqual(task, { orgId: 14, subInventoryCode: "GZSZ", status: "pending" });
+  const logs = await queryAll<{ entityType: string; toState: string }>(
+    client.db,
+    sql`SELECT entity_type AS "entityType", to_state AS "toState" FROM transaction_logs
+        WHERE entity_id IN ('cn-order-TE-CONF-1', ${body.putAwayTaskId}) ORDER BY created_date`
+  );
+  assert.deepEqual(
+    logs.map((l) => [l.entityType, l.toState]),
+    [
+      ["receiving_order_cn", "in_hand"],
+      ["put_away_task_cn", "pending"],
+    ]
+  );
+
+  // Second confirm → 409; unknown batch → 404.
+  const again = await app.request("/admin/receiving-cn/orders/TE-CONF-1/confirm", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(again.status, 409);
+  assert.match(await again.text(), /order_not_pending/);
+  const missing = await app.request("/admin/receiving-cn/orders/NOPE/confirm", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(missing.status, 404);
+});
+
+test("item edit: partNo re-resolves wcl_item_no; poNo + lineQty set; received_qty follows while 0", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  await seedPendingCnOrder("TE-EDIT-1", "PO-1");
+  const itemId = "cn-item-TE-EDIT-1";
+
+  await patchItem(token, itemId, { partNo: "  NEW-PART-9 ", poNo: "319000001T1", lineQty: 55 });
+  const row = await queryGet<{ partNo: string; wclItemNo: string | null; poNo: string; lineQty: number; receivedQty: number }>(
+    client.db,
+    sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo", po_no AS "poNo",
+               line_qty AS "lineQty", received_qty AS "receivedQty"
+        FROM receiving_invoice_items_cn WHERE id = ${itemId}`
+  );
+  assert.equal(row!.partNo, "NEW-PART-9");
+  assert.equal(row!.wclItemNo, null); // no parts-master match → cleared
+  assert.equal(row!.poNo, "319000001T1");
+  assert.equal(row!.lineQty, 55);
+  assert.equal(row!.receivedQty, 55); // was 0 → follows line_qty
+
+  const logs = await queryAll<{ metadata: { field: string; from: string | null; to: string | null } }>(
+    client.db,
+    sql`SELECT metadata FROM transaction_logs
+        WHERE entity_type = 'receiving_invoice_item_cn' AND entity_id = ${itemId}
+        ORDER BY created_date`
+  );
+  const fields = logs.map((l) => l.metadata.field);
+  assert.ok(fields.includes("part_no"));
+  assert.ok(fields.includes("wcl_item_no"));
+  assert.ok(fields.includes("po_no"));
+  assert.ok(fields.includes("line_qty"));
+
+  // lineQty validation.
+  const bad = await app.request(`/admin/receiving-cn/items/${itemId}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ lineQty: 0 }),
+  });
+  assert.equal(bad.status, 400);
+});
+
+test("item edit: wclItemNo change applies the matched part_no; unknown wcl leaves part_no", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  await client.db.execute(
+    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no, description)
+        VALUES ('test-part-434j', 'KOA', 'P-434J', 'WCL/434J', 'test part')`
+  );
+  await seedPendingCnOrder("TE-EDIT-2", "PO-1");
+  const itemId = "cn-item-TE-EDIT-2";
+
+  // A master-known wcl: canonical wcl stored + part_no applied alongside.
+  await patchItem(token, itemId, { wclItemNo: "wcl/434j" }); // case-insensitive match
+  const row = await queryGet<{ partNo: string; wclItemNo: string }>(
+    client.db,
+    sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo" FROM receiving_invoice_items_cn WHERE id = ${itemId}`
+  );
+  assert.equal(row!.wclItemNo, "WCL/434J");
+  assert.equal(row!.partNo, "P-434J");
+
+  // An unknown wcl: stored as typed, part_no untouched.
+  await patchItem(token, itemId, { wclItemNo: "WCL/NOPE" });
+  const row2 = await queryGet<{ partNo: string; wclItemNo: string }>(
+    client.db,
+    sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo" FROM receiving_invoice_items_cn WHERE id = ${itemId}`
+  );
+  assert.equal(row2!.wclItemNo, "WCL/NOPE");
+  assert.equal(row2!.partNo, "P-434J");
+
+  const logs = await queryAll<{ metadata: { field: string; from: string | null; to: string | null } }>(
+    client.db,
+    sql`SELECT metadata FROM transaction_logs
+        WHERE entity_type = 'receiving_invoice_item_cn' AND entity_id = ${itemId}
+        ORDER BY created_date`
+  );
+  const partLog = logs.find((l) => l.metadata.field === "part_no");
+  assert.deepEqual([partLog?.metadata.from, partLog?.metadata.to], ["RK73B1JTTD181G", "P-434J"]);
+  const wclLogs = logs.filter((l) => l.metadata.field === "wcl_item_no");
+  assert.deepEqual(
+    wclLogs.map((l) => [l.metadata.from, l.metadata.to]),
+    [
+      ["WCL/181G", "WCL/434J"],
+      ["WCL/434J", "WCL/NOPE"],
     ]
   );
 });

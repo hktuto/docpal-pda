@@ -203,7 +203,12 @@ const itemColumnDefs = computed<AdminColumnDef<CnOrderItemRow>[]>(() => [
   {
     key: "partNo",
     label: t("admin.pages.receivingCn.itemsTable.partNo"),
-    accessor: (it) => it.wclItemNo ?? it.partNo,
+    size: 190,
+  },
+  {
+    key: "wclItemNo",
+    label: t("admin.pages.receivingCn.itemsTable.wclItemNo"),
+    accessor: (it) => it.wclItemNo ?? "",
     size: 190,
   },
   {
@@ -260,6 +265,78 @@ function tableForGroup(key: string): GroupTable {
 
 const editItems = ref<CnOrderItemRow[] | null>(null);
 const savingEdit = ref(false);
+
+// Pending orders (pdf path, awaiting the admin confirm) edit inline in the
+// table — same fields as the modal, saved per cell on change.
+const isPending = computed(() => detail.value?.order.status === "pending");
+
+type InlineField =
+  | "partNo"
+  | "wclItemNo"
+  | "poNo"
+  | "lineQty"
+  | "ctnNo"
+  | "dateCode"
+  | "lotCode"
+  | "coo"
+  | "cow"
+  | "subInventoryCode";
+
+const INLINE_FIELD_BODY: Record<InlineField, (row: CnOrderItemRow) => Record<string, string | null | number>> = {
+  partNo: (row) => ({ partNo: row.partNo }),
+  // The backend applies the matched part's part_no alongside a wcl change.
+  wclItemNo: (row) => ({ wclItemNo: row.wclItemNo }),
+  poNo: (row) => ({ poNo: row.poNo }),
+  lineQty: (row) => ({ lineQty: Number(row.lineQty) }),
+  ctnNo: (row) => ({ ctnNo: row.ctnNo }),
+  dateCode: (row) => ({ dateCode: row.dateCode }),
+  lotCode: (row) => ({ lotCode: row.lotCode }),
+  coo: (row) => ({ coo: row.coo }),
+  cow: (row) => ({ cow: row.cow }),
+  subInventoryCode: (row) => ({ subInventory: row.subInventoryCode }),
+};
+
+async function saveInline(item: CnOrderItemRow, field: InlineField) {
+  if (!detail.value) return;
+  if (field === "lineQty") {
+    const qty = Number(item.lineQty);
+    if (!Number.isInteger(qty) || qty <= 0) {
+      error.value = t("admin.pages.receivingCn.invalidQty");
+      await load();
+      return;
+    }
+  }
+  error.value = "";
+  try {
+    const updated = await flow.updateCnItem(item.id, INLINE_FIELD_BODY[field](item));
+    const idx = detail.value.items.findIndex((i) => i.id === item.id);
+    if (idx >= 0) detail.value.items.splice(idx, 1, { ...item, ...updated });
+    logsKey.value++;
+  } catch (e: any) {
+    error.value = e?.message ?? String(e);
+    await load();
+  }
+}
+
+// ---- confirm receipt (pending → in_hand + put-away task) ----
+
+const confirming = ref(false);
+
+async function confirmOrder() {
+  if (!detail.value || confirming.value) return;
+  if (!window.confirm(t("admin.pages.receivingCn.confirmOrderConfirm", { batchNo: detail.value.order.batchNo }))) return;
+  confirming.value = true;
+  error.value = "";
+  try {
+    await flow.confirmCnOrder(batchNo);
+    await load();
+    logsKey.value++;
+  } catch (e: any) {
+    error.value = `${t("admin.pages.receivingCn.confirmFailed")}: ${e?.message ?? String(e)}`;
+  } finally {
+    confirming.value = false;
+  }
+}
 
 function openEdit(item: CnOrderItemRow) {
   editItems.value = [item];
@@ -319,6 +396,14 @@ function putAwayStatusClass(s: string): string {
     <div class="page-head">
       <h1>{{ $t("admin.pages.receivingCn.detailTitle", { batchNo }) }}</h1>
       <div class="head-actions">
+        <button
+          v-if="isPending"
+          class="btn btn-primary"
+          :disabled="confirming || loading"
+          @click="confirmOrder"
+        >
+          {{ confirming ? $t("admin.common.saving") : $t("admin.pages.receivingCn.confirmOrder") }}
+        </button>
         <button class="btn" :disabled="downloading || loading" @click="downloadExcel">
           {{ downloading ? $t("admin.common.loading") : $t("admin.pages.receivingCn.downloadExcel") }}
         </button>
@@ -421,6 +506,111 @@ function putAwayStatusClass(s: string): string {
           :empty-text="$t('admin.common.noRecords')"
           :on-reset-columns="tableForGroup(group.key).resetColumnState"
         >
+          <template #cell-partNo="{ row }">
+            <input
+              v-if="isPending"
+              v-model="row.partNo"
+              class="cell-input"
+              type="text"
+              @change="saveInline(row, 'partNo')"
+            />
+            <span v-else>{{ row.partNo }}</span>
+          </template>
+          <template #cell-wclItemNo="{ row }">
+            <ReceivingCnPartNoSelect
+              v-if="isPending"
+              :model-value="row.wclItemNo ?? ''"
+              :aria-label="$t('admin.pages.receivingCn.itemsTable.wclItemNo')"
+              @update:model-value="row.wclItemNo = $event"
+              @pick="row.partNo = $event.partNo"
+              @commit="saveInline(row, 'wclItemNo')"
+            />
+            <span v-else>{{ row.wclItemNo ?? "—" }}</span>
+          </template>
+          <template #cell-poNo="{ row }">
+            <input
+              v-if="isPending"
+              v-model="row.poNo"
+              class="cell-input"
+              type="text"
+              @change="saveInline(row, 'poNo')"
+            />
+            <span v-else>{{ row.poNo ?? "—" }}</span>
+          </template>
+          <template #cell-lineQty="{ row }">
+            <input
+              v-if="isPending"
+              v-model.number="row.lineQty"
+              class="cell-input"
+              type="number"
+              min="1"
+              step="1"
+              @change="saveInline(row, 'lineQty')"
+            />
+            <span v-else>{{ row.lineQty ?? "—" }}</span>
+          </template>
+          <template #cell-ctnNo="{ row }">
+            <input
+              v-if="isPending"
+              v-model="row.ctnNo"
+              class="cell-input"
+              type="text"
+              @change="saveInline(row, 'ctnNo')"
+            />
+            <span v-else>{{ row.ctnNo ?? "—" }}</span>
+          </template>
+          <template #cell-dateCode="{ row }">
+            <input
+              v-if="isPending"
+              v-model="row.dateCode"
+              class="cell-input"
+              type="text"
+              @change="saveInline(row, 'dateCode')"
+            />
+            <span v-else>{{ row.dateCode ?? "—" }}</span>
+          </template>
+          <template #cell-lotCode="{ row }">
+            <input
+              v-if="isPending"
+              v-model="row.lotCode"
+              class="cell-input"
+              type="text"
+              @change="saveInline(row, 'lotCode')"
+            />
+            <span v-else>{{ row.lotCode ?? "—" }}</span>
+          </template>
+          <template #cell-coo="{ row }">
+            <input
+              v-if="isPending"
+              v-model="row.coo"
+              class="cell-input"
+              type="text"
+              @change="saveInline(row, 'coo')"
+            />
+            <span v-else>{{ row.coo ?? "—" }}</span>
+          </template>
+          <template #cell-cow="{ row }">
+            <input
+              v-if="isPending"
+              v-model="row.cow"
+              class="cell-input"
+              type="text"
+              @change="saveInline(row, 'cow')"
+            />
+            <span v-else>{{ row.cow ?? "—" }}</span>
+          </template>
+          <template #cell-subInventoryCode="{ row }">
+            <select
+              v-if="isPending"
+              v-model="row.subInventoryCode"
+              class="cell-input"
+              @change="saveInline(row, 'subInventoryCode')"
+            >
+              <option :value="null">—</option>
+              <option v-for="opt in subInventoryOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+            <span v-else>{{ row.subInventoryCode ?? "—" }}</span>
+          </template>
           <template #cell-putAway="{ row }">
             <span v-if="row.putAwayQty > 0 || row.putAwayLocations.length > 0">
               {{ row.putAwayQty }}/{{ row.receivedQty }}
@@ -513,6 +703,15 @@ function putAwayStatusClass(s: string): string {
 .locations {
   display: block;
   font-size: 0.75rem;
+}
+.cell-input {
+  width: 100%;
+  min-width: 4rem;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.8125rem;
+  border: 1px solid #d5dee7;
+  border-radius: 0.25rem;
+  box-sizing: border-box;
 }
 .chip {
   display: inline-block;

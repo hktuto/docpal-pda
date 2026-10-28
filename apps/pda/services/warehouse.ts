@@ -27,6 +27,8 @@ import type {
   PutAwayTaskListRow,
   PutAwayScanResult,
   CnPutAwayCompleteItem,
+  CnManualReceiptOrder,
+  CnManualReceiptResult,
   ScanPickingItemResult,
   ScanIntoShippingBoxResult,
   Shelf,
@@ -188,6 +190,11 @@ export interface WarehouseService {
     taskId: string,
     items: CnPutAwayCompleteItem[]
   ): Promise<{ taskCompleted: boolean }>;
+
+  // CN manual receiving (手動收貨) — POST /receiving-cn/manual-receipts (spec
+  // 2026-10-27-manual-receiving-pda-design): commits the whole PDA-staged
+  // task in one call; 404 while the cnReceiving flag is off.
+  createCnManualReceipt(orders: CnManualReceiptOrder[]): Promise<CnManualReceiptResult>;
 
   // Measuring — box-scoped (no tasks): the list is the open boxes with
   // ≥1 package whose picking orders are ALL picking-complete (the order's

@@ -25,7 +25,7 @@ New file `apps/backend/src/db/schema/receivingCn.ts` (Drizzle; `newId()`, `now()
 - `receiving_invoices_cn` — `id`, `receiving_order_id` (FK cascade), `invoice_no`, `total_qty`, `total_ctn`, `delivery_date`, `org_id`, timestamps.
 - `receiving_invoice_items_cn` — `id`, `receiving_invoice_id` (FK cascade), `part_no`, `wcl_item_no`, `po_no`, `po_line`, `line_qty`, `received_qty` (0), `picked_qty` (0), `put_away_qty` (0), `ctn_no`, `date_code`, `lot_code`, `coo`, `cow`, `org_id`, `sub_inventory_code`, mismatch fields, `additional_data`/`order_data` jsonb, timestamps, `drawing_no`.
 - `put_away_tasks_cn` — dedicated CN put-away task (does NOT touch `put_away_tasks`): `id`, `receiving_order_cn_id` (text, NOT NULL, UNIQUE, FK → `receiving_orders_cn.id` cascade), `org_id`, `sub_inventory_code` (uniform-pair derivation from the order's items, NULL when mixed), `status` (`pending | completed`, default `pending`), timestamps.
-- `receiving_cn_workflows` — upload tracking: `id`, `phase` (`excel | pdf`), `batch_no` (generated correlation key `CN-<YYYYMMDD>-<6 alnum>`, injected into the DocPal payload; NULL on rows predating the column), `invoice_no` (CN 編號), `supplier`, `filename`, `docpal_document_id`, `docpal_process_id`, `docpal_business_key`, `status` (`workflow_running | completed | failed | cancelled`, default `workflow_running`), `payload` jsonb (the verified payload object, sent to DocPal as `excel_result_data: [payload + batchNo]`), `error`, `created_by`, timestamps.
+- `receiving_cn_workflows` — upload tracking: `id`, `phase` (`excel | pdf`), `batch_no` (generated correlation key — `CN-<YYYYMMDD>-<6 alnum>` for excel, `TE-yyyymmdd-[seq]` for pdf since 2026-10-28 — injected into the DocPal payload; NULL on rows predating the column), `invoice_no` (CN 編號), `supplier`, `filename`, `docpal_document_id`, `docpal_process_id`, `docpal_business_key`, `status` (`workflow_running | completed | failed | cancelled`, default `workflow_running`), `payload` jsonb (the verified payload object, sent to DocPal as `excel_result_data: [payload + batchNo]`), `error`, `created_by`, timestamps.
 
 **Assumption (open integration point):** the external upstream-sync service writes `receiving_orders_cn` / `receiving_invoices_cn` / `receiving_invoice_items_cn` from the DocPal workflow output, the same way it writes masters/orders today. Our backend treats them as read-only input for finalization/put-away, matched by `batch_no` = the CN 編號 from the verified payload.
 
@@ -73,8 +73,8 @@ Self-rescheduling `setTimeout` loop (pattern: `jobs/goodsVerifyDayEnd.ts`; `unre
 - `GET /admin/receiving-cn/orders` — order-centric list: paged `receiving_orders_cn` rows (newest first; put-away task status + matched workflow's `docpalBusinessKey`/invoice/supplier joined on `batch_no`, legacy fallback `invoice_no`) plus `pending` placeholders — workflows (any status) whose correlation key matches no order yet, newest first, not paged; pending rows carry `status: "processing"`.
 - `GET /admin/receiving-cn/orders/:batchNo` — one CN order: order + invoices + items (each item carries its invoice's `invoiceNo`) + the put-away task; 404 `receiving_cn_order_not_found` (a pending-only workflow has no order yet).
 - `GET /admin/receiving-cn/:id` — detail incl. payload items.
-- `POST /admin/receiving-cn/excel` — multipart (`file` + `data` JSON string) → validate payload → `createCnUpload(phase: "excel")`.
-- `POST /admin/receiving-cn/pdf/ocr` / `POST /admin/receiving-cn/pdf` — **phase 2** (blocked on the DocPal OCR-result endpoint).
+- `POST /admin/receiving-cn/excel` — multipart (`file` + `data` JSON string) → validate payload → `createCnUpload(phase: "excel")`. (Superseded in the UI by the PDF form; kept for existing workflow definitions.)
+- `POST /admin/receiving-cn/pdf` — **phase 2**: multipart `file` only (PDF) → `createCnUpload(phase: "pdf")`; the kick sends the file entry under `variables.pdfFiles` (no `excel_result_data` — DocPal OCR extracts the data inside the workflow; the in-admin verify step is a later phase). 400 `invalid_file_type` for non-PDF.
 
 Payload validation: header fields are strings; `items` non-empty; each item needs `partNo`/`poNo` non-empty, `qty` positive-integer-like. 400 `invalid_payload` otherwise.
 
@@ -97,12 +97,20 @@ New `receiving-cn` flow step (default **disabled**) on the `warehouse_config` "f
 
 - `utils/cnReceivingExcel.ts` (+ vitest): AOA → `{receivedOffice, supplier, receiptNo, invoiceNo, receivedDate, items[]}`. Find the item header row by col-0 `訂單號`; map 9 columns by header text; stop at col-0 `合计` / `收貨注意事項`; label-scan the header fields; convert Excel serial dates (`XLSX.SSF.parse_date_code`); coerce `qty`/`cartonNo`/`dateCode` to strings; keep `poNo` as string (large numbers).
 - `pages/receiving-cn/index.vue` — tracking list (`useAdminTable` + `useUrlQueryState`, SSE reload on `/admin/receiving-cn`), "New upload" button.
-- `pages/receiving-cn/new.vue` — wizard: file pick → verify/edit (header form + `<DataTable>` + row edit modal mirroring `components/receiving/ItemEditModal.vue`, add/remove row, Σ carton/qty cross-check vs 合计 with mismatch banner) → submit `FormData` (`file` + `data`) to `/admin/receiving-cn/excel`; 502 → error banner.
+- `pages/receiving-cn/new.vue` — single-step PDF upload (phase 2): dropzone/picker (`.pdf` only) → submit `FormData` (`file`) to `/admin/receiving-cn/pdf`; 502 → error banner. (The phase-1 Excel verify/edit wizard is superseded; `utils/cnReceivingExcel.ts` and the `/excel` endpoint remain for existing workflow definitions.)
 - `utils/flowApi.ts` typed wrappers; nav entry in `utils/entities.ts`; i18n keys in `layers/i18n` all three locales; `apps/admin/TOC.md`.
 
-## Phase 2 (PDF + OCR)
+## Phase 2 (PDF + OCR) — admin-verify flow (revised 2026-10-28)
 
-Same architecture; differences only: file type pdf, `POST /admin/receiving-cn/pdf/ocr` returns OCR-extracted draft items for the same verify UI, and the PDF workflow definition's variable shape. Blocked on: DocPal OCR-result endpoint confirmation, PDF workflow variable shape, `DOCPAL_CN_PDF_WORKFLOW_ID`.
+The admin new-upload form (`pages/receiving-cn/new.vue`) is a single-step PDF picker posting to `POST /admin/receiving-cn/pdf`: the backend uploads the file to DocPal and kicks `DOCPAL_CN_PDF_WORKFLOW_ID` with the file entry under `variables.pdfFiles` (plus the `batch_no` correlation key and the real-user creator variables); the tracking row stores `phase: "pdf"` with `payload: {}` (invoiceNo/supplier NULL until OCR).
+
+The verification does NOT happen inside DocPal — the OCR workflow never reaches a completed state for this flow. Instead (implemented 2026-10-28):
+
+- **Batch numbering** — pdf uploads use `TE-yyyymmdd-[seq]` (`nextCnBrandedNo`, brand always TE), sharing the namespace with PDA manual receipts (max numeric suffix across `receiving_invoices_cn.invoice_no`, `receiving_orders_cn.batch_no`, `receiving_cn_workflows.batch_no`).
+- **Synced order stays `pending`** — the upstream sync writes the `_cn` trio stamped with the batch_no; the cron's `finalizeCnOrder` no longer applies (the workflow never completes), so the order waits for the admin.
+- **Detail-open prepare** (`prepareCnOrderDetail`, run by `GET /admin/receiving-cn/orders/:batchNo` on pending orders) — each item's `org_id`/`sub_inventory_code` is re-derived from `po_no` via the manual-receiving prefix rules (`deriveCnManualOrgSub`; pairs missing from `org_info` are skipped), and NULL `arrived_at`/`arrived_by` are stamped.
+- **Inline item editing** — the detail page (`pages/receiving-cn/[batchNo].vue`) renders the items table with inline cell editors while the order is `pending` (partNo plain input; wclItemNo via the `ReceivingCnPartNoSelect` combobox — a pick applies the matched part_no too; poNo, lineQty, ctnNo, dateCode, lotCode, coo, cow, subInventory), saved per cell through the extended `PATCH /admin/receiving-cn/items/:id` (a wclItemNo change wins: unique master match supplies canonical wcl + part_no; a bare partNo change re-resolves wcl_item_no; lineQty must be a positive integer and received_qty follows while 0). The shared edit modal remains for batch edits.
+- **Admin confirm** — `POST /admin/receiving-cn/orders/:batchNo/confirm` (`confirmCnOrder`, 409 `order_not_pending` otherwise) is the receipt moment: po_no cleanup + received_qty fill + order → `in_hand` with the arrival stamp + the CN put-away task, sharing `receiveCnOrderTx` with the cron finalize. Audit rows + `receiving_cn.completed` SSE.
 
 ## Open items
 

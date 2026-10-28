@@ -5,7 +5,15 @@ import type { AppDb } from "../db.js";
 import { newId } from "./id.js";
 import { now } from "./now.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
-import { receivingCnWorkflows, transactionLogs } from "./schema/index.js";
+import {
+  putAwayTasksCn,
+  receivingCnWorkflows,
+  receivingInvoiceItemsCn,
+  receivingInvoicesCn,
+  receivingOrdersCn,
+  transactionLogs,
+} from "./schema/index.js";
+import { normalizePartNo } from "./scanParse.js";
 import { emitEvent } from "./events.js";
 import {
   deleteWorkflowAttachment,
@@ -130,10 +138,12 @@ export interface CnUploadActor {
 }
 
 export interface CreateCnUploadInput {
-  /** "excel" today; "pdf" is phase 2. */
+  /** "excel" = phase 1 (verified rows sent along); "pdf" = phase 2 (DocPal
+   *  OCR extracts the data inside the workflow — no payload). */
   phase: "excel" | "pdf";
   file: { filename: string; mime: string; bytes: Uint8Array };
-  payload: CnUploadPayload;
+  /** Verified excel rows — required for phase "excel", omitted for "pdf". */
+  payload?: CnUploadPayload;
   actor: CnUploadActor;
 }
 
@@ -153,48 +163,82 @@ export function generateCnBatchNo(at: Date = new Date()): string {
   return `CN-${ymd}-${code}`;
 }
 
+/** Next `[brand]-yyyymmdd-[seq]` number in the shared CN numbering namespace.
+ *  Counts the max numeric suffix across every table the namespace spans —
+ *  `receiving_invoices_cn.invoice_no` (manual receipts), `receiving_orders_cn.batch_no`
+ *  (synced orders) and `receiving_cn_workflows.batch_no` (pdf uploads) — so a
+ *  manual TE receipt and a TE pdf upload never collide on the same day. */
+export async function nextCnBrandedNo(db: AppDb, brand: string, at: Date = new Date()): Promise<string> {
+  const ymd = [
+    at.getFullYear(),
+    String(at.getMonth() + 1).padStart(2, "0"),
+    String(at.getDate()).padStart(2, "0"),
+  ].join("");
+  const prefix = `${brand}-${ymd}-`;
+  const row = await queryGet<{ max: number | null }>(
+    db,
+    sql`SELECT MAX(CAST(split_part(no, '-', 3) AS integer)) AS max FROM (
+          SELECT invoice_no AS no FROM receiving_invoices_cn WHERE invoice_no LIKE ${`${prefix}%`}
+          UNION ALL SELECT batch_no FROM receiving_orders_cn WHERE batch_no LIKE ${`${prefix}%`}
+          UNION ALL SELECT batch_no FROM receiving_cn_workflows WHERE batch_no LIKE ${`${prefix}%`}
+        ) s
+        WHERE no ~ ${`^${brand}-[0-9]{8}-[0-9]+$`}`
+  );
+  return `${prefix}${String((row?.max ?? 0) + 1).padStart(2, "0")}`;
+}
+
 /**
  * Upload flow per spec: file → DocPal upload, kick the workflow definition
- * with the upload entry + verified payload (with the generated batchNo) +
- * real-user creator variables, then one tx inserting the tracking row (batch
- * no in its own column; the stored payload jsonb stays the verified data as
- * sent by the client) + audit log. A kick failure after a successful upload
- * deletes the orphaned attachment before the 502 escapes.
+ * with the upload entry + the real-user creator variables, then one tx
+ * inserting the tracking row (batch no in its own column; the stored payload
+ * jsonb stays the verified data as sent by the client — `{}` for pdf) + audit
+ * log. Phase shapes: "excel" adds `excelFiles` + `excel_result_data` (with the
+ * generated batchNo); "pdf" adds `pdfFiles` only (DocPal OCR extracts the data
+ * inside the workflow; the verify step is a later phase). A kick failure after
+ * a successful upload deletes the orphaned attachment before the 502 escapes.
  */
 export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Promise<{ id: string }> {
   const definitionId = input.phase === "excel" ? docpalCnExcelWorkflowId() : docpalCnPdfWorkflowId();
   if (!definitionId) {
     throw new HTTPException(500, { message: "docpal_workflow_definition_not_configured" });
   }
-  const batchNo = generateCnBatchNo();
+  if (input.phase === "excel" && !input.payload) {
+    throw new HTTPException(400, { message: "invalid_payload" });
+  }
+  // pdf uploads are always TE and number like manual receipts
+  // (`TE-yyyymmdd-seq`); the retired excel phase keeps the random CN- key.
+  const batchNo = input.phase === "pdf" ? await nextCnBrandedNo(db, "TE") : generateCnBatchNo();
   const { filename, mime, bytes } = input.file;
   const data = await uploadWorkflowFile(filename, mime, bytes, filename);
   const extension = filename.includes(".") ? filename.slice(filename.lastIndexOf(".") + 1).toLowerCase() : "";
   const uploadName = typeof data.name === "string" && data.name ? data.name : filename;
-  const variables: Record<string, unknown> = {
-    excelFiles: [
-      {
-        extension,
-        file_name: filename,
+  const fileEntry = {
+    extension,
+    file_name: filename,
+    id: data.id,
+    mime_type: mime,
+    name: uploadName,
+    response: {
+      data: {
+        fileContent: { mime_type: mime },
+        fileContentExtension: extension,
         id: data.id,
-        mime_type: mime,
         name: uploadName,
-        response: {
-          data: {
-            fileContent: { mime_type: mime },
-            fileContentExtension: extension,
-            id: data.id,
-            name: uploadName,
-          },
-        },
       },
-    ],
-    excel_result_data: [{ ...input.payload, batchNo }],
+    },
+  };
+  const variables: Record<string, unknown> = {
     start_user_id: input.actor.username,
     batch_no: batchNo,
     __system__user_creator_id: input.actor.username,
     __system__user_creator_name: input.actor.displayName,
   };
+  if (input.phase === "excel") {
+    variables.excelFiles = [fileEntry];
+    variables.excel_result_data = [{ ...input.payload!, batchNo }];
+  } else {
+    variables.pdfFiles = [fileEntry];
+  }
   let process: { id: string; business_key?: string };
   try {
     process = await startProcess(definitionId, variables);
@@ -210,15 +254,15 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
     await tx.insert(receivingCnWorkflows).values({
       id,
       phase: input.phase,
-      invoiceNo: input.payload.invoiceNo ?? null,
-      supplier: input.payload.supplier ?? null,
+      invoiceNo: input.payload?.invoiceNo ?? null,
+      supplier: input.payload?.supplier ?? null,
       filename,
       docpalDocumentId: data.id,
       docpalProcessId: process.id,
       docpalBusinessKey: process.business_key ?? null,
       batchNo,
       status: "workflow_running",
-      payload: input.payload,
+      payload: input.payload ?? {},
       createdBy: input.actor.username,
       createdDate: at,
       lastUpdateDate: at,
@@ -235,6 +279,277 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
     });
   });
   return { id };
+}
+
+// --- manual receipt (PDA 手動收貨) ---------------------------------------------
+// Spec docs/superpowers/specs/2026-10-27-manual-receiving-pda-design.md: the
+// PDA stages the task locally (order numbers + scanned label items) and commits
+// it in one call — no DocPal workflow, no upstream sync. The tx writes the same
+// _cn world finalizeCnOrder finalizes: order in_hand + arrived stamp, one
+// invoice per order number, items at line_qty = received_qty = scanned qty,
+// plus the dedicated CN put-away task.
+
+export interface CnManualReceiptItemInput {
+  partNo: string;
+  qty: number;
+  /** Client-resolved parts key (from the label parse); the backend falls
+   *  back to its own parts lookup when absent. */
+  wclItemNo?: string;
+  dateCode?: string;
+  lotCode?: string;
+  coo?: string;
+  cow?: string;
+  ctnNo?: string;
+  supplierCode?: string;
+  /** The task brand (one per task, from the first label's matched template) —
+   *  drives the invoice_no/batch_no `[brand]-yyyymmdd-[seq]`; required on at
+   *  least one item. */
+  brand?: string;
+  /** The scanned label text — traceability only (stored in additional_data). */
+  raw?: string;
+}
+
+export interface CnManualReceiptOrderInput {
+  /** The 訂單號 the operator typed — stored as po_no on its items and used to
+   *  derive each item's org/sub-inventory. */
+  orderNo: string;
+  items: CnManualReceiptItemInput[];
+}
+
+const MANUAL_ITEM_STRING_FIELDS = [
+  "wclItemNo",
+  "dateCode",
+  "lotCode",
+  "coo",
+  "cow",
+  "ctnNo",
+  "supplierCode",
+  "brand",
+  "raw",
+] as const;
+
+/** Validate the manual-receipt commit body; 400 invalid_payload on any deviation. */
+export function validateCnManualReceipt(raw: unknown): CnManualReceiptOrderInput[] {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new HTTPException(400, { message: "invalid_payload" });
+  }
+  const body = (raw as Record<string, unknown>).orders;
+  if (!Array.isArray(body) || body.length === 0) {
+    throw new HTTPException(400, { message: "invalid_payload: orders must be a non-empty array" });
+  }
+  const seenOrderNos = new Set<string>();
+  return body.map((rawOrder, i) => {
+    if (typeof rawOrder !== "object" || rawOrder === null || Array.isArray(rawOrder)) {
+      throw new HTTPException(400, { message: `invalid_payload: orders[${i}] must be an object` });
+    }
+    const o = rawOrder as Record<string, unknown>;
+    const orderNo = typeof o.orderNo === "string" ? o.orderNo.trim() : "";
+    if (!orderNo) throw new HTTPException(400, { message: `invalid_payload: orders[${i}].orderNo must be non-empty` });
+    const orderKey = orderNo.toUpperCase().replace(/\s+/g, "");
+    if (seenOrderNos.has(orderKey)) {
+      throw new HTTPException(400, { message: `invalid_payload: duplicate orderNo ${orderNo}` });
+    }
+    seenOrderNos.add(orderKey);
+    if (!Array.isArray(o.items) || o.items.length === 0) {
+      throw new HTTPException(400, { message: `invalid_payload: orders[${i}].items must be a non-empty array` });
+    }
+    const items = o.items.map((rawItem, j) => {
+      if (typeof rawItem !== "object" || rawItem === null || Array.isArray(rawItem)) {
+        throw new HTTPException(400, { message: `invalid_payload: orders[${i}].items[${j}] must be an object` });
+      }
+      const r = rawItem as Record<string, unknown>;
+      const partNo = typeof r.partNo === "string" ? r.partNo.trim() : "";
+      if (!partNo) {
+        throw new HTTPException(400, { message: `invalid_payload: orders[${i}].items[${j}].partNo must be non-empty` });
+      }
+      const qty = typeof r.qty === "number" ? r.qty : Number(r.qty);
+      if (!Number.isInteger(qty) || qty <= 0) {
+        throw new HTTPException(400, { message: `invalid_payload: orders[${i}].items[${j}].qty must be a positive integer` });
+      }
+      const item: CnManualReceiptItemInput = { partNo, qty };
+      for (const field of MANUAL_ITEM_STRING_FIELDS) {
+        const v = r[field];
+        if (v === undefined || v === null) continue;
+        if (typeof v !== "string") {
+          throw new HTTPException(400, { message: `invalid_payload: orders[${i}].items[${j}].${field} must be a string` });
+        }
+        const trimmed = v.trim();
+        if (trimmed !== "") item[field] = trimmed;
+      }
+      return item;
+    });
+    return { orderNo, items };
+  });
+}
+
+/** SQL mirror of normalizePartNo (picking.ts): whitespace collapsed out,
+ *  uppercase, TE "AMP(...)"/"TE-AMP(...)" wrapper unwrapped. */
+const unwrappedPartCol = (col: SQL) =>
+  sql`regexp_replace(upper(regexp_replace(${col}, '\\s', '', 'g')), '^(TE-)?AMP\\((.+)\\)$', '\\2')`;
+
+/** parts.wcl_item_no for a scanned part no — only on a unique space/case-
+ *  insensitive match (either parts column), else NULL (parts.part_no is not
+ *  unique; a bare unknown part stays text-only). */
+async function resolveWclItemNo(tx: DbOrTx, partNo: string): Promise<string | null> {
+  const key = normalizePartNo(partNo);
+  const rows = await queryAll<{ wclItemNo: string }>(
+    tx,
+    sql`SELECT wcl_item_no AS "wclItemNo" FROM parts
+        WHERE ${unwrappedPartCol(sql`part_no`)} = ${key} OR ${unwrappedPartCol(sql`wcl_item_no`)} = ${key}
+        GROUP BY wcl_item_no`
+  );
+  return rows.length === 1 ? rows[0].wclItemNo : null;
+}
+
+/** The parts-master row for a wcl_item_no — only on a unique space/case-
+ *  insensitive match, else NULL. A wcl_item_no edit applies the matched
+ *  part_no alongside (the admin combobox picks wcl_item_no values). */
+async function resolvePartByWclItemNo(tx: DbOrTx, wclItemNo: string): Promise<{ partNo: string; wclItemNo: string } | null> {
+  const key = normalizePartNo(wclItemNo);
+  const rows = await queryAll<{ partNo: string; wclItemNo: string }>(
+    tx,
+    sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo" FROM parts
+        WHERE ${unwrappedPartCol(sql`wcl_item_no`)} = ${key}
+        GROUP BY part_no, wcl_item_no`
+  );
+  return rows.length === 1 ? rows[0] : null;
+}
+
+export interface CreateCnManualReceiptResult {
+  id: string;
+  batchNo: string;
+  putAwayTaskId: string;
+}
+
+/** po_no prefix → the item's stock location (spec: 319/317 → 7/SZSZ1,
+ *  329/327 → 14/GZSZ, 339/337 → 5/SHSZ, 349/347 → 12/BJSZ, else 7/STORE1). */
+const MANUAL_ORG_SUB_RULES: { prefixes: string[]; orgId: number; subInventoryCode: string }[] = [
+  { prefixes: ["319", "317"], orgId: 7, subInventoryCode: "SZSZ1" },
+  { prefixes: ["329", "327"], orgId: 14, subInventoryCode: "GZSZ" },
+  { prefixes: ["339", "337"], orgId: 5, subInventoryCode: "SHSZ" },
+  { prefixes: ["349", "347"], orgId: 12, subInventoryCode: "BJSZ" },
+];
+
+export function deriveCnManualOrgSub(poNo: string): { orgId: number; subInventoryCode: string } {
+  for (const rule of MANUAL_ORG_SUB_RULES) {
+    if (rule.prefixes.some((p) => poNo.startsWith(p))) {
+      return { orgId: rule.orgId, subInventoryCode: rule.subInventoryCode };
+    }
+  }
+  return { orgId: 7, subInventoryCode: "STORE1" };
+}
+
+/** Commit one PDA manual-receiving task: one order + ONE invoice + items +
+ *  the CN put-away task + audit + SSE, one tx. The task's single brand (first
+ *  scanned item's) drives the invoice number `[brand]-yyyymmdd-[seq]` (seq =
+ *  that brand's invoice count for the day + 1); batch_no = invoice_no;
+ *  delivery_date = the creation date; each order number lands on its items as
+ *  po_no and derives their org/sub-inventory. */
+export async function createCnManualReceipt(
+  db: AppDb,
+  input: { orders: CnManualReceiptOrderInput[]; actor: { id: string; username: string } }
+): Promise<CreateCnManualReceiptResult> {
+  const { orders, actor } = input;
+  const brand = orders.flatMap((o) => o.items).find((item) => item.brand)?.brand;
+  if (!brand) throw new HTTPException(400, { message: "invalid_payload: an item brand is required" });
+  const orderId = newId();
+  const invoiceId = newId();
+  const taskId = newId();
+  const at = now();
+  const orderOrgId = deriveCnManualOrgSub(orders[0].orderNo).orgId;
+  let invoiceNo = "";
+
+  await db.transaction(async (tx) => {
+    invoiceNo = await nextCnBrandedNo(tx, brand, at);
+
+    await tx.insert(receivingOrdersCn).values({
+      id: orderId,
+      batchNo: invoiceNo,
+      deliveryDate: at,
+      status: "in_hand",
+      arrivedAt: at,
+      arrivedBy: actor.id,
+      orgId: orderOrgId,
+      createdDate: at,
+      lastUpdateDate: at,
+    });
+    await tx.insert(receivingInvoicesCn).values({
+      id: invoiceId,
+      receivingOrderId: orderId,
+      invoiceNo,
+      totalQty: orders.reduce((s, o) => s + o.items.reduce((si, it) => si + it.qty, 0), 0),
+      orgId: orderOrgId,
+      createdDate: at,
+      lastUpdateDate: at,
+    });
+    for (const order of orders) {
+      const pair = deriveCnManualOrgSub(order.orderNo);
+      for (const item of order.items) {
+        await tx.insert(receivingInvoiceItemsCn).values({
+          id: newId(),
+          receivingInvoiceId: invoiceId,
+          partNo: item.partNo,
+          wclItemNo: item.wclItemNo ?? (await resolveWclItemNo(tx, item.partNo)),
+          poNo: order.orderNo,
+          lineQty: item.qty,
+          receivedQty: item.qty,
+          ctnNo: item.ctnNo ?? null,
+          dateCode: item.dateCode ?? null,
+          lotCode: item.lotCode ?? null,
+          coo: item.coo ?? null,
+          cow: item.cow ?? null,
+          orgId: pair.orgId,
+          subInventoryCode: pair.subInventoryCode,
+          additionalData: {
+            source: "manual",
+            ...(item.raw ? { raw: item.raw } : {}),
+            ...(item.supplierCode ? { supplierCode: item.supplierCode } : {}),
+            scannedBy: actor.username,
+          },
+          createdDate: at,
+          lastUpdateDate: at,
+        });
+      }
+    }
+    const derived = await cnOrderPair(tx, orderId);
+    // Same pair rule as finalizeCnOrder: uniform item pair wins, else the
+    // order's org with a NULL sub-inventory.
+    await tx.insert(putAwayTasksCn).values({
+      id: taskId,
+      receivingOrderCnId: orderId,
+      orgId: derived.orgId ?? orderOrgId,
+      subInventoryCode: derived.subInventoryCode,
+      status: "pending",
+      createdDate: at,
+      lastUpdateDate: at,
+    });
+    await tx.insert(transactionLogs).values({
+      id: newId(),
+      entityType: "receiving_order_cn",
+      entityId: orderId,
+      fromState: null,
+      toState: "in_hand",
+      actorId: actor.id,
+      metadata: { source: "manual", orderNos: orders.map((o) => o.orderNo) },
+      createdDate: at,
+    });
+    await tx.insert(transactionLogs).values({
+      id: newId(),
+      entityType: "put_away_task_cn",
+      entityId: taskId,
+      fromState: null,
+      toState: "pending",
+      actorId: actor.id,
+      metadata: { receivingOrderCnId: orderId },
+      createdDate: at,
+    });
+    await emitEvent(tx, {
+      type: "receiving_cn.completed",
+      topics: ["/admin/receiving-cn", "/put-away-tasks"],
+      data: { receivingOrderCnId: orderId, batchNo: invoiceNo, source: "manual" },
+    });
+  });
+  return { id: orderId, batchNo: invoiceNo, putAwayTaskId: taskId };
 }
 
 // --- reads -------------------------------------------------------------------
@@ -556,6 +871,98 @@ export async function getCnOrderDetail(db: AppDb, batchNo: string): Promise<CnOr
   };
 }
 
+/** Re-derive every item's org/sub-inventory from its po_no prefix rules
+ *  (deriveCnManualOrgSub). Items whose derived pair is missing from org_info
+ *  are skipped (kept on the upstream pair) so a master-data gap never breaks
+ *  the detail page. */
+async function rederiveCnItemOrgSubTx(tx: AppDb, orderId: string, at: Date): Promise<void> {
+  const items = await queryAll<{ id: string; poNo: string | null }>(
+    tx,
+    sql`SELECT rii.id, rii.po_no AS "poNo"
+        FROM receiving_invoice_items_cn rii
+        JOIN receiving_invoices_cn ri ON ri.id = rii.receiving_invoice_id
+        WHERE ri.receiving_order_id = ${orderId} AND rii.po_no IS NOT NULL AND rii.po_no <> ''`
+  );
+  for (const item of items) {
+    const pair = deriveCnManualOrgSub(item.poNo!);
+    const known = await queryGet<{ n: number }>(
+      tx,
+      sql`SELECT COUNT(*)::int AS n FROM org_info
+          WHERE org_id = ${pair.orgId} AND secondary_inventory_name = ${pair.subInventoryCode}`
+    );
+    if (!known?.n) continue;
+    await queryRun(
+      tx,
+      sql`UPDATE receiving_invoice_items_cn
+          SET org_id = ${pair.orgId}, sub_inventory_code = ${pair.subInventoryCode}, last_update_date = ${at}
+          WHERE id = ${item.id}
+            AND (org_id IS DISTINCT FROM ${pair.orgId} OR sub_inventory_code IS DISTINCT FROM ${pair.subInventoryCode})`
+    );
+  }
+}
+
+/**
+ * Pending-order cleanup, run when the admin opens the order detail: the pdf
+ * workflow never finalizes, so the synced order sits at `pending` until the
+ * admin confirms it. Opening the detail normalizes the record — item
+ * org/sub-inventory from the po_no prefix rules, and the arrival stamp
+ * (arrived_at / arrived_by, filled only when NULL). No-op for non-pending
+ * orders. Never throws on unknown batch_no.
+ */
+export async function prepareCnOrderDetail(db: AppDb, batchNo: string, actorId: string | null): Promise<void> {
+  const order = await queryGet<{ id: string; status: string }>(
+    db,
+    sql`SELECT id, status FROM receiving_orders_cn WHERE batch_no = ${batchNo} ORDER BY created_date DESC LIMIT 1`
+  );
+  if (!order || order.status !== "pending") return;
+  const at = now();
+  await db.transaction(async (tx) => {
+    await rederiveCnItemOrgSubTx(tx, order.id, at);
+    await queryRun(
+      tx,
+      sql`UPDATE receiving_orders_cn
+          SET arrived_at = COALESCE(arrived_at, ${at}),
+              arrived_by = COALESCE(arrived_by, ${actorId}),
+              last_update_date = ${at}
+          WHERE id = ${order.id}`
+    );
+  });
+}
+
+/**
+ * Admin confirm of a pending CN order (spec phase 2): the receipt moment for
+ * the pdf path — re-runs the po_no cleanup, fills received_qty from line_qty,
+ * stamps the order in_hand + arrived, creates the CN put-away task, audit rows
+ * + receiving_cn.completed SSE. 404 receiving_cn_order_not_found; 409
+ * order_not_pending unless the order is pending.
+ */
+export async function confirmCnOrder(
+  db: AppDb,
+  batchNo: string,
+  actor: { id: string; username: string }
+): Promise<{ id: string; batchNo: string; putAwayTaskId: string | null }> {
+  const order = await queryGet<{ id: string; status: string; orgId: number; dateCode: string | null }>(
+    db,
+    sql`SELECT id, status, org_id AS "orgId", date_code AS "dateCode" FROM receiving_orders_cn
+        WHERE batch_no = ${batchNo} ORDER BY created_date DESC LIMIT 1`
+  );
+  if (!order) throw new HTTPException(404, { message: "receiving_cn_order_not_found" });
+  if (order.status !== "pending") throw new HTTPException(409, { message: "order_not_pending" });
+  let taskId: string | null = null;
+  await db.transaction(async (tx) => {
+    const at = now();
+    await rederiveCnItemOrgSubTx(tx, order.id, at);
+    const result = await receiveCnOrderTx(tx, order, actor.id, at, { source: "admin_confirm" });
+    taskId = result.taskId;
+    await emitEvent(tx, {
+      type: "receiving_cn.completed",
+      topics: ["/admin/receiving-cn", "/put-away-tasks"],
+      data: { receivingOrderCnId: order.id, batchNo, source: "admin_confirm", putAwayTaskCreated: taskId !== null },
+    });
+  });
+  return { id: order.id, batchNo, putAwayTaskId: taskId };
+}
+
 // --- order audit logs -----------------------------------------------------------------
 
 /** Reuse the standard log row/params/page shapes (src/db/receiving.ts). */
@@ -640,6 +1047,9 @@ export async function listCnOrderLogs(
  *  mirrors the standard flow's RECEIVING_ITEM_FIELDS
  *  (src/db/adminedits.ts). */
 const CN_ITEM_FIELDS = {
+  partNo: "part_no",
+  wclItemNo: "wcl_item_no",
+  poNo: "po_no",
   dateCode: "date_code",
   lotCode: "lot_code",
   coo: "coo",
@@ -683,13 +1093,18 @@ const CN_ITEM_SELECT = sql`SELECT rii.id, rii.receiving_invoice_id AS "receiving
  *  against the item's org pair in org_info (the composite FK target);
  *  null/"" clears the nullable column. `suggestedShelf` read-modify-writes
  *  the override inside additional_data (null/"" clears the key back to the
- *  computed suggestion); free-text, advisory only. Returns the updated row. */
+ *  computed suggestion); free-text, advisory only. A `wclItemNo` change wins
+ *  over `partNo`: a unique parts-master match supplies the canonical
+ *  wcl_item_no and applies its part_no; a bare `partNo` change re-resolves
+ *  wcl_item_no (NULL when ambiguous). Returns the updated row. */
 export async function updateCnReceivingItemFields(
   db: AppDb,
   input: {
     itemId: string;
     fields: Partial<Record<CnItemField, string | null>>;
     actorId: string | null;
+    /** Positive integer; received_qty follows while it is still 0. */
+    lineQty?: number;
     subInventory?: string | null;
     suggestedShelf?: string | null;
   }
@@ -697,12 +1112,22 @@ export async function updateCnReceivingItemFields(
   const keys = (Object.keys(CN_ITEM_FIELDS) as CnItemField[]).filter((k) => k in input.fields);
   const hasSubInventory = input.subInventory !== undefined;
   const hasSuggestedShelf = input.suggestedShelf !== undefined;
-  if (keys.length === 0 && !hasSubInventory && !hasSuggestedShelf) throw new HTTPException(400, { message: "no_fields" });
+  const hasLineQty = input.lineQty !== undefined;
+  if (keys.length === 0 && !hasSubInventory && !hasSuggestedShelf && !hasLineQty)
+    throw new HTTPException(400, { message: "no_fields" });
   const existing = await queryGet<
-    Record<string, string | null> & { partNo: string; wclItemNo: string | null; orgId: number; additionalData: Record<string, unknown> | null }
+    Record<string, string | null> & {
+      partNo: string;
+      wclItemNo: string | null;
+      orgId: number;
+      lineQty: number | null;
+      receivedQty: number;
+      additionalData: Record<string, unknown> | null;
+    }
   >(
     db,
     sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo", org_id AS "orgId",
+               po_no AS "poNo", line_qty AS "lineQty", received_qty AS "receivedQty",
                date_code AS "dateCode", lot_code AS "lotCode", coo, cow, ctn_no AS "ctnNo",
                sub_inventory_code AS "subInventoryCode", additional_data AS "additionalData"
         FROM receiving_invoice_items_cn WHERE id = ${input.itemId}`
@@ -720,11 +1145,32 @@ export async function updateCnReceivingItemFields(
   if (existing.wclItemNo) itemMeta.wclItemNo = existing.wclItemNo;
 
   await db.transaction(async (tx) => {
+    // A wcl_item_no edit wins over partNo: the uniquely matched master row
+    // supplies the canonical wcl_item_no AND applies its part_no alongside.
+    const wclChange = "wclItemNo" in input.fields ? input.fields.wclItemNo : undefined;
+    const partNoChange = "partNo" in input.fields ? input.fields.partNo : undefined;
+    const matchedPart = wclChange ? await resolvePartByWclItemNo(tx, wclChange) : null;
+    // A bare part-no edit (no wcl change in the same call) re-resolves the
+    // WCL key from the parts master (NULL when there is no unique match).
+    const resolvedWcl =
+      wclChange === undefined && partNoChange ? await resolveWclItemNo(tx, partNoChange) : undefined;
+    const directKeys = keys.filter((k) => k !== "wclItemNo" && !(k === "partNo" && wclChange !== undefined));
     await queryRun(
       tx,
       sql`UPDATE receiving_invoice_items_cn SET ${sql.join(
         [
-          ...keys.map((k) => sql`${sql.raw(CN_ITEM_FIELDS[k])} = ${input.fields[k] ?? null}`),
+          ...directKeys.map((k) => sql`${sql.raw(CN_ITEM_FIELDS[k])} = ${input.fields[k] ?? null}`),
+          ...(wclChange !== undefined ? [sql`wcl_item_no = ${matchedPart?.wclItemNo ?? wclChange}`] : []),
+          ...(matchedPart ? [sql`part_no = ${matchedPart.partNo}`] : []),
+          ...(wclChange === undefined && partNoChange !== undefined
+            ? [sql`wcl_item_no = ${resolvedWcl ?? null}`]
+            : []),
+          ...(hasLineQty
+            ? [
+                sql`line_qty = ${input.lineQty!}`,
+                sql`received_qty = CASE WHEN received_qty = 0 THEN ${input.lineQty!} ELSE received_qty END`,
+              ]
+            : []),
           ...(hasSubInventory ? [sql`sub_inventory_code = ${input.subInventory ?? null}`] : []),
           ...(hasSuggestedShelf
             ? input.suggestedShelf === null
@@ -736,11 +1182,34 @@ export async function updateCnReceivingItemFields(
       )}, last_update_date = ${now()} WHERE id = ${input.itemId}`
     );
     const existingOverride = existing.additionalData?.suggestedShelf;
-    const auditEntries: { field: string; from: string | null; to: string | null }[] = keys.map((k) => ({
+    const auditEntries: { field: string; from: string | null; to: string | null }[] = directKeys.map((k) => ({
       field: CN_ITEM_FIELDS[k],
       from: existing[k],
       to: input.fields[k] ?? null,
     }));
+    if (wclChange !== undefined) {
+      auditEntries.push({
+        field: "wcl_item_no",
+        from: existing.wclItemNo,
+        to: matchedPart?.wclItemNo ?? wclChange,
+      });
+      if (matchedPart) {
+        auditEntries.push({ field: "part_no", from: existing.partNo, to: matchedPart.partNo });
+      }
+    } else if (partNoChange !== undefined) {
+      auditEntries.push({
+        field: "wcl_item_no",
+        from: existing.wclItemNo,
+        to: resolvedWcl ?? null,
+      });
+    }
+    if (hasLineQty) {
+      auditEntries.push({
+        field: "line_qty",
+        from: existing.lineQty === null ? null : String(existing.lineQty),
+        to: String(input.lineQty!),
+      });
+    }
     if (hasSubInventory) {
       auditEntries.push({ field: "sub_inventory_code", from: existing.subInventoryCode, to: input.subInventory ?? null });
     }
@@ -796,6 +1265,74 @@ async function cnOrderPair(
  * in_hand (+arrived stamp), idempotent put_away_tasks_cn insert, audit logs,
  * workflow → completed, SSE.
  */
+/** The receipt moment shared by the workflow finalize (cron) and the admin
+ *  confirm: fill received_qty from line_qty (date code falls back to the
+ *  order's), stamp the order in_hand + arrived, insert the CN put-away task
+ *  (uniform item pair wins; else the order's org with NULL sub-inventory),
+ *  with the audit rows. `orderLogMetadata` rides on the order's log row. */
+async function receiveCnOrderTx(
+  tx: AppDb,
+  order: { id: string; status: string; orgId: number; dateCode: string | null },
+  actorId: string | null,
+  at: Date,
+  orderLogMetadata: Record<string, unknown>
+): Promise<{ changed: boolean; taskId: string | null }> {
+  // Rows the sync left at received_qty = 0 inherit line_qty; rows with a real
+  // received qty are untouched.
+  await queryRun(
+    tx,
+    sql`UPDATE receiving_invoice_items_cn rii
+        SET received_qty = rii.line_qty,
+            date_code = COALESCE(rii.date_code, ${order.dateCode}),
+            last_update_date = ${at}
+        FROM receiving_invoices_cn ri
+        WHERE rii.receiving_invoice_id = ri.id AND ri.receiving_order_id = ${order.id}
+          AND rii.received_qty = 0 AND rii.line_qty IS NOT NULL`
+  );
+  const derived = await cnOrderPair(tx, order.id);
+  const pair = { orgId: derived.orgId ?? order.orgId, subInventoryCode: derived.subInventoryCode };
+  const changed = await queryGet<{ id: string }>(
+    tx,
+    sql`UPDATE receiving_orders_cn
+        SET status = 'in_hand', arrived_at = ${at},
+            arrived_by = COALESCE(${actorId}, arrived_by), last_update_date = ${at}
+        WHERE id = ${order.id} AND status <> 'in_hand'
+        RETURNING id`
+  );
+  if (changed) {
+    await tx.insert(transactionLogs).values({
+      id: newId(),
+      entityType: "receiving_order_cn",
+      entityId: order.id,
+      fromState: order.status,
+      toState: "in_hand",
+      actorId,
+      metadata: orderLogMetadata,
+      createdDate: at,
+    });
+  }
+  const task = await queryAll<{ id: string }>(
+    tx,
+    sql`INSERT INTO put_away_tasks_cn (id, receiving_order_cn_id, org_id, sub_inventory_code, status, created_date)
+        VALUES (${newId()}, ${order.id}, ${pair.orgId}, ${pair.subInventoryCode}, 'pending', ${at})
+        ON CONFLICT (receiving_order_cn_id) DO NOTHING
+        RETURNING id`
+  );
+  if (task.length > 0) {
+    await tx.insert(transactionLogs).values({
+      id: newId(),
+      entityType: "put_away_task_cn",
+      entityId: task[0].id,
+      fromState: null,
+      toState: "pending",
+      actorId,
+      metadata: { receivingOrderCnId: order.id },
+      createdDate: at,
+    });
+  }
+  return { changed: !!changed, taskId: task[0]?.id ?? null };
+}
+
 export async function finalizeCnOrder(db: AppDb, workflowRow: CnWorkflowRow, actorId: string | null): Promise<boolean> {
   const matchKey = workflowRow.batchNo ?? workflowRow.invoiceNo;
   if (!matchKey) return false;
@@ -808,66 +1345,8 @@ export async function finalizeCnOrder(db: AppDb, workflowRow: CnWorkflowRow, act
   if (!order) return false;
 
   await db.transaction(async (tx) => {
-    // Full-receipt default (confirmReceivingArrival mirror): the CN flow has
-    // no separate confirm step — finalize IS the receipt moment. Rows the
-    // sync left at received_qty = 0 inherit line_qty; rows with a real
-    // received qty are untouched. Date code falls back to the order's.
-    await queryRun(
-      tx,
-      sql`UPDATE receiving_invoice_items_cn rii
-          SET received_qty = rii.line_qty,
-              date_code = COALESCE(rii.date_code, ${order.dateCode}),
-              last_update_date = ${now()}
-          FROM receiving_invoices_cn ri
-          WHERE rii.receiving_invoice_id = ri.id AND ri.receiving_order_id = ${order.id}
-            AND rii.received_qty = 0 AND rii.line_qty IS NOT NULL`
-    );
-    const derived = await cnOrderPair(tx, order.id);
-    // Uniform item pair wins; when the items are mixed/unknown the task still
-    // belongs to the order's org (receiving_orders_cn.org_id) so the PDA list
-    // never derives a NULL-org ghost (sub-inventory stays NULL — the order
-    // carries no sub-inventory).
-    const pair = { orgId: derived.orgId ?? order.orgId, subInventoryCode: derived.subInventoryCode };
     const at = now();
-    const changed = await queryGet<{ id: string }>(
-      tx,
-      sql`UPDATE receiving_orders_cn
-          SET status = 'in_hand', arrived_at = ${at},
-              arrived_by = COALESCE(${actorId}, arrived_by), last_update_date = ${at}
-          WHERE id = ${order.id} AND status <> 'in_hand'
-          RETURNING id`
-    );
-    if (changed) {
-      await tx.insert(transactionLogs).values({
-        id: newId(),
-        entityType: "receiving_order_cn",
-        entityId: order.id,
-        fromState: order.status,
-        toState: "in_hand",
-        actorId,
-        metadata: { workflowId: workflowRow.id },
-        createdDate: at,
-      });
-    }
-    const task = await queryAll<{ id: string }>(
-      tx,
-      sql`INSERT INTO put_away_tasks_cn (id, receiving_order_cn_id, org_id, sub_inventory_code, status, created_date)
-          VALUES (${newId()}, ${order.id}, ${pair.orgId}, ${pair.subInventoryCode}, 'pending', ${at})
-          ON CONFLICT (receiving_order_cn_id) DO NOTHING
-          RETURNING id`
-    );
-    if (task.length > 0) {
-      await tx.insert(transactionLogs).values({
-        id: newId(),
-        entityType: "put_away_task_cn",
-        entityId: task[0].id,
-        fromState: null,
-        toState: "pending",
-        actorId,
-        metadata: { receivingOrderCnId: order.id },
-        createdDate: at,
-      });
-    }
+    const { taskId } = await receiveCnOrderTx(tx, order, actorId, at, { workflowId: workflowRow.id });
     await tx.insert(transactionLogs).values({
       id: newId(),
       entityType: "receiving_cn_workflow",
@@ -885,7 +1364,7 @@ export async function finalizeCnOrder(db: AppDb, workflowRow: CnWorkflowRow, act
     await emitEvent(tx, {
       type: "receiving_cn.completed",
       topics: ["/admin/receiving-cn"],
-      data: { workflowId: workflowRow.id, receivingOrderCnId: order.id, putAwayTaskCreated: task.length > 0 },
+      data: { workflowId: workflowRow.id, receivingOrderCnId: order.id, putAwayTaskCreated: taskId !== null },
     });
   });
   return true;

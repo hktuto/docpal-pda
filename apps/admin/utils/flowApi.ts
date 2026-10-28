@@ -805,6 +805,27 @@ export async function submitCnExcelUpload(file: File, data: unknown): Promise<Cn
   return (await res.json()) as CnWorkflowRow;
 }
 
+/** POST /admin/receiving-cn/pdf — the scanned receiving confirmation PDF only
+ *  (phase 2: DocPal OCR extracts the data inside the workflow). 400
+ *  file_required / invalid_file_type; 502 docpal_workflow: …; 500
+ *  docpal_workflow_token_not_configured /
+ *  docpal_workflow_definition_not_configured. Returns the created workflow
+ *  row. */
+export async function submitCnPdfUpload(file: File): Promise<CnWorkflowRow> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  const res = await fetch(`${cnApiBaseUrl()}/admin/receiving-cn/pdf`, {
+    method: "POST",
+    headers: cnAuthHeaders(),
+    body: form,
+  });
+  if (!res.ok) {
+    const text = (await res.text()).trim();
+    throw new Error(text || `Request failed (${res.status})`);
+  }
+  return (await res.json()) as CnWorkflowRow;
+}
+
 // ---- customer receiving (CN) orders (synced receiving_orders_cn rows) ----
 
 /** Finalized CN receiving order row (kind "order"). */
@@ -1241,9 +1262,18 @@ export function useFlowApi() {
     updateCnItem: (
       id: string,
       fields: Partial<
-        Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "subInventory" | "suggestedShelf", string | null>
-      >
+        Record<
+          "partNo" | "wclItemNo" | "poNo" | "dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "subInventory" | "suggestedShelf",
+          string | null
+        >
+      > & { lineQty?: number }
     ) => api.patch<CnOrderItemRow>(`/admin/receiving-cn/items/${id}`, fields),
+    // Admin confirm of a pending CN order (pdf path): → in_hand + put-away task.
+    confirmCnOrder: (batchNo: string) =>
+      api.post<{ id: string; batchNo: string; putAwayTaskId: string | null }>(
+        `/admin/receiving-cn/orders/${encodeURIComponent(batchNo)}/confirm`,
+        {}
+      ),
     // CN order audit log — same page/search/sort convention as the standard
     // receiving order logs.
     listCnOrderLogs: (batchNo: string, params: OrderLogsParams) =>

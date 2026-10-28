@@ -50,6 +50,8 @@ import type {
   ScanIntoShippingBoxResult,
   PutAwayScanResult,
   CnPutAwayCompleteItem,
+  CnManualReceiptOrder,
+  CnManualReceiptResult,
   AdHocPutAwayItem,
   AdHocPutAwayResult,
   AdHocPutAwayLocation,
@@ -561,6 +563,12 @@ export function createBackendWarehouseService(
       items: CnPutAwayCompleteItem[]
     ): Promise<{ taskCompleted: boolean }> {
       return client.post(`/put-away-cn/tasks/${taskId}/complete`, { items });
+    },
+
+    // CN manual receiving (手動收貨) — one commit call for the whole
+    // PDA-staged task (spec 2026-10-27-manual-receiving-pda-design).
+    async createCnManualReceipt(orders: CnManualReceiptOrder[]): Promise<CnManualReceiptResult> {
+      return client.post("/receiving-cn/manual-receipts", { orders });
     },
 
     // Measuring — box-scoped reads (no tasks): open boxes with ≥1 package
