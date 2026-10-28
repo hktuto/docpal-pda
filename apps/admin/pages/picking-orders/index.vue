@@ -299,7 +299,7 @@ const {
         <span>{{ $t("admin.pages.pickingOrders.deliveryDateTo") }}</span>
         <input v-model="deliveryDateTo" type="date" />
       </label>
-      <input v-model="search" :placeholder="$t('admin.pages.pickingOrders.searchPlaceholder')" />
+      <input v-model="search" class="filter-search" :placeholder="$t('admin.pages.pickingOrders.searchPlaceholder')" />
       <UserScopeFilterButton @saved="load" />
     </div>
 
@@ -374,6 +374,12 @@ const {
 }
 .filters input {
   flex: 1;
+}
+.filters .filter-search {
+  padding: 0.4375rem 0.5625rem;
+  border: 1px solid #b6c2cd;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
 }
 .filter-type {
   width: 11.25rem;
