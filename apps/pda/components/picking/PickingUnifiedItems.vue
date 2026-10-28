@@ -38,7 +38,6 @@
             <button
               type="button"
               class="btn btn--small btn--secondary"
-              :disabled="row.status !== 'queued'"
               @click="emit('remove-queue', row.keys)"
             >
               {{ $t('picking.scanSession.removeRow') }}
