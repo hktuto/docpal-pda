@@ -64,8 +64,13 @@ useUrlQueryState({
   pageSize: { state: pageSize, defaultValue: 50, parse: parsePositiveInt(50) },
 });
 
-async function load() {
-  loading.value = true;
+async function load(opts: { background?: boolean } = {}) {
+  // Background refresh (polls, SSE, manual refresh with data on screen):
+  // keep showing the current rows — no loading flash. The placeholder only
+  // appears on the very first load.
+  const background = opts.background ?? rows.value.length > 0;
+  if (!background) loading.value = true;
+  loadInFlight = true;
   error.value = "";
   try {
     const res = await flow.listCnOrders({
@@ -73,12 +78,17 @@ async function load() {
       page: pagination.value.pageIndex + 1,
       pageSize: pagination.value.pageSize,
     });
-    rows.value = [...res.pending, ...res.rows];
-    total.value = res.total;
+    const next: CnMergedRow[] = [...res.pending, ...res.rows];
+    // Skip the assignment (and the re-render) when nothing changed.
+    if (res.total !== total.value || JSON.stringify(next) !== JSON.stringify(rows.value)) {
+      rows.value = next;
+      total.value = res.total;
+    }
   } catch (e: any) {
     error.value = e.message;
   } finally {
-    loading.value = false;
+    loadInFlight = false;
+    if (!background) loading.value = false;
     syncPolling();
   }
 }
@@ -88,12 +98,13 @@ async function load() {
 // cleared as soon as every workflow has its record back (or the page exits).
 const POLL_INTERVAL_MS = 10_000;
 let pollTimer: ReturnType<typeof setInterval> | undefined;
+let loadInFlight = false;
 
 function syncPolling() {
   const hasPending = rows.value.some((r) => r.kind === "pending");
   if (hasPending && !pollTimer) {
     pollTimer = setInterval(() => {
-      if (!loading.value) load();
+      if (!loadInFlight) load({ background: true });
     }, POLL_INTERVAL_MS);
   } else if (!hasPending && pollTimer) {
     clearInterval(pollTimer);
