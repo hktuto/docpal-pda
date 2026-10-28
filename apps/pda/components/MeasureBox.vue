@@ -9,40 +9,33 @@
           {{ $t('measuring.measureBox.packagesVerified', { verified: verifiedCount, total: packages.length }) }}
         </h3>
         <p v-if="!packages.length" class="empty" style="padding: 0;">{{ $t('common.noPackages') }}</p>
-        <table v-else class="pkg-table">
-          <thead>
-            <tr>
-              <th>{{ $t('measuring.measureBox.part') }}</th>
-              <th>{{ $t('measuring.measureBox.qty') }}</th>
-              <th>{{ $t('measuring.measureBox.dateLotOrigin') }}</th>
-              <th>{{ $t('measuring.measureBox.status') }}</th>
-              <th v-if="canScan"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="pkg in packages" :key="pkg.id">
-              <td>{{ pkg.wclItemNo ?? pkg.partNo }}</td>
-              <td>
-                {{ pkg.qty }}
-                <span v-if="partialQty(pkg) !== null" class="partial-qty">({{ partialQty(pkg) }})</span>
-              </td>
-              <td>{{ labelDateCode(pkg.dateCode) }} / {{ pkg.lotCode || $t('common.noData') }} / {{ pkg.coo || $t('common.noData') }} / {{ pkg.cow || $t('common.noData') }}</td>
-              <td>
-                <span class="badge" :class="badgeClass(isVerified(pkg) ? 'verified' : 'pending')">
-                  {{ isVerified(pkg) ? $t('common.verified') : $t('common.pending') }}
+        <div v-else class="pkg-list">
+          <div v-for="pkg in packages" :key="pkg.id" class="pkg-row">
+            <div class="pkg-main">
+              <div class="pkg-title">
+                <span
+                  class="pkg-dot"
+                  :class="isVerified(pkg) ? 'pkg-dot--verified' : 'pkg-dot--pending'"
+                  :title="isVerified(pkg) ? $t('common.verified') : $t('common.pending')"
+                ></span>
+                <span class="pkg-item-no">{{ pkg.wclItemNo ?? pkg.partNo }}</span>
+              </div>
+              <div class="pkg-meta">
+                <span>
+                  {{ pkg.qty }}
+                  <span v-if="partialQty(pkg) !== null" class="partial-qty">({{ partialQty(pkg) }})</span>
                 </span>
-              </td>
-              <td v-if="canScan">
-                <button
-                  v-if="!isVerified(pkg)"
-                  class="btn btn--small"
-                  :disabled="scanning"
-                  @click="openScan(pkg.id)"
-                >{{ $t('actions.scan') }}</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                <span>{{ dateOriginLabel(pkg) }}</span>
+              </div>
+            </div>
+            <button
+              v-if="canScan && !isVerified(pkg)"
+              class="btn btn--small"
+              :disabled="scanning"
+              @click="openScan(pkg.id)"
+            >{{ $t('actions.scan') }}</button>
+          </div>
+        </div>
       </div>
 
       <p v-if="canScan && !allVerified" class="scan-hint">
@@ -91,7 +84,6 @@ import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { ocrResultToInput, useLabelScan } from "~/composables/useLabelScan";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
-import { badgeClass } from "~/composables/useStatusBadge";
 import { runScanMatcher, useScanMatchers, type ScanTaskContext } from "~/composables/useScanMatchers";
 import { useFlowSteps } from "~/composables/useFlowSteps";
 import { toLabelDateCode } from "~/utils/dateCode";
@@ -188,6 +180,11 @@ const verifying = ref(false);
 // (spec 2026-10-22); scan matching keeps comparing canonical values.
 function labelDateCode(code: string | null): string {
   return toLabelDateCode(code, dateCodeFormat.value) || t('common.noData');
+}
+
+// Line-2 batch label: [datecode]-[coo]-[cow], skipping empty coo/cow.
+function dateOriginLabel(pkg: MeasuringPackage): string {
+  return [labelDateCode(pkg.dateCode), pkg.coo, pkg.cow].filter(Boolean).join("-");
 }
 
 useVisibleReload(load);
@@ -361,21 +358,61 @@ useHardwareScanner({
 </script>
 
 <style scoped>
-.pkg-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
+.pkg-list {
+  display: flex;
+  flex-direction: column;
 }
 
-.pkg-table th,
-.pkg-table td {
-  text-align: left;
-  padding: 0.5rem;
+.pkg-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0;
   border-bottom: 1px solid var(--border);
 }
 
-.pkg-table tbody tr:last-child td {
+.pkg-row:last-child {
   border-bottom: none;
+}
+
+.pkg-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.pkg-title {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-weight: 500;
+}
+
+.pkg-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pkg-dot--verified {
+  background: var(--success);
+}
+
+.pkg-dot--pending {
+  background: var(--warning);
+}
+
+.pkg-item-no {
+  word-break: break-all;
+}
+
+.pkg-meta {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.125rem;
+  padding-left: 0.875rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
 }
 
 .scan-hint {
