@@ -94,7 +94,7 @@
       </div>
     </div>
 
-    <div ref="menuRef" class="app-header__menu">
+    <div v-if="!showBack" ref="menuRef" class="app-header__menu">
       <button
         type="button"
         class="app-header__menu-toggle"
