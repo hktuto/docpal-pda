@@ -119,7 +119,9 @@ function parseQrRaw(raw, template, qtyEncoding, dateCodeEncoding) {
   if (dateCodeEncoding === "koa_month_counter") dateCode = rawLotCode ? decodeKoaDateCode(rawLotCode) : undefined;
   if (dateCodeEncoding === "ncc_lot_ymmdd") dateCode = rawLotCode ? decodeNccDateCode(rawLotCode) : undefined;
   return {
-    partNo: normalizePartNo(groups.itemId),
+    // COPAL resCode group: appended to the itemId (parts.part_no stores the
+    // resistance code) — keep in sync with scanParse.ts parseQrRaw.
+    partNo: normalizePartNo(groups.resCode ? `${groups.itemId} ${groups.resCode}` : groups.itemId),
     qty,
     dateCode,
     lotCode: dateCodeEncoding === "ncc_lot_ymmdd" && rawLotCode ? formatNccLotCode(rawLotCode) : rawLotCode,
@@ -159,12 +161,14 @@ const TEMPLATES = {
   },
   // Restored from RegPattern Id=156 (COPAL). Fixed-width 111-char label.
   // itemId = printed part name; OHM-spec parts keep the resistance code in a
-  // separate resCode group (dropped by the parser — see remark).
+  // separate resCode group, appended to the itemId by parseQrRaw (parts.part_no
+  // stores it, e.g. "SM-3 TW" + 104 → SM-3TW 104). Updated 2026-10-28:
+  // lowercase "ohm", 3-digit resistance (100K), optional numeric spec token.
   COPAL: {
     qtyEncoding: null,
     qrType: null,
     template:
-      "^\\d{12}\\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:\\s{2,}\\d{1,2}K\\s+OHM\\((?<resCode>\\d+)\\))?\\s+(?<qty>\\d+)\\s+\\d+\\s+\\S+\\s+(?<serialNo>\\S+).*$",
+      "^\\d{12}\\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:\\s{2,}\\d{1,2})?(?:\\s{2,}\\d+K\\s+[Oo][Hh][Mm]\\((?<resCode>\\d+)\\))?\\s+(?<qty>\\d+)\\s+\\d+\\s+\\S+\\s+(?<serialNo>\\S+).*$",
   },
   // Restored from RegPattern Id=173 (SII). $-delimited reel QR:
   // 1$MPN$qty$lot$MPN-repeat$yyyymm$serial — itemId = field 4 (old Primary_Key).

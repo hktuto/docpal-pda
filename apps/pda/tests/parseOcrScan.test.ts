@@ -374,6 +374,39 @@ describe("parseQrCapture", () => {
     expect(result.parsed.wclItemNo).toBe("KOA/SR732ERTTDR200F");
   });
 
+  it("parses COPAL new-layout reels (lowercase ohm, 3-digit K, spec token) and appends resCode to the itemId", () => {
+    const copalTemplate = {
+      code: "19915",
+      qrcodeTemplate: String.raw`^\d{12}\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:\s{2,}\d{1,2})?(?:\s{2,}\d+K\s+[Oo][Hh][Mm]\((?<resCode>\d+)\))?\s+(?<qty>\d+)\s+\d+\s+\S+\s+(?<serialNo>\S+).*$`,
+      qrcodeQtyEncoding: null,
+      brands: ["COPAL", "NIDEC"],
+    };
+    // Switch label (no OHM spec): the "03" spec token must not become the qty.
+    const sw = parseQrCapture(
+      "254442210031                CFS-0402MC           03                    240   240   C6Y      6101300000 AA        C",
+      { supplierTemplates: [copalTemplate], targets: ["CFS-0402MC"] }
+    );
+    expect(sw.matched).toBe(true);
+    expect(sw.parsed.itemId).toBe("CFS-0402MC");
+    expect(sw.parsed.qty).toBe(240);
+    // Trimmer labels: resCode is appended because parts.part_no stores the
+    // resistance code ("SM-3TW 104" / "FT-63ES 202").
+    const sm3 = parseQrCapture(
+      "206440005101                SM-3 TW        01   100K ohm(104)       1000  1000  C6H      6081500000 AA        C",
+      { supplierTemplates: [copalTemplate], targets: ["SM-3TW 104"] }
+    );
+    expect(sm3.matched).toBe(true);
+    expect(sm3.parsed.itemId).toBe("SM-3TW104");
+    expect(sm3.parsed.qty).toBe(1000);
+    const ft63 = parseQrCapture(
+      "202821003211                FT-63 ES      10    2K   ohm(202)        1000  2142  C6J      609090084RR8J05741448C",
+      { supplierTemplates: [copalTemplate], targets: ["FT-63ES 202"] }
+    );
+    expect(ft63.matched).toBe(true);
+    expect(ft63.parsed.itemId).toBe("FT-63ES202");
+    expect(ft63.parsed.qty).toBe(1000);
+  });
+
   it("derives the WCL item no from a single-brand profile when the template has no wclItemNo group (ABLIC $ reel)", () => {
     const ablicTemplate = {
       code: "84915",

@@ -105,19 +105,21 @@ VALUES
   -- label, e.g.
   --   234101510021                CJS-1200TB1                             2000  2071  C6E      605220557MMJ805615383C
   --   202661004111                CT-9  4EW           10K  OHM(103)       100   646   C6F      606220290PPZ205648146C
+  --   202821003211                FT-63 ES      10    2K   ohm(202)        1000  2142  C6J      609090084RR8J05741448C
   -- itemId = printed part name (whitespace-collapsed by normalizePartNo ->
-  -- e.g. CJS-1200TB1, SD-2011, CT-94EW). For OHM-spec trimmer parts the
-  -- resistance code (103 -> CT-94EW103 in the parts master) lands in the
-  -- separate resCode group and is DROPPED by parseQrRaw — a regex named group
-  -- cannot concatenate non-adjacent substrings, so OHM parts will not match
-  -- parts.part_no directly (the old system never resolved these either:
-  -- recorded Part_Num is empty for all COPAL scans in BVSDB).
-  -- Verified: 53/53 distinct real scans (qty + structure).
+  -- e.g. CJS-1200TB1, SD-2011, CT-94EW). The model may be followed by an
+  -- optional short numeric spec token (03/01/10 — turns/positions, not part
+  -- of the part no). For OHM-spec trimmer parts the resistance code (104 ->
+  -- SM-3TW 104 in the parts master) lands in the resCode group; parseQrRaw
+  -- APPENDS it to the itemId so OHM parts match parts.part_no (updated
+  -- 2026-10-28 — previously dropped). "ohm" prints lowercase on newer reels
+  -- and the resistance can be 3 digits (100K).
+  -- Verified: 54/54 distinct real scans (qty + structure) + 3 new-layout reels.
   (
     '00000000-0000-7000-8000-000000009003', '19915', NULL,
-    $re$^\d{12}\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:\s{2,}\d{1,2}K\s+OHM\((?<resCode>\d+)\))?\s+(?<qty>\d+)\s+\d+\s+\S+\s+(?<serialNo>\S+).*$$re$,
+    $re$^\d{12}\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:\s{2,}\d{1,2})?(?:\s{2,}\d+K\s+[Oo][Hh][Mm]\((?<resCode>\d+)\))?\s+(?<qty>\d+)\s+\d+\s+\S+\s+(?<serialNo>\S+).*$$re$,
     NULL, NULL, NULL, NULL, NULL, ARRAY['COPAL', 'NIDEC'],
-    'Restored from BVSDB RegPattern Id=156 (WHHK), 2026-08-13 backup. Fixed-width reel label; the old .NET conditional regex (?(.+ohm.+)...|...) was adapted to an optional OHM group (JS has no conditionals). resCode (e.g. 103 of CT-94EW103) is captured but dropped by the parser — OHM-spec COPAL parts will not auto-match parts.part_no. Verified vs 53 real ScannedItem raws.'
+    'Restored from BVSDB RegPattern Id=156 (WHHK), 2026-08-13 backup. Fixed-width reel label; the old .NET conditional regex (?(.+ohm.+)...|...) was adapted to an optional OHM group (JS has no conditionals). Updated 2026-10-28: tolerate lowercase ''ohm'', 3-digit resistances (100K), and the optional numeric spec token after the model; the resCode group is now appended to the itemId by parseQrRaw so OHM-spec parts match parts.part_no (e.g. ''SM-3 TW'' + 104 → SM-3TW 104). Verified vs 54 real ScannedItem raws + 3 new-layout reel scans.'
   ),
 
   -- SII (supplier 70915, SII SEMICONDUCTOR HONG KONG): $-delimited reel QR,

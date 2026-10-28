@@ -56,9 +56,14 @@ const NCC_TEMPLATE = String.raw`^(?=.{28}$|.{32}$)(?<itemId>\d{6}(?=.{22}$)|\d{1
 
 // COPAL: fixed-width 111-char reel label, e.g.
 //   234101510021                CJS-1200TB1                             2000  2071  C6E      605220557MMJ805615383C
-// For OHM-spec trimmer parts the resistance code (103 of CT-94EW103) lands in
-// the resCode group and is dropped by parseQrRaw — those parts won't match.
-const COPAL_TEMPLATE = String.raw`^\d{12}\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:\s{2,}\d{1,2}K\s+OHM\((?<resCode>\d+)\))?\s+(?<qty>\d+)\s+\d+\s+\S+\s+(?<serialNo>\S+).*$`;
+//   202821003211                FT-63 ES      10    2K   ohm(202)        1000  2142  C6J      609090084RR8J05741448C
+// The model may be followed by an optional short numeric spec token (03/01/10
+// — turns/positions, not part of the part no) and/or the resistance spec
+// "\d+K ohm(resCode)" — "ohm" prints lowercase on newer reels and the
+// resistance can be 3 digits (100K). For OHM-spec trimmer parts the resCode
+// (104 of SM-3TW 104) is appended to the itemId by the parser so the scan
+// matches parts.part_no, which stores the resistance code.
+const COPAL_TEMPLATE = String.raw`^\d{12}\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:\s{2,}\d{1,2})?(?:\s{2,}\d+K\s+[Oo][Hh][Mm]\((?<resCode>\d+)\))?\s+(?<qty>\d+)\s+\d+\s+\S+\s+(?<serialNo>\S+).*$`;
 
 // SII/ABLIC: $-delimited reel QR, e.g.
 //   1$S-5743NBH1A-M3T4U$3000$VM3F6XA1761-0367$S-5743NBH1A-M3T4U$202607$67352039027
@@ -133,7 +138,7 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
     qrTemplate: COPAL_TEMPLATE,
     brands: ["COPAL", "NIDEC"],
     remark:
-      "Restored from BVSDB RegPattern Id=156 (WHHK), 2026-08-13 backup. OHM-spec parts (resCode group) will not auto-match parts.part_no. Verified vs 53 real ScannedItem raws.",
+      "Restored from BVSDB RegPattern Id=156 (WHHK), 2026-08-13 backup. Fixed-width reel label; the old .NET conditional regex (?(.+ohm.+)...|...) was adapted to an optional OHM group (JS has no conditionals). Updated 2026-10-28: tolerate lowercase 'ohm', 3-digit resistances (100K), and the optional numeric spec token after the model; the resCode group is now appended to the itemId by parseQrRaw so OHM-spec parts match parts.part_no (e.g. 'SM-3 TW' + 104 → SM-3TW 104). Verified vs 54 real ScannedItem raws + 3 new-layout reel scans.",
   },
   {
     supplierCode: "70915", // SII SEMICONDUCTOR HONG KONG LIMITED

@@ -951,7 +951,13 @@ export function parseQrCapture(
     const groups = extractNamedGroups(regex, normalizedQr);
     if (!groups || !groups.itemId) continue;
     console.log("groups", groups)
-    const normalizedItemId = collapseSpaces(groups.itemId.toUpperCase());
+    // COPAL OHM-spec trimmer labels carry the resistance code ("104" of
+    // SM-3TW 104) in a resCode group after the model; parts.part_no stores
+    // it, so append it to the item identity. Keep in sync with
+    // apps/backend/src/db/scanParse.ts parseQrRaw.
+    const normalizedItemId = collapseSpaces(
+      (groups.resCode ? `${groups.itemId} ${groups.resCode}` : groups.itemId).toUpperCase()
+    );
     const itemMatch =
       targetArray.length === 0 ||
       targetArray.some((t) => collapseSpaces(t.toUpperCase()) === normalizedItemId);

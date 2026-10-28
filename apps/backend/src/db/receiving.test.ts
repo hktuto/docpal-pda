@@ -329,6 +329,38 @@ test("parseQrRaw: ABLIC $-reel QR derives wclItemNo from the single-brand prefix
   assert.equal(koaParsed.wclItemNo, "KOA/SR732ERTTDR200F");
 });
 
+test("parseQrRaw: COPAL new-layout reels — spec token, lowercase ohm, resCode appended", () => {
+  const profile = builtinSupplierProfiles.find((p) => p.supplierCode === "19915");
+  assert.ok(profile?.qrTemplate);
+  const parse = (raw: string) =>
+    parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding ?? null, profile.dateCodeEncoding ?? null, undefined, "wwyy", profile.brands);
+
+  // Switch label (no OHM spec): the "03" spec token must not become the qty.
+  const sw = parse("254442210031                CFS-0402MC           03                    240   240   C6Y      6101300000 AA        C");
+  assert.equal(sw.partNo, "CFS-0402MC");
+  assert.equal(sw.qty, 240);
+  assert.equal(sw.serialNo, "6101300000");
+
+  // Trimmer labels: lowercase "ohm", 3-digit "100K", spec token — resCode is
+  // appended to the itemId because parts.part_no stores the resistance code
+  // ("SM-3TW 104" / "FT-63ES 202"; normalizePartNo collapses whitespace).
+  const sm3 = parse("206440005101                SM-3 TW        01   100K ohm(104)       1000  1000  C6H      6081500000 AA        C");
+  assert.equal(sm3.partNo, "SM-3TW104");
+  assert.equal(sm3.qty, 1000);
+  const ft63 = parse("202821003211                FT-63 ES      10    2K   ohm(202)        1000  2142  C6J      609090084RR8J05741448C");
+  assert.equal(ft63.partNo, "FT-63ES202");
+  assert.equal(ft63.qty, 1000);
+  assert.equal(ft63.serialNo, "609090084RR8J05741448C");
+
+  // Old-layout reels keep parsing (uppercase OHM, no spec token).
+  const old = parse("202821003111                FT-63 ES            1K  OHM(102)        1000  1413  C6F      607020289RR8J05662768C");
+  assert.equal(old.partNo, "FT-63ES102");
+  assert.equal(old.qty, 1000);
+  const plain = parse("234101510021                CJS-1200TB1                             2000  2071  C6E      605220557MMJ805615383C");
+  assert.equal(plain.partNo, "CJS-1200TB1");
+  assert.equal(plain.qty, 2000);
+});
+
 test("decodeYyyymmMidmonthDateCode: YYYYMM anchored on the 15th → ISO week", () => {
   // 2026-06-15 is the Monday of ISO week 25; 2026-07-15 → week 29.
   assert.equal(decodeYyyymmMidmonthDateCode("202606"), "2526");

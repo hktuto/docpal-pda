@@ -368,7 +368,9 @@ export function deriveWclItemNo(itemId: string, brands?: string[] | null): strin
  * ('koa_month_counter' → decodeKoaDateCode, 'yyww' → decodeYywwDateCode,
  * 'ncc_lot_ymmdd' → decodeNccDateCode; otherwise passed through raw).
  * Templates without a `serialNo` group simply yield no serial
- * (older templates, other suppliers) — unknown groups are ignored.
+ * (older templates, other suppliers) — unknown groups are ignored, except
+ * `resCode` (COPAL OHM-spec trimmers): it is appended to the itemId so the
+ * parsed partNo carries the resistance code that parts.part_no stores.
  * When the template has no `wclItemNo` group, `brands` (the supplier
  * profile's brand list) drives the single-brand derivation — see
  * deriveWclItemNo.
@@ -422,7 +424,10 @@ export function parseQrRaw(
   }
 
   return {
-    partNo: normalizePartNo(groups.itemId),
+    // Templates may split the part identity across groups — COPAL OHM-spec
+    // trimmer labels carry the resistance code ("104" of SM-3TW 104) in a
+    // resCode group after the model; parts.part_no stores it, so append it.
+    partNo: normalizePartNo(groups.resCode ? `${groups.itemId} ${groups.resCode}` : groups.itemId),
     qty,
     dateCode,
     lotCode: dateCodeEncoding === DATE_CODE_ENCODING_NCC_LOT_YMMDD && rawLotCode
