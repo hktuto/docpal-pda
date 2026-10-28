@@ -6,6 +6,7 @@ const DATE_CODE_ENCODING_KOA_MONTH_COUNTER = "koa_month_counter";
 const DATE_CODE_ENCODING_YYWW = "yyww";
 const DATE_CODE_ENCODING_YYWWD = "yywwd";
 const DATE_CODE_ENCODING_NCC_LOT_YMMDD = "ncc_lot_ymmdd";
+const DATE_CODE_ENCODING_YMMDD = "ymmdd";
 const DATE_CODE_ENCODING_YYYYMM_MIDMONTH = "yyyymm_midmonth";
 const qrTemplateRegexCache = new Map<string, RegExp | null>();
 
@@ -886,6 +887,28 @@ export function decodeNccDateCode(
   return toLabelDateCode(canonical, dateCodeFormat) ?? undefined;
 }
 
+/** Decode a 5-digit YMMDD date code (COPAL reel label: the leading digits of
+ *  the serial field, e.g. "61013" = 2026-10-13) to an ISO week date code.
+ *  The one-digit year resolves to the latest matching year not after the scan
+ *  year (same rule as the NCC lot prefix). Keep in sync with
+ *  apps/backend/src/db/scanParse.ts decodeYmmddDateCode. */
+export function decodeYmmddDateCode(
+  raw: string,
+  referenceDate: Date = new Date(),
+  dateCodeFormat: DateCodeFormat = "wwyy"
+): string | undefined {
+  if (!/^\d{5}$/.test(raw)) return undefined;
+  const referenceYear = referenceDate.getFullYear();
+  let year = Math.floor(referenceYear / 10) * 10 + Number(raw[0]);
+  if (year > referenceYear) year -= 10;
+  const month = Number(raw.slice(1, 3));
+  const day = Number(raw.slice(3, 5));
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return undefined;
+  const canonical = `${String(getIsoYear(date) % 100).padStart(2, "0")}${String(getIsoWeek(date)).padStart(2, "0")}`;
+  return toLabelDateCode(canonical, dateCodeFormat) ?? undefined;
+}
+
 function getQrTemplateRegex(template: string): RegExp | null {
   if (qrTemplateRegexCache.has(template)) {
     return qrTemplateRegexCache.get(template)!;
@@ -988,6 +1011,8 @@ export function parseQrCapture(
       dateCode = rawDateCode ? decodeYywwdDateCode(rawDateCode, dateCodeFormat) : undefined;
     } else if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_NCC_LOT_YMMDD) {
       dateCode = rawLotCode ? decodeNccDateCode(rawLotCode, new Date(), dateCodeFormat) : undefined;
+    } else if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_YMMDD) {
+      dateCode = rawLotCode ? decodeYmmddDateCode(rawLotCode, new Date(), dateCodeFormat) : undefined;
     } else if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_YYYYMM_MIDMONTH) {
       dateCode = rawDateCode ? decodeYyyymmMidmonthDateCode(rawDateCode, dateCodeFormat) : undefined;
     } else {

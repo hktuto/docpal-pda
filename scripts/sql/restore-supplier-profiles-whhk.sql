@@ -113,13 +113,15 @@ VALUES
   -- SM-3TW 104 in the parts master) lands in the resCode group; parseQrRaw
   -- APPENDS it to the itemId so OHM parts match parts.part_no (updated
   -- 2026-10-28 — previously dropped). "ohm" prints lowercase on newer reels
-  -- and the resistance can be 3 digits (100K).
+  -- and the resistance can be 3 digits (100K). The serial field leads with a
+  -- 5-digit YMMDD date code (61013 = 2026-10-13), captured as lotCode and
+  -- decoded to WWYY by date_code_encoding 'ymmdd'.
   -- Verified: 54/54 distinct real scans (qty + structure) + 3 new-layout reels.
   (
     '00000000-0000-7000-8000-000000009003', '19915', NULL,
-    $re$^\d{12}\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:\s{2,}\d{1,2})?(?:\s{2,}\d+K\s+[Oo][Hh][Mm]\((?<resCode>\d+)\))?\s+(?<qty>\d+)\s+\d+\s+\S+\s+(?<serialNo>\S+).*$$re$,
-    NULL, NULL, NULL, NULL, NULL, ARRAY['COPAL', 'NIDEC'],
-    'Restored from BVSDB RegPattern Id=156 (WHHK), 2026-08-13 backup. Fixed-width reel label; the old .NET conditional regex (?(.+ohm.+)...|...) was adapted to an optional OHM group (JS has no conditionals). Updated 2026-10-28: tolerate lowercase ''ohm'', 3-digit resistances (100K), and the optional numeric spec token after the model; the resCode group is now appended to the itemId by parseQrRaw so OHM-spec parts match parts.part_no (e.g. ''SM-3 TW'' + 104 → SM-3TW 104). Verified vs 54 real ScannedItem raws + 3 new-layout reel scans.'
+    $re$^\d{12}\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:\s{2,}\d{1,2})?(?:\s{2,}\d+K\s+[Oo][Hh][Mm]\((?<resCode>\d+)\))?\s+(?<qty>\d+)\s+\d+\s+\S+\s+(?<serialNo>(?<lotCode>\d{5})?\S*).*$$re$,
+    NULL, NULL, NULL, NULL, 'ymmdd', ARRAY['COPAL', 'NIDEC'],
+    'Restored from BVSDB RegPattern Id=156 (WHHK), 2026-08-13 backup. Fixed-width reel label; the old .NET conditional regex (?(.+ohm.+)...|...) was adapted to an optional OHM group (JS has no conditionals). Updated 2026-10-28: tolerate lowercase ''ohm'', 3-digit resistances (100K), and the optional numeric spec token after the model; the resCode group is appended to the itemId by parseQrRaw so OHM-spec parts match parts.part_no (e.g. ''SM-3 TW'' + 104 → SM-3TW 104); the serial''s 5-digit YMMDD prefix is captured as lotCode and decoded to WWYY by date_code_encoding ''ymmdd''. Verified vs 54 real ScannedItem raws + 3 new-layout reel scans.'
   ),
 
   -- SII (supplier 70915, SII SEMICONDUCTOR HONG KONG): $-delimited reel QR,

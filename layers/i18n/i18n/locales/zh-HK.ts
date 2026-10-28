@@ -1474,6 +1474,7 @@ export default {
         dateCodePlain: "原值",
         dateCodeKoa: "KOA 格式 — 月份計數 + 週數（例如 1723L789 → 2326）",
         dateCodeNcc: "NCC 格式 — 批號前綴 YMMDD（例如 60910… → 3726）",
+        dateCodeYmmdd: "YMMDD — 5 位日期前綴（例如 61013 → 4226）",
         dateCodeYyyymm: "YYYYMM 月份 — 以當月 15 日為準（例如 202606 → 2526）",
         dateCodeYywwd: "TE 格式 — YYWW + 日期位（例如 26374 → 3726）",
         outdatedLimitMonths: "過期期限（月）",

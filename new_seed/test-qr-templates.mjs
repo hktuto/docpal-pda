@@ -92,6 +92,24 @@ function decodeNccDateCode(raw) {
   const week = Math.ceil(((dd.getTime() - jan1.getTime()) / 86400000 + 1) / 7);
   return `${String(week).padStart(2, "0")}${String(dd.getUTCFullYear() % 100).padStart(2, "0")}`;
 }
+// Keep in sync with decodeYmmddDateCode in scanParse.ts (WWYY output, no
+// label-format conversion in this harness port).
+function decodeYmmddDateCode(raw) {
+  if (!/^\d{5}$/.test(raw)) return undefined;
+  const now = new Date();
+  let year = Math.floor(now.getFullYear() / 10) * 10 + Number(raw[0]);
+  if (year > now.getFullYear()) year -= 10;
+  const month = Number(raw.slice(1, 3));
+  const day = Number(raw.slice(3, 5));
+  const d = new Date(year, month - 1, day);
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return undefined;
+  const dd = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dow = dd.getUTCDay() || 7;
+  dd.setUTCDate(dd.getUTCDate() + 4 - dow);
+  const jan1 = new Date(Date.UTC(dd.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((dd.getTime() - jan1.getTime()) / 86400000 + 1) / 7);
+  return `${String(week).padStart(2, "0")}${String(dd.getUTCFullYear() % 100).padStart(2, "0")}`;
+}
 function formatNccLotCode(raw) {
   return /^\d{13}$/.test(raw) ? `${raw.slice(0, 5)}-0${raw.slice(5, 11)}-${raw.slice(11)}` : raw;
 }
@@ -118,6 +136,7 @@ function parseQrRaw(raw, template, qtyEncoding, dateCodeEncoding) {
   let dateCode = groups.dateCode ?? undefined;
   if (dateCodeEncoding === "koa_month_counter") dateCode = rawLotCode ? decodeKoaDateCode(rawLotCode) : undefined;
   if (dateCodeEncoding === "ncc_lot_ymmdd") dateCode = rawLotCode ? decodeNccDateCode(rawLotCode) : undefined;
+  if (dateCodeEncoding === "ymmdd") dateCode = rawLotCode ? decodeYmmddDateCode(rawLotCode) : undefined;
   return {
     // COPAL resCode group: appended to the itemId (parts.part_no stores the
     // resistance code) — keep in sync with scanParse.ts parseQrRaw.
@@ -163,12 +182,15 @@ const TEMPLATES = {
   // itemId = printed part name; OHM-spec parts keep the resistance code in a
   // separate resCode group, appended to the itemId by parseQrRaw (parts.part_no
   // stores it, e.g. "SM-3 TW" + 104 → SM-3TW 104). Updated 2026-10-28:
-  // lowercase "ohm", 3-digit resistance (100K), optional numeric spec token.
+  // lowercase "ohm", 3-digit resistance (100K), optional numeric spec token;
+  // the serial's 5-digit YMMDD prefix is the lotCode group, decoded to WWYY
+  // by dateCodeEncoding "ymmdd".
   COPAL: {
     qtyEncoding: null,
+    dateCodeEncoding: "ymmdd",
     qrType: null,
     template:
-      "^\\d{12}\\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:\\s{2,}\\d{1,2})?(?:\\s{2,}\\d+K\\s+[Oo][Hh][Mm]\\((?<resCode>\\d+)\\))?\\s+(?<qty>\\d+)\\s+\\d+\\s+\\S+\\s+(?<serialNo>\\S+).*$",
+      "^\\d{12}\\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:\\s{2,}\\d{1,2})?(?:\\s{2,}\\d+K\\s+[Oo][Hh][Mm]\\((?<resCode>\\d+)\\))?\\s+(?<qty>\\d+)\\s+\\d+\\s+\\S+\\s+(?<serialNo>(?<lotCode>\\d{5})?\\S*).*$",
   },
   // Restored from RegPattern Id=173 (SII). $-delimited reel QR:
   // 1$MPN$qty$lot$MPN-repeat$yyyymm$serial — itemId = field 4 (old Primary_Key).

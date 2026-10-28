@@ -193,6 +193,22 @@ export function decodeNccDateCode(raw: string, referenceDate: Date = new Date())
   return `${String(week).padStart(2, "0")}${String(isoYear % 100).padStart(2, "0")}`;
 }
 
+/** COPAL serial-prefix YMMDD (5 digits, e.g. "61013" = 2026-10-13) → WWYY,
+ *  resolving the year digit to the latest matching year not after the scan
+ *  year. Mirrors the backend/PDA decoder (date_code_encoding 'ymmdd'). */
+export function decodeYmmddDateCode(raw: string, referenceDate: Date = new Date()): string | undefined {
+  if (!/^\d{5}$/.test(raw)) return undefined;
+  const referenceYear = referenceDate.getUTCFullYear();
+  let year = Math.floor(referenceYear / 10) * 10 + Number(raw[0]);
+  if (year > referenceYear) year -= 10;
+  const month = Number(raw.slice(1, 3));
+  const day = Number(raw.slice(3, 5));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return undefined;
+  const { week, year: isoYear } = isoWeekYear(date);
+  return `${String(week).padStart(2, "0")}${String(isoYear % 100).padStart(2, "0")}`;
+}
+
 /** YYYYMM month date code (ABLIC/SII $-reel labels) → WWYY, anchored on the
  *  15th of the month ("202606" → 2026-06-15 → ISO week 25 → "2526"). Mirrors
  *  the backend/PDA decoder (date_code_encoding 'yyyymm_midmonth'). */

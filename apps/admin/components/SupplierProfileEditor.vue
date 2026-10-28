@@ -5,6 +5,7 @@ import {
   decodeKoaQty,
   decodeKoaDateCode,
   decodeNccDateCode,
+  decodeYmmddDateCode,
   decodeYyyymmMidmonthDateCode,
   decodeYywwdDateCode,
   formatNccLotCode,
@@ -60,6 +61,7 @@ const dateCodeEncodingOptions = computed(() => [
   { value: "", label: t("admin.pages.supplierProfile.dateCodePlain") },
   { value: "koa_month_counter", label: t("admin.pages.supplierProfile.dateCodeKoa") },
   { value: "ncc_lot_ymmdd", label: t("admin.pages.supplierProfile.dateCodeNcc") },
+  { value: "ymmdd", label: t("admin.pages.supplierProfile.dateCodeYmmdd") },
   { value: "yyyymm_midmonth", label: t("admin.pages.supplierProfile.dateCodeYyyymm") },
   { value: "yywwd", label: t("admin.pages.supplierProfile.dateCodeYywwd") },
 ]);
@@ -224,6 +226,10 @@ function displayDateCode(raw: string | undefined): string {
   if (dateCodeEncoding.value === "ncc_lot_ymmdd") {
     const decoded = decodeNccDateCode(raw);
     return decoded !== undefined ? `${decoded} (${t("admin.pages.supplierProfile.nccFormat")})` : raw;
+  }
+  if (dateCodeEncoding.value === "ymmdd") {
+    const decoded = decodeYmmddDateCode(raw);
+    return decoded !== undefined ? `${decoded} (${t("admin.pages.supplierProfile.dateCodeYmmdd")})` : raw;
   }
   if (dateCodeEncoding.value === "yyyymm_midmonth") {
     const decoded = decodeYyyymmMidmonthDateCode(raw);

@@ -44,6 +44,13 @@
   28- and 32-digit templates from backtracking into each other; NCC_KTD parsing
   is preserved, and drawing-number-to-item-number lookup is not implemented
   (spec `docs/superpowers/specs/2026-10-26-ncc-lot-date-code-design.md`).
+- COPAL fixed-width reel labels (supplier 19915): the model may be followed by
+  an optional numeric spec token and/or a `<n>K ohm(<resCode>)` resistance spec
+  (lowercase `ohm` on newer reels); the `resCode` is appended to the itemId by
+  the parsers because parts.part_no stores the resistance code
+  (`SM-3 TW` + `104` → `SM-3TW 104`). The serial field's 5-digit `YMMDD` prefix
+  is the lot code, decoded to the ISO week date code by the `ymmdd` encoding
+  (same one-digit-year rule as NCC).
 - Multi-item labels (e.g. a carton label whose items table lists several
   parts): the client parses the raw capture into one row per item
   (`extractMultiItemRows` in `utils/parseOcrScan.ts`) before posting; 2+
