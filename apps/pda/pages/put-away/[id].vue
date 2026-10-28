@@ -207,9 +207,10 @@ const error = ref<string | null>(null);
 const order = ref<ReceivingOrderDetail | null>(null);
 const items = ref<PutAwayExpectedItem[]>([]);
 const shelves = ref<Shelf[]>([]);
-// scans[] are the order's PENDING pieces. Standard mode: the unstaged scans
-// from the put-away aggregate. CN mode: the locally staged pieces awaiting
-// the batch confirm (kept across reloads; cleared on commit).
+// scans[] are the order's recorded pieces — BOTH pending (shelfCode null)
+// and already-shelved ones; consumers wanting "pending" must filter on
+// shelfCode (see stagedQtyByItem / selectShelf). CN mode: the locally staged
+// pieces awaiting the batch confirm (kept across reloads; cleared on commit).
 const scans = ref<PutAwayScan[]>([]);
 // CN duplicate-serial guard (the standard path's check is backend-side).
 const cnSeenSerials = ref<Set<string>>(new Set());
@@ -426,20 +427,25 @@ useHardwareScanner({
 });
 
 // Shelf scan: select the shelf (banner), then — when pieces are pending —
-// offer to commit them all onto it in one go.
+// offer to commit them all onto it in one go. Only scans without a shelf
+// count as pending: scans[] also carries the already-shelved pieces (for the
+// panel display), and they must not inflate the count or re-commit.
 async function selectShelf(code: string) {
   selectedShelf.value = code;
   showToast(t("putAway.shelfSelected", { shelf: code }));
   // CN: pieces carry the shelf they were scanned on and post via the batch
   // confirm button — no per-shelf commit prompt.
   if (cnMode.value) return;
-  if (scans.value.length === 0) return;
-  const total = scans.value.reduce((sum, s) => sum + s.qty, 0);
+  const pendingScans = scans.value.filter((s) => !s.shelfCode);
+  if (pendingScans.length === 0) return;
+  const total = pendingScans.reduce((sum, s) => sum + s.qty, 0);
   const confirmed = window.confirm(
     t("putAway.pendingPanel.commitPrompt", { count: total, shelf: code })
   );
   if (!confirmed) return;
-  await commitPendingToShelf(code);
+  // Pass the pending ids explicitly so pieces scanned between the prompt and
+  // the confirm (or shelved leftovers) are not swept onto the new shelf.
+  await commitPendingToShelf(code, pendingScans.map((s) => s.id));
 }
 
 // --- CN put-away (cnReceiving flow) -----------------------------------------
