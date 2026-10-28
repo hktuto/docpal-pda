@@ -12,10 +12,9 @@
           </span>
         </div>
         <DetailRow :label="$t('picking.detail.customer')" :value="order.customerCode" />
-        <DetailRow :label="$t('picking.detail.shipTo')" :value="order.shipTo" />
         <DetailRow
-          :label="$t('picking.detail.deliveryDate')"
-          :value="order.deliveryDate ? order.deliveryDate.slice(0, 10) : null"
+          :label="$t('labeling.totals')"
+          :value="$t('labeling.boxesItems', { boxes: order.boxes.length, items: order.items.length })"
         />
       </div>
 

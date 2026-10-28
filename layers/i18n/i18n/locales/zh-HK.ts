@@ -131,6 +131,8 @@ export default {
     confirmFinish: "確認訂單 {orderNo} 已完成貼標籤？",
     finished: "貼標籤已完成",
     alreadyDone: "該訂單已完成貼標籤",
+    totals: "總數",
+    boxesItems: "{boxes} 箱 · {items} 項",
     noLongerMatch: "標籤打印規則已不再符合此訂單 — 請直接完成貼標籤以繼續。"
   },
   manualReceiving: {
@@ -640,10 +642,6 @@ export default {
       boxTitle: "箱號 {id}",
       pickingOrders: "揀貨單",
       packagesVerified: "包裹 — 已查貨 {verified} / {total}",
-      part: "料號",
-      qty: "數量",
-      dateLotOrigin: "日期 / 批次 / 產地",
-      status: "狀態",
       measurements: "箱號測量",
       boxSize: "箱號尺寸",
       netWeight: "淨重",

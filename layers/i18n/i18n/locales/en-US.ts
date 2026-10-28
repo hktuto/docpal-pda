@@ -131,6 +131,8 @@ export default {
     confirmFinish: "Mark order {orderNo} as labeled?",
     finished: "Labeling finished",
     alreadyDone: "Labeling was already finished",
+    totals: "Total",
+    boxesItems: "{boxes} box(es) · {items} item(s)",
     noLongerMatch: "Label print rules no longer match this order — mark labeling done to continue."
   },
   manualReceiving: {
@@ -640,10 +642,6 @@ export default {
       boxTitle: "Box {id}",
       pickingOrders: "Picking orders",
       packagesVerified: "Packages — {verified} / {total} verified",
-      part: "Part",
-      qty: "Qty",
-      dateLotOrigin: "Date / Lot / Origin",
-      status: "Status",
       measurements: "Box measurements",
       boxSize: "Box size",
       netWeight: "Net weight",
