@@ -2300,11 +2300,12 @@ test("scan shelf-scan mode require-any: deducts the scanned shelf's lot; 409s", 
     });
     assert.equal((await allocationOf(itemId)).qty, 630);
 
-    // a lot whose synced lot_code is empty never rejects the label's lot code
+    // a lot whose synced lot_code is blank (upstream writes whitespace-only
+    // codes) never rejects the label's lot code
     const blankLotId = randomUUID();
     await client.db.execute(
       sql`INSERT INTO inventory_lots (id, part_no, wcl_item_no, date_code, lot_code, coo, cow, shelf_code, org_id, sub_inventory_code, total_qty, allocated_qty, created_date, last_update_date)
-          VALUES (${blankLotId}, 'RK73H1JTTD1002F', 'RK73H1JTTD1002F', '2602', '', 'JP', 'JP', 'A0104', 2, 'STORE1', 300, 0, now(), now())`
+          VALUES (${blankLotId}, 'RK73H1JTTD1002F', 'RK73H1JTTD1002F', '2602', ' ', 'JP', 'JP', 'A0104', 2, 'STORE1', 300, 0, now(), now())`
     );
     await scanPickingItem(client.db, itemId, {
       actorId,

@@ -1295,7 +1295,7 @@ function scannedLocationMatches(
  * allowedOrgIds; the label's date code must not be newer than the lot's
  * (equal-or-earlier passes; unparseable scanned codes and lots without a date
  * code skip the check), and the label's lot code must match unless the lot's
- * synced lot_code is empty (unknown); oldest date_code wins (FIFO).
+ * synced lot_code is blank (unknown); oldest date_code wins (FIFO).
  * 409 no_stock_at_location when no candidate covers the scanned qty.
  */
 async function resolveScannedShelfLot(
@@ -1331,9 +1331,9 @@ async function resolveScannedShelfLot(
                             AND sm_s.org_id = il.org_id AND upper(sm_s.code) = upper(il.sub_inventory_code)))
           ${allowedOrgFilter(sql`il.org_id`)}
           AND (${!scannedDateComparable}::boolean OR il.date_code IS NULL OR il.date_code >= ${scannedDateCode ?? ""})
-          -- A lot whose synced lot_code is empty is "unknown" — never rejects
-          -- the label's lot code.
-          AND (${input.lotCode ?? null}::text IS NULL OR il.lot_code IS NULL OR il.lot_code = '' OR il.lot_code = ${input.lotCode ?? null})
+          -- A lot whose synced lot_code is blank is "unknown" — never rejects
+          -- the label's lot code (upstream sync writes whitespace-only codes).
+          AND (${input.lotCode ?? null}::text IS NULL OR il.lot_code IS NULL OR btrim(il.lot_code) = '' OR il.lot_code = ${input.lotCode ?? null})
           -- Same guard as allocate.ts: lots whose shelf is missing from
           -- shelves fail the FK on UPDATE, so never source from them.
           AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))
