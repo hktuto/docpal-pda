@@ -6,9 +6,9 @@
 // (docs/backend/print-service.md) — canvas templates bind by name and ignore
 // extras. All values are strings unless boolean).
 
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { queryGet, type DbOrTx } from "./query.js";
+import { queryAll, queryGet, type DbOrTx } from "./query.js";
 import { getPickingOrderDetail, type PickingItemDetail, type PickingOrderDetail, type PickingPackageDetail } from "./picking.js";
 import { resolveLabelPrintRulesForOrder, type LabelPrintRuleMatch } from "./labelPrint.js";
 import { dateCodeRank } from "./dateCode.js";
@@ -217,11 +217,12 @@ function yhftCh01Row(
   order: PickingOrderDetail,
   item: PickingItemDetail | null,
   pkg: PickingPackageDetail | null,
-  qty: number
+  qty: number,
+  mpn: string,
+  drawingNo: string
 ): Record<string, unknown> {
   const batch = pkg ? packageBatch(pkg) : EMPTY_BATCH;
-  const mpn = item?.partNo ?? "";
-  const npm2 = str(item?.wclItemNo);
+  const npm2 = drawingNo;
   const qtyText = `${qty} PCS`;
   const deliveryNum = order.orderNo;
   return {
@@ -244,7 +245,41 @@ function yhftCh01Row(
 }
 
 async function yhftCh01Converter(ctx: LabelPrintContext): Promise<Record<string, unknown>[]> {
-  const { order, match } = ctx;
+  const { db, order, match } = ctx;
+
+  // Manufacturer part number (物料型号): the detail's partNo IS the WCL item
+  // no (picking_items.part_no join convention) — the real supplier part
+  // number lives on parts.part_no.
+  const wclKeys = [...new Set(order.items.map((i) => str(i.wclItemNo) || i.partNo))];
+  const partRows = wclKeys.length
+    ? await queryAll<{ wclItemNo: string; partNo: string }>(
+        db,
+        sql`SELECT wcl_item_no AS "wclItemNo", part_no AS "partNo"
+            FROM parts WHERE ${inArray(sql`wcl_item_no`, wclKeys)}`
+      )
+    : [];
+  const mpnByWclItemNo = new Map(partRows.map((r) => [r.wclItemNo, r.partNo]));
+  const mpnOf = (item: PickingItemDetail | null | undefined): string =>
+    item ? (mpnByWclItemNo.get(str(item.wclItemNo) || item.partNo) ?? "") : "";
+
+  // Drawing number (零件图号): only inventory_lots carries drawing_no —
+  // packages from other sources (or lots without one) leave npm2 blank.
+  const lotIds = [
+    ...new Set(
+      order.items.flatMap((i) =>
+        i.packages.filter((p) => p.sourceType === "inventory_lot").map((p) => p.sourceId)
+      )
+    ),
+  ];
+  const lotRows = lotIds.length
+    ? await queryAll<{ id: string; drawingNo: string | null }>(
+        db,
+        sql`SELECT id, drawing_no AS "drawingNo" FROM inventory_lots WHERE ${inArray(sql`id`, lotIds)}`
+      )
+    : [];
+  const drawingByLotId = new Map(lotRows.map((r) => [r.id, r.drawingNo ?? ""]));
+  const drawingNoOf = (pkg: PickingPackageDetail | null | undefined): string =>
+    pkg?.sourceType === "inventory_lot" ? (drawingByLotId.get(pkg.sourceId) ?? "") : "";
 
   const rows: Record<string, unknown>[] = [];
   if (match.labelType === "carton") {
@@ -261,12 +296,14 @@ async function yhftCh01Converter(ctx: LabelPrintContext): Promise<Record<string,
       const distinctParts = new Set(boxPkgs.map(({ item }) => item.partNo));
       const single = distinctParts.size === 1 ? boxPkgs[0] : undefined;
       const totalQty = boxPkgs.reduce((sum, { pkg }) => sum + pkg.qty, 0);
-      rows.push(yhftCh01Row(order, single?.item ?? null, single?.pkg ?? null, totalQty));
+      rows.push(
+        yhftCh01Row(order, single?.item ?? null, single?.pkg ?? null, totalQty, mpnOf(single?.item), drawingNoOf(single?.pkg))
+      );
     }
   } else {
     for (const item of order.items) {
       for (const pkg of item.packages) {
-        rows.push(yhftCh01Row(order, item, pkg, pkg.qty));
+        rows.push(yhftCh01Row(order, item, pkg, pkg.qty, mpnOf(item), drawingNoOf(pkg)));
       }
     }
   }
