@@ -355,6 +355,8 @@ export default {
         item: "Item label"
       },
       labelsCount: "{count} label(s)",
+      printer: "Printer",
+      printerDefault: "Template default printer",
       print: "Print",
       printAll: "Print all",
       skip: "Skip",

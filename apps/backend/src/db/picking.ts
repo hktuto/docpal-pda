@@ -951,6 +951,11 @@ export interface PickingPackageDetail {
   rescannedQty: number;
   /** Raw scan string of the source label (traceability/display only). */
   labelBarcode: string | null;
+  /** Pick-time scanned batch fields — win over the source snapshot when set. */
+  scannedDateCode: string | null;
+  scannedLotCode: string | null;
+  scannedCoo: string | null;
+  scannedCow: string | null;
   shippingBoxId: string | null;
   sourceType: string;
   sourceId: string;
@@ -1123,6 +1128,8 @@ export async function getPickingOrderDetail(
             date_code AS "dateCode", lot_code AS "lotCode", coo, cow,
             verified, verify_verified AS "verifyVerified",
             rescanned_qty AS "rescannedQty", label_barcode AS "labelBarcode",
+            scanned_date_code AS "scannedDateCode", scanned_lot_code AS "scannedLotCode",
+            scanned_coo AS "scannedCoo", scanned_cow AS "scannedCow",
             shipping_box_id AS "shippingBoxId",
             source_type AS "sourceType", source_id AS "sourceId"
           FROM picking_packages

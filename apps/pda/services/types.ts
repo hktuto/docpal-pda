@@ -393,12 +393,26 @@ export interface PickingWorkLock {
 
 /** One label-print-rule match for a finished picking order
  *  (GET /picking-orders/:id/label-print-rules → {matches}) — first-match-wins
- *  per label type (spec 2026-10-27). */
+ *  per label type (spec 2026-10-27). labelCount is the backend-converted
+ *  param-row count (spec 2026-10-29). */
 export interface LabelPrintRuleMatch {
   ruleId: string;
   name: string;
   labelType: "carton" | "item_box" | "item";
   printTemplateId: string;
+  labelCount: number;
+}
+
+export interface PrintJob {
+  jobId: string;
+  status: string;
+  diagnostics?: string[];
+}
+
+/** POST /picking-orders/:id/label-print result (spec 2026-10-29). */
+export interface PrintPickingLabelResult {
+  jobs: PrintJob[];
+  labelCount: number;
 }
 
 // ------------------------------------------------------------------
@@ -424,7 +438,7 @@ export interface LabelingOrderRow {
   deliveryDate: string | null;
   itemCount: number;
   totalQty: number;
-  labelMatches: LabelPrintRuleMatch[];
+  labelMatches: Omit<LabelPrintRuleMatch, "labelCount">[];
   lastUpdateDate: string;
 }
 

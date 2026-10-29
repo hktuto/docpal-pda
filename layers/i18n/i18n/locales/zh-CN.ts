@@ -355,6 +355,8 @@ export default {
         item: "物料标签"
       },
       labelsCount: "{count} 张标签",
+      printer: "打印机",
+      printerDefault: "模板默认打印机",
       print: "打印",
       printAll: "全部打印",
       skip: "跳过",

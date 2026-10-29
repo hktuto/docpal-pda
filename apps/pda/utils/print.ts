@@ -1,18 +1,12 @@
 /**
- * Client for the backend print proxy (/print/*), mirroring
- * apps/admin/utils/print.ts but over the shared services/apiClient wrapper
- * (token, base URL from the /server picker, error mapping) instead of raw
- * fetch. v1 sends no printerName — the print service uses the template's
- * default printer. Upstream API doc: docs/backend/print-service.md
+ * Client for the backend print proxy job reads (/print/jobs/*) — printing
+ * itself goes through POST /picking-orders/:id/label-print (backend-side
+ * param conversion, spec 2026-10-29). Uses the shared services/apiClient
+ * wrapper (token, base URL from the /server picker, error mapping).
  */
 import { createApiClient, type ApiClient } from "../services/apiClient";
+import type { PrintJob } from "../services/types";
 import { getApiBaseUrl } from "./serverHost";
-
-export interface PrintJob {
-  jobId: string;
-  status: string;
-  diagnostics?: string[];
-}
 
 let client: ApiClient | null = null;
 
@@ -22,21 +16,35 @@ function api(): ApiClient {
   return client;
 }
 
-/** POST /print/dynamic — print one template; returns data incl. jobs[]. */
-export async function dynamicPrint(opts: {
-  templateId: string;
-  printingParams: Record<string, unknown>[];
-}): Promise<{ jobs: PrintJob[] }> {
-  return api().post<{ jobs: PrintJob[] }>("/print/dynamic", {
-    copies: 1,
-    mode: "auto",
-    ...opts,
-  });
-}
-
 /** GET /print/jobs/:jobId — current status of one print job. */
 export function getPrintJob(jobId: string): Promise<PrintJob> {
   return api().get<PrintJob>(`/print/jobs/${encodeURIComponent(jobId)}`);
+}
+
+/** One printer as returned by the print service's agent-printers list. */
+export interface PrinterInfo {
+  serviceId: string;
+  deviceKey: string;
+  name?: string;
+  alias?: string;
+}
+
+/** GET /print/printers — available printers (flattened across print services). */
+export async function listPrinters(): Promise<PrinterInfo[]> {
+  const data = await api().get<unknown>("/print/printers");
+  return Array.isArray(data) ? (data as PrinterInfo[]) : [];
+}
+
+/** Composite picker value for one printer: "<serviceId>.<deviceKey>". */
+export function printerKey(p: PrinterInfo): string {
+  return `${p.serviceId}.${p.deviceKey}`;
+}
+
+/** Split a printerKey back into its parts; null when the value is not a picker selection. */
+export function parsePrinterKey(key: string): { serviceId: string; deviceKey: string } | null {
+  const i = key.indexOf(".");
+  if (i <= 0 || i === key.length - 1) return null;
+  return { serviceId: key.slice(0, i), deviceKey: key.slice(i + 1) };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

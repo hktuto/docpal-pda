@@ -264,10 +264,18 @@
   Print all / Skip — the per-rule rows are the shared
   `components/picking/LabelPrintRulesPanel.vue`, also embedded by the
   labeling detail page; the deferred `/verify` / `/labeling/[id]` navigation
-  waits for the prompt to close; fetch/print errors only toast). Params come from
-  `utils/labelPrintParams.ts` (per-label-type superset of the print-service
-  template fields), printed via `utils/print.ts` over the `/print/*` proxy
-  with the template's default printer. Reprint: "Print labels" header action
+  waits for the prompt to close; fetch/print errors only toast). Params are
+  built backend-side (spec
+  `docs/superpowers/specs/2026-10-29-backend-label-print-conversion-design.md`):
+  the panel calls `POST /picking-orders/:id/label-print` `{ruleId}` and the
+  backend converts (`src/db/labelPrintParams.ts` — per-templateId converter
+  registry, default per-label-type superset builder, pick-time scanned batch
+  values preferred) and proxies the print service. The panel carries a printer
+  dropdown (`GET /print/printers` agent printers, the choice remembered in the
+  `label_printer` localStorage key, sent as `{serviceId, deviceKey}` — the
+  backend forwards both plus `printerName = deviceKey`); the empty option
+  prints with the template's default printer. Job polling via `utils/print.ts`.
+  Reprint: "Print labels" header action
   on `pages/picking/[id].vue` for `picking_finished`/`measuring_finished`/
   `shipped` orders.
 - Supplier outdated date-code scan warnings (spec

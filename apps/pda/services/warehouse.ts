@@ -14,6 +14,7 @@ import type {
   PickingOrderDetail,
   PickingWorkLock,
   LabelPrintRuleMatch,
+  PrintPickingLabelResult,
   LabelingOrderListQuery,
   LabelingOrderRow,
   ScanPickingItemInput,
@@ -85,6 +86,15 @@ export interface WarehouseService {
   // Label-print rules matching a finished picking order (spec 2026-10-27;
   // first-match-wins per label type, at most one carton/item_box/item match).
   getPickingLabelPrintRules(orderId: string): Promise<LabelPrintRuleMatch[]>;
+  // Server-side label print (spec 2026-10-29): the backend converts the order
+  // to printingParams and proxies the print service. `printer` is the
+  // caller-picked agent printer (serviceId + deviceKey); absent = the
+  // template's default printer.
+  printPickingLabel(
+    orderId: string,
+    ruleId: string,
+    printer?: { serviceId: string; deviceKey: string }
+  ): Promise<PrintPickingLabelResult>;
   scanPickingItem(
     itemId: string,
     input: ScanPickingItemInput

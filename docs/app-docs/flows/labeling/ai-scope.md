@@ -26,8 +26,10 @@
   errors as toasts) live in the shared
   `components/picking/LabelPrintRulesPanel.vue`, embedded by both
   `components/picking/LabelPrintPrompt.vue` and this page. Data:
-  `GET /picking-orders/:id/label-print-rules` + `utils/labelPrintParams.ts` +
-  `utils/print.ts` over the `/print/*` proxy. Zero live matches → an info
+  `GET /picking-orders/:id/label-print-rules` (each match carries the
+  backend-computed `labelCount`) + `POST /picking-orders/:id/label-print`
+  (backend-side param conversion, spec 2026-10-29) + job polling via
+  `utils/print.ts`. Zero live matches → an info
   line ("rules no longer match") replaces the print rows; finishing stays
   available.
 - **Finish labeling** → `POST /picking-orders/:id/labeling-finish`
@@ -70,7 +72,8 @@
 - `apps/pda/pages/labeling/[id].vue` — the labeling detail (print panel +
   Finish labeling action).
 - `apps/pda/components/picking/LabelPrintRulesPanel.vue` — shared per-rule
-  print rows (extracted from `LabelPrintPrompt.vue`; used by both).
+  print rows + the printer dropdown (agent printers, `label_printer`
+  localStorage, empty = template default; used by both).
 - `apps/pda/pages/index.vue` — home tile (`v-if="flowSteps.labeling"`).
 - `apps/pda/composables/useFlowSteps.ts` — `labeling: true` default.
 - `apps/backend/src/routes/picking.ts` — `POST

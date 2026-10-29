@@ -31,6 +31,7 @@ import {
 } from "../db/picking.js";
 import { scheduleAllocateAll } from "../db/allocate.js";
 import { resolveLabelPrintRulesForOrder } from "../db/labelPrint.js";
+import { labelCountForMatch, printOrderLabel } from "../db/labelPrintParams.js";
 import { actorFrom } from "../auth/middleware.js";
 import { getUserScope } from "../db/user-scope.js";
 
@@ -112,9 +113,39 @@ pickingRoute.get("/picking-orders/:id", async (c) => {
 });
 
 // Label-print rules matching this order (picking-finish print prompt):
-// first active rule by ascending priority per label_type.
+// first active rule by ascending priority per label_type. Each match carries
+// labelCount (the converted param-row count) — computed here only, so the
+// labeling list (listLabelingOrders) never pays converter cost per row.
 pickingRoute.get("/picking-orders/:id/label-print-rules", async (c) => {
-  return c.json(await resolveLabelPrintRulesForOrder(db, c.req.param("id")), 200);
+  const orderId = c.req.param("id");
+  const { matches } = await resolveLabelPrintRulesForOrder(db, orderId);
+  const scope = await getUserScope(db, actorFrom(c).username);
+  const order = await getPickingOrderDetail(db, orderId, scope);
+  const withCounts = await Promise.all(
+    matches.map(async (match) => ({ ...match, labelCount: await labelCountForMatch(db, order, match) }))
+  );
+  return c.json({ matches: withCounts }, 200);
+});
+
+// Server-side label print: the client sends { ruleId } plus an optional
+// printer pick ({ serviceId, deviceKey } from GET /print/printers; absent =
+// the template's default printer); the backend loads + re-validates the rule,
+// converts the order to printingParams (per-templateId converter registry,
+// default superset builder), and proxies to the print service.
+pickingRoute.post("/picking-orders/:id/label-print", async (c) => {
+  const body = await readJson<{ ruleId?: string; serviceId?: string; deviceKey?: string }>(c);
+  if (!body.ruleId) throw new HTTPException(400, { message: "rule_id_required" });
+  if (Boolean(body.serviceId) !== Boolean(body.deviceKey)) {
+    throw new HTTPException(400, { message: "printer_incomplete" });
+  }
+  const scope = await getUserScope(db, actorFrom(c).username);
+  const result = await printOrderLabel(db, {
+    orderId: c.req.param("id"),
+    ruleId: body.ruleId,
+    scope,
+    printer: body.serviceId ? { serviceId: body.serviceId, deviceKey: body.deviceKey! } : undefined,
+  });
+  return c.json(result, 200);
 });
 
 // Shelf presence check (flow config pickingShelfScan require-match): stock of

@@ -355,6 +355,8 @@ export default {
         item: "物料標籤"
       },
       labelsCount: "{count} 張標籤",
+      printer: "打印機",
+      printerDefault: "範本預設打印機",
       print: "列印",
       printAll: "全部列印",
       skip: "略過",

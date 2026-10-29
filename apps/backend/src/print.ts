@@ -15,6 +15,10 @@ export interface DynamicPrintBody {
   templateId: string;
   printingParams: Record<string, unknown>[];
   printerName?: string;
+  // Agent-printer selection (from GET /api/v1/usb/agent-printers) — the
+  // service-dynamic-print route targets the given print service + device.
+  serviceId?: string;
+  deviceKey?: string;
   copies?: number;
   mode?: string;
   orientation?: string;

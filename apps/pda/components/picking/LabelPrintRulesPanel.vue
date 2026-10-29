@@ -1,4 +1,13 @@
 <template>
+  <div class="printer-row">
+    <label class="printer-row__label" for="lpr-printer">{{ $t('picking.printLabels.printer') }}</label>
+    <select id="lpr-printer" v-model="printerName" class="printer-row__select">
+      <option value="">{{ $t('picking.printLabels.printerDefault') }}</option>
+      <option v-for="p in printers" :key="printerKey(p)" :value="printerKey(p)">
+        {{ p.alias || p.name || p.deviceKey }}
+      </option>
+    </select>
+  </div>
   <ul class="match-list">
     <li v-for="match in matches" :key="match.ruleId" class="match-row">
       <div class="match-info">
@@ -6,7 +15,7 @@
         <span class="match-meta">
           {{ $t(`picking.printLabels.labelTypes.${match.labelType}`) }} · {{ match.printTemplateId }}
         </span>
-        <span class="match-meta">{{ $t('picking.printLabels.labelsCount', { count: labelCount(match) }) }}</span>
+        <span class="match-meta">{{ $t('picking.printLabels.labelsCount', { count: match.labelCount }) }}</span>
       </div>
       <button
         class="btn btn--small"
@@ -35,14 +44,20 @@
 </template>
 
 <script setup lang="ts">
-// The per-rule match list + print logic shared by the picking-finish
-// LabelPrintPrompt modal and the labeling detail page (spec
+// The printer picker + per-rule match list + print logic shared by the
+// picking-finish LabelPrintPrompt modal and the labeling detail page (spec
 // docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md).
 import { useToast } from "~/composables/useToast";
 import { useErrorMessage } from "~/composables/errorMessage";
+import { useWarehouse } from "~/composables/useWarehouse";
 import InlineSpinner from "~/components/InlineSpinner.vue";
-import { dynamicPrint, waitForPrintJob } from "~/utils/print";
-import { buildLabelPrintParams } from "~/utils/labelPrintParams";
+import {
+  listPrinters,
+  parsePrinterKey,
+  printerKey,
+  waitForPrintJob,
+  type PrinterInfo,
+} from "~/utils/print";
 import type { LabelPrintRuleMatch, PickingOrderDetail } from "~/services/types";
 
 const props = defineProps<{
@@ -52,30 +67,37 @@ const props = defineProps<{
 
 const { showToast } = useToast();
 const getErrorMessage = useErrorMessage();
+const warehouse = useWarehouse();
+
+// Printer picker — the print service's agent printers (same "label_printer"
+// localStorage key as the admin dialogs); empty = the template's default
+// printer. A remembered key that is no longer listed still prints (the raw
+// serviceId/deviceKey pair is sent as-is).
+const printerName = ref(import.meta.client ? (localStorage.getItem("label_printer") ?? "") : "");
+const printers = ref<PrinterInfo[]>([]);
+
+const selectedPrinter = computed(() => parsePrinterKey(printerName.value.trim()) ?? undefined);
+
+watch(printerName, (value) => {
+  if (import.meta.client) localStorage.setItem("label_printer", value.trim());
+});
+
+// Non-fatal: without the list the picker just offers the default printer.
+onMounted(async () => {
+  try {
+    printers.value = await listPrinters();
+  } catch {
+    printers.value = [];
+  }
+});
 
 type RowState = "idle" | "printing" | "printed" | "failed";
 
 const rowStates = ref<Record<string, RowState>>({});
 const printingAll = ref(false);
-// Label counts never change while the panel is shown — build each match's
-// params once, lazily, and reuse them for the actual print call.
-const paramsCache = new Map<string, Record<string, unknown>[]>();
 
 function stateOf(ruleId: string): RowState {
   return rowStates.value[ruleId] ?? "idle";
-}
-
-function paramsFor(match: LabelPrintRuleMatch): Record<string, unknown>[] {
-  let params = paramsCache.get(match.ruleId);
-  if (!params) {
-    params = buildLabelPrintParams(match.labelType, props.order);
-    paramsCache.set(match.ruleId, params);
-  }
-  return params;
-}
-
-function labelCount(match: LabelPrintRuleMatch): number {
-  return paramsFor(match).length;
 }
 
 const allPrinted = computed(() =>
@@ -86,17 +108,13 @@ const allPrinted = computed(() =>
 function reset(): void {
   rowStates.value = {};
   printingAll.value = false;
-  paramsCache.clear();
 }
 
 async function printMatch(match: LabelPrintRuleMatch): Promise<void> {
   if (stateOf(match.ruleId) === "printing") return;
   rowStates.value = { ...rowStates.value, [match.ruleId]: "printing" };
   try {
-    const { jobs } = await dynamicPrint({
-      templateId: match.printTemplateId,
-      printingParams: paramsFor(match),
-    });
+    const { jobs } = await warehouse.printPickingLabel(props.order.id, match.ruleId, selectedPrinter.value);
     for (const job of jobs) {
       await waitForPrintJob(job.jobId);
     }
@@ -125,6 +143,28 @@ defineExpose({ printAll, reset, printingAll, allPrinted });
 </script>
 
 <style scoped>
+.printer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.printer-row__label {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.printer-row__select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
 .match-list {
   list-style: none;
   margin: 0;
