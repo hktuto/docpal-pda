@@ -31,6 +31,10 @@
  * Usage:
  *   node scripts/migrate-datecode-yyww.mjs <database-url> --yes
  *   node scripts/migrate-datecode-yyww.mjs <database-url>        # dry-run report
+ *   node scripts/migrate-datecode-yyww.mjs <database-url> --yes --force
+ *     # clear the marker first — only safe when the migrated tables were
+ *     # wiped and re-loaded with WWYY data since the last run (e.g. a
+ *     # nightly inventory re-init)
  */
 
 import { resolve, dirname } from "node:path";
@@ -42,6 +46,7 @@ const repoRoot = resolve(__dirname, "..");
 
 const DATABASE_URL = process.argv[2];
 const CONFIRM = process.argv.includes("--yes");
+const FORCE = process.argv.includes("--force");
 
 if (!DATABASE_URL) {
   console.error("Usage: node scripts/migrate-datecode-yyww.mjs <database-url> [--yes]");
@@ -95,10 +100,17 @@ try {
   console.log(`Connecting to ${DATABASE_URL.replace(/:[^:@]+@/, ":***@")}...`);
   await sql`SELECT 1`;
 
+  if (FORCE) {
+    const cleared = await sql`DELETE FROM warehouse_config WHERE key = ${MARKER_KEY}`;
+    console.log(`--force: cleared marker '${MARKER_KEY}' (${cleared.count} row(s)).`);
+  }
+
   const marker = await sql`SELECT value FROM warehouse_config WHERE key = ${MARKER_KEY}`;
   if (marker.length > 0) {
+    const markerValue =
+      typeof marker[0].value === "string" ? JSON.parse(marker[0].value) : marker[0].value;
     console.error(
-      `\nREFUSING TO RUN: marker '${MARKER_KEY}' exists (migrated at ${marker[0].value.at}). ` +
+      `\nREFUSING TO RUN: marker '${MARKER_KEY}' exists (migrated at ${markerValue.at}). ` +
         `This migration is NOT idempotent — re-running would corrupt date codes.`
     );
     process.exit(2);
