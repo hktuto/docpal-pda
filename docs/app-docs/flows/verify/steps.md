@@ -10,6 +10,8 @@ From the home screen, tap **Verify**. The list shows the boxes with a pending ve
 
 Tap the box to open its page. The page shows the box's packages with their re-scan progress and recorded measurements — a box may hold packages from several picking orders.
 
+If a **carton label** was printed for the box, you can also scan it from the list — the matching box opens directly (and the carton label counts as verified).
+
 ![Verify box page](./assets/verify-box.png)
 
 ## 3. Reopen the box if it needs correction
@@ -22,10 +24,15 @@ The box page (shared with measuring) lists the box's packages in a table. Scan e
 
 Every package in the box must be re-scanned in this pass — the task cannot complete until all of them are.
 
+The page has up to two sections:
+
+- **Labels to verify** — shown when the box contains orders with printed labels. Scan each printed item/item-box label once (the row flips to *label scanned*), then scan the physical items; the app rejects an item whose part number, COO or date code does not match the label. If a carton label was printed, a carton row sits at the top until you scan it.
+- **Items to re-scan** — orders without printed labels (including external-label orders) show one row per item with the total qty; scan in any combination until each total is reached.
+
 ## 5. Correct measurements if needed
 
 When every package in an open box is verified, the measurements form opens automatically (or tap **Enter measurements** in the header's page-action menu). Box size, net/gross weight (kg — the net weight pre-fills from the part net-weight master), and destination country can be edited; then **Confirm box** closes the box again. See [Box measurements](../measuring/box-measurements.md).
 
 ## 6. Complete the task
 
-When the box is closed and every package has been re-scanned, tap **Complete verify** (the button appears only then). The box moves on to the admin shipping feed.
+When the box is closed, every package re-scanned, and every printed label verified (carton label included, when one was printed), tap **Complete verify** (the button appears only then — a missing label scan shows a "labels not all verified" error). The box moves on to the admin shipping feed.

@@ -22,7 +22,11 @@ label type, template):
 
 - **Print** per row — prints that label with the template's default printer;
   a spinner tracks the print job and errors show as toasts.
-- Labels are re-printable as many times as needed.
+- Labels are re-printable as many times as needed — every print (reprints
+  included) is recorded server-side and later checked in Verify.
+- A rule marked **external** shows an info row ("label provided by customer")
+  with no Print button — the customer supplies those labels; just stick them
+  when they arrive.
 
 If the rules were edited since the order finished and no longer match, an
 info line says so in place of the print rows — the finish action stays

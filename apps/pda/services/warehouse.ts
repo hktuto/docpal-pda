@@ -38,6 +38,9 @@ import type {
   MeasuringOrderGroup,
   VerifyTaskListRow,
   VerifyTaskDetail,
+  VerifyLabelLookup,
+  ScanVerifyTaskLabelResult,
+  VerifyPackageBatch,
   FlowConfig,
   GoodsVerifyTaskListRow,
   GoodsVerifyTaskDetail,
@@ -104,7 +107,10 @@ export interface WarehouseService {
   removeScannedPackage(packageId: string): Promise<void>;
   // Whole-box exact-match claim: reuse a shelf carton as the shipping box.
   claimShelfBox(orderId: string, shelfBoxId: string): Promise<{ shippingBoxId: string; packageIds: string[] }>;
-  verifyPackage(packageId: string, qty?: number): Promise<void>;
+  // Measuring/verify package re-scan credit. `batch` (spec 2026-10-30) rides
+  // along when the package is label_verified — the server hard-compares it
+  // against the printed label (409 label_item_mismatch).
+  verifyPackage(packageId: string, qty?: number, batch?: VerifyPackageBatch): Promise<void>;
   createShippingBoxForPickingOrder(pickingOrderId: string, boxId?: string): Promise<void>;
   updateShippingBox(id: string, fields: ShippingBoxUpdateInput): Promise<void>;
   addPackageToBox(packageId: string, boxId: string): Promise<void>;
@@ -221,6 +227,11 @@ export interface WarehouseService {
   // pending verify task.
   getVerifyTasks(status?: string): Promise<VerifyTaskListRow[]>;
   getVerifyTask(id: string): Promise<VerifyTaskDetail>;
+  // Label-aware verify (spec 2026-10-30): resolve a box by scanning its
+  // printed carton label (stamps carton_label_verified; null on 404), and the
+  // label-mode label scan inside a task's box (null on 404).
+  lookupVerifyTaskByLabel(raw: string): Promise<VerifyLabelLookup | null>;
+  scanVerifyTaskLabel(taskId: string, raw: string): Promise<ScanVerifyTaskLabelResult | null>;
   completeVerifyTask(id: string): Promise<void>;
   reopenShippingBox(boxId: string): Promise<void>;
 

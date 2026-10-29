@@ -110,6 +110,11 @@ export const shippingBoxes = pgTable(
     shippedBy: text("shipped_by").references(() => users.id),
     // Whole-box claim: the reused shelf carton this box was created from.
     sourceShelfBoxId: text("source_shelf_box_id").references(() => shelfBoxes.id),
+    // Carton label verification (2026-10-30 label-aware verify): stamped when
+    // the printed carton label is scanned (box entry or verify scan).
+    cartonLabelVerified: boolean("carton_label_verified").notNull().default(false),
+    cartonLabelVerifiedAt: timestamp("carton_label_verified_at", { mode: "date" }),
+    cartonLabelVerifiedBy: text("carton_label_verified_by"),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
@@ -156,6 +161,11 @@ export const pickingPackages = pgTable(
     // Aggregate re-scan truth (2026-10-03): credited qty from verify scans —
     // completion when rescanned_qty >= qty; mode-agnostic (both flags ride along).
     rescannedQty: integer("rescanned_qty").notNull().default(0),
+    // Item/item-box label verification (2026-10-30 label-aware verify):
+    // stamped when the package's printed label is scanned.
+    labelVerified: boolean("label_verified").notNull().default(false),
+    labelVerifiedAt: timestamp("label_verified_at", { mode: "date" }),
+    labelVerifiedBy: text("label_verified_by"),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },

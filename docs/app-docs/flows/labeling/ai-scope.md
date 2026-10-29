@@ -41,6 +41,20 @@
   helper — the measuring-off verify-task spawn) and emits SSE
   `picking.labeling_finished` (topics `["/picking-orders",
   "/labeling-orders"]`).
+- **Label source (2026-10-30, spec
+  `docs/superpowers/specs/2026-10-30-label-source-and-label-verify-design.md`)**:
+  `label_print_rules.label_source` (`internal` default | `external` —
+  customer-provided). External matches render in the print panel as info rows
+  ("label provided by customer", no print button, excluded from print-all) and
+  `POST /picking-orders/:id/label-print` rejects them with 409
+  `label_rule_external`; external-only orders still enter the labeling queue
+  (finishing attests the customer's labels are stuck) but count as
+  **unlabeled** in verify.
+- **Print records**: every successful print (reprints included) inserts a
+  `label_prints` row (rule/template/printer, `expected_label_count`, jsonb
+  `payload` — per-label params linked via `packageId` (item/item_box) or
+  `shippingBoxId` (carton), `printed_by`). The recorded content drives
+  label-mode verify (see [Verify](../verify/ai-scope.md)).
 - Downstream gates while pending: `listMeasuringBoxes`
   (`apps/backend/src/db/measuring.ts`) and the verify-task spawn both require
   `labeling_pending = false` for EVERY order in the box — a cross-order box
@@ -99,6 +113,7 @@
 ## Related specs/plans
 
 - `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`
+- `docs/superpowers/specs/2026-10-30-label-source-and-label-verify-design.md`
 - `docs/superpowers/plans/2026-10-28-picking-labeling-step.md`
 - `docs/superpowers/specs/2026-10-27-picking-finish-label-print-prompt-design.md`
 - `docs/superpowers/specs/2026-09-16-label-print-rules-design.md`

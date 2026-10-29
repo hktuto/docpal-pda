@@ -151,6 +151,7 @@ export interface LabelPrintRuleMatch {
   name: string;
   labelType: string;
   printTemplateId: string;
+  labelSource: string; // internal | external
 }
 
 export async function resolveLabelPrintRulesForOrder(
@@ -192,11 +193,13 @@ export async function resolveLabelPrintRulesForOrder(
     labelType: string;
     conditions: RuleConditions;
     printTemplateId: string;
+    labelSource: string;
   }>(
     db,
     sql`
       SELECT id, name, label_type AS "labelType", conditions,
-             print_template_id AS "printTemplateId"
+             print_template_id AS "printTemplateId",
+             label_source AS "labelSource"
       FROM label_print_rules
       WHERE active
       ORDER BY priority ASC, created_date ASC
@@ -214,6 +217,7 @@ export async function resolveLabelPrintRulesForOrder(
       name: rule.name,
       labelType: rule.labelType,
       printTemplateId: rule.printTemplateId,
+      labelSource: rule.labelSource,
     });
   }
   return { matches };

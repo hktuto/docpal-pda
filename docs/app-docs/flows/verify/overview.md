@@ -14,7 +14,8 @@ Use the Verify flow when a verify task was created for a box (one task per box �
 2. The operator selects a box — the page shows the box's packages with their re-scan progress and recorded measurements.
 3. If the box needs correction, the operator taps **Reopen** — the box opens and its packages must be re-scanned before it can be re-closed.
 4. On the box page (shared with measuring) the operator scans each package's QR label again to re-verify it — this works on the closed box (checking contents against the sealed box is the normal verify pass). Box size, weights (kg), and destination country can be edited while the box is open.
-5. When every package has been re-scanned and the box is closed (or still open, when the measuring step is off — completing then closes the box), the operator completes the verify task — the box is now ready to ship.
+5. **Orders with printed labels are checked against those labels** (label mode): if a carton label was printed for the box, scanning it opens the box from the verify list (and is required before completion); each printed item/item-box label must be scanned once, then the physical items are scanned and the app hard-checks part number, COO and date code between the label and the item. Orders without printed labels (including external-label orders) just show per-item totals — any scan combination that reaches each item's total passes.
+6. When every package has been re-scanned, every printed label verified, and the box is closed (or still open, when the measuring step is off — completing then closes the box), the operator completes the verify task — the box is now ready to ship.
 
 ## Related guides
 

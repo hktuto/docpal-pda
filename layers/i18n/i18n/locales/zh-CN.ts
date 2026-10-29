@@ -363,7 +363,8 @@ export default {
       printing: "打印中…",
       printed: "已打印",
       printFailed: "打印失败——点击重试",
-      noMatchingRules: "此订单没有符合的标签打印规则"
+      noMatchingRules: "此订单没有符合的标签打印规则",
+      externalNote: "标签由客户提供"
     },
     itemsSection: {
       title: "明细",
@@ -650,14 +651,29 @@ export default {
       grossWeight: "毛重",
       destinationCountry: "目的国家/地区",
       scanHint: "扫描包裹二维码以核验。",
+      scanHintLabels: "扫描已打印的标签或包裹二维码。",
       noMatch: "没有匹配该标签的未核验包裹。",
-      alreadyRescanned: "已全部复核扫描（{count} 件）。"
+      alreadyRescanned: "已全部复核扫描（{count} 件）。",
+      labelsToVerify: "待核验标签",
+      itemsToRescan: "待复核扫描物料",
+      cartonLabel: "箱标签",
+      scanCartonLabel: "请扫描已打印的箱标签",
+      scanLabel: "请扫描已打印的标签",
+      labelScanned: "标签已扫描——物料 {rescanned}/{qty}"
     }
   },
   verify: {
     title: "复核",
     hint: "待复核的已关闭箱子。",
     boxNotFound: "列表中没有匹配“{id}”的箱子。",
+    cartonLabelVerified: "箱标签已核验",
+    labelScanned: "标签已核验：{part}",
+    labelFields: {
+      partNo: "零件编号",
+      wclItemNo: "WCL 物料编号",
+      coo: "原产地",
+      dateCode: "日期码"
+    },
     detail: {
       completeVerify: "完成复核",
       completing: "完成中…",
@@ -924,7 +940,9 @@ export default {
     network_error: "网络错误，请检查连接后重试。",
     unresolved_outdated_warnings: "此订单有 {count} 条未解决的日期码过期警告 — 请先联系管理员解决，再完成订单。",
     box_coo_mismatch: "箱内已有产地（COO）为 {coos} 的货品 — 请将相同产地的货品装入同一箱。",
-    labeling_not_pending: "此订单不在待贴标签状态"
+    labeling_not_pending: "此订单不在待贴标签状态",
+    labels_not_all_verified: "完成复核前必须扫描所有已打印的标签（箱标签及物料标签）",
+    label_item_mismatch: "扫描的物料与已打印标签不符（{fields}）"
   },
   status: {
     receiving: {
@@ -1367,6 +1385,7 @@ export default {
       createdDate: "创建时间",
       lastUpdateDate: "更新时间",
       labelType: "标签类型",
+      labelSource: "标签来源",
       printTemplateId: "打印模板 ID",
       printTemplateIdHint: "标签打印服务的模板 slug。已知模板：katata-label、katata-3-8、carton-a4-sheet、carton-label-canvas、LABEL-FLEXTRONICS-2-5、LABEL-HET-CAR-3-4、LABEL-HET-INTELLIGENT-3-4、LABEL-HW-1、rohs-7、rohs-18。",
       priority: "优先级",
@@ -2488,6 +2507,10 @@ export default {
           carton: "箱",
           item_box: "零件盒",
           item: "零件"
+        },
+        labelSources: {
+          internal: "内部（我方打印）",
+          external: "外部（客户提供）"
         },
         editTitle: "编辑标签打印规则 — {name}",
         requiredFields: "名称、标签类型及打印模板 ID 为必填。",

@@ -10,6 +10,7 @@ export * from "./audit.js";
 export * from "./events.js";
 export * from "./config.js";
 export * from "./label-print.js";
+export * from "./label-prints.js";
 export * from "./outdated.js";
 export * from "./adhocPutaway.js";
 export * from "./inventory-labels.js";

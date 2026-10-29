@@ -1,6 +1,7 @@
 import { useAuth } from './useAuth';
 import { useWarehouse } from './useWarehouse';
 import { I18nError } from '~/composables/i18nError';
+import { ApiError } from '~/services/apiClient';
 import type { OcrInput } from '~/utils/ocrNormalize';
 import { toCanonicalDateCode, type DateCodeFormat } from '~/utils/dateCode';
 import type {
@@ -75,6 +76,10 @@ export interface ScanTaskContext {
   /** Raw scan string (measuring/verify): proves same-label re-scans for
    *  legacy packages whose parsed scanned_* fields were never stored. */
   rawLabel?: string;
+  /** Label-aware verify (spec 2026-10-30): tried with the raw scan BEFORE the
+   *  aggregate matcher — returns true when the scan was a printed label
+   *  (handled: package/box stamped + toast shown by the callback). */
+  tryLabel?: (raw: string) => Promise<boolean>;
   // measuring vs verify pass — decides which per-package flag skips a row
   // (`verified` in measuring, `verifyVerified` in verify); default 'measuring'
   flow?: 'measuring' | 'verify';
@@ -298,7 +303,31 @@ export function useScanMatchers(): ScanMatchers {
         record: matched,
         apply: async () => {
           for (const credit of matched.credits) {
-            await warehouse.verifyPackage(credit.packageId, credit.qty);
+            // Label-verified packages (spec 2026-10-30): the scan's batch
+            // fields ride along so the server hard-compares them against the
+            // printed label (409 label_item_mismatch).
+            const pkg = packages.find((p) => p.id === credit.packageId);
+            const batch = pkg?.labelVerified
+              ? {
+                  partNo: parsed.partNo ? String(parsed.partNo) : undefined,
+                  wclItemNo: parsed.wclItemNo ? String(parsed.wclItemNo) : undefined,
+                  coo: parsed.coo ? String(parsed.coo) : undefined,
+                  dateCode: parsed.dateCode
+                    ? (toCanonicalDateCode(String(parsed.dateCode), format) ?? String(parsed.dateCode))
+                    : undefined,
+                }
+              : undefined;
+            try {
+              await warehouse.verifyPackage(credit.packageId, credit.qty, batch);
+            } catch (e: unknown) {
+              if (e instanceof ApiError && e.body?.error === 'label_item_mismatch' && Array.isArray(e.body.fields)) {
+                const fields = (e.body.fields as unknown[])
+                  .map((f) => t(`verify.labelFields.${String(f)}`))
+                  .join(', ');
+                throw new I18nError('label_item_mismatch', { fields });
+              }
+              throw e;
+            }
           }
         },
       };

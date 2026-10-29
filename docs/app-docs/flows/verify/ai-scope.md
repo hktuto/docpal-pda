@@ -50,6 +50,31 @@
   `docs/superpowers/specs/2026-10-14-picking-scan-batch-validation-design.md`).
   `label_barcode` stays on the schema for
   traceability/display but no longer drives matching.
+- **Label mode (2026-10-30, spec
+  `docs/superpowers/specs/2026-10-30-label-source-and-label-verify-design.md`)**:
+  per package, verify splits by whether the package's order matches ≥ 1
+  active **internal** label rule (evaluated live per box load; the detail
+  packages carry `labelMode`). Unlabeled packages (rule-less or external-only
+  orders) are presented as per-item totals rows (grouped client-side via
+  `apps/pda/utils/verifyDisplayGroups.ts`) — matching is the unchanged
+  aggregate matcher. Label-mode packages stack label verification on top of
+  the qty re-scan: scanning a printed label (`POST /verify-tasks/:id/scan-label`
+  — raw-string equality against ANY string param value of the recorded
+  `label_prints` payload rows, template-agnostic; carton rows for the box
+  match first and stamp `shipping_boxes.carton_label_verified`, item/item_box
+  rows mark `picking_packages.label_verified` and return the label's anchored
+  expectations; idempotent, 404 `label_print_not_found` on a miss) is required
+  before its item scans, which pass their batch fields to
+  `POST /packages/:id/verify` for a server-side hard compare
+  (part_no/wcl_item_no + COO + date code → 409 `label_item_mismatch` with the
+  differing fields). A carton label also opens the box from the verify list
+  (`GET /verify-tasks/lookup-by-label?raw=`, tried before box-id matching).
+  `completeVerifyTask` adds 409 `labels_not_all_verified`;
+  `reopenShippingBox` resets the label/carton flags with the existing resets;
+  label-mode packages with NO print record (labeling finished without
+  printing) fall back to plain aggregate matching. Measuring-mode boxes (no
+  verify task yet) intercept carton-label scans only; item labels are checked
+  during the verify pass.
 - Complete the verify task once **every package is fully re-scanned**
   (`rescanned_qty >= qty`) — 409 `packages_not_all_rescanned` otherwise; the
   page's complete button mirrors this guard. The box must be closed when the
@@ -108,8 +133,18 @@
   `POST /verify-tasks/:id/complete` (guards: 404 `verify_task_not_found`,
   409 `verify_task_not_pending`, 409 `shipping_box_not_closed` (measuring
   step on only), 409
-  `packages_not_all_rescanned` until every package is re-scanned; with
-  measuring off the completion closes the still-open box).
+  `packages_not_all_rescanned` until every package is re-scanned, 409
+  `labels_not_all_verified` until every printed label of the box's
+  label-mode orders is scanned; with
+  measuring off the completion closes the still-open box). Label mode:
+  `GET /verify-tasks/lookup-by-label?raw=` (registered BEFORE `/:id`),
+  `POST /verify-tasks/:id/scan-label`; `labeledOrderIds` /
+  `cartonPrintExists` helpers; the detail carries per-package
+  `labelMode`/`labelVerified` and box `cartonLabelRequired`/`cartonLabelVerified`.
+- `apps/pda/utils/verifyDisplayGroups.ts` — per-item totals grouping +
+  label-first scan dispatch helper (`dispatchVerifyScan`), unit-tested in
+  `apps/pda/tests/verifyDisplayGroups.test.ts`.
+- `apps/backend/src/db/labelVerify.test.ts` — label-mode backend coverage.
 - `apps/backend/src/db/picking.ts` — `closeShippingBox` spawns the box's
   pending verify task when the verify step is enabled (`ON CONFLICT DO
   NOTHING`, and resets the packages' rescanned credit for the new pass), and
@@ -148,6 +183,7 @@
 - `docs/superpowers/specs/2026-10-03-picking-scan-truth-and-aggregate-verify-design.md`
 - `docs/superpowers/specs/2026-10-14-picking-scan-batch-validation-design.md`
 - `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`
+- `docs/superpowers/specs/2026-10-30-label-source-and-label-verify-design.md`
 - `docs/superpowers/specs/2026-07-28-verify-step-and-flow-step-config-design.md`
 - `docs/superpowers/specs/2026-07-28-measuring-verify-refinements-design.md`
 - `docs/backend/api-design.md` §Verify

@@ -225,6 +225,16 @@ export const entities: Record<string, EntityConfig> = {
         ],
       },
       {
+        key: "labelSource",
+        label: "admin.fields.labelSource",
+        type: "select",
+        defaultValue: "internal",
+        options: [
+          { value: "internal", label: "admin.pages.labelPrintRules.labelSources.internal" },
+          { value: "external", label: "admin.pages.labelPrintRules.labelSources.external" },
+        ],
+      },
+      {
         key: "conditions",
         label: "admin.fields.conditions",
         type: "conditions",

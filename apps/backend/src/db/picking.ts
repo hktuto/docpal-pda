@@ -2115,7 +2115,21 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
  *  - no pending verify task on the verify path → 409.
  * 409 `package_already_verified` when the package is already fully rescanned.
  */
-export async function verifyPackage(db: AppDb, input: { packageId: string; actorId: string; qty?: number }): Promise<void> {
+export async function verifyPackage(
+  db: AppDb,
+  input: {
+    packageId: string;
+    actorId: string;
+    qty?: number;
+    /** Scanned batch fields (label mode, 2026-10-30): when the package is
+     *  label_verified these are hard-compared against the label record's
+     *  anchored values — mismatch → 409 label_item_mismatch. */
+    partNo?: string;
+    wclItemNo?: string;
+    coo?: string;
+    dateCode?: string;
+  }
+): Promise<void> {
   return db.transaction(async (tx) => {
     const pkg = await queryGet<{
       id: string;
@@ -2125,16 +2139,44 @@ export async function verifyPackage(db: AppDb, input: { packageId: string; actor
       qty: number;
       rescannedQty: number;
       pickingOrderId: string;
+      labelVerified: boolean;
+      partNo: string;
+      wclItemNo: string | null;
+      coo: string | null;
+      dateCode: string | null;
     }>(
       tx,
       sql`SELECT pp.id, pp.shipping_box_id AS "shippingBoxId", pp.verified,
                  pp.verify_verified AS "verifyVerified", pp.qty, pp.rescanned_qty AS "rescannedQty",
-                 pi.picking_order_id AS "pickingOrderId"
-          FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id WHERE pp.id = ${input.packageId}`
+                 pi.picking_order_id AS "pickingOrderId",
+                 pp.label_verified AS "labelVerified",
+                 COALESCE(pp.scanned_part_no, pi.part_no) AS "partNo",
+                 COALESCE(pp.scanned_wcl_item_no, p.wcl_item_no) AS "wclItemNo",
+                 COALESCE(pp.scanned_coo, pp.coo) AS coo,
+                 COALESCE(pp.scanned_date_code, pp.date_code) AS "dateCode"
+          FROM picking_packages pp
+          JOIN picking_items pi ON pi.id = pp.picking_item_id
+          JOIN parts p ON p.wcl_item_no = pi.part_no
+          WHERE pp.id = ${input.packageId}`
     );
     if (!pkg) throw new HTTPException(404, { message: "package_not_found" });
     if (pkg.shippingBoxId === null) throw new HTTPException(409, { message: "package_not_in_box" });
     await assertActor(tx, input.actorId);
+    if (pkg.labelVerified) {
+      const differing: string[] = [];
+      if (input.partNo !== undefined && input.partNo !== pkg.partNo) differing.push("partNo");
+      if (input.wclItemNo !== undefined && input.wclItemNo !== (pkg.wclItemNo ?? "")) differing.push("wclItemNo");
+      if (input.coo !== undefined && input.coo !== (pkg.coo ?? "")) differing.push("coo");
+      if (input.dateCode !== undefined && input.dateCode !== (pkg.dateCode ?? "")) differing.push("dateCode");
+      if (differing.length > 0) {
+        throw new HTTPException(409, {
+          res: new Response(JSON.stringify({ error: "label_item_mismatch", fields: differing }), {
+            status: 409,
+            headers: { "content-type": "application/json" },
+          }),
+        });
+      }
+    }
     const remaining = pkg.qty - pkg.rescannedQty;
     if (input.qty !== undefined && (!Number.isInteger(input.qty) || input.qty <= 0)) {
       throw new HTTPException(400, { message: "qty_must_be_positive_integer" });
@@ -2690,10 +2732,20 @@ export async function reopenShippingBox(db: AppDb, input: { shippingBoxId: strin
     );
     if (!task || task.status !== "pending") throw new HTTPException(409, { message: "verify_task_not_pending" });
 
-    await queryRun(tx, sql`UPDATE shipping_boxes SET status = 'open', last_update_date = ${now()} WHERE id = ${box.id}`);
     await queryRun(
       tx,
-      sql`UPDATE picking_packages SET verified = false, verify_verified = false, rescanned_qty = 0, last_update_date = ${now()} WHERE shipping_box_id = ${box.id}`
+      sql`UPDATE shipping_boxes
+          SET status = 'open', carton_label_verified = false, carton_label_verified_at = NULL,
+              carton_label_verified_by = NULL, last_update_date = ${now()}
+          WHERE id = ${box.id}`
+    );
+    await queryRun(
+      tx,
+      sql`UPDATE picking_packages
+          SET verified = false, verify_verified = false, rescanned_qty = 0,
+              label_verified = false, label_verified_at = NULL, label_verified_by = NULL,
+              last_update_date = ${now()}
+          WHERE shipping_box_id = ${box.id}`
     );
     await logTransition(tx, {
       entityType: "shipping_box",

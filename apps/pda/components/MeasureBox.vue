@@ -9,37 +9,100 @@
           {{ $t('measuring.measureBox.packagesVerified', { verified: verifiedCount, total: packages.length }) }}
         </h3>
         <p v-if="!packages.length" class="empty" style="padding: 0;">{{ $t('common.noPackages') }}</p>
-        <div v-else class="pkg-list">
-          <div v-for="pkg in packages" :key="pkg.id" class="pkg-row">
-            <div class="pkg-main">
-              <div class="pkg-title">
-                <span
-                  class="pkg-dot"
-                  :class="isVerified(pkg) ? 'pkg-dot--verified' : 'pkg-dot--pending'"
-                  :title="isVerified(pkg) ? $t('common.verified') : $t('common.pending')"
-                ></span>
-                <span class="pkg-item-no">{{ pkg.wclItemNo ?? pkg.partNo }}</span>
+
+        <template v-else>
+          <!-- Labels to verify (spec 2026-10-30): packages of labeled orders
+               need their printed label scanned on top of the qty re-scan. -->
+          <template v-if="labelPackages.length || (box.cartonLabelRequired && !box.cartonLabelVerified)">
+            <h4 class="section-title">{{ $t('measuring.measureBox.labelsToVerify') }}</h4>
+            <div class="pkg-list" style="margin-bottom: 1rem;">
+              <div v-if="box.cartonLabelRequired && !box.cartonLabelVerified" class="pkg-row">
+                <div class="pkg-main">
+                  <div class="pkg-title">
+                    <span class="pkg-dot pkg-dot--pending" :title="$t('common.pending')"></span>
+                    <span class="pkg-item-no">{{ $t('measuring.measureBox.cartonLabel') }}</span>
+                  </div>
+                  <div class="pkg-meta">
+                    <span>{{ $t('measuring.measureBox.scanCartonLabel') }}</span>
+                  </div>
+                </div>
+                <button
+                  v-if="canScan"
+                  class="btn btn--small"
+                  :disabled="scanning"
+                  @click="openScan()"
+                >{{ $t('actions.scan') }}</button>
               </div>
-              <div class="pkg-meta">
-                <span>
-                  {{ pkg.qty }}
-                  <span v-if="partialQty(pkg) !== null" class="partial-qty">({{ partialQty(pkg) }})</span>
-                </span>
-                <span>{{ dateOriginLabel(pkg) }}</span>
+              <div v-for="pkg in labelPackages" :key="pkg.id" class="pkg-row">
+                <div class="pkg-main">
+                  <div class="pkg-title">
+                    <span
+                      class="pkg-dot"
+                      :class="isVerified(pkg) ? 'pkg-dot--verified' : 'pkg-dot--pending'"
+                      :title="isVerified(pkg) ? $t('common.verified') : $t('common.pending')"
+                    ></span>
+                    <span class="pkg-item-no">{{ pkg.wclItemNo ?? pkg.partNo }}</span>
+                  </div>
+                  <div class="pkg-meta">
+                    <span>
+                      {{ pkg.qty }}
+                      <span v-if="partialQty(pkg) !== null" class="partial-qty">({{ partialQty(pkg) }})</span>
+                    </span>
+                    <span>{{ dateOriginLabel(pkg) }}</span>
+                  </div>
+                  <div class="pkg-meta">
+                    <span v-if="pkg.labelVerified" class="label-state label-state--ok">
+                      {{ $t('measuring.measureBox.labelScanned', { rescanned: pkg.rescannedQty ?? 0, qty: pkg.qty }) }}
+                    </span>
+                    <span v-else class="label-state">
+                      {{ $t('measuring.measureBox.scanLabel') }}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  v-if="canScan && !isVerified(pkg)"
+                  class="btn btn--small"
+                  :disabled="scanning"
+                  @click="openScan(pkg.id)"
+                >{{ $t('actions.scan') }}</button>
               </div>
             </div>
-            <button
-              v-if="canScan && !isVerified(pkg)"
-              class="btn btn--small"
-              :disabled="scanning"
-              @click="openScan(pkg.id)"
-            >{{ $t('actions.scan') }}</button>
-          </div>
-        </div>
+          </template>
+
+          <!-- Items to re-scan: aggregate-mode packages grouped per item +
+               batch combo with summed totals (spec 2026-10-30). -->
+          <template v-if="aggregateGroups.length">
+            <h4 v-if="labelPackages.length" class="section-title">{{ $t('measuring.measureBox.itemsToRescan') }}</h4>
+            <div class="pkg-list">
+              <div v-for="group in aggregateGroups" :key="group.key" class="pkg-row">
+                <div class="pkg-main">
+                  <div class="pkg-title">
+                    <span
+                      class="pkg-dot"
+                      :class="groupFullyRescanned(group) ? 'pkg-dot--verified' : 'pkg-dot--pending'"
+                      :title="groupFullyRescanned(group) ? $t('common.verified') : $t('common.pending')"
+                    ></span>
+                    <span class="pkg-item-no">{{ group.wclItemNo ?? group.partNo }}</span>
+                  </div>
+                  <div class="pkg-meta">
+                    <span>{{ group.rescannedQty }}/{{ group.totalQty }}</span>
+                    <span>{{ groupBatchLabel(group) }}</span>
+                  </div>
+                </div>
+                <button
+                  v-if="canScan && !groupFullyRescanned(group)"
+                  class="btn btn--small"
+                  :disabled="scanning"
+                  @click="openScan()"
+                >{{ $t('actions.scan') }}</button>
+              </div>
+            </div>
+          </template>
+        </template>
       </div>
 
       <p v-if="canScan && !allVerified" class="scan-hint">
-        {{ $t('measuring.measureBox.scanHint') }}
+        {{ labelScanActive ? $t('measuring.measureBox.scanHintLabels') : $t('measuring.measureBox.scanHint') }}
       </p>
 
       <div v-if="box.status === 'closed'" class="card" style="margin-bottom: 1.5rem;">
@@ -80,6 +143,7 @@
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useToast } from "~/composables/useToast";
+import { useWarehouse } from "~/composables/useWarehouse";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { ocrResultToInput, useLabelScan } from "~/composables/useLabelScan";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
@@ -87,8 +151,16 @@ import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
 import { runScanMatcher, useScanMatchers, type ScanTaskContext } from "~/composables/useScanMatchers";
 import { useFlowSteps } from "~/composables/useFlowSteps";
 import { toLabelDateCode } from "~/utils/dateCode";
+import {
+  dispatchVerifyScan,
+  groupAggregatePackages,
+  groupFullyRescanned,
+  hasLabelWork,
+  isLabelModePackage,
+  type VerifyAggregateGroup,
+} from "~/utils/verifyDisplayGroups";
 import type { PageHeaderAction } from "~/composables/usePageHeader";
-import type { MeasuringPackage } from "~/services/types";
+import type { MeasuringPackage, ScanVerifyTaskLabelResult, VerifyLabelLookup } from "~/services/types";
 
 /** Normalized box view the pages hand in via `loadDetail` (measuring box
  *  detail and verify task detail both map onto this). */
@@ -102,6 +174,9 @@ interface MeasureBoxView {
   netWeight: number | null;
   suggestedNetWeightKg?: number | null;
   destinationCountry: string | null;
+  /** Carton label gate (spec 2026-10-30). */
+  cartonLabelRequired?: boolean;
+  cartonLabelVerified?: boolean;
 }
 
 interface MeasureBoxDetail {
@@ -117,6 +192,9 @@ const props = defineProps<{
   boxId: string;
   loadDetail: () => Promise<MeasureBoxDetail>;
   mode: 'measuring' | 'verify';
+  /** Pending verify task id (verify mode only) — needed by the scan-label
+   *  endpoint (spec 2026-10-30). */
+  verifyTaskId?: string | null;
   /** Order numbers of every picking order with packages in the box. */
   orderNos?: string[];
   /** Bump to force a reload from the parent (e.g. after a box reopen). */
@@ -154,6 +232,7 @@ const { t } = useI18n();
 const boxStatusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const { showToast } = useToast();
+const warehouse = useWarehouse();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -185,6 +264,47 @@ function labelDateCode(code: string | null): string {
 // Line-2 batch label: [datecode]-[coo]-[cow], skipping empty coo/cow.
 function dateOriginLabel(pkg: MeasuringPackage): string {
   return [labelDateCode(pkg.dateCode), pkg.coo, pkg.cow].filter(Boolean).join("-");
+}
+
+// Label-mode vs aggregate display split (spec 2026-10-30): label-mode
+// packages render per package in "labels to verify"; the rest group per
+// item + batch combo in "items to re-scan".
+const labelPackages = computed(() => packages.value.filter(isLabelModePackage));
+const aggregateGroups = computed(() => groupAggregatePackages(packages.value));
+
+function groupBatchLabel(group: VerifyAggregateGroup): string {
+  return [labelDateCode(group.dateCode), group.coo, group.cow].filter(Boolean).join("-");
+}
+
+// Label-scan dispatch runs before the aggregate matcher whenever the box has
+// label work: label-mode packages, or an unverified required carton label.
+const labelScanActive = computed(() => hasLabelWork(packages.value, box.value));
+
+/**
+ * Try the raw scan as a printed label (spec 2026-10-30). Verify mode goes to
+ * the task's scan-label endpoint (carton + item/item_box labels); measuring
+ * mode has no verify task yet, so only the carton-label lookup applies (it
+ * also matches open measuring boxes and stamps carton_label_verified).
+ * Returns the hit (and shows the toast) or null to fall through to the
+ * aggregate matcher.
+ */
+async function scanLabelForBox(raw: string): Promise<ScanVerifyTaskLabelResult | VerifyLabelLookup | null> {
+  if (props.mode === 'verify') {
+    if (!props.verifyTaskId) return null;
+    const hit = await warehouse.scanVerifyTaskLabel(props.verifyTaskId, raw);
+    if (!hit) return null;
+    if (hit.kind === 'carton') {
+      showToast(t('verify.cartonLabelVerified'));
+    } else {
+      const part = hit.expectations?.wclItemNo ?? hit.expectations?.partNo ?? '';
+      showToast(t('verify.labelScanned', { part }));
+    }
+    return hit;
+  }
+  const hit = await warehouse.lookupVerifyTaskByLabel(raw);
+  if (!hit || hit.shippingBoxId !== props.boxId) return null;
+  showToast(t('verify.cartonLabelVerified'));
+  return hit;
 }
 
 useVisibleReload(load);
@@ -296,6 +416,13 @@ const scanContext = computed<ScanTaskContext>(() => ({
   flow: props.mode,
   packages: packages.value,
   dateCodeFormat: dateCodeFormat.value,
+  // Printed-label dispatch before the aggregate matcher (spec 2026-10-30);
+  // a handled label scan reports as 'applied' and the reload runs via
+  // onScanApplied.
+  tryLabel: async (raw: string) => {
+    if (!labelScanActive.value) return false;
+    return (await scanLabelForBox(raw)) !== null;
+  },
 }));
 
 async function openScan(packageId?: string) {
@@ -328,12 +455,23 @@ useHardwareScanner({
     if (!box.value) return false;
     verifying.value = true;
     try {
-      const parsedResult = await parseRawValue(rawValue);
-      const result = await runScanMatcher(
-        { ...scanContext.value, rawLabel: rawValue },
-        ocrResultToInput(parsedResult.parsed),
-        matchers
-      );
+      const dispatch = await dispatchVerifyScan(rawValue, {
+        labelModeActive: labelScanActive.value,
+        scanLabel: scanLabelForBox,
+        aggregate: async (raw) => {
+          const parsedResult = await parseRawValue(raw);
+          return runScanMatcher(
+            { ...scanContext.value, rawLabel: raw },
+            ocrResultToInput(parsedResult.parsed),
+            matchers
+          );
+        },
+      });
+      if (dispatch.kind === "label") {
+        await load();
+        return true;
+      }
+      const result = dispatch.result;
       if (result.type === "single") {
         await result.apply();
         showToast(t("common.scanSuccess"));
@@ -349,6 +487,9 @@ useHardwareScanner({
       } else if (result.type === "error") {
         showToast(result.message);
       }
+      return false;
+    } catch (e: unknown) {
+      showToast(errorMessage(e));
       return false;
     } finally {
       verifying.value = false;
@@ -424,5 +565,15 @@ useHardwareScanner({
 .partial-qty {
   color: var(--muted);
   font-size: 0.8125rem;
+}
+
+.section-title {
+  margin: 0 0 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.label-state--ok {
+  color: var(--success);
 }
 </style>

@@ -6,6 +6,7 @@ import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs } from "./schema/index.js";
 import { isStepEnabled } from "../config.js";
 import { now } from "./now.js";
+import { resolveLabelPrintRulesForOrder } from "./labelPrint.js";
 
 // ---------------------------------------------------------------------------
 // Verify flow (box-scoped, 2026-08-11 design). A verify_tasks row is created
@@ -27,6 +28,42 @@ import { now } from "./now.js";
 async function assertActor(tx: DbOrTx, actorId: string): Promise<void> {
   const actor = await queryGet<{ id: string }>(tx, sql`SELECT id FROM users WHERE id = ${actorId}`);
   if (!actor) throw new HTTPException(400, { message: "actor_not_found" });
+}
+
+// ---------------------------------------------------------------------------
+// Label mode (2026-10-30 label-source-and-label-verify): an order is
+// "labeled" when ≥ 1 active INTERNAL label-print rule matches it (evaluated
+// live per box load). Packages of labeled orders follow label mode in
+// verify/measuring; the rest (external-only and rule-less orders) stay
+// aggregate. Printed-label matching is template-agnostic: raw-string equality
+// against any string value of a recorded label_prints payload row's params.
+// ---------------------------------------------------------------------------
+
+/** Subset of `orderIds` that are labeled (≥ 1 internal active rule match). */
+export async function labeledOrderIds(db: DbOrTx, orderIds: string[]): Promise<Set<string>> {
+  const labeled = new Set<string>();
+  for (const orderId of new Set(orderIds)) {
+    const { matches } = await resolveLabelPrintRulesForOrder(db, orderId);
+    if (matches.some((m) => m.labelSource === "internal")) labeled.add(orderId);
+  }
+  return labeled;
+}
+
+/** Any string value of the payload row's params equals the raw scan. */
+function paramsContainRaw(raw: string): ReturnType<typeof sql> {
+  return sql`EXISTS (SELECT 1 FROM jsonb_each_text(el -> 'params') kv WHERE kv.value = ${raw})`;
+}
+
+/** True when a carton print record targets this box. */
+export async function cartonPrintExists(db: DbOrTx, boxId: string): Promise<boolean> {
+  const row = await queryGet<{ id: string }>(
+    db,
+    sql`SELECT lp.id
+        FROM label_prints lp, jsonb_array_elements(lp.payload) el
+        WHERE lp.label_type = 'carton' AND el ->> 'shippingBoxId' = ${boxId}
+        LIMIT 1`
+  );
+  return row !== undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +124,9 @@ export interface VerifyBoxRow {
   destinationCountry: string | null;
   shippedAt: Date | null;
   suggestedNetWeightKg: number | null;
+  /** A carton print record exists for this box (carton label scan required at completion). */
+  cartonLabelRequired: boolean;
+  cartonLabelVerified: boolean;
 }
 
 export interface VerifyPackageRow {
@@ -111,6 +151,10 @@ export interface VerifyPackageRow {
   scannedCow: string | null;
   partNo: string;
   wclItemNo: string | null;
+  /** Label mode (2026-10-30): the package's order matched ≥ 1 internal rule. */
+  labelMode: boolean;
+  /** The package's printed label has been scanned. */
+  labelVerified: boolean;
 }
 
 export interface VerifyTaskDetail {
@@ -128,15 +172,18 @@ export async function getVerifyTaskDetail(db: AppDb, taskId: string): Promise<Ve
   );
   if (!task) throw new HTTPException(404, { message: "verify_task_not_found" });
 
-  const box = (await queryGet<Omit<VerifyBoxRow, "suggestedNetWeightKg">>(
+  const box = (await queryGet<Omit<VerifyBoxRow, "suggestedNetWeightKg" | "cartonLabelRequired">>(
     db,
     sql`SELECT id, picking_order_id AS "pickingOrderId", status, box_size AS "boxSize",
                gross_weight AS "grossWeight", net_weight AS "netWeight",
-               destination_country AS "destinationCountry", shipped_at AS "shippedAt"
+               destination_country AS "destinationCountry", shipped_at AS "shippedAt",
+               carton_label_verified AS "cartonLabelVerified"
         FROM shipping_boxes WHERE id = ${task.shippingBoxId}`
   ))!;
 
-  const packages = await queryAll<VerifyPackageRow & { formulaWeight: number | null; formulaQty: number | null }>(
+  const packages = await queryAll<
+    VerifyPackageRow & { formulaWeight: number | null; formulaQty: number | null; pickingOrderId: string }
+  >(
     db,
     sql`
       SELECT
@@ -147,6 +194,8 @@ export async function getVerifyTaskDetail(db: AppDb, taskId: string): Promise<Ve
         pp.label_barcode AS "labelBarcode",
         pp.scanned_date_code AS "scannedDateCode", pp.scanned_lot_code AS "scannedLotCode",
         pp.scanned_coo AS "scannedCoo", pp.scanned_cow AS "scannedCow",
+        pp.label_verified AS "labelVerified",
+        pi.picking_order_id AS "pickingOrderId",
         COALESCE(pp.scanned_part_no, pi.part_no) AS "partNo",
         COALESCE(pp.scanned_wcl_item_no, p.wcl_item_no) AS "wclItemNo",
         nwf.weight AS "formulaWeight", nwf.qty AS "formulaQty"
@@ -159,10 +208,16 @@ export async function getVerifyTaskDetail(db: AppDb, taskId: string): Promise<Ve
     `
   );
 
+  const labeled = await labeledOrderIds(db, packages.map((p) => p.pickingOrderId));
+  const cartonLabelRequired = await cartonPrintExists(db, task.shippingBoxId);
+
   return {
     task,
-    box: { ...box, suggestedNetWeightKg: suggestedNetWeightKg(packages) },
-    packages: packages.map(({ formulaWeight: _fw, formulaQty: _fq, ...rest }) => rest),
+    box: { ...box, cartonLabelRequired, suggestedNetWeightKg: suggestedNetWeightKg(packages) },
+    packages: packages.map(({ formulaWeight: _fw, formulaQty: _fq, pickingOrderId, ...rest }) => ({
+      ...rest,
+      labelMode: labeled.has(pickingOrderId),
+    })),
   };
 }
 
@@ -190,6 +245,148 @@ function suggestedNetWeightKg(
 // Mutations
 // ---------------------------------------------------------------------------
 
+export interface LabelLookupResult {
+  taskId: string | null; // null when the box is still open (measuring pass)
+  shippingBoxId: string;
+}
+
+/**
+ * Box resolution by carton label (2026-10-30): the raw scan matches a recorded
+ * carton print row (any string value of its params) whose box has a pending
+ * verify task or is still open. Stamps the box's carton_label_verified
+ * triple. 404 label_print_not_found on no match; idempotent on re-scan.
+ */
+export async function lookupVerifyTaskByLabel(
+  db: AppDb,
+  input: { raw: string; actorId: string }
+): Promise<LabelLookupResult> {
+  return db.transaction(async (tx) => {
+    await assertActor(tx, input.actorId);
+    const candidates = await queryAll<{ shippingBoxId: string }>(
+      tx,
+      sql`SELECT DISTINCT el ->> 'shippingBoxId' AS "shippingBoxId"
+          FROM label_prints lp, jsonb_array_elements(lp.payload) el
+          WHERE lp.label_type = 'carton'
+            AND el ->> 'shippingBoxId' IS NOT NULL
+            AND ${paramsContainRaw(input.raw)}
+          ORDER BY 1`
+    );
+    for (const { shippingBoxId } of candidates) {
+      const box = await queryGet<{ id: string; status: string }>(
+        tx,
+        sql`SELECT id, status FROM shipping_boxes WHERE id = ${shippingBoxId}`
+      );
+      if (!box) continue;
+      const task = await queryGet<{ id: string }>(
+        tx,
+        sql`SELECT id FROM verify_tasks WHERE shipping_box_id = ${box.id} AND status = 'pending'`
+      );
+      if (!task && box.status !== "open") continue;
+      await queryRun(
+        tx,
+        sql`UPDATE shipping_boxes
+            SET carton_label_verified = true, carton_label_verified_at = ${now()},
+                carton_label_verified_by = ${input.actorId}, last_update_date = ${now()}
+            WHERE id = ${box.id}`
+      );
+      return { taskId: task?.id ?? null, shippingBoxId: box.id };
+    }
+    throw new HTTPException(404, { message: "label_print_not_found" });
+  });
+}
+
+export interface LabelScanExpectations {
+  partNo: string;
+  wclItemNo: string | null;
+  coo: string | null;
+  dateCode: string | null;
+  qty: number;
+}
+
+export interface LabelScanResult {
+  kind: "carton" | "item";
+  packageId?: string;
+  expectations?: LabelScanExpectations;
+}
+
+/**
+ * Label-mode label scan within a verify task's box (2026-10-30). Carton print
+ * rows for the box match first (stamps carton_label_verified); then
+ * item/item_box print rows of the box's orders (marks the linked package
+ * label_verified and returns its anchored expectations — the same values the
+ * label was printed from). 404 label_print_not_found on no match; idempotent
+ * on re-scan.
+ */
+export async function scanVerifyTaskLabel(
+  db: AppDb,
+  input: { taskId: string; raw: string; actorId: string }
+): Promise<LabelScanResult> {
+  return db.transaction(async (tx) => {
+    const task = await queryGet<{ id: string; shippingBoxId: string }>(
+      tx,
+      sql`SELECT id, shipping_box_id AS "shippingBoxId" FROM verify_tasks WHERE id = ${input.taskId}`
+    );
+    if (!task) throw new HTTPException(404, { message: "verify_task_not_found" });
+    await assertActor(tx, input.actorId);
+    const boxId = task.shippingBoxId;
+
+    const cartonHit = await queryGet<{ id: string }>(
+      tx,
+      sql`SELECT lp.id
+          FROM label_prints lp, jsonb_array_elements(lp.payload) el
+          WHERE lp.label_type = 'carton'
+            AND el ->> 'shippingBoxId' = ${boxId}
+            AND ${paramsContainRaw(input.raw)}
+          LIMIT 1`
+    );
+    if (cartonHit) {
+      await queryRun(
+        tx,
+        sql`UPDATE shipping_boxes
+            SET carton_label_verified = true, carton_label_verified_at = ${now()},
+                carton_label_verified_by = ${input.actorId}, last_update_date = ${now()}
+            WHERE id = ${boxId}`
+      );
+      return { kind: "carton" };
+    }
+
+    const itemHit = await queryGet<{ packageId: string }>(
+      tx,
+      sql`SELECT el ->> 'packageId' AS "packageId"
+          FROM label_prints lp, jsonb_array_elements(lp.payload) el
+          WHERE lp.label_type IN ('item', 'item_box')
+            AND ${paramsContainRaw(input.raw)}
+            AND (el ->> 'packageId') IN (
+              SELECT id FROM picking_packages WHERE shipping_box_id = ${boxId}
+            )
+          ORDER BY lp.created_date DESC
+          LIMIT 1`
+    );
+    if (!itemHit?.packageId) throw new HTTPException(404, { message: "label_print_not_found" });
+
+    await queryRun(
+      tx,
+      sql`UPDATE picking_packages
+          SET label_verified = true, label_verified_at = ${now()},
+              label_verified_by = ${input.actorId}, last_update_date = ${now()}
+          WHERE id = ${itemHit.packageId}`
+    );
+    const pkg = (await queryGet<LabelScanExpectations>(
+      tx,
+      sql`SELECT pp.qty,
+                 COALESCE(pp.scanned_part_no, pi.part_no) AS "partNo",
+                 COALESCE(pp.scanned_wcl_item_no, p.wcl_item_no) AS "wclItemNo",
+                 COALESCE(pp.scanned_coo, pp.coo) AS coo,
+                 COALESCE(pp.scanned_date_code, pp.date_code) AS "dateCode"
+          FROM picking_packages pp
+          JOIN picking_items pi ON pi.id = pp.picking_item_id
+          JOIN parts p ON p.wcl_item_no = pi.part_no
+          WHERE pp.id = ${itemHit.packageId}`
+    ))!;
+    return { kind: "item", packageId: itemHit.packageId, expectations: pkg };
+  });
+}
+
 /**
  * Complete a box's verify task: the task must be pending and every package
  * in the box must be fully re-scanned (`rescanned_qty >= qty`). With the
@@ -211,10 +408,17 @@ export async function completeVerifyTask(db: AppDb, input: { taskId: string; act
     await assertActor(tx, input.actorId);
     if (task.status !== "pending") throw new HTTPException(409, { message: "verify_task_not_pending" });
 
-    const box = await queryGet<{ id: string; status: string; pickingOrderId: string | null; destinationCountry: string | null }>(
+    const box = await queryGet<{
+      id: string;
+      status: string;
+      pickingOrderId: string | null;
+      destinationCountry: string | null;
+      cartonLabelVerified: boolean;
+    }>(
       tx,
       sql`SELECT id, status, picking_order_id AS "pickingOrderId",
-                 destination_country AS "destinationCountry"
+                 destination_country AS "destinationCountry",
+                 carton_label_verified AS "cartonLabelVerified"
           FROM shipping_boxes WHERE id = ${task.shippingBoxId}`
     );
     // Measuring ON: the box must already be closed (measuring close spawns
@@ -230,6 +434,25 @@ export async function completeVerifyTask(db: AppDb, input: { taskId: string; act
       sql`SELECT id FROM picking_packages WHERE shipping_box_id = ${task.shippingBoxId} AND rescanned_qty < qty LIMIT 1`
     );
     if (notRescanned) throw new HTTPException(409, { message: "packages_not_all_rescanned" });
+
+    // Label gate (2026-10-30): every package with an item/item_box print
+    // record must be label_verified, and a box with a carton print record must
+    // be carton_label_verified. Packages whose label was never printed fall
+    // back to plain aggregate (no print row → nothing to check).
+    const unverifiedItemLabel = await queryGet<{ id: string }>(
+      tx,
+      sql`SELECT pp.id
+          FROM label_prints lp, jsonb_array_elements(lp.payload) el
+          JOIN picking_packages pp ON pp.id = el ->> 'packageId'
+          WHERE lp.label_type IN ('item', 'item_box')
+            AND pp.shipping_box_id = ${task.shippingBoxId}
+            AND NOT pp.label_verified
+          LIMIT 1`
+    );
+    if (unverifiedItemLabel) throw new HTTPException(409, { message: "labels_not_all_verified" });
+    if (!box.cartonLabelVerified && (await cartonPrintExists(tx, task.shippingBoxId))) {
+      throw new HTTPException(409, { message: "labels_not_all_verified" });
+    }
 
     if (!measuringOn && box.status === "open") {
       let dest = box.destinationCountry;

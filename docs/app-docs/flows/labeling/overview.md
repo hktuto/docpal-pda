@@ -33,6 +33,13 @@ Measuring. Hidden when the `labeling` flow step is disabled.
   match, the page says so and the operator just finishes.
 - **Reprints after the stage** — the "Print labels" action on the picking
   detail page stays available after labeling is done.
+- **External labels** — a rule marked *external* means the customer provides
+  the label: the row shows "label provided by customer" with NO print button
+  (the order still enters the queue; finishing attests the customer's labels
+  are on). Only *internal* rules print.
+- **Every print is recorded** — the backend stores each print (reprints
+  included) with its full label content, which the Verify flow later uses to
+  check scanned labels (see [Verify](../verify/overview.md)).
 
 ## Related flows
 

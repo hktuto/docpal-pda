@@ -363,7 +363,8 @@ export default {
       printing: "Printing…",
       printed: "Printed",
       printFailed: "Failed — tap to retry",
-      noMatchingRules: "No label print rules match this order"
+      noMatchingRules: "No label print rules match this order",
+      externalNote: "Label provided by customer"
     },
     itemsSection: {
       title: "Items",
@@ -650,14 +651,29 @@ export default {
       grossWeight: "Gross weight",
       destinationCountry: "Destination country",
       scanHint: "Scan a package QR code to verify it.",
+      scanHintLabels: "Scan a printed label or a package QR code.",
       noMatch: "No unverified package matches this label.",
-      alreadyRescanned: "Already fully rescanned ({count} items)."
+      alreadyRescanned: "Already fully rescanned ({count} items).",
+      labelsToVerify: "Labels to verify",
+      itemsToRescan: "Items to re-scan",
+      cartonLabel: "Carton label",
+      scanCartonLabel: "Scan the printed carton label",
+      scanLabel: "Scan the printed label",
+      labelScanned: "Label scanned — item {rescanned}/{qty}"
     }
   },
   verify: {
     title: "Verify",
     hint: "Closed boxes ready for the verify pass.",
     boxNotFound: "No box in the list matches \"{id}\".",
+    cartonLabelVerified: "Carton label verified",
+    labelScanned: "Label verified: {part}",
+    labelFields: {
+      partNo: "Part No.",
+      wclItemNo: "WCL item no",
+      coo: "COO",
+      dateCode: "Date code"
+    },
     detail: {
       completeVerify: "Complete verify",
       completing: "Completing…",
@@ -924,7 +940,9 @@ export default {
     network_error: "Network error. Please check your connection and try again.",
     unresolved_outdated_warnings: "This order has {count} unresolved outdated date-code warning(s) — ask an admin to resolve them before finishing.",
     box_coo_mismatch: "This box already holds items with COO {coos} — pack items with the same COO in one box.",
-    labeling_not_pending: "This order is not waiting for labeling"
+    labeling_not_pending: "This order is not waiting for labeling",
+    labels_not_all_verified: "Every printed label (carton and item) must be scanned before completing the verify task",
+    label_item_mismatch: "The scanned item does not match its printed label ({fields})"
   },
   status: {
     receiving: {
@@ -1367,6 +1385,7 @@ export default {
       createdDate: "Created",
       lastUpdateDate: "Updated",
       labelType: "Label type",
+      labelSource: "Label source",
       printTemplateId: "Print template ID",
       printTemplateIdHint: "Template slug on the label print service. Known templates: katata-label, katata-3-8, carton-a4-sheet, carton-label-canvas, LABEL-FLEXTRONICS-2-5, LABEL-HET-CAR-3-4, LABEL-HET-INTELLIGENT-3-4, LABEL-HW-1, rohs-7, rohs-18.",
       priority: "Priority",
@@ -2491,6 +2510,10 @@ export default {
           carton: "Carton",
           item_box: "Item box",
           item: "Item"
+        },
+        labelSources: {
+          internal: "Internal (printed by us)",
+          external: "External (provided by customer)"
         },
         editTitle: "Edit Label Print Rule — {name}",
         requiredFields: "Name, label type and print template ID are required.",

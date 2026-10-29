@@ -16,8 +16,14 @@
           {{ $t(`picking.printLabels.labelTypes.${match.labelType}`) }} · {{ match.printTemplateId }}
         </span>
         <span class="match-meta">{{ $t('picking.printLabels.labelsCount', { count: match.labelCount }) }}</span>
+        <span v-if="match.labelSource === 'external'" class="match-meta match-external">
+          {{ $t('picking.printLabels.externalNote') }}
+        </span>
       </div>
+      <!-- External labels are provided by the customer — info row only,
+           never printable (spec 2026-10-30). -->
       <button
+        v-if="match.labelSource !== 'external'"
         class="btn btn--small"
         :class="{
           'match-print--printed': stateOf(match.ruleId) === 'printed',
@@ -100,8 +106,14 @@ function stateOf(ruleId: string): RowState {
   return rowStates.value[ruleId] ?? "idle";
 }
 
+// External matches (customer-provided labels) are info rows — excluded from
+// printAll and from the allPrinted computation (they are not printable).
+const printableMatches = computed(() =>
+  props.matches.filter((m) => m.labelSource !== "external")
+);
+
 const allPrinted = computed(() =>
-  props.matches.every((m) => stateOf(m.ruleId) === "printed")
+  printableMatches.value.every((m) => stateOf(m.ruleId) === "printed")
 );
 
 /** Clear per-row print state (the modal calls this each time it opens). */
@@ -129,7 +141,7 @@ async function printAll(): Promise<void> {
   if (printingAll.value) return;
   printingAll.value = true;
   try {
-    for (const match of props.matches) {
+    for (const match of printableMatches.value) {
       if (stateOf(match.ruleId) !== "printed") {
         await printMatch(match);
       }
@@ -198,6 +210,10 @@ defineExpose({ printAll, reset, printingAll, allPrinted });
 .match-meta {
   color: var(--muted);
   font-size: 0.8125rem;
+}
+
+.match-external {
+  color: var(--warning);
 }
 
 .match-print--printed {

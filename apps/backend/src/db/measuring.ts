@@ -2,6 +2,7 @@ import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet } from "./query.js";
+import { cartonPrintExists, labeledOrderIds } from "./verify.js";
 
 // ---------------------------------------------------------------------------
 // Measuring reads (box-scoped, 2026-08-11 design). measuring_tasks is gone:
@@ -116,6 +117,10 @@ export interface MeasuringPackageRow {
   scannedCow: string | null;
   partNo: string;
   wclItemNo: string | null;
+  /** Label mode (2026-10-30): the package's order matched ≥ 1 internal rule. */
+  labelMode: boolean;
+  /** The package's printed label has been scanned. */
+  labelVerified: boolean;
 }
 
 export interface MeasuringBoxDetail {
@@ -129,22 +134,28 @@ export interface MeasuringBoxDetail {
   shippedAt: Date | null;
   createdDate: Date;
   suggestedNetWeightKg: number | null;
+  /** A carton print record exists for this box (carton label scan required at completion). */
+  cartonLabelRequired: boolean;
+  cartonLabelVerified: boolean;
   packages: MeasuringPackageRow[];
 }
 
 /** Box + packages with part identity + the formula-driven suggested net weight. */
 export async function getMeasuringBoxDetail(db: AppDb, boxId: string): Promise<MeasuringBoxDetail> {
-  const box = await queryGet<Omit<MeasuringBoxDetail, "packages" | "suggestedNetWeightKg">>(
+  const box = await queryGet<Omit<MeasuringBoxDetail, "packages" | "suggestedNetWeightKg" | "cartonLabelRequired">>(
     db,
     sql`SELECT id AS "boxId", picking_order_id AS "pickingOrderId", status,
                box_size AS "boxSize", gross_weight AS "grossWeight", net_weight AS "netWeight",
                destination_country AS "destinationCountry",
-               shipped_at AS "shippedAt", created_date AS "createdDate"
+               shipped_at AS "shippedAt", created_date AS "createdDate",
+               carton_label_verified AS "cartonLabelVerified"
         FROM shipping_boxes WHERE id = ${boxId}`
   );
   if (!box) throw new HTTPException(404, { message: "shipping_box_not_found" });
 
-  const packages = await queryAll<MeasuringPackageRow & { formulaWeight: number | null; formulaQty: number | null }>(
+  const packages = await queryAll<
+    MeasuringPackageRow & { formulaWeight: number | null; formulaQty: number | null; pickingOrderId: string }
+  >(
     db,
     sql`
       SELECT
@@ -155,6 +166,8 @@ export async function getMeasuringBoxDetail(db: AppDb, boxId: string): Promise<M
         pp.label_barcode AS "labelBarcode",
         pp.scanned_date_code AS "scannedDateCode", pp.scanned_lot_code AS "scannedLotCode",
         pp.scanned_coo AS "scannedCoo", pp.scanned_cow AS "scannedCow",
+        pp.label_verified AS "labelVerified",
+        pi.picking_order_id AS "pickingOrderId",
         COALESCE(pp.scanned_part_no, pi.part_no) AS "partNo",
         COALESCE(pp.scanned_wcl_item_no, p.wcl_item_no) AS "wclItemNo",
         nwf.weight AS "formulaWeight", nwf.qty AS "formulaQty"
@@ -167,10 +180,17 @@ export async function getMeasuringBoxDetail(db: AppDb, boxId: string): Promise<M
     `
   );
 
+  const labeled = await labeledOrderIds(db, packages.map((p) => p.pickingOrderId));
+  const cartonLabelRequired = await cartonPrintExists(db, boxId);
+
   return {
     ...box,
+    cartonLabelRequired,
     suggestedNetWeightKg: suggestedNetWeightKg(packages),
-    packages: packages.map(({ formulaWeight: _fw, formulaQty: _fq, ...rest }) => rest),
+    packages: packages.map(({ formulaWeight: _fw, formulaQty: _fq, pickingOrderId, ...rest }) => ({
+      ...rest,
+      labelMode: labeled.has(pickingOrderId),
+    })),
   };
 }
 

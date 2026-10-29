@@ -166,6 +166,12 @@ export function useLabelScan() {
     // package's stored labelBarcode is the same-label proof for legacy rows.
     const context: ScanTaskContext = { ...contextInput, rawLabel: captureRawLabelValue(capture) };
 
+    // Label-aware verify (spec 2026-10-30): a printed carton/item label scan
+    // is consumed before the aggregate matcher ever sees it.
+    if (context.tryLabel && (await context.tryLabel(context.rawLabel ?? ''))) {
+      return { status: 'applied' };
+    }
+
     const t3 = performance.now();
     const matchResult = await runScanMatcher(context, parsed, matchers);
     console.log('[SCAN-TIME] runScanMatcher', (performance.now() - t3).toFixed(1), 'ms');

@@ -142,6 +142,7 @@ pickingRoute.post("/picking-orders/:id/label-print", async (c) => {
   const result = await printOrderLabel(db, {
     orderId: c.req.param("id"),
     ruleId: body.ruleId,
+    actorId: actorFrom(c).id,
     scope,
     printer: body.serviceId ? { serviceId: body.serviceId, deviceKey: body.deviceKey! } : undefined,
   });
@@ -241,8 +242,16 @@ pickingRoute.post("/picking-orders/:id/claim-shelf-box", async (c) => {
 // step is disabled the verify pass runs on the still-open box (the finish
 // spawned the task; verify completion closes the box).
 pickingRoute.post("/packages/:id/verify", async (c) => {
-  const body = await readJson<{ qty?: number }>(c);
-  await verifyPackage(db, { packageId: c.req.param("id"), actorId: actorFrom(c).id, qty: body.qty });
+  const body = await readJson<{ qty?: number; partNo?: string; wclItemNo?: string; coo?: string; dateCode?: string }>(c);
+  await verifyPackage(db, {
+    packageId: c.req.param("id"),
+    actorId: actorFrom(c).id,
+    qty: body.qty,
+    partNo: body.partNo,
+    wclItemNo: body.wclItemNo,
+    coo: body.coo,
+    dateCode: body.dateCode,
+  });
   return c.json({ ok: true }, 200);
 });
 

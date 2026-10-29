@@ -35,6 +35,8 @@ const loadDetail = async () => {
       netWeight: d.netWeight,
       suggestedNetWeightKg: d.suggestedNetWeightKg,
       destinationCountry: d.destinationCountry,
+      cartonLabelRequired: d.cartonLabelRequired,
+      cartonLabelVerified: d.cartonLabelVerified,
     },
     packages: d.packages,
   };

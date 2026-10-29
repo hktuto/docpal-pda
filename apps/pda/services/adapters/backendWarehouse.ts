@@ -32,6 +32,9 @@ import type {
   MeasuringOrderGroup,
   VerifyTaskListRow,
   VerifyTaskDetail,
+  VerifyLabelLookup,
+  ScanVerifyTaskLabelResult,
+  VerifyPackageBatch,
   FlowConfig,
   GoodsVerifyTaskListRow,
   GoodsVerifyTaskDetail,
@@ -60,8 +63,16 @@ import type {
   ShelfExchangeResult,
 } from "../types";
 import type { WarehouseService } from "../warehouse";
-import { createApiClient } from "../apiClient";
+import { createApiClient, ApiError } from "../apiClient";
+import { I18nError } from "~/composables/i18nError";
 import { emitOutdatedWarning } from "../scanWarningBus";
+
+/** 404 label_print_not_found surfaces as a plain-text I18nError; anything
+ *  structured/else as an ApiError — treat both as "no label match" → null. */
+function isLabelNotFound(e: unknown): boolean {
+  if (e instanceof I18nError && e.code === "label_print_not_found") return true;
+  return e instanceof ApiError && e.status === 404;
+}
 
 export interface CreateBackendWarehouseServiceOptions {
   apiBaseUrl?: string;
@@ -325,8 +336,11 @@ export function createBackendWarehouseService(
     },
     // Measuring/verify package re-scan: credits `qty` (default: the
     // package's remaining) onto rescanned_qty.
-    async verifyPackage(packageId: string, qty?: number): Promise<void> {
-      await client.post(`/packages/${packageId}/verify`, qty === undefined ? {} : { qty });
+    async verifyPackage(packageId: string, qty?: number, batch?: VerifyPackageBatch): Promise<void> {
+      await client.post(`/packages/${packageId}/verify`, {
+        ...(qty === undefined ? {} : { qty }),
+        ...(batch ?? {}),
+      });
     },
     async createShippingBoxForPickingOrder(
       pickingOrderId: string,
@@ -603,6 +617,25 @@ export function createBackendWarehouseService(
     },
     async getVerifyTask(id: string): Promise<VerifyTaskDetail> {
       return client.get(`/verify-tasks/${id}`);
+    },
+    // Label-aware verify (spec 2026-10-30): box resolution by printed carton
+    // label (stamps carton_label_verified) and the label-mode label scan
+    // inside a task's box; both return null on 404 label_print_not_found.
+    async lookupVerifyTaskByLabel(raw: string): Promise<VerifyLabelLookup | null> {
+      try {
+        return await client.get("/verify-tasks/lookup-by-label", { raw });
+      } catch (e) {
+        if (isLabelNotFound(e)) return null;
+        throw e;
+      }
+    },
+    async scanVerifyTaskLabel(taskId: string, raw: string): Promise<ScanVerifyTaskLabelResult | null> {
+      try {
+        return await client.post(`/verify-tasks/${taskId}/scan-label`, { raw });
+      } catch (e) {
+        if (isLabelNotFound(e)) return null;
+        throw e;
+      }
     },
     async completeVerifyTask(id: string): Promise<void> {
       await client.post(`/verify-tasks/${id}/complete`, {});

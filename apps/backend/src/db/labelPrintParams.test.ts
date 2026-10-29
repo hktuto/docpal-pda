@@ -240,15 +240,16 @@ async function insertRule(opts: {
   labelType: "carton" | "item_box" | "item";
   orderNoGlob: string;
   active?: boolean;
+  labelSource?: "internal" | "external";
 }): Promise<string> {
   const id = randomUUID();
   await client.db.execute(sql`
     INSERT INTO label_print_rules
-      (id, name, label_type, conditions, print_template_id, priority, active)
+      (id, name, label_type, conditions, print_template_id, priority, active, label_source)
     VALUES
       (${id}, ${`rule-${id}`}, ${opts.labelType},
        ${JSON.stringify({ combinator: "and", conditions: [{ field: "order_no", operator: "match", value: opts.orderNoGlob }] })}::jsonb,
-       ${`tpl-${id}`}, 100, ${opts.active ?? true})
+       ${`tpl-${id}`}, 100, ${opts.active ?? true}, ${opts.labelSource ?? "internal"})
   `);
   return id;
 }
@@ -297,4 +298,163 @@ test("printOrderLabel: unknown order → 404 picking_order_not_found", async () 
     404,
     "picking_order_not_found"
   );
+});
+
+test("printOrderLabel: external rule → 409 label_rule_external", async () => {
+  const ruleId = await insertRule({ labelType: "carton", orderNoGlob: "SO-DEMO-*", labelSource: "external" });
+  await assertHttpError(
+    printOrderLabel(client.db, { orderId: await orderId(), ruleId, actorId: randomUUID() }),
+    409,
+    "label_rule_external"
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Print recording (2026-10-30): a successful upstream print inserts one
+// label_prints row with the full linked payload; a reprint is a new row.
+// ---------------------------------------------------------------------------
+
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { allocateAll } from "./allocate.js";
+import {
+  addAllUnboxedToShippingBox,
+  createShippingBox,
+  scanPickingItem,
+} from "./picking.js";
+import { queryAll } from "./query.js";
+
+interface PrintRecordRow {
+  id: string;
+  pickingOrderId: string;
+  ruleId: string;
+  labelType: string;
+  printTemplateId: string;
+  expectedLabelCount: number;
+  payload: { shippingBoxId: string | null; packageId: string | null; params: Record<string, unknown> }[];
+  result: unknown;
+  printedBy: string;
+}
+
+async function actorId(): Promise<string> {
+  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`);
+  return row!.id;
+}
+
+async function itemIdOf(orderId: string, partNo: string): Promise<string> {
+  const row = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM picking_items WHERE picking_order_id = ${orderId} AND part_no = ${partNo}`
+  );
+  return row!.id;
+}
+
+async function allocationIdOf(itemId: string): Promise<string> {
+  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM allocations WHERE picking_item_id = ${itemId}`);
+  return row!.id;
+}
+
+/** Scan all three seeded items in full and box them. */
+async function boxedOrder(): Promise<{ orderId: string; boxId: string; packageIds: string[]; actor: string }> {
+  const actor = await actorId();
+  await allocateAll(client.db);
+  const id = await orderId();
+  const packageIds: string[] = [];
+  for (const [partNo, qty] of [["RK73H1JTTD1002F", 1000], ["RK73H1JTTD2202F", 500], ["RK73B1JTTD181G", 300]] as const) {
+    const itemId = await itemIdOf(id, partNo);
+    const { packageIds: ids } = await scanPickingItem(client.db, itemId, {
+      actorId: actor,
+      allocationId: await allocationIdOf(itemId),
+      qty,
+    });
+    packageIds.push(...ids);
+  }
+  const box = await createShippingBox(client.db, { pickingOrderId: id, actorId: actor });
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId: actor });
+  return { orderId: id, boxId: box.id, packageIds, actor };
+}
+
+async function withStubPrintServer<T>(fn: (requests: Record<string, unknown>[]) => Promise<T>): Promise<T> {
+  const requests: Record<string, unknown>[] = [];
+  const server: Server = createServer((req, res) => {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", () => {
+      requests.push(JSON.parse(body));
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, data: { jobs: ["job-1", "job-2"] } }));
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as AddressInfo).port;
+  const prev = process.env.PRINT_API_BASE_URL;
+  process.env.PRINT_API_BASE_URL = `http://127.0.0.1:${port}`;
+  try {
+    return await fn(requests);
+  } finally {
+    if (prev === undefined) delete process.env.PRINT_API_BASE_URL;
+    else process.env.PRINT_API_BASE_URL = prev;
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+test("printOrderLabel records one label_prints row per print, reprint = new row, linkage stripped upstream", async () => {
+  const { orderId, boxId, packageIds, actor } = await boxedOrder();
+  const ruleId = await insertRule({ labelType: "carton", orderNoGlob: "SO-DEMO-*" });
+
+  await withStubPrintServer(async (requests) => {
+    const first = await printOrderLabel(client.db, { orderId, ruleId, actorId: actor });
+    assert.equal(first.labelCount, 1);
+    assert.deepEqual(first.jobs, ["job-1", "job-2"]);
+    // Linkage is stripped from what goes upstream.
+    const upstream = requests[0] as { printingParams: Record<string, unknown>[] };
+    assert.equal(upstream.printingParams.length, 1);
+    assert.ok(!("shippingBoxId" in upstream.printingParams[0]) || upstream.printingParams[0].shippingBoxId === undefined);
+    assert.ok(!("packageId" in upstream.printingParams[0]));
+
+    await printOrderLabel(client.db, { orderId, ruleId, actorId: actor }); // reprint
+  });
+
+  const rows = await queryAll<PrintRecordRow>(
+    client.db,
+    sql`SELECT id, picking_order_id AS "pickingOrderId", rule_id AS "ruleId",
+               label_type AS "labelType", print_template_id AS "printTemplateId",
+               expected_label_count AS "expectedLabelCount", payload, result,
+               printed_by AS "printedBy"
+        FROM label_prints WHERE picking_order_id = ${orderId} ORDER BY created_date, id`
+  );
+  assert.equal(rows.length, 2); // print + reprint
+  for (const row of rows) {
+    assert.equal(row.ruleId, ruleId);
+    assert.equal(row.labelType, "carton");
+    assert.equal(row.expectedLabelCount, 1);
+    assert.equal(row.printedBy, actor);
+    assert.deepEqual(row.result, ["job-1", "job-2"]);
+    assert.equal(row.payload.length, 1);
+    assert.equal(row.payload[0].shippingBoxId, boxId);
+    assert.equal(row.payload[0].packageId, null);
+    assert.equal(row.payload[0].params.boxId, boxId);
+  }
+});
+
+test("printOrderLabel item rule records one payload row per package with packageId linkage", async () => {
+  const { orderId, packageIds, actor } = await boxedOrder();
+  const ruleId = await insertRule({ labelType: "item", orderNoGlob: "SO-DEMO-*" });
+
+  await withStubPrintServer(async () => {
+    const result = await printOrderLabel(client.db, { orderId, ruleId, actorId: actor });
+    assert.equal(result.labelCount, 3);
+  });
+
+  const row = await queryGet<PrintRecordRow>(
+    client.db,
+    sql`SELECT expected_label_count AS "expectedLabelCount", payload
+        FROM label_prints WHERE picking_order_id = ${orderId}`
+  );
+  assert.equal(row!.expectedLabelCount, 3);
+  assert.deepEqual(
+    row!.payload.map((r) => r.packageId).sort(),
+    [...packageIds].sort()
+  );
+  assert.ok(row!.payload.every((r) => r.shippingBoxId === null));
 });

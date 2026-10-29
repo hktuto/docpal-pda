@@ -17,6 +17,7 @@ const loading = ref(true);
 const form = reactive({
   name: "",
   labelType: "",
+  labelSource: "internal",
   conditions: { combinator: "and", conditions: [{ field: "org_id", operator: "eq", value: "" }] } as RuleConditions,
   printTemplateId: "",
   priority: "",
@@ -35,6 +36,13 @@ const labelTypeOptions = computed(() =>
   }))
 );
 
+const labelSourceOptions = computed(() =>
+  ["internal", "external"].map((value) => ({
+    value,
+    label: t(`admin.pages.labelPrintRules.labelSources.${value}`),
+  }))
+);
+
 async function load() {
   loading.value = true;
   error.value = "";
@@ -42,6 +50,7 @@ async function load() {
     rule.value = await api.get(`/admin/label-print-rules/${ruleId}`);
     form.name = rule.value.name ?? "";
     form.labelType = rule.value.labelType ?? "";
+    form.labelSource = rule.value.labelSource ?? "internal";
     form.conditions = JSON.parse(JSON.stringify(rule.value.conditions));
     form.printTemplateId = rule.value.printTemplateId ?? "";
     form.priority = rule.value.priority != null ? String(rule.value.priority) : "";
@@ -94,6 +103,7 @@ async function save() {
     await api.patch(`/admin/label-print-rules/${ruleId}`, {
       name: form.name.trim(),
       labelType: form.labelType,
+      labelSource: form.labelSource,
       conditions,
       printTemplateId: form.printTemplateId.trim(),
       // NOT NULL column — a blank field keeps the server value instead of sending null.
@@ -171,6 +181,17 @@ async function testMatch() {
               :options="labelTypeOptions"
               :all-label="$t('admin.fields.labelType')"
               :aria-label="$t('admin.fields.labelType')"
+              :multiple="false"
+              :show-all="false"
+            />
+          </div>
+          <div class="form-row">
+            <label>{{ $t("admin.fields.labelSource") }}</label>
+            <SearchableSelect
+              v-model="form.labelSource"
+              :options="labelSourceOptions"
+              :all-label="$t('admin.fields.labelSource')"
+              :aria-label="$t('admin.fields.labelSource')"
               :multiple="false"
               :show-all="false"
             />

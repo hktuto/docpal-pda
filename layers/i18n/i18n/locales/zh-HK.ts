@@ -363,7 +363,8 @@ export default {
       printing: "列印中…",
       printed: "已列印",
       printFailed: "列印失敗——點擊重試",
-      noMatchingRules: "此訂單沒有符合的標籤列印規則"
+      noMatchingRules: "此訂單沒有符合的標籤列印規則",
+      externalNote: "標籤由客戶提供"
     },
     itemsSection: {
       title: "項目",
@@ -650,14 +651,29 @@ export default {
       grossWeight: "毛重",
       destinationCountry: "目的地國家/地區",
       scanHint: "掃描包裹 QR code 以核實。",
+      scanHintLabels: "掃描已列印的標籤或包裹 QR code。",
       noMatch: "沒有與此標籤相符的未核實包裹。",
-      alreadyRescanned: "已全部複核掃描（{count} 件）。"
+      alreadyRescanned: "已全部複核掃描（{count} 件）。",
+      labelsToVerify: "待核實標籤",
+      itemsToRescan: "待複核掃描物料",
+      cartonLabel: "箱標籤",
+      scanCartonLabel: "請掃描已列印的箱標籤",
+      scanLabel: "請掃描已列印的標籤",
+      labelScanned: "標籤已掃描——物料 {rescanned}/{qty}"
     }
   },
   verify: {
     title: "覆核",
     hint: "待覆核的已關閉箱號。",
     boxNotFound: "列表中找不到與「{id}」相符的箱號。",
+    cartonLabelVerified: "箱標籤已核實",
+    labelScanned: "標籤已核實：{part}",
+    labelFields: {
+      partNo: "零件編號",
+      wclItemNo: "WCL 物料編號",
+      coo: "原產地",
+      dateCode: "日期碼"
+    },
     detail: {
       completeVerify: "完成覆核",
       completing: "完成中…",
@@ -924,7 +940,9 @@ export default {
     network_error: "網絡錯誤，請檢查連接後重試。",
     unresolved_outdated_warnings: "此訂單有 {count} 條未解決的日期碼過期警告 — 請先聯絡管理員解決，再完成訂單。",
     box_coo_mismatch: "箱內已有產地（COO）為 {coos} 的貨品 — 請將相同產地的貨品裝入同一箱。",
-    labeling_not_pending: "此訂單不在待貼標籤狀態"
+    labeling_not_pending: "此訂單不在待貼標籤狀態",
+    labels_not_all_verified: "完成覆核前必須掃描所有已列印的標籤（箱標籤及物料標籤）",
+    label_item_mismatch: "掃描的物料與已列印標籤不符（{fields}）"
   },
   status: {
     receiving: {
@@ -1367,6 +1385,7 @@ export default {
       createdDate: "建立時間",
       lastUpdateDate: "更新時間",
       labelType: "標籤類型",
+      labelSource: "標籤來源",
       printTemplateId: "列印模板 ID",
       printTemplateIdHint: "標籤列印服務的模板 slug。已知模板：katata-label、katata-3-8、carton-a4-sheet、carton-label-canvas、LABEL-FLEXTRONICS-2-5、LABEL-HET-CAR-3-4、LABEL-HET-INTELLIGENT-3-4、LABEL-HW-1、rohs-7、rohs-18。",
       priority: "優先級",
@@ -2488,6 +2507,10 @@ export default {
           carton: "箱",
           item_box: "零件盒",
           item: "零件"
+        },
+        labelSources: {
+          internal: "內部（我方列印）",
+          external: "外部（客戶提供）"
         },
         editTitle: "編輯標籤列印規則 — {name}",
         requiredFields: "名稱、標籤類型及列印範本 ID 為必填。",

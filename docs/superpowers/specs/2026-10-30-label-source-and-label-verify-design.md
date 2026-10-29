@@ -1,7 +1,7 @@
 # Label source (internal/external) + label-aware verify — design
 
 - Date: 2026-10-30
-- Status: draft — two open decisions flagged "DECISION" below, chosen defaults await owner confirmation
+- Status: implemented (2026-10-30) — owner confirmed answers 1–3; the three "DECISION" defaults below stand as written (external-only orders enter labeling; carton label required at completion; unprinted packages fall back to aggregate)
 - Builds on: `2026-10-27-picking-finish-label-print-prompt-design.md` (label print rules), `2026-10-28-picking-labeling-step-design.md` (labeling stage), `2026-10-29-backend-label-print-conversion-design.md` (backend print conversion + converters), `2026-10-03-picking-scan-truth-and-aggregate-verify-design.md` (aggregate verify)
 
 ## Background

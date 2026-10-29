@@ -401,6 +401,9 @@ export interface LabelPrintRuleMatch {
   labelType: "carton" | "item_box" | "item";
   printTemplateId: string;
   labelCount: number;
+  /** Label source (spec 2026-10-30): internal = we print; external = the
+   *  customer provides the label (info row only, never printable). */
+  labelSource: "internal" | "external";
 }
 
 export interface PrintJob {
@@ -939,6 +942,12 @@ export interface MeasuringPackage {
   scannedCow?: string | null;
   partNo: string;
   wclItemNo: string | null;
+  /** Label mode (spec 2026-10-30): the package's order matched ≥1 active
+   *  internal label rule — its printed labels are verify requirements on top
+   *  of the qty re-scan. Absent/false = aggregate mode. */
+  labelMode?: boolean;
+  /** The package's printed item/item_box label has been scanned (scan-label). */
+  labelVerified?: boolean;
 }
 
 /** GET /measuring-boxes/:id — the box plus its packages. */
@@ -957,6 +966,10 @@ export interface MeasuringBoxDetail {
   destinationCountry: string | null;
   shippedAt: string | null;
   createdDate: string;
+  /** Carton label gate (spec 2026-10-30): a carton print record exists for
+   *  this box, so completion needs cartonLabelVerified. */
+  cartonLabelRequired?: boolean;
+  cartonLabelVerified?: boolean;
   packages: MeasuringPackage[];
 }
 
@@ -997,8 +1010,46 @@ export interface VerifyTaskDetail {
     destinationCountry: string | null;
     shippedAt: string | null;
     suggestedNetWeightKg?: number | null;
+    /** Carton label gate (spec 2026-10-30). */
+    cartonLabelRequired?: boolean;
+    cartonLabelVerified?: boolean;
   };
   packages: MeasuringPackage[];
+}
+
+/** GET /verify-tasks/lookup-by-label?raw= 200 (spec 2026-10-30): the raw scan
+ *  matched a recorded carton label print for a box with a pending verify task
+ *  / open measuring box. Side effect: stamps the box's carton_label_verified.
+ *  404 label_print_not_found → the adapter returns null. */
+export interface VerifyLabelLookup {
+  /** Null when the box is still open (measuring pass — no verify task yet). */
+  taskId: string | null;
+  shippingBoxId: string;
+}
+
+/** POST /verify-tasks/:id/scan-label 200 (spec 2026-10-30). Carton matches
+ *  stamp the box; item/item_box matches mark the package label_verified and
+ *  return the label's anchored expectations. 404 → adapter returns null. */
+export interface ScanVerifyTaskLabelResult {
+  kind: "carton" | "item";
+  packageId?: string;
+  expectations?: {
+    partNo: string;
+    wclItemNo: string | null;
+    coo: string | null;
+    dateCode: string | null;
+    qty: number;
+  };
+}
+
+/** Optional batch fields on POST /packages/:id/verify (spec 2026-10-30) —
+ *  hard-compared server-side when the package is label_verified
+ *  (409 label_item_mismatch). */
+export interface VerifyPackageBatch {
+  partNo?: string;
+  wclItemNo?: string;
+  coo?: string;
+  dateCode?: string;
 }
 
 // ------------------------------------------------------------------

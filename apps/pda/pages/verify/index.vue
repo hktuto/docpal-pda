@@ -81,20 +81,29 @@ async function load() {
 
 const rows = computed(() => rawRows.value);
 
-// Scanning a box QR (or typing its id on the wedge) opens that box directly.
-// Exact id wins; otherwise a unique substring match (e.g. the daily seq).
+// Scanning a printed carton label opens its box (and stamps the box's
+// carton_label_verified — spec 2026-10-30); otherwise a box QR (or its id
+// typed on the wedge) opens that box directly. Exact id wins; otherwise a
+// unique substring match (e.g. the daily seq).
 useHardwareScanner({
   enabled: () => rows.value.length > 0,
-  onScan: (rawValue) => {
-    const boxes = rows.value;
-    const q = rawValue.trim().toLowerCase();
+  onScan: async (rawValue) => {
+    const q = rawValue.trim();
     if (!q) return false;
-    const exact = boxes.find((b) => b.shippingBoxId.toLowerCase() === q);
-    const matches = exact ? [exact] : boxes.filter((b) => b.shippingBoxId.toLowerCase().includes(q));
+    const hit = await warehouse.lookupVerifyTaskByLabel(q);
+    if (hit) {
+      router.push(`/verify/${hit.shippingBoxId}`);
+      showToast(t("verify.cartonLabelVerified"));
+      return;
+    }
+    const boxes = rows.value;
+    const needle = q.toLowerCase();
+    const exact = boxes.find((b) => b.shippingBoxId.toLowerCase() === needle);
+    const matches = exact ? [exact] : boxes.filter((b) => b.shippingBoxId.toLowerCase().includes(needle));
     if (matches.length === 1) {
       router.push(`/verify/${matches[0].shippingBoxId}`);
     } else {
-      showToast(t("verify.boxNotFound", { id: rawValue.trim() }));
+      showToast(t("verify.boxNotFound", { id: q }));
       return false;
     }
   },

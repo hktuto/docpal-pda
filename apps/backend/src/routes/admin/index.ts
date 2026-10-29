@@ -16,7 +16,7 @@ import {
   labelPrintRules,
   inventoryLabels,
 } from "../../db/schema/index.js";
-import { createCrudRouter, reqStr, optStr, reqInt, reqNum, optInt, optStrArray, optJson, optBool, reqBool, reqLabelType, reqConditions } from "./crud.js";
+import { createCrudRouter, reqStr, optStr, reqInt, reqNum, optInt, optStrArray, optJson, optBool, reqBool, reqLabelType, reqLabelSource, reqConditions } from "./crud.js";
 import { docpalBaseUrl } from "../../config.js";
 import { queryAll } from "../../db/query.js";
 import { shelfBoxesRoute } from "./shelfBoxes.js";
@@ -332,6 +332,7 @@ adminRoute.route(
       id: optId(b),
       name: reqStr(b, "name"),
       labelType: reqLabelType(b, "labelType"),
+      labelSource: b.labelSource !== undefined ? reqLabelSource(b, "labelSource") : "internal",
       conditions: reqConditions(b, "conditions"),
       printTemplateId: reqStr(b, "printTemplateId"),
       priority: optInt(b, "priority") ?? 100,
@@ -341,6 +342,7 @@ adminRoute.route(
     update: (b) => ({
       ...(b.name !== undefined && { name: reqStr(b, "name") }),
       ...(b.labelType !== undefined && { labelType: reqLabelType(b, "labelType") }),
+      ...(b.labelSource !== undefined && { labelSource: reqLabelSource(b, "labelSource") }),
       ...(b.conditions !== undefined && { conditions: reqConditions(b, "conditions") }),
       ...(b.printTemplateId !== undefined && { printTemplateId: reqStr(b, "printTemplateId") }),
       ...(b.priority !== undefined && { priority: reqInt(b, "priority") }),

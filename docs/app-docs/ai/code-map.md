@@ -91,7 +91,7 @@ Page and component locations mapped to source files.
 
 | Component | Source file |
 |-----------|-------------|
-| Shared box page (package verify by scan, measurements, close; `mode` prop = measuring/verify) | `components/MeasureBox.vue` |
+| Shared box page (package verify by scan, measurements, close; `mode` prop = measuring/verify; two sections — labels-to-verify + per-item totals — grouping/dispatch in `utils/verifyDisplayGroups.ts`) | `components/MeasureBox.vue` |
 | Flow-step config (disabled-step home tiles) | `composables/useFlowSteps.ts` |
 
 ## Receiving
@@ -199,7 +199,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `GET /put-away/candidates`, `GET /put-away-tasks`, `GET /put-away-tasks/:id`, `POST /receiving-orders/:id/put-away-scans`, `DELETE /put-away-scans/:scanId`, `/shelf-boxes*` lifecycle (create / cancel / assign-scan / remove-scan / add-all-unboxed / close) | `apps/backend/src/routes/putaway.ts` |
 | `GET /put-away-cn/tasks`, `GET /put-away-cn/tasks/:id`, `POST /put-away-cn/tasks/:id/complete` (CN put-away variant — 404 unless flow-config `cnReceiving` is true) | `apps/backend/src/routes/putawayCn.ts` |
 | `GET /measuring-boxes`, `GET /measuring-boxes/:id` | `apps/backend/src/routes/measuring.ts` |
-| `GET /verify-tasks`, `GET /verify-tasks/:id`, `POST /verify-tasks/:id/complete` | `apps/backend/src/routes/verify.ts` |
+| `GET /verify-tasks`, `GET /verify-tasks/lookup-by-label`, `GET /verify-tasks/:id`, `POST /verify-tasks/:id/scan-label`, `POST /verify-tasks/:id/complete` | `apps/backend/src/routes/verify.ts` |
 | `GET /shipping-orders`, `GET /shipping-orders/:boxId`, `POST /shipping-orders/:boxId/ship` | `apps/backend/src/routes/shipping.ts` |
 | `GET /config` (flow config from the `warehouse_config` row `"flow"`, `FLOW_CONFIG` env override, deprecated `FLOW_STEPS_DISABLED` fallback) | `apps/backend/src/routes/config.ts` |
 | `POST /goods-verify-tasks/generate`, `GET /goods-verify-tasks`, `GET /goods-verify-tasks/:id`, `POST /goods-verify-tasks/:id/verify` | `apps/backend/src/routes/goodsverify.ts` |

@@ -14,6 +14,9 @@ import { resolveLabelPrintRulesForOrder, type LabelPrintRuleMatch } from "./labe
 import { dateCodeRank } from "./dateCode.js";
 import type { UserScopeEntry } from "./user-scope.js";
 import { dynamicPrint } from "../print.js";
+import { newId } from "./id.js";
+import { labelPrints } from "./schema/index.js";
+import { now } from "./now.js";
 
 export interface LabelPrintContext {
   db: DbOrTx;
@@ -21,12 +24,21 @@ export interface LabelPrintContext {
   match: LabelPrintRuleMatch;
 }
 
-type LabelParamConverter = (ctx: LabelPrintContext) => Promise<Record<string, unknown>[]>;
+/** A converted param row plus its print-record linkage: carton rows carry
+ *  `shippingBoxId`, item/item_box rows carry `packageId`. `params` is exactly
+ *  what goes upstream to the print service. */
+export interface LabelPrintParamRow {
+  shippingBoxId: string | null;
+  packageId: string | null;
+  params: Record<string, unknown>;
+}
+
+type LinkedLabelParamConverter = (ctx: LabelPrintContext) => Promise<LabelPrintParamRow[]>;
 
 // Per-templateId overrides register here (A4 chunking, customer-specific
 // payloads, DB-enriched fields).
-const converters: Record<string, LabelParamConverter> = {
-  "yhft-ch-01": yhftCh01Converter,
+const linkedConverters: Record<string, LinkedLabelParamConverter> = {
+  "yhft-ch-01": yhftCh01Linked,
 };
 
 interface BatchFields {
@@ -103,15 +115,15 @@ function batchFields(batch: BatchFields): Record<string, string> {
 
 const EMPTY_BATCH: BatchFields = { dateCode: "", lotCode: "", coo: "", cow: "" };
 
-/** Default builder: one row per shipping box (`carton`) or one row per
- *  package across all items (`item_box` / `item`), then 1-based
+/** Default builder (linked): one row per shipping box (`carton`) or one row
+ *  per package across all items (`item_box` / `item`), then 1-based
  *  page/total/showTailBox over the row set. */
-export function buildDefaultLabelPrintParams(
+export function buildDefaultLinkedLabelPrintParams(
   labelType: string,
   order: PickingOrderDetail
-): Record<string, unknown>[] {
+): LabelPrintParamRow[] {
   const identity = identityFields(order);
-  const rows: Record<string, unknown>[] = [];
+  const rows: LabelPrintParamRow[] = [];
 
   if (labelType === "carton") {
     const boxes = [...order.boxes].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -128,21 +140,25 @@ export function buildDefaultLabelPrintParams(
       const single = distinctParts.size === 1 ? boxPkgs[0] : undefined;
       const totalQty = boxPkgs.reduce((sum, { pkg }) => sum + pkg.qty, 0);
       rows.push({
-        ...identity,
-        ...partFields(single?.item ?? null),
-        ...batchFields(single ? packageBatch(single.pkg) : EMPTY_BATCH),
-        qty: str(totalQty),
-        quantity: str(totalQty),
-        serialNo: box.id,
-        boxId: box.id,
-        barcodeValue: box.id,
-        barCode: box.id,
-        extraCode: box.id,
-        qrcode: box.id,
-        qrPayload: box.id,
-        traceCode: box.id,
-        midQr: box.id,
-        topQr: box.id,
+        shippingBoxId: box.id,
+        packageId: null,
+        params: {
+          ...identity,
+          ...partFields(single?.item ?? null),
+          ...batchFields(single ? packageBatch(single.pkg) : EMPTY_BATCH),
+          qty: str(totalQty),
+          quantity: str(totalQty),
+          serialNo: box.id,
+          boxId: box.id,
+          barcodeValue: box.id,
+          barCode: box.id,
+          extraCode: box.id,
+          qrcode: box.id,
+          qrPayload: box.id,
+          traceCode: box.id,
+          midQr: box.id,
+          topQr: box.id,
+        },
       });
     }
   } else {
@@ -150,21 +166,25 @@ export function buildDefaultLabelPrintParams(
       for (const pkg of item.packages) {
         const trace = packageTrace(item, pkg);
         rows.push({
-          ...identity,
-          ...partFields(item),
-          ...batchFields(packageBatch(pkg)),
-          qty: str(pkg.qty),
-          quantity: str(pkg.qty),
-          serialNo: str(pkg.shippingBoxId),
-          boxId: str(pkg.shippingBoxId),
-          barcodeValue: pkg.id,
-          barCode: pkg.id,
-          extraCode: str(pkg.shippingBoxId),
-          qrcode: trace,
-          qrPayload: trace,
-          traceCode: trace,
-          midQr: trace,
-          topQr: trace,
+          shippingBoxId: null,
+          packageId: pkg.id,
+          params: {
+            ...identity,
+            ...partFields(item),
+            ...batchFields(packageBatch(pkg)),
+            qty: str(pkg.qty),
+            quantity: str(pkg.qty),
+            serialNo: str(pkg.shippingBoxId),
+            boxId: str(pkg.shippingBoxId),
+            barcodeValue: pkg.id,
+            barCode: pkg.id,
+            extraCode: str(pkg.shippingBoxId),
+            qrcode: trace,
+            qrPayload: trace,
+            traceCode: trace,
+            midQr: trace,
+            topQr: trace,
+          },
         });
       }
     }
@@ -173,16 +193,32 @@ export function buildDefaultLabelPrintParams(
   const total = rows.length;
   return rows.map((row, i) => ({
     ...row,
-    page: String(i + 1),
-    total: String(total),
-    showTailBox: true,
+    params: {
+      ...row.params,
+      page: String(i + 1),
+      total: String(total),
+      showTailBox: true,
+    },
   }));
 }
 
-export async function buildLabelPrintParams(ctx: LabelPrintContext): Promise<Record<string, unknown>[]> {
-  const converter = converters[ctx.match.printTemplateId];
+export function buildDefaultLabelPrintParams(
+  labelType: string,
+  order: PickingOrderDetail
+): Record<string, unknown>[] {
+  return buildDefaultLinkedLabelPrintParams(labelType, order).map((row) => row.params);
+}
+
+/** Linked conversion: per-templateId converter when registered, otherwise the
+ *  default builder keyed by label_type. */
+export async function buildLinkedLabelPrintParams(ctx: LabelPrintContext): Promise<LabelPrintParamRow[]> {
+  const converter = linkedConverters[ctx.match.printTemplateId];
   if (converter) return converter(ctx);
-  return buildDefaultLabelPrintParams(ctx.match.labelType, ctx.order);
+  return buildDefaultLinkedLabelPrintParams(ctx.match.labelType, ctx.order);
+}
+
+export async function buildLabelPrintParams(ctx: LabelPrintContext): Promise<Record<string, unknown>[]> {
+  return (await buildLinkedLabelPrintParams(ctx)).map((row) => row.params);
 }
 
 // ---------------------------------------------------------------------------
@@ -245,7 +281,7 @@ function yhftCh01Row(
   };
 }
 
-async function yhftCh01Converter(ctx: LabelPrintContext): Promise<Record<string, unknown>[]> {
+async function yhftCh01Linked(ctx: LabelPrintContext): Promise<LabelPrintParamRow[]> {
   const { db, order, match } = ctx;
 
   // Drawing number (零件图号): only inventory_lots carries drawing_no —
@@ -267,7 +303,7 @@ async function yhftCh01Converter(ctx: LabelPrintContext): Promise<Record<string,
   const drawingNoOf = (pkg: PickingPackageDetail | null | undefined): string =>
     pkg?.sourceType === "inventory_lot" ? (drawingByLotId.get(pkg.sourceId) ?? "") : "";
 
-  const rows: Record<string, unknown>[] = [];
+  const rows: LabelPrintParamRow[] = [];
   if (match.labelType === "carton") {
     const boxes = [...order.boxes].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     for (const box of boxes) {
@@ -282,20 +318,29 @@ async function yhftCh01Converter(ctx: LabelPrintContext): Promise<Record<string,
       const distinctParts = new Set(boxPkgs.map(({ item }) => item.partNo));
       const single = distinctParts.size === 1 ? boxPkgs[0] : undefined;
       const totalQty = boxPkgs.reduce((sum, { pkg }) => sum + pkg.qty, 0);
-      rows.push(
-        yhftCh01Row(order, single?.item ?? null, single?.pkg ?? null, totalQty, drawingNoOf(single?.pkg))
-      );
+      rows.push({
+        shippingBoxId: box.id,
+        packageId: null,
+        params: yhftCh01Row(order, single?.item ?? null, single?.pkg ?? null, totalQty, drawingNoOf(single?.pkg)),
+      });
     }
   } else {
     for (const item of order.items) {
       for (const pkg of item.packages) {
-        rows.push(yhftCh01Row(order, item, pkg, pkg.qty, drawingNoOf(pkg)));
+        rows.push({
+          shippingBoxId: null,
+          packageId: pkg.id,
+          params: yhftCh01Row(order, item, pkg, pkg.qty, drawingNoOf(pkg)),
+        });
       }
     }
   }
 
   const total = rows.length;
-  return rows.map((row, i) => ({ ...row, page: String(i + 1), total: String(total) }));
+  return rows.map((row, i) => ({
+    ...row,
+    params: { ...row.params, page: String(i + 1), total: String(total) },
+  }));
 }
 
 /** Converted param-row count for one match (the PDA panel shows it before
@@ -318,6 +363,7 @@ export async function printOrderLabel(
   input: {
     orderId: string;
     ruleId: string;
+    actorId: string;
     scope?: UserScopeEntry[] | null;
     // Caller-picked agent printer (serviceId + deviceKey from
     // GET /print/printers); absent = the template's default printer.
@@ -336,12 +382,17 @@ export async function printOrderLabel(
   const { matches } = await resolveLabelPrintRulesForOrder(db, input.orderId);
   const match = matches.find((m) => m.ruleId === input.ruleId);
   if (!match) throw new HTTPException(409, { message: "label_rule_no_longer_matches" });
+  // External labels are provided by the customer — nothing to print.
+  if (match.labelSource === "external") {
+    throw new HTTPException(409, { message: "label_rule_external" });
+  }
 
   const order = await getPickingOrderDetail(db, input.orderId, input.scope);
-  const printingParams = await buildLabelPrintParams({ db, order, match });
-  if (printingParams.length === 0) {
+  const rows = await buildLinkedLabelPrintParams({ db, order, match });
+  if (rows.length === 0) {
     throw new HTTPException(400, { message: "printing_params_required" });
   }
+  const printingParams = rows.map((row) => row.params);
 
   const data = (await dynamicPrint({
     templateId: match.printTemplateId,
@@ -355,5 +406,26 @@ export async function printOrderLabel(
       ? { serviceId: input.printer.serviceId, deviceKey: input.printer.deviceKey, printerName: input.printer.deviceKey }
       : {}),
   })) as { jobs?: unknown };
-  return { jobs: data?.jobs ?? [], labelCount: printingParams.length };
+  const jobs = data?.jobs ?? [];
+
+  // Print history (2026-10-30): one row per print action, recording the exact
+  // per-label payload linked to its package/box. Only on upstream success.
+  await db.insert(labelPrints).values({
+    id: newId(),
+    pickingOrderId: input.orderId,
+    ruleId: match.ruleId,
+    labelType: match.labelType,
+    printTemplateId: match.printTemplateId,
+    printerName: input.printer?.deviceKey ?? null,
+    serviceId: input.printer?.serviceId ?? null,
+    deviceKey: input.printer?.deviceKey ?? null,
+    expectedLabelCount: rows.length,
+    payload: rows,
+    result: jobs,
+    printedBy: input.actorId,
+    createdDate: now(),
+    lastUpdateDate: now(),
+  });
+
+  return { jobs, labelCount: rows.length };
 }

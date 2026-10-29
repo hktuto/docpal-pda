@@ -8,6 +8,7 @@
       <MeasureBox
         :box-id="boxId"
         :load-detail="loadDetail"
+        :verify-task-id="taskId"
         :order-nos="orderNos"
         :reload-token="reloadToken"
         mode="verify"
@@ -93,13 +94,17 @@ const loadDetail = async () => {
 // Mirrors the backend guard: every package fully re-scanned
 // (rescannedQty >= qty) before the verify pass can complete. The box must be
 // closed only when the measuring step is on — with measuring off the finish
-// spawned the task on the open box and completing closes it.
+// spawned the task on the open box and completing closes it. Label gates
+// (spec 2026-10-30): a required carton label must be verified; printed
+// item-label coverage is enforced server-side (409 labels_not_all_verified)
+// — unprinted label-mode packages fall back to aggregate and don't block.
 const { flowSteps } = useFlowSteps();
 const canComplete = computed(() => {
   const d = detail.value;
   if (!d || d.task.status !== "pending") return false;
   if (flowSteps.value.measuring && d.box.status !== "closed") return false;
   if (!d.packages.length) return false;
+  if (d.box.cartonLabelRequired && !d.box.cartonLabelVerified) return false;
   return d.packages.every((p) => (p.rescannedQty ?? 0) >= p.qty);
 });
 

@@ -110,6 +110,17 @@ export function reqLabelType(body: Record<string, unknown>, field: string): stri
   return v;
 }
 
+// Label-print rules: label_source ∈ internal | external.
+const LABEL_SOURCES = new Set(["internal", "external"]);
+
+export function reqLabelSource(body: Record<string, unknown>, field: string): string {
+  const v = reqStr(body, field);
+  if (!LABEL_SOURCES.has(v)) {
+    throw new HTTPException(400, { message: `${field} must be one of internal|external` });
+  }
+  return v;
+}
+
 // Label-print rules: conditions JSON shape —
 // { combinator: "and"|"or", conditions: [{ field, operator, value }] } with
 // field ∈ org_id|sub_inventory|supplier|order_no|order_type|customer, operator ∈ eq|match,
