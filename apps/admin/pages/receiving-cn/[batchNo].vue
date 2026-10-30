@@ -143,7 +143,7 @@ const groups = computed<CnItemGroup[]>(() => {
   }
   return inv
     .slice()
-    .sort((a, b) => a.invoiceNo.localeCompare(b.invoiceNo, undefined, { numeric: true, sensitivity: "base" }))
+    .sort((a, b) =>  a.invoiceNo?.localeCompare(b.invoiceNo, undefined, { numeric: true, sensitivity: "base" }))
     .map((i) => ({
       key: i.id,
       invoiceNo: i.invoiceNo,
