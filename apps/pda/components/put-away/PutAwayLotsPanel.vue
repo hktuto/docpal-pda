@@ -8,7 +8,7 @@
       :key="group.key"
       :data-item-id="group.key"
       class="card"
-      :class="{ 'card--armed': armedItemId === group.key }"
+      :class="{ 'card--armed': armedItemId === group.key, 'card--done': isDone(group) }"
     >
       <div v-if="armedItemId === group.key" class="armed-banner">
         <span class="armed-badge">{{ $t('putAway.lotsPanel.armedBadge') }}</span>
@@ -20,6 +20,9 @@
         :expanded="expandedItems.has(group.key)"
         :title="groupTitle(group)"
         :meta="[fieldsMeta(group), progressMeta(group)]"
+        :chip-text="isDone(group) ? $t('putAway.lotsPanel.done') : undefined"
+        chip-class="badge--done"
+        :done="isDone(group)"
         @toggle="toggleExpand(group.key)"
       >
         <DetailRow
@@ -99,7 +102,7 @@
         </div>
       </AppListRow>
 
-      <div class="lot-actions">
+      <div v-if="!isDone(group)" class="lot-actions">
         <button
           class="btn btn--small"
           :disabled="scanning"
@@ -182,8 +185,16 @@ function isExpandable(group: PutAwayItemGroup): boolean {
   return (
     detailConfig.value.expandedFields.length > 0 ||
     group.items.length > 1 ||
-    group.stagedQty > 0
+    group.stagedQty > 0 ||
+    isDone(group)
   );
+}
+
+/** Fully put away: nothing left on any member line and no staged scans. Done
+ *  groups stay on the list — dimmed, with a done chip — and no longer offer
+ *  scan actions. */
+function isDone(group: PutAwayItemGroup): boolean {
+  return group.remainingQty <= 0 && group.stagedQty === 0;
 }
 
 function groupTitle(group: PutAwayItemGroup): string {
@@ -249,6 +260,10 @@ function toggleExpand(groupKey: string) {
 
 .card--armed {
   border: 2px solid var(--primary);
+}
+
+.card--done {
+  opacity: 0.55;
 }
 
 .armed-banner {

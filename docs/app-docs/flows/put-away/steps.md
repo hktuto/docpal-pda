@@ -15,8 +15,13 @@ Tap the task to open the detail page. The batch number and receiving status show
 The detail shows receiving-area items waiting to be put away, grouped by part
 number — if the order carries the same part on several lines (for example
 300 + 20000), they appear as **one card with the combined total**, with total,
-scanned, and put-away quantities. Expand the card (the **expand** button) to see
+scanned, and put-away quantities. Cards are ordered by part number. Expand the
+card (the **expand** button) to see
 the individual lines with their own remaining quantities and batch values.
+
+Items that are fully put away stay on the list — dimmed, with a green **Done**
+chip and no scan buttons — so you can still expand them to review or reverse
+the recorded pieces.
 
 ## 4. Scan physical pieces
 

@@ -72,10 +72,14 @@
   ledger, moving the qty back to pending; 409 `lot_has_pick_allocations` when
   the lot feeds pick allocations). A `BOX-*` scan is rejected with an
   informational toast — boxes are not used in this flow. The detail list is
-  grouped by part number — all visible invoice lines of one part render as a
+  grouped by part number — ALL invoice lines of one part render as a
   single card with summed qty (`utils/putAwayGroups.ts`
-  `groupPutAwayItems`, spec `2026-10-05-put-away-part-grouping-design`);
-  expanding the card lists the member lines with their per-line remaining +
+  `groupPutAwayItems`, spec `2026-10-05-put-away-part-grouping-design`),
+  ordered by part number (numeric-aware; CN mode keeps po_line → part_no).
+  Fully put-away groups (nothing remaining, nothing staged) stay on the
+  list — dimmed with a green "Done" chip and no scan buttons — instead of
+  disappearing; the scan-match pool (`visibleItems`) still excludes them.
+  Expanding the card lists the member lines with their per-line remaining +
   batch values. One label's qty may span several same-part lines (a 20300
   package against 300 + 20000 lines): every write path splits the qty FIFO
   across the group's lines into one `recordPutAwayScan` per line
@@ -94,7 +98,8 @@
   `findPutAwayTargets` against that group's lines only, same
   `errors.scanned_part_does_not_match_item` toast on mismatch) → free-match.
   A successful armed scan stays armed; the armed state auto-clears when a
-  reload drops the group from `groups`. The per-card camera OCR button opens
+  reload finds the group fully put away (done groups stay on the list but no
+  longer accept scans). The per-card camera OCR button opens
   a review step first: a single parsed record pops the
   `LabelScanReviewModal` confirm form (`confirmSingleMatch: true`); a
   multi-item (carton) label pops the shared `ScanMultiItemModal` table and

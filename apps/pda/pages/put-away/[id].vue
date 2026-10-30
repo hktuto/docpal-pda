@@ -87,7 +87,7 @@ import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
 import { scrollToItem } from "~/utils/scroll";
 import { rawCode } from "~/utils/text";
-import { compareByPoLineThenPartNo, findCnPutAwayTargets, findPutAwayTargets } from "~/utils/putAwayScan";
+import { compareByPoLineThenPartNo, compareNumericAware, findCnPutAwayTargets, findPutAwayTargets } from "~/utils/putAwayScan";
 import {
   groupPutAwayItems,
   type PutAwayItemGroup,
@@ -259,10 +259,11 @@ const matchItems = computed<PutAwayExpectedItem[]>(() => {
   });
 });
 
-// Same visibility rule as the old lots list: items with anything left to put
-// away, or with scans still pending. CN mode orders the list po_line →
-// part_no (the warehouse works the sheet by PO line); standard keeps the
-// backend order.
+// Scan-match pool: items with anything left to put away, or with scans still
+// pending. CN mode orders the pool po_line → part_no (the warehouse works the
+// sheet by PO line); standard keeps the backend order. The DISPLAYED list
+// (displayItems → groups) is broader: fully put-away items stay visible,
+// dimmed with a done chip.
 const visibleItems = computed(() => {
   const list = matchItems.value.filter(
     (item) =>
@@ -272,10 +273,23 @@ const visibleItems = computed(() => {
   return list;
 });
 
+// Display list: every item on the order, sorted by part_no (numeric-aware, so
+// "9" < "10"). CN mode keeps its po_line → part_no order. Done groups (nothing
+// remaining, nothing staged) render dimmed instead of disappearing.
+const displayItems = computed(() => {
+  const list = [...matchItems.value];
+  list.sort(
+    cnMode.value
+      ? compareByPoLineThenPartNo
+      : (a, b) => compareNumericAware(a.partNo, b.partNo)
+  );
+  return list;
+});
+
 // Display grouping: one card per part, summed qty (spec 2026-10-05). Writes
 // stay per receiving line — scans are split FIFO across the group's lines.
 const groups = computed(() =>
-  groupPutAwayItems(visibleItems.value, stagedQtyByItem.value)
+  groupPutAwayItems(displayItems.value, stagedQtyByItem.value)
 );
 
 const armedGroupItems = computed(() => {
@@ -739,11 +753,13 @@ async function load() {
       outdatedWarningCount.value = detail.outdatedWarningCount;
     }
 
-    // Auto-disarm when the armed group has left the visible list (fully put
-    // away with no pending scans left).
+    // Auto-disarm when the armed group is fully put away (nothing remaining,
+    // nothing staged) — done groups no longer accept scans.
+    const armedGroup = groups.value.find((g) => g.key === armedItemId.value);
     if (
       armedItemId.value &&
-      !groups.value.some((g) => g.key === armedItemId.value)
+      (!armedGroup ||
+        (armedGroup.remainingQty <= 0 && armedGroup.stagedQty === 0))
     ) {
       armedItemId.value = null;
     }
