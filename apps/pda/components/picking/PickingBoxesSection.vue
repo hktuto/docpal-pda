@@ -18,10 +18,22 @@
       <button
         v-if="actionable"
         class="btn btn--small"
-        :disabled="scanningBox"
-        @click="$emit('scan-box')"
+        @click="$emit('choose-box')"
       >
-        {{ $t('picking.boxesSection.scanBox') }}
+        {{ $t('picking.boxesSection.chooseBox') }}
+      </button>
+      <button
+        v-if="actionable"
+        class="btn btn--small"
+        :disabled="unboxedCount === 0 || boxingEach"
+        @click="$emit('box-each-unboxed')"
+      >
+        <template v-if="boxingEach">
+          <InlineSpinner /> {{ $t('actions.creating') }}
+        </template>
+        <template v-else>
+          {{ $t('picking.boxesSection.boxEachUnboxed') }}
+        </template>
       </button>
       <button
         class="btn btn--small btn--ghost"
@@ -112,6 +124,14 @@
           {{ scanIntoBoxId === box.id ? $t('picking.boxesSection.scanIntoBoxStop') : $t('picking.boxesSection.scanIntoBox') }}
         </button>
         <button
+          v-if="closable"
+          class="btn btn--small"
+          :disabled="box.packageCount === 0 || closingBox[box.id]"
+          @click="$emit('close-box', box.id)"
+        >
+          {{ closingBox[box.id] ? $t('actions.confirming') : $t('picking.boxesSection.closeBox') }}
+        </button>
+        <button
           v-if="box.packageCount === 0"
           class="btn btn--small btn--danger"
           :disabled="cancellingBox[box.id]"
@@ -159,7 +179,10 @@ const props = defineProps<{
   boxContents: Record<string, BoxContentEntry[]>;
   actionable: boolean;
   creatingBox: boolean;
-  scanningBox: boolean;
+  boxingEach: boolean;
+  /** Close button per open box — shown only when the measuring step is off. */
+  closable: boolean;
+  closingBox: Record<string, boolean>;
   cancellingBox: Record<string, boolean>;
   addingAll: Record<string, boolean>;
   anyAddingAll: boolean;
@@ -173,7 +196,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "create-box": [];
-  "scan-box": [];
+  "choose-box": [];
+  "box-each-unboxed": [];
+  "close-box": [boxId: string];
   "cancel-box": [boxId: string];
   "add-all-to-box": [boxId: string];
   "toggle-scan-into-box": [boxId: string];

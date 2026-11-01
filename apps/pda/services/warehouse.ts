@@ -20,6 +20,7 @@ import type {
   ScanPickingItemInput,
   PickingShelfStockQuery,
   ShippingBoxUpdateInput,
+  OpenShippingBox,
   ReportPickingIssueEntry,
   ReportPickingIssuesResult,
   PutAwayCandidate,
@@ -119,6 +120,12 @@ export interface WarehouseService {
   // against the printed label (409 label_item_mismatch).
   verifyPackage(packageId: string, qty?: number, batch?: VerifyPackageBatch): Promise<void>;
   createShippingBoxForPickingOrder(pickingOrderId: string, boxId?: string): Promise<void>;
+  // One new box per scanned-but-unboxed package of the order (201
+  // {created, boxIds}; created: 0 when nothing is unboxed).
+  createBoxPerUnboxedPackage(pickingOrderId: string): Promise<{ created: number; boxIds: string[] }>;
+  // All open shipping boxes (any picking order), oldest first — feeds the
+  // choose-box dialog for cross-order scan-into-box.
+  listOpenShippingBoxes(): Promise<OpenShippingBox[]>;
   updateShippingBox(id: string, fields: ShippingBoxUpdateInput): Promise<void>;
   addPackageToBox(packageId: string, boxId: string): Promise<void>;
   removePackageFromBox(boxId: string, packageId: string): Promise<void>;

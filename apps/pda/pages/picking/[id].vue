@@ -36,7 +36,9 @@
         :box-contents="boxContents"
         :actionable="actionable"
         :creating-box="creatingBox"
-        :scanning-box="scanningBox"
+        :boxing-each="boxingEach"
+        :closable="!flowSteps.measuring"
+        :closing-box="closingBox"
         :cancelling-box="cancellingBox"
         :adding-all="addingAll"
         :any-adding-all="anyAddingAll"
@@ -45,7 +47,9 @@
         :scan-into-box-id="scanIntoBoxId"
         :scanning-into-box="scanningIntoBox"
         @create-box="createBox"
-        @scan-box="scanBoxId"
+        @choose-box="openChooseBox"
+        @box-each-unboxed="boxEachUnboxed"
+        @close-box="closeBox"
         @cancel-box="cancelBox"
         @add-all-to-box="addAllToBox"
         @toggle-scan-into-box="toggleScanIntoBox"
@@ -80,6 +84,14 @@
         :order="order"
         :matches="printPromptMatches"
       />
+
+      <ChooseBoxDialog
+        :open="chooseBoxOpen"
+        :boxes="chooseBoxes"
+        :current-order-id="orderId"
+        @select="onChooseBox"
+        @close="chooseBoxOpen = false"
+      />
     </template>
   </div>
 </template>
@@ -93,12 +105,12 @@ import { useWarehouse } from "~/composables/useWarehouse";
 import { usePickingWorkLock } from "~/composables/usePickingWorkLock";
 import { useFlowSteps } from "~/composables/useFlowSteps";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
-import { useLabelScan, captureLabel, captureRawLabelValue, ocrResultToInput } from "~/composables/useLabelScan";
-import { playScanError, playScanSuccess } from "~/utils/scanBeep";
+import { useLabelScan, ocrResultToInput } from "~/composables/useLabelScan";
 import { rawCode } from "~/utils/text";
 import { resolvePickingFinishRoute } from "~/utils/labeling";
 import { ApiError } from "~/services/apiClient";
 import PickingBoxesSection, { type BoxContentEntry } from "~/components/picking/PickingBoxesSection.vue";
+import ChooseBoxDialog from "~/components/picking/ChooseBoxDialog.vue";
 import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
 import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
 import LabelPrintPrompt from "~/components/picking/LabelPrintPrompt.vue";
@@ -106,6 +118,7 @@ import ScanFab from "~/components/ScanFab.vue";
 import type { PageHeaderAction } from "~/composables/usePageHeader";
 import type {
   LabelPrintRuleMatch,
+  OpenShippingBox,
   PickingOrderDetail,
 } from "~/services/types";
 
@@ -137,9 +150,12 @@ const boxSelections = ref<Record<string, string>>({});
 
 const { showToast } = useToast();
 const { parseRawValue } = useLabelScan();
-const scanningBox = ref(false);
 const scanIntoBoxId = ref<string | null>(null);
 const scanningIntoBox = ref(false);
+const boxingEach = ref(false);
+const closingBox = ref<Record<string, boolean>>({});
+const chooseBoxOpen = ref(false);
+const chooseBoxes = ref<OpenShippingBox[] | null>(null);
 
 // Post-finish label-print prompt (spec 2026-10-27): after a successful finish
 // the matching label print rules open in a prompt; the post-finish route
@@ -215,59 +231,21 @@ async function scanIntoBox(boxId: string, barcode: string): Promise<boolean> {
   }
 }
 
-// Scan-to-create-box: on this page a scan that matches a supplier QR template
-// is an item label (point the operator at scan mode); anything else is treated
-// as a pre-printed box id and creates an open box with that id.
-async function createBoxWithId(boxId: string): Promise<boolean> {
-  const trimmed = boxId.trim();
-  if (!trimmed || scanningBox.value) return false;
-  scanningBox.value = true;
-  try {
-    await warehouse.createShippingBoxForPickingOrder(orderId, trimmed);
-    boxesExpanded.value = true;
-    await load();
-    showToast(t("picking.detail.boxCreated", { id: trimmed }));
-    return true;
-  } catch (e) {
-    showToast(errorMessage(e));
-    return false;
-  } finally {
-    scanningBox.value = false;
-  }
-}
-
 useHardwareScanner({
-  enabled: () => actionable.value && !scanningBox.value && !scanningIntoBox.value,
+  enabled: () => actionable.value && !scanningIntoBox.value,
   onScan: async (rawValue: string) => {
     // An armed "scan into box" takes every scan — the barcode may belong to
-    // another order, so the usual supplier-template / box-id routing below
-    // is bypassed until the operator disarms.
+    // another order, so the usual supplier-template routing below is bypassed
+    // until the operator disarms.
     if (scanIntoBoxId.value) {
       return await scanIntoBox(scanIntoBoxId.value, rawValue);
     }
-    const parsedResult = await parseRawValue(rawValue);
-    if (parsedResult.matched) {
-      showToast(t("picking.detail.itemQrUseScanMode"));
-      return false;
-    }
-    return await createBoxWithId(rawValue);
+    // No scan-to-create-box fallback anymore — any non-armed scan just
+    // points the operator at the scan page.
+    showToast(t("picking.detail.itemQrUseScanMode"));
+    return false;
   },
 });
-
-async function scanBoxId() {
-  if (scanningBox.value) return;
-  try {
-    const capture = await captureLabel();
-    if (!capture) return;
-    const value = captureRawLabelValue(capture).trim();
-    const ok = value.length > 0 && (await createBoxWithId(value));
-    if (ok) playScanSuccess();
-    else playScanError();
-  } catch (e) {
-    playScanError();
-    showToast(errorMessage(e));
-  }
-}
 
 const allItemsFullyBoxed = computed(
   () => order.value?.items?.every((i) => i.pickedQty >= i.qty) ?? false
@@ -379,13 +357,14 @@ async function load() {
   try {
     const data = await warehouse.getPickingOrder(orderId);
     order.value = data;
-    // An armed scan-into box that left the open state (closed/cancelled
-    // elsewhere) disarms itself.
-    if (
-      scanIntoBoxId.value &&
-      !data.boxes.some((b) => b.id === scanIntoBoxId.value && b.status === "open")
-    ) {
-      scanIntoBoxId.value = null;
+    // Disarm only when the armed box is one of THIS order's boxes and left
+    // the open state — a cross-order armed box (chosen via Choose box) has no
+    // card here and stays armed; a stale one fails loudly on the next scan.
+    if (scanIntoBoxId.value) {
+      const armed = data.boxes.find((b) => b.id === scanIntoBoxId.value);
+      if (armed && armed.status !== "open") {
+        scanIntoBoxId.value = null;
+      }
     }
     const nextBoxSelections: Record<string, string> = {};
     for (const item of data.items) {
@@ -446,6 +425,62 @@ async function cancelBox(boxId: string) {
   } finally {
     cancellingBox.value[boxId] = false;
   }
+}
+
+// One new box per scanned-but-unboxed package (spec 2026-11-01).
+async function boxEachUnboxed() {
+  if (boxingEach.value) return;
+  if (unboxedCountForOrder.value === 0) return;
+  const confirmed = window.confirm(t("picking.boxesSection.boxEachConfirm"));
+  if (!confirmed) return;
+  boxingEach.value = true;
+  try {
+    const result = await warehouse.createBoxPerUnboxedPackage(orderId);
+    showToast(t("picking.boxesSection.boxEachDone", { count: result.created }));
+    boxesExpanded.value = true;
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    boxingEach.value = false;
+  }
+}
+
+// Close from the picking page (measuring step off — no size/weights needed).
+async function closeBox(boxId: string) {
+  if (closingBox.value[boxId]) return;
+  const confirmed = window.confirm(t("picking.boxesSection.closeBoxConfirm", { box: boxId }));
+  if (!confirmed) return;
+  closingBox.value[boxId] = true;
+  try {
+    await warehouse.closeShippingBox(boxId);
+    showToast(t("picking.boxesSection.closedBox", { box: boxId }));
+    await load();
+  } catch (e) {
+    showToast(errorMessage(e));
+  } finally {
+    closingBox.value[boxId] = false;
+  }
+}
+
+// Choose box dialog: any open box (incl. other orders') can be armed for
+// scan-into-box — cross-order packing via POST /shipping-boxes/:id/scan.
+async function openChooseBox() {
+  chooseBoxOpen.value = true;
+  chooseBoxes.value = null;
+  try {
+    chooseBoxes.value = await warehouse.listOpenShippingBoxes();
+  } catch (e) {
+    chooseBoxOpen.value = false;
+    showToast(errorMessage(e));
+  }
+}
+
+function onChooseBox(boxId: string) {
+  chooseBoxOpen.value = false;
+  scanIntoBoxId.value = boxId;
+  boxesExpanded.value = true;
+  showToast(t("picking.boxesSection.armedBanner", { box: boxId }));
 }
 
 async function addAllToBox(boxId: string) {

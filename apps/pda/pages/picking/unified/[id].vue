@@ -40,6 +40,15 @@
         <span v-else>{{ $t('picking.scanSession.scanShelfFirst') }}</span>
       </div>
 
+      <div v-if="scanIntoBoxId" class="armed-banner">
+        <span class="armed-banner-label">
+          {{ $t('picking.boxesSection.armedBanner', { box: scanIntoBoxId }) }}
+        </span>
+        <button class="btn btn--small btn--secondary" @click="scanIntoBoxId = null">
+          {{ $t('picking.boxesSection.scanIntoBoxStop') }}
+        </button>
+      </div>
+
       <PickingUnifiedItems
         :items="order.items ?? []"
         :queue-rows="rows"
@@ -63,7 +72,9 @@
         :box-contents="boxContents"
         :actionable="actionable"
         :creating-box="creatingBox"
-        :scanning-box="false"
+        :boxing-each="boxingEach"
+        :closable="!flowSteps.measuring"
+        :closing-box="closingBox"
         :cancelling-box="cancellingBox"
         :adding-all="addingAll"
         :any-adding-all="anyAddingAll"
@@ -72,6 +83,9 @@
         :scan-into-box-id="scanIntoBoxId"
         :scanning-into-box="scanningIntoBox"
         @create-box="createBox"
+        @choose-box="openChooseBox"
+        @box-each-unboxed="boxEachUnboxed"
+        @close-box="closeBox"
         @cancel-box="cancelBox"
         @add-all-to-box="addAllToBox"
         @toggle-scan-into-box="toggleScanIntoBox"
@@ -116,6 +130,14 @@
         @close="session.closeBoxPick"
       />
 
+      <ChooseBoxDialog
+        :open="chooseBoxOpen"
+        :boxes="chooseBoxes"
+        :current-order-id="orderId"
+        @select="onChooseBox"
+        @close="chooseBoxOpen = false"
+      />
+
       <LabelPrintPrompt
         v-if="order"
         v-model:open="printPromptOpen"
@@ -155,10 +177,11 @@ import PickingBoxesSection, { type BoxContentEntry } from "~/components/picking/
 import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
 import PickingScanReviewModal from "~/components/picking/PickingScanReviewModal.vue";
 import PickFromBoxDialog from "~/components/picking/PickFromBoxDialog.vue";
+import ChooseBoxDialog from "~/components/picking/ChooseBoxDialog.vue";
 import PickingUnifiedItems from "~/components/picking/PickingUnifiedItems.vue";
 import LabelPrintPrompt from "~/components/picking/LabelPrintPrompt.vue";
 import type { OcrInput } from "~/utils/ocrNormalize";
-import type { LabelPrintRuleMatch, PickingOrderDetail } from "~/services/types";
+import type { LabelPrintRuleMatch, OpenShippingBox, PickingOrderDetail } from "~/services/types";
 import type { ScanSessionResult } from "~/composables/usePickingScanSession";
 
 definePageMeta({ title: "meta.pickingDetail" });
@@ -193,6 +216,10 @@ const boxSelections = ref<Record<string, string>>({});
 const ocrCapturing = ref(false);
 const scanIntoBoxId = ref<string | null>(null);
 const scanningIntoBox = ref(false);
+const boxingEach = ref(false);
+const closingBox = ref<Record<string, boolean>>({});
+const chooseBoxOpen = ref(false);
+const chooseBoxes = ref<OpenShippingBox[] | null>(null);
 
 const review = ref<{
   rows: { parsed: OcrInput; options: CandidateOptions }[];
@@ -315,7 +342,6 @@ async function scanIntoBox(boxId: string, barcode: string): Promise<boolean> {
 async function deliverScan(rawValue: string): Promise<boolean> {
   if (!order.value) return false;
   try {
-    console.log("boxPickId", boxPickId.value)
     if (scanIntoBoxId.value) {
       return await scanIntoBox(scanIntoBoxId.value, rawValue);
     }
@@ -608,13 +634,14 @@ usePageHeader({
 async function load() {
   try {
     order.value = await warehouse.getPickingOrder(orderId);
-    // An armed scan-into box that left the open state (closed/cancelled
-    // elsewhere) disarms itself.
-    if (
-      scanIntoBoxId.value &&
-      !order.value.boxes.some((b) => b.id === scanIntoBoxId.value && b.status === "open")
-    ) {
-      scanIntoBoxId.value = null;
+    // Disarm only when the armed box is one of THIS order's boxes and left
+    // the open state — a cross-order armed box (chosen via Choose box) has no
+    // card here and stays armed; a stale one fails loudly on the next scan.
+    if (scanIntoBoxId.value) {
+      const armed = order.value.boxes.find((b) => b.id === scanIntoBoxId.value);
+      if (armed && armed.status !== "open") {
+        scanIntoBoxId.value = null;
+      }
     }
     const nextBoxSelections: Record<string, string> = {};
     for (const item of order.value.items) {
@@ -675,6 +702,62 @@ async function cancelBox(boxId: string) {
   } finally {
     cancellingBox.value[boxId] = false;
   }
+}
+
+// One new box per scanned-but-unboxed package (spec 2026-11-01).
+async function boxEachUnboxed() {
+  if (boxingEach.value) return;
+  if (unboxedCountForOrder.value === 0) return;
+  const confirmed = window.confirm(t("picking.boxesSection.boxEachConfirm"));
+  if (!confirmed) return;
+  boxingEach.value = true;
+  try {
+    const result = await warehouse.createBoxPerUnboxedPackage(orderId);
+    showToast(t("picking.boxesSection.boxEachDone", { count: result.created }));
+    boxesExpanded.value = true;
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    boxingEach.value = false;
+  }
+}
+
+// Close from the picking page (measuring step off — no size/weights needed).
+async function closeBox(boxId: string) {
+  if (closingBox.value[boxId]) return;
+  const confirmed = window.confirm(t("picking.boxesSection.closeBoxConfirm", { box: boxId }));
+  if (!confirmed) return;
+  closingBox.value[boxId] = true;
+  try {
+    await warehouse.closeShippingBox(boxId);
+    showToast(t("picking.boxesSection.closedBox", { box: boxId }));
+    await load();
+  } catch (e) {
+    showToast(errorMessage(e));
+  } finally {
+    closingBox.value[boxId] = false;
+  }
+}
+
+// Choose box dialog: any open box (incl. other orders') can be armed for
+// scan-into-box — cross-order packing via POST /shipping-boxes/:id/scan.
+async function openChooseBox() {
+  chooseBoxOpen.value = true;
+  chooseBoxes.value = null;
+  try {
+    chooseBoxes.value = await warehouse.listOpenShippingBoxes();
+  } catch (e) {
+    chooseBoxOpen.value = false;
+    showToast(errorMessage(e));
+  }
+}
+
+function onChooseBox(boxId: string) {
+  chooseBoxOpen.value = false;
+  scanIntoBoxId.value = boxId;
+  boxesExpanded.value = true;
+  showToast(t("picking.boxesSection.armedBanner", { box: boxId }));
 }
 
 async function addAllToBox(boxId: string) {
@@ -885,6 +968,24 @@ onUnmounted(() => window.removeEventListener("beforeunload", beforeUnload));
 }
 
 .shelf-banner-label {
+  font-weight: 700;
+}
+
+.armed-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #dbeafe;
+  border: 1px solid #3b82f6;
+  border-radius: 0.375rem;
+  color: #1e40af;
+  font-size: 1rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.armed-banner-label {
   font-weight: 700;
 }
 

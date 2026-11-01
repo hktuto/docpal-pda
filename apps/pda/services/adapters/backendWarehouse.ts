@@ -20,6 +20,7 @@ import type {
   ScanPickingItemInput,
   PickingShelfStockQuery,
   ShippingBoxUpdateInput,
+  OpenShippingBox,
   ReportPickingIssueEntry,
   ReportPickingIssuesResult,
   PutAwayCandidate,
@@ -356,6 +357,17 @@ export function createBackendWarehouseService(
       await client.post(`/picking-orders/${pickingOrderId}/boxes`, {
         boxId: boxId?.trim() || undefined,
       });
+    },
+    // One new box per scanned-but-unboxed package (spec 2026-11-01).
+    async createBoxPerUnboxedPackage(
+      pickingOrderId: string
+    ): Promise<{ created: number; boxIds: string[] }> {
+      return client.post(`/picking-orders/${pickingOrderId}/box-each-unboxed`, {});
+    },
+    // All open shipping boxes, oldest first (choose-box dialog).
+    async listOpenShippingBoxes(): Promise<OpenShippingBox[]> {
+      const res = await client.get<{ boxes: OpenShippingBox[] }>("/shipping-boxes");
+      return res.boxes;
     },
     // Box size / weights (kg) / destination country; open boxes only.
     async updateShippingBox(

@@ -83,6 +83,7 @@ Page and component locations mapped to source files.
 |-----------|-------------|
 | Items section | `components/picking/PickingItemsSection.vue` |
 | Boxes section | `components/picking/PickingBoxesSection.vue` |
+| Choose-box dialog (cross-order box picker, arms scan-into-box) | `components/picking/ChooseBoxDialog.vue` |
 | Issue banner | `components/picking/PickingIssueBanner.vue` |
 | Unified items list (evaluation — collapsed progress/allocation-chip rows, expanded pending/box/line/allocation views) | `components/picking/PickingUnifiedItems.vue` |
 | Unified scan-session routing (queue, sticky shelf context, pick-from-box, carton auto-queue, confirm with re-resolve) | `composables/usePickingScanSession.ts` |

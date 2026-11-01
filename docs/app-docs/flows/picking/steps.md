@@ -24,7 +24,7 @@ Tap a row to expand it. From top to bottom the expanded row shows:
 
 - **Pending scans** — scans being applied right now, plus any scan that failed to apply (stays listed with its error message and a **Remove** button).
 - **Line breakdown** (merged rows only) — the required and scanned quantity of each contributing order line.
-- **Unboxed packages** — each picked-but-unpacked package with a box selector and **Add to box**, plus a **Remove scan** button (asks for confirmation) that undoes a mis-scan: the scanned stock is returned, the allocation reopens, and the item can be scanned again. Boxed or verified packages cannot be removed this way — take them out of the box first.
+- **Unboxed packages** — each picked-but-unpacked package with a box selector and **Add to box**, plus a **Remove scan** button (asks for confirmation) that undoes a mis-scan: the scanned stock is returned, the allocation reopens, and the item can be scanned again. Boxed or verified packages cannot be removed this way — take them out of the box first. To pack every unboxed package into its own new box in one go, use **Box each unboxed** in the Boxes section below.
 - **Boxed packages** — each packed package with its box id and a **Remove** button (while that box is still open).
 - **Planned allocations** (behind a collapsible summary, shown while the part is not fully picked) — where the remaining stock is allocated from: location, batch (date / lot / COO / COW) and allocated quantity. For allocations against a receiving order the recorded box id appears with the source so you know which boxes to pick from. If the allocated shelf carries a warning (set by an admin on the shelf, e.g. outdated-stock shelves), a ⚠️ icon appears next to the shelf code — hover/long-press shows the warning text; the stock is still pickable. If an allocation's source date code is older than the warehouse's outdated-stock threshold (flow config, default 2 years), a ⚠️ stock-age warning appears on the date/lot row — display-only, picking is unaffected.
 
@@ -59,6 +59,12 @@ Carton and box picks are recorded immediately, just like label scans.
 ### Scan item into box (cross-order)
 
 The **Boxes** section below the item list has a **Scan item into box** toggle per open box. With it armed, scanning a part barcode picks that item straight into the box — even when the item belongs to a *different* picking order (a box may hold packages from several orders). The system resolves the barcode across all open orders; if nothing matches or more than one order's item could match, a message explains why nothing was added. Scanning another box's toggle switches the armed box.
+
+To pack into a box that belongs to a different order, tap **Choose box** in the Boxes section header: a dialog lists every open box in the warehouse (its id, the order that created it, how many packages it holds) — tap one to arm it. While a box is armed, a banner at the top of the page shows the target box; tap **Stop** on the banner (or the box's toggle) to disarm.
+
+**Box each unboxed:** the **Box each unboxed** header button creates one new box per scanned-but-unpacked package and packs each package into its own box in one action.
+
+**Close box:** when the measuring step is turned off for the warehouse, every open, non-empty box card shows a **Close** button — confirm to close the box right from the picking page (no size/weights needed; the box gets its verify task at close when the verify step is enabled). When the measuring step is on, boxes close at the measuring page instead.
 
 **One COO per box:** a box should hold items of a single country of origin. Adding an item whose COO differs from what is already in the box is rejected with a message (an item without a COO is always allowed). **Add all** is the exception — it packs everything at once; if the result mixes COOs, the box card shows a ⚠ **Mixed COO** chip listing the origins.
 

@@ -218,19 +218,34 @@
   expandable **Contents** list (part, qty, date/lot/COO/COW per package)
   with a **Move out** button on open boxes
   (`DELETE /shipping-boxes/:id/packages/:packageId`).
+  Box operations redesign (2026-11-01, spec
+  `docs/superpowers/specs/2026-11-01-picking-box-operations-design.md`):
+  the boxes-section header has **Choose box** (a dialog over `GET
+  /shipping-boxes` — every open box in the warehouse with creator order no +
+  package count — arms it for cross-order scan-into-box; an armed banner at
+  the top of the page shows the target box with a Stop button, and the
+  reload-disarm logic keeps a cross-order armed box armed) and **Box each
+  unboxed** (`POST /picking-orders/:id/box-each-unboxed` — one new box per
+  scanned-but-unboxed package of the order, packed in one tx). When the
+  measuring flow step is disabled, each open non-empty box card has a
+  **Close** button (`POST /shipping-boxes/:id/close`) — measuring-off
+  `closeShippingBox` skips the `all_packages_must_be_verified` and
+  box-size/weights guards (no measuring re-scan exists; the measuring-off
+  verify completion closes boxes the same way).
   Boxing NEVER finishes the order (2026-10-16): the order stays `picking`
   until the operator presses the explicit **Finish** button — a bottom-bar
   button that appears the moment every item is fully boxed (2026-10-20: the
   finish action lives ONLY in that bottom bar, not the header menu;
   `POST /picking-orders/:id/finish`).
-- Box labels + pre-printed box ids: on the picking detail page the
-  hardware scanner is armed for box ids — a scan that does not match a
-  supplier QR template creates an open box with that scanned (pre-printed)
-  id; item QRs get a "use scan mode" toast. A "Scan box id" button covers
-  camera/manual entry. Server side, `createShippingBox` accepts an optional
-  `boxId` (409 `box_id_exists` on duplicates — the id is the global PK);
-  server-generated ids follow `BOX-S-<YYYYMMDD>-<seq>` (per-day
-  seq, `nextBoxId` in `apps/backend/src/db/boxes.ts`).
+- Box labels + pre-printed box ids: REMOVED 2026-11-01 (spec
+  `docs/superpowers/specs/2026-11-01-picking-box-operations-design.md`) —
+  users never print box labels, so the "Scan box id" button and the
+  hardware-scanner scan-to-create-box fallback on the picking detail page are
+  gone; boxes are always created with a server-generated id
+  (`BOX-S-<YYYYMMDD>-<seq>`, per-day seq, `nextBoxId` in
+  `apps/backend/src/db/boxes.ts`). Server side, `createShippingBox` still
+  accepts an optional `boxId` (409 `box_id_exists` on duplicates — the id is
+  the global PK) for API callers.
   The per-box Print button on the picking detail was removed (2026-07), as
   was the receiving picking tab's placeholder Print button — the receiving
   picking tab is read-only info now; real printing will be added

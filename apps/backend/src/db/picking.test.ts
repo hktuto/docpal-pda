@@ -7,12 +7,13 @@ import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
 import { allocateAll } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
-import { _setPickingShelfScanForTests, _setPickingFromSubinventoryOrgsForTests, _setReceivingSubInventoryRulesForTests, _setOutdatedStockYearsForTests, _resetFlowConfigForTests } from "../config.js";
+import { _setPickingShelfScanForTests, _setPickingFromSubinventoryOrgsForTests, _setReceivingSubInventoryRulesForTests, _setOutdatedStockYearsForTests, _setFlowStepsDisabledForTests, _resetFlowConfigForTests } from "../config.js";
 import { dateToDateCode } from "./dateCode.js";
 import {
   acquireWorkLock,
   addAllUnboxedToShippingBox,
   addPackageToBox,
+  boxEachUnboxedPackage,
   cancelShippingBox,
   claimShelfBox,
   closeShippingBox,
@@ -20,6 +21,7 @@ import {
   finishPickingOrder,
   getPickingOrderDetail,
   getPickingShelfStock,
+  listOpenShippingBoxes,
   listPickingOrderLogs,
   listPickingOrders,
   releaseWorkLock,
@@ -2317,5 +2319,129 @@ test("scan shelf-scan mode require-any: deducts the scanned shelf's lot; 409s", 
     assert.equal((await allocationOf(itemId)).qty, 605);
   } finally {
     _setPickingShelfScanForTests("off");
+  }
+});
+
+// --- box operations (spec 2026-11-01-picking-box-operations-design.md) ---------
+
+test("box-each-unboxed: one new open box per unboxed package; second call boxes nothing", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F");
+  const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 500 })).packageIds[0];
+  const p2 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 500 })).packageIds[0];
+  const p3 = (await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 200 })).packageIds[0];
+
+  const result = await boxEachUnboxedPackage(client.db, { pickingOrderId: orderId, actorId });
+  assert.equal(result.created, 3);
+  assert.equal(result.boxIds.length, 3);
+  assert.equal(new Set(result.boxIds).size, 3);
+
+  // each package landed in its own distinct open box owned by the order
+  // (oldest first: p1 → boxIds[0], p2 → boxIds[1], p3 → boxIds[2])
+  for (const [i, pkgId] of [p1, p2, p3].entries()) {
+    const pkg = await queryGet<{ shippingBoxId: string | null }>(
+      client.db,
+      sql`SELECT shipping_box_id AS "shippingBoxId" FROM picking_packages WHERE id = ${pkgId}`
+    );
+    assert.equal(pkg!.shippingBoxId, result.boxIds[i]);
+    const box = await queryGet<{ status: string; pickingOrderId: string | null }>(
+      client.db,
+      sql`SELECT status, picking_order_id AS "pickingOrderId" FROM shipping_boxes WHERE id = ${pkg!.shippingBoxId}`
+    );
+    assert.deepEqual(box, { status: "open", pickingOrderId: orderId });
+  }
+
+  // boxing moved picked_qty forward (packages count as boxed)
+  assert.equal((await itemStateOf(item1)).pickedQty, 1000);
+  assert.equal((await itemStateOf(item2)).pickedQty, 200);
+
+  // nothing left unboxed → created 0, no new boxes
+  const again = await boxEachUnboxedPackage(client.db, { pickingOrderId: orderId, actorId });
+  assert.deepEqual(again, { created: 0, boxIds: [] });
+  const boxCount = await queryGet<{ c: number }>(
+    client.db,
+    sql`SELECT COUNT(*)::int AS c FROM shipping_boxes WHERE picking_order_id = ${orderId}`
+  );
+  assert.equal(boxCount!.c, 3);
+});
+
+test("shipping-boxes list: open boxes only, oldest first, package counts + creator order no", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  // keep the demo world hermetic: drop the other seeded picking order
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${orderId}`);
+
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 500 });
+  await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 500 });
+
+  // two one-package boxes + one empty box, all open
+  const { boxIds } = await boxEachUnboxedPackage(client.db, { pickingOrderId: orderId, actorId });
+  assert.equal(boxIds.length, 2);
+  const emptyBox = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  // a closed box must not be listed
+  await client.db.execute(sql`UPDATE shipping_boxes SET status = 'closed' WHERE id = ${boxIds[1]}`);
+
+  const boxes = await listOpenShippingBoxes(client.db);
+  assert.deepEqual(boxes.map((b) => b.id), [boxIds[0], emptyBox.id]);
+  for (const b of boxes) {
+    assert.equal(b.orderId, orderId);
+    assert.equal(b.orderNo, "SO-DEMO-0001");
+    assert.equal(b.boxSize, null);
+    assert.equal(b.netWeight, null);
+    assert.equal(b.grossWeight, null);
+    assert.ok(b.createdDate instanceof Date);
+  }
+  assert.equal(boxes[0].packageCount, 1);
+  assert.equal(boxes[1].packageCount, 0);
+
+  // orderless box → null orderId/orderNo (LEFT JOIN)
+  await client.db.execute(
+    sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_date, last_update_date)
+        VALUES ('BOX-S-ORPHAN-1', NULL, 'open', now(), now())`
+  );
+  const withOrphan = await listOpenShippingBoxes(client.db);
+  const orphan = withOrphan.find((b) => b.id === "BOX-S-ORPHAN-1")!;
+  assert.equal(orphan.orderId, null);
+  assert.equal(orphan.orderNo, null);
+  assert.equal(orphan.packageCount, 0);
+});
+
+test("close flow (measuring off): close skips the rescan and size/weights guards", async () => {
+  await reseed(client);
+  _setFlowStepsDisabledForTests(["measuring"]);
+  try {
+    const { orderId, actorId } = await seededOrderAllocated();
+    const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+    const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F");
+    await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 500 });
+    await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 200 });
+
+    const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+    const emptyClose = await catchHttp(closeShippingBox(client.db, { shippingBoxId: box.id, actorId }));
+    assert.equal(emptyClose.status, 409);
+    assert.equal(emptyClose.message, "cannot_close_empty_shipping_box");
+
+    const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+    assert.equal(packed, 2);
+
+    // no verifyPackage, no box size, no weights → still closes
+    await closeShippingBox(client.db, { shippingBoxId: box.id, actorId });
+    const closed = await queryGet<{ status: string; boxSize: string | null; destinationCountry: string | null }>(
+      client.db,
+      sql`SELECT status, box_size AS "boxSize", destination_country AS "destinationCountry" FROM shipping_boxes WHERE id = ${box.id}`
+    );
+    assert.deepEqual(closed, { status: "closed", boxSize: null, destinationCountry: "ACME Electronics (HK)" });
+
+    // the verify-task spawn + rescanned-credit reset are mode-independent
+    const task = await queryGet<{ status: string }>(
+      client.db,
+      sql`SELECT status FROM verify_tasks WHERE shipping_box_id = ${box.id}`
+    );
+    assert.equal(task!.status, "pending");
+  } finally {
+    _resetFlowConfigForTests();
   }
 });

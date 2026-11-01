@@ -531,6 +531,20 @@ export interface PickingBox {
   shippedBy: string | null;
 }
 
+/** GET /shipping-boxes row — an open shipping box, any picking order
+ *  (orderId/orderNo = the creator order, informational only). */
+export interface OpenShippingBox {
+  id: string;
+  orderId: string | null;
+  orderNo: string | null;
+  packageCount: number;
+  boxSize: string | null;
+  netWeight: number | null;
+  grossWeight: number | null;
+  destinationCountry: string | null;
+  createdDate: string;
+}
+
 /** Whole-box claim hint on GET /picking-orders/:id — a fully-claimable shelf
  *  box whose current contents exactly equal the order's remaining demand. */
 export interface SuggestedShelfBox {

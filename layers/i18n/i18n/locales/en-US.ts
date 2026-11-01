@@ -330,7 +330,6 @@ export default {
       finishPicking: "Finish picking",
       scan: "Scan",
       noMatchingAllocation: "No matching allocation for scanned item",
-      boxCreated: "Box {id} created",
       printComingSoon: "Printing will be available in a later update",
       itemQrUseScanMode: "Item label — use the Scan button to pick items",
       heldBy: "This order is being picked by {name} — read-only",
@@ -440,7 +439,14 @@ export default {
     boxesSection: {
       title: "Boxes ({count})",
       newBox: "New box",
-      scanBox: "Scan box id",
+      chooseBox: "Choose box",
+      boxEachUnboxed: "Box each unboxed",
+      boxEachConfirm: "Create one new box for each unboxed package?",
+      boxEachDone: "Created {count} boxes",
+      closeBox: "Close",
+      closeBoxConfirm: "Close box {box}?",
+      closedBox: "Box {box} closed",
+      armedBanner: "Scanning into {box}",
       boxId: "Box ID",
       status: "Status",
       packages: "Packages",
@@ -456,6 +462,13 @@ export default {
       moveOut: "Move out",
       movingOut: "Moving out…",
       mixedCoo: "Mixed COO: {coos}"
+    },
+    chooseBoxDialog: {
+      title: "Choose an open box",
+      loading: "Loading…",
+      empty: "No open boxes",
+      thisOrder: "This order",
+      packages: "{count} pkg"
     },
     issueBanner: {
       issueReason: "Issue reason",

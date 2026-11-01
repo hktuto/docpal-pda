@@ -330,7 +330,6 @@ export default {
       finishPicking: "完成拣货",
       scan: "扫码",
       noMatchingAllocation: "扫描的物料没有匹配的分配",
-      boxCreated: "箱号 {id} 已创建",
       printComingSoon: "打印功能将在后续版本提供",
       itemQrUseScanMode: "这是物料标签——请使用扫码按钮拣货",
       heldBy: "此订单正由 {name} 拣货——只读",
@@ -440,7 +439,14 @@ export default {
     boxesSection: {
       title: "箱子 ({count})",
       newBox: "新建箱子",
-      scanBox: "扫描箱号",
+      chooseBox: "选择箱",
+      boxEachUnboxed: "逐件装箱",
+      boxEachConfirm: "为每个未装箱的包裹各建一箱？",
+      boxEachDone: "已建 {count} 箱",
+      closeBox: "封箱",
+      closeBoxConfirm: "封箱 {box}？",
+      closedBox: "箱 {box} 已封",
+      armedBanner: "正在扫描入箱 {box}",
       boxId: "箱号",
       status: "状态",
       packages: "包裹",
@@ -456,6 +462,13 @@ export default {
       moveOut: "移出",
       movingOut: "移出中…",
       mixedCoo: "COO 混箱：{coos}"
+    },
+    chooseBoxDialog: {
+      title: "选择已开箱",
+      loading: "加载中…",
+      empty: "没有已开箱",
+      thisOrder: "本订单",
+      packages: "{count} 件"
     },
     issueBanner: {
       issueReason: "问题原因",

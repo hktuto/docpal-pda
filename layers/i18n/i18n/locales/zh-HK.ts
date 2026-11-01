@@ -330,7 +330,6 @@ export default {
       finishPicking: "完成揀貨",
       scan: "掃碼",
       noMatchingAllocation: "掃描的項目沒有匹配的分配",
-      boxCreated: "箱號 {id} 已建立",
       printComingSoon: "打印功能將於稍後版本提供",
       itemQrUseScanMode: "這是物料標籤——請使用掃碼按鈕揀貨",
       heldBy: "此訂單正由 {name} 揀貨——唯讀",
@@ -440,7 +439,14 @@ export default {
     boxesSection: {
       title: "箱號 ({count})",
       newBox: "新增箱號",
-      scanBox: "掃描箱號",
+      chooseBox: "選擇箱",
+      boxEachUnboxed: "逐件裝箱",
+      boxEachConfirm: "為每個未裝箱的包裹各建一箱？",
+      boxEachDone: "已建 {count} 箱",
+      closeBox: "封箱",
+      closeBoxConfirm: "封箱 {box}？",
+      closedBox: "箱 {box} 已封",
+      armedBanner: "正在掃描入箱 {box}",
       boxId: "箱號",
       status: "狀態",
       packages: "包裹",
@@ -456,6 +462,13 @@ export default {
       moveOut: "移出",
       movingOut: "移出中…",
       mixedCoo: "COO 混箱：{coos}"
+    },
+    chooseBoxDialog: {
+      title: "選擇已開箱",
+      loading: "載入中…",
+      empty: "沒有已開箱",
+      thisOrder: "本訂單",
+      packages: "{count} 件"
     },
     issueBanner: {
       issueReason: "問題原因",

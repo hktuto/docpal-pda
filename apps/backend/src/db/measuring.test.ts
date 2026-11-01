@@ -321,7 +321,7 @@ test("close IS the measuring completion: spawns the box's verify task when verif
   assert.equal(order!.status, "picking_finished");
 });
 
-test("close: verify disabled → no verify task; measuring disabled → close guards unchanged", async () => {
+test("close: verify disabled → no verify task; measuring disabled → close guards relaxed", async () => {
   await reset(["verify"]);
   const fx = await finishedOrder();
   await closeTheBox(fx.boxId, fx.actorId, fx.packageIds);
@@ -333,15 +333,19 @@ test("close: verify disabled → no verify task; measuring disabled → close gu
   const box = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM shipping_boxes WHERE id = ${fx.boxId}`);
   assert.equal(box!.status, "closed");
 
-  // measuring step off no longer changes the close guards: the same
-  // measurement requirements apply (unverified packages block the close)
+  // measuring step off relaxes the close guards (spec
+  // 2026-11-01-picking-box-operations-design.md): no measuring re-scan exists,
+  // so unverified packages and missing size/weights no longer block the close
   await reset(["measuring"]);
   const fx2 = await finishedOrder();
-  const unverified = await catchHttp(closeShippingBox(client.db, { shippingBoxId: fx2.boxId, actorId: fx2.actorId }));
-  assert.equal(unverified.status, 409);
-  assert.equal(unverified.message, "all_packages_must_be_verified");
-  await closeTheBox(fx2.boxId, fx2.actorId, fx2.packageIds);
-  // verify step still enabled here → the box's verify task spawned
+  await closeShippingBox(client.db, { shippingBoxId: fx2.boxId, actorId: fx2.actorId });
+  const box2 = await queryGet<{ status: string; boxSize: string | null }>(
+    client.db,
+    sql`SELECT status, box_size AS "boxSize" FROM shipping_boxes WHERE id = ${fx2.boxId}`
+  );
+  assert.deepEqual(box2, { status: "closed", boxSize: null });
+  // verify step still enabled → the task spawned at finish (measuring-off
+  // progression); the close's ON CONFLICT keeps exactly one pending task
   const task2 = await queryGet<{ status: string }>(
     client.db,
     sql`SELECT status FROM verify_tasks WHERE shipping_box_id = ${fx2.boxId}`
