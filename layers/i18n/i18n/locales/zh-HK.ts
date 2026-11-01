@@ -60,6 +60,7 @@ export default {
     serverDownChecking: "檢查中…",
     noData: "—",
     stateNone: "—",
+    assignedToMe: "指派給我",
     searchByRefOrSupplier: "按參考編號或供應商搜尋…",
     searchByRefPoOrCustomer: "按單號、PO 或客戶搜尋…",
     searchPickingOrdersOrParts: "按揀貨單或料號搜尋…",
@@ -2591,5 +2592,25 @@ export default {
         }
       }
     }
+  },
+  taskAssignments: {
+    navLink: "任務指派",
+    title: "任務指派",
+    explainer: "將 PDA 任務指派給指定用戶；未指派的任務對所有人可見。",
+    flows: {
+      "receiving-cn": "客戶收貨 (CN)",
+      picking: "揀貨",
+      labeling: "貼標籤",
+      "put-away": "上架",
+      "put-away-cn": "上架 (CN)",
+      measuring: "測量",
+      verify: "覆核"
+    },
+    colTask: "任務",
+    colStatus: "狀態",
+    colAssignee: "指派人",
+    unassigned: "未指派",
+    none: "此流程暫無待處理任務。",
+    saveFailed: "儲存指派失敗"
   }
 } as const;

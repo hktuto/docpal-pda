@@ -11,6 +11,7 @@ import { putAwayConfig, receivingOrderNameTemplate, dateCodeFormat } from "../co
 import { toCanonicalDateCode } from "./dateCode.js";
 import { formatReceivingOrderName } from "../receivingOrderName.js";
 import { allowedOrgFilter } from "./org-filter.js";
+import { assigneeFilter } from "./user-scope.js";
 import {
   checkOutdatedDateCode,
   recordOutdatedWarning,
@@ -339,10 +340,15 @@ export interface PutAwayCandidateRow {
   unboxedItems: number;
   /** Unresolved outdated-scan warnings (spec 2026-10-07); 0 = none. */
   outdatedWarningCount: number;
+  /** Assignee of the order's put-away task, when one exists (spec
+   *  2026-11-01-task-assignee-design.md); NULL = visible to everyone. */
+  assignee: string | null;
 }
 
-/** Receivable orders (in_hand / provisional_received) with per-order item counts. */
-export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidateRow[]> {
+/** Receivable orders (in_hand / provisional_received) with per-order item counts.
+ *  `username` applies the assignee filter through the order's put-away task
+ *  (no task row → unassigned → visible to everyone). */
+export async function listPutAwayCandidates(db: AppDb, username?: string): Promise<PutAwayCandidateRow[]> {
   const rows = await queryAll<Omit<PutAwayCandidateRow, "displayName">>(
     db,
     sql`
@@ -362,9 +368,11 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
           rii.received_qty - rii.picked_qty - rii.put_away_qty
             - COALESCE(alloc.qty, 0) - COALESCE(staged.qty, 0) > 0)::int AS "unboxedItems",
         (SELECT COUNT(*)::int FROM outdated_scan_warnings osw
-         WHERE osw.order_kind = 'putaway' AND osw.order_id = ro.id AND osw.resolved_at IS NULL) AS "outdatedWarningCount"
+         WHERE osw.order_kind = 'putaway' AND osw.order_id = ro.id AND osw.resolved_at IS NULL) AS "outdatedWarningCount",
+        task.assignee
       FROM receiving_orders ro
       LEFT JOIN suppliers s ON s.code = ro.supplier_code
+      LEFT JOIN put_away_tasks task ON task.receiving_order_id = ro.id
       JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
       JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
       -- item-derived pair: the single DISTINCT item pair, NULL when mixed
@@ -393,7 +401,8 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
       ) staged ON staged.receiving_invoice_item_id = rii.id
       WHERE ro.status IN ('in_hand', 'provisional_received')
       ${allowedOrgFilter(sql`ro.org_id`)}
-      GROUP BY ro.id, s.id, pair."orgId", pair."subInventoryCode"
+      ${assigneeFilter(sql`task.assignee`, username)}
+      GROUP BY ro.id, s.id, pair."orgId", pair."subInventoryCode", task.assignee
       ORDER BY ro.created_date DESC
     `
   );

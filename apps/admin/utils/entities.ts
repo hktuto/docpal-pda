@@ -384,6 +384,7 @@ export const navSections: { title: string; links: { route: string; title: string
       { route: "/app-download", title: "admin.navLinks.appDownload" },
       { route: "/user-badges", title: "admin.navLinks.userBadges" },
       { route: "/user-profiles", title: "admin.navLinks.userProfiles" },
+      { route: "/task-assignments", title: "taskAssignments.navLink" },
     ],
   },
   {

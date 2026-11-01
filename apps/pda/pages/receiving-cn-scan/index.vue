@@ -22,6 +22,7 @@
       :title="task.batchNo"
       :meta="rowMeta(task)"
       :chip-text="$t('receivingScan.progress', { resolved: task.resolvedCount, total: task.itemCount })"
+      :mine-text="mineText(task)"
     />
   </AppListPage>
 </template>
@@ -36,6 +37,7 @@ useHead({ title: t("receivingScan.title") });
 
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
+const { mineText } = useAssignedToMe();
 
 const pending = ref(true);
 const error = ref<string | null>(null);

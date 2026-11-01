@@ -77,6 +77,7 @@ export const PDA_LIST_FIELDS: Record<PdaViewListKey, Record<string, PdaListField
     item_count: { field: "itemCount" },
     remaining_items: { field: "remainingItems" },
     pending_picking_orders: { field: "pendingPickingOrders" },
+    assignee: { field: "assignee" },
   },
   picking: {
     order_no: { field: "orderNo" },
@@ -92,6 +93,7 @@ export const PDA_LIST_FIELDS: Record<PdaViewListKey, Record<string, PdaListField
     working_by_name: { field: "workingByName" },
     org_id: { field: "orgId" },
     sub_inventory_code: { field: "subInventoryCode" },
+    assignee: { field: "assignee" },
   },
   "put-away": {
     name: { field: "displayName" },
@@ -107,6 +109,7 @@ export const PDA_LIST_FIELDS: Record<PdaViewListKey, Record<string, PdaListField
     sub_inventory_code: { field: "subInventoryCode" },
     unboxed_items: { field: "unboxedItems" },
     received_items: { field: "receivedItems" },
+    assignee: { field: "assignee" },
   },
   "goods-verify": {
     wcl_item_no: { field: "wclItemNo" },
@@ -126,6 +129,7 @@ export const PDA_LIST_FIELDS: Record<PdaViewListKey, Record<string, PdaListField
     destination_country: { field: "destinationCountry" },
     package_count: { field: "packageCount" },
     verify_verified_count: { field: "verifyVerifiedCount" },
+    assignee: { field: "assignee" },
   },
   measuring: {
     box_id: { field: "boxId" },
@@ -133,6 +137,7 @@ export const PDA_LIST_FIELDS: Record<PdaViewListKey, Record<string, PdaListField
     order_nos: { field: "orderNos" },
     package_count: { field: "packageCount" },
     verified_count: { field: "verifiedCount" },
+    assignee: { field: "assignee" },
   },
   // Labeling list (spec 2026-10-28): picking order fields + the live matched
   // label count (row field derived from labelMatches.length by the page).
@@ -145,6 +150,7 @@ export const PDA_LIST_FIELDS: Record<PdaViewListKey, Record<string, PdaListField
     item_count: { field: "itemCount" },
     total_qty: { field: "totalQty" },
     labelCount: { field: "labelCount" },
+    assignee: { field: "assignee" },
   },
   // View-config only (no pdaListTemplates list): the stock-search part group.
   "stock-search": {

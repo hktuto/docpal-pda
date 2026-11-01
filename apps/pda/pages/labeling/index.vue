@@ -23,6 +23,7 @@
       :meta="rowView(row).meta"
       :chip-text="rowChip(row)?.text"
       :chip-class="rowChip(row)?.cls"
+      :mine-text="mineText(row)"
     />
   </AppListPage>
 </template>
@@ -43,6 +44,7 @@ useHead({ title: t("labeling.title") });
 // on backends without the key. labelCount is derived from the row's live
 // labelMatches for the template/chip catalogs.
 const { viewConfig, renderChip } = useViewConfig();
+const { mineText } = useAssignedToMe();
 const { search, rows, total, loading, loadError, hasMore, load, refresh } = useLabelingOrders();
 
 function rowFields(row: LabelingOrderRow) {

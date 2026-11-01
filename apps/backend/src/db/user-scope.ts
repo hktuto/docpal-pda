@@ -92,6 +92,16 @@ export function receivingOrderScopeFilter(
   return sql`AND (NOT EXISTS (SELECT 1 ${itemsOf}) OR EXISTS (SELECT 1 ${itemsOf} AND ${cond}))`;
 }
 
+/**
+ * Task assignee visibility (spec 2026-11-01-task-assignee-design.md): a row
+ * with assignee NULL is visible to everyone; once set, only that username
+ * sees it. `AND (...)` fragment for interpolation after a WHERE; empty when
+ * no username is given (admin/shared callers stay unfiltered).
+ */
+export function assigneeFilter(column: SQL, username: string | null | undefined): SQL {
+  return username ? sql`AND (${column} IS NULL OR ${column} = ${username})` : sql``;
+}
+
 /** Body validation for the profile PUTs: subInventoryScopes must be an array
  *  of `{ orgId: integer, code: non-empty string }`. Missing/[] clears the
  *  scope (stored as-is; the reader treats [] as unrestricted). */

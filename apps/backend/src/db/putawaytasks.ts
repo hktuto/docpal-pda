@@ -9,6 +9,7 @@ import { now } from "./now.js";
 import { getPutAwayAggregate, orderPair, type PutAwayAggregate } from "./putaway.js";
 import { receivingOrderNameTemplate } from "../config.js";
 import { formatReceivingOrderName } from "../receivingOrderName.js";
+import { assigneeFilter } from "./user-scope.js";
 
 // ---------------------------------------------------------------------------
 // Put-away tasks (spec 2026-08-10-put-away-tasks-design.md). One task per
@@ -78,14 +79,16 @@ export interface PutAwayTaskListRow {
   subInventoryCode: string | null;
   receivedItems: number;
   unboxedItems: number;
+  /** Optional assignee username (spec 2026-11-01-task-assignee-design.md). */
+  assignee: string | null;
   createdDate: Date;
 }
 
 /** Task queue, oldest truck first. Item counts use the candidates formula.
  *  No allowedOrgIds filter: a task row only exists after its order arrived in
  *  this warehouse — it's actionable work here regardless of org scope (same
- *  rule as the CN list below). */
-export async function listPutAwayTasks(db: AppDb, status?: string): Promise<PutAwayTaskListRow[]> {
+ *  rule as the CN list below). `username` applies the assignee filter. */
+export async function listPutAwayTasks(db: AppDb, status?: string, username?: string): Promise<PutAwayTaskListRow[]> {
   const rows = await queryAll<Omit<PutAwayTaskListRow, "displayName">>(
     db,
     sql`
@@ -104,6 +107,7 @@ export async function listPutAwayTasks(db: AppDb, status?: string): Promise<PutA
         COUNT(rii.id) FILTER (WHERE
           rii.received_qty - rii.picked_qty - rii.put_away_qty
             - COALESCE(alloc.qty, 0) - COALESCE(staged.qty, 0) > 0)::int AS "unboxedItems",
+        t.assignee,
         t.created_date AS "createdDate"
       FROM put_away_tasks t
       JOIN receiving_orders ro ON ro.id = t.receiving_order_id
@@ -125,6 +129,7 @@ export async function listPutAwayTasks(db: AppDb, status?: string): Promise<PutA
       ) staged ON staged.receiving_invoice_item_id = rii.id
       WHERE TRUE
       ${status ? sql`AND t.status = ${status}` : sql``}
+      ${assigneeFilter(sql`t.assignee`, username)}
       GROUP BY t.id, ro.id, s.id
       ORDER BY t.created_date ASC, t.id
     `
@@ -147,20 +152,22 @@ export async function listPutAwayTasks(db: AppDb, status?: string): Promise<PutA
 }
 
 export interface PutAwayTaskDetail extends PutAwayAggregate {
-  task: { id: string; status: string; receivingOrderId: string; createdDate: Date };
+  task: { id: string; status: string; receivingOrderId: string; assignee: string | null; createdDate: Date };
 }
 
 /**
  * Task detail = the per-order put-away aggregate (which already includes the
  * per-item shelf/box suggestions, ranked within each item's org +
- * sub-inventory) plus the task row.
+ * sub-inventory) plus the task row. 404 put_away_task_not_found when the task
+ * is assigned to a different username (no existence leak).
  */
-export async function getPutAwayTaskDetail(db: AppDb, taskId: string): Promise<PutAwayTaskDetail> {
+export async function getPutAwayTaskDetail(db: AppDb, taskId: string, username?: string): Promise<PutAwayTaskDetail> {
   const task = await queryGet<PutAwayTaskDetail["task"]>(
     db,
-    sql`SELECT id, status, receiving_order_id AS "receivingOrderId",
+    sql`SELECT id, status, receiving_order_id AS "receivingOrderId", assignee,
                created_date AS "createdDate"
-        FROM put_away_tasks WHERE id = ${taskId}`
+        FROM put_away_tasks WHERE id = ${taskId}
+        ${assigneeFilter(sql`assignee`, username)}`
   );
   if (!task) throw new HTTPException(404, { message: "put_away_task_not_found" });
 

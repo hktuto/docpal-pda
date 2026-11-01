@@ -23,6 +23,9 @@ export const receivingOrdersCn = pgTable(
     status: text("status").notNull().default("pending"), // pending | scanning | in_hand | clear
     arrivedAt: timestamp("arrived_at", { mode: "date" }),
     arrivedBy: text("arrived_by").references(() => users.id),
+    // Optional assignee (username, no FK): NULL = visible to everyone; set =
+    // only that user sees the CN scan task on PDA.
+    assignee: text("assignee"),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
@@ -104,6 +107,7 @@ export const putAwayTasksCn = pgTable(
     orgId: integer("org_id"), // uniform pair from the order's items, NULL when mixed
     subInventoryCode: text("sub_inventory_code"),
     status: text("status").notNull().default("pending"), // pending | completed
+    assignee: text("assignee"), // optional assignee username — NULL = visible to everyone
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },

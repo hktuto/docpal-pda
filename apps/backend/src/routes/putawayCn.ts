@@ -39,14 +39,14 @@ function assertCnEnabled(): void {
 // CN task queue (put_away_tasks_cn), oldest first. ?status= filters.
 putawayCnRoute.get("/put-away-cn/tasks", async (c) => {
   assertCnEnabled();
-  return c.json(await listCnPutAwayTasks(db, c.req.query("status")), 200);
+  return c.json(await listCnPutAwayTasks(db, c.req.query("status"), actorFrom(c).username), 200);
 });
 
 // CN task detail: order + expected items (remaining + shelf suggestions) +
 // the on-hand lots this order's put-away has created.
 putawayCnRoute.get("/put-away-cn/tasks/:id", async (c) => {
   assertCnEnabled();
-  return c.json(await getCnPutAwayTaskDetail(db, c.req.param("id")), 200);
+  return c.json(await getCnPutAwayTaskDetail(db, c.req.param("id"), actorFrom(c).username), 200);
 });
 
 // Complete CN put-away items in one tx: put_away_qty updates + on-hand lot

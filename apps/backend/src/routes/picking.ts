@@ -6,7 +6,6 @@ import {
   acquireWorkLock,
   addAllUnboxedToShippingBox,
   addPackageToBox,
-  boxEachUnboxedPackage,
   cancelShippingBox,
   claimShelfBox,
   closeShippingBox,
@@ -16,7 +15,6 @@ import {
   getPickingOrderDetail,
   getPickingShelfStock,
   listLabelingOrders,
-  listOpenShippingBoxes,
   listPickingOrders,
   releaseWorkLock,
   removePackageFromBox,
@@ -70,7 +68,8 @@ export const pickingRoute = new Hono();
 pickingRoute.get("/picking-orders", async (c) => {
   const limit = Number(c.req.query("limit"));
   const offset = Number(c.req.query("offset"));
-  const scope = await getUserScope(db, actorFrom(c).username);
+  const actor = actorFrom(c);
+  const scope = await getUserScope(db, actor.username);
   return c.json(
     await listPickingOrders(db, {
       status: c.req.query("status"),
@@ -86,6 +85,7 @@ pickingRoute.get("/picking-orders", async (c) => {
       scope,
     }),
     200
+      username: actor.username,
   );
 });
 
@@ -110,8 +110,9 @@ pickingRoute.post("/picking-orders/reorder", async (c) => {
 
 // Nested detail: order + items (allocations, packages) + boxes.
 pickingRoute.get("/picking-orders/:id", async (c) => {
-  const scope = await getUserScope(db, actorFrom(c).username);
-  return c.json(await getPickingOrderDetail(db, c.req.param("id"), scope), 200);
+  const actor = actorFrom(c);
+  const scope = await getUserScope(db, actor.username);
+  return c.json(await getPickingOrderDetail(db, c.req.param("id"), scope, actor.username), 200);
 });
 
 // Label-print rules matching this order (picking-finish print prompt):
@@ -121,8 +122,9 @@ pickingRoute.get("/picking-orders/:id", async (c) => {
 pickingRoute.get("/picking-orders/:id/label-print-rules", async (c) => {
   const orderId = c.req.param("id");
   const { matches } = await resolveLabelPrintRulesForOrder(db, orderId);
-  const scope = await getUserScope(db, actorFrom(c).username);
-  const order = await getPickingOrderDetail(db, orderId, scope);
+  const actor = actorFrom(c);
+  const scope = await getUserScope(db, actor.username);
+  const order = await getPickingOrderDetail(db, orderId, scope, actor.username);
   const withCounts = await Promise.all(
     matches.map(async (match) => ({ ...match, labelCount: await labelCountForMatch(db, order, match) }))
   );
@@ -269,22 +271,6 @@ pickingRoute.post("/picking-orders/:id/boxes", async (c) => {
   return c.json(box, 201);
 });
 
-// One new open box per scanned-but-unboxed package of the order →
-// {created, boxIds} (spec 2026-11-01-picking-box-operations-design.md).
-pickingRoute.post("/picking-orders/:id/box-each-unboxed", async (c) => {
-  const result = await boxEachUnboxedPackage(db, {
-    pickingOrderId: c.req.param("id"),
-    actorId: actorFrom(c).id,
-  });
-  return c.json(result, 201);
-});
-
-// All open shipping boxes, oldest first (the PDA choose-box dialog;
-// unscoped — cross-order packing means any open box is a valid target).
-pickingRoute.get("/shipping-boxes", async (c) => {
-  return c.json({ boxes: await listOpenShippingBoxes(db) }, 200);
-});
-
 // Edit box size / weights (kg) / destination country; open boxes only.
 pickingRoute.patch("/shipping-boxes/:id", async (c) => {
   const body = await readJson<{
@@ -400,7 +386,8 @@ pickingRoute.post("/picking-orders/:id/labeling-finish", async (c) => {
 pickingRoute.get("/labeling-orders", async (c) => {
   const limit = Number(c.req.query("limit"));
   const offset = Number(c.req.query("offset"));
-  const scope = await getUserScope(db, actorFrom(c).username);
+  const actor = actorFrom(c);
+  const scope = await getUserScope(db, actor.username);
   return c.json(
     await listLabelingOrders(db, {
       search: c.req.query("search"),
@@ -424,3 +411,4 @@ pickingRoute.delete("/picking-orders/:id/work-lock", async (c) => {
   await releaseWorkLock(db, { orderId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json({ ok: true }, 200);
 });
+      username: actor.username,

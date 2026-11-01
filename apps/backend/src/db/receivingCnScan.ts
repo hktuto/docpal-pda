@@ -7,6 +7,7 @@ import { queryAll, queryGet, queryRun } from "./query.js";
 import { transactionLogs } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import { cnOrderPair } from "./receivingCn.js";
+import { assigneeFilter } from "./user-scope.js";
 
 // ---------------------------------------------------------------------------
 // CN receiving scan task (PDF path) — spec
@@ -27,11 +28,14 @@ export interface CnScanTaskRow {
   orgId: number;
   itemCount: number;
   resolvedCount: number;
+  /** Optional assignee username — NULL = visible to everyone. */
+  assignee: string | null;
   createdDate: Date;
 }
 
-/** Scan-task queue: CN orders at `scanning`, oldest first. */
-export async function listCnScanTasks(db: AppDb): Promise<CnScanTaskRow[]> {
+/** Scan-task queue: CN orders at `scanning`, oldest first. `username` applies
+ *  the assignee visibility filter (spec 2026-11-01-task-assignee-design.md). */
+export async function listCnScanTasks(db: AppDb, username?: string): Promise<CnScanTaskRow[]> {
   return queryAll<CnScanTaskRow>(
     db,
     sql`
@@ -42,11 +46,13 @@ export async function listCnScanTasks(db: AppDb): Promise<CnScanTaskRow[]> {
         ro.org_id AS "orgId",
         COUNT(rii.id)::int AS "itemCount",
         COUNT(rii.id) FILTER (WHERE rii.scan_status IS NOT NULL)::int AS "resolvedCount",
+        ro.assignee,
         ro.created_date AS "createdDate"
       FROM receiving_orders_cn ro
       JOIN receiving_invoices_cn ri ON ri.receiving_order_id = ro.id
       JOIN receiving_invoice_items_cn rii ON rii.receiving_invoice_id = ri.id
       WHERE ro.status = 'scanning'
+      ${assigneeFilter(sql`ro.assignee`, username)}
       GROUP BY ro.id
       ORDER BY ro.created_date ASC, ro.id
     `
@@ -95,13 +101,14 @@ interface CnScanningOrder {
   orgId: number;
   deliveryDate: Date | null;
   dateCode: string | null;
+  assignee: string | null;
 }
 
 async function loadCnOrder(db: AppDb, orderId: string): Promise<CnScanningOrder | null> {
   const row = await queryGet<CnScanningOrder>(
     db,
     sql`SELECT id, batch_no AS "batchNo", status, org_id AS "orgId",
-               delivery_date AS "deliveryDate", date_code AS "dateCode"
+               delivery_date AS "deliveryDate", date_code AS "dateCode", assignee
         FROM receiving_orders_cn WHERE id = ${orderId}`
   );
   return row ?? null;
@@ -115,15 +122,17 @@ export interface CnScanTaskDetail {
     deliveryDate: Date | null;
     invoiceNos: string | null;
     dateCode: string | null;
+    assignee: string | null;
   };
   items: CnScanItemRow[];
 }
 
 /** One scan task: order + all items with their scan fields. 404
- *  receiving_cn_scan_task_not_found unless the order is `scanning`. */
-export async function getCnScanTaskDetail(db: AppDb, orderId: string): Promise<CnScanTaskDetail> {
+ *  receiving_cn_scan_task_not_found unless the order is `scanning` — also
+ *  when the order is assigned to a different username (no existence leak). */
+export async function getCnScanTaskDetail(db: AppDb, orderId: string, username?: string): Promise<CnScanTaskDetail> {
   const order = await loadCnOrder(db, orderId);
-  if (!order || order.status !== "scanning") {
+  if (!order || order.status !== "scanning" || (username !== undefined && order.assignee !== null && order.assignee !== username)) {
     throw new HTTPException(404, { message: "receiving_cn_scan_task_not_found" });
   }
   const invoiceNos = (
@@ -146,6 +155,7 @@ export async function getCnScanTaskDetail(db: AppDb, orderId: string): Promise<C
       deliveryDate: order.deliveryDate,
       invoiceNos,
       dateCode: order.dateCode,
+      assignee: order.assignee,
     },
     items,
   };

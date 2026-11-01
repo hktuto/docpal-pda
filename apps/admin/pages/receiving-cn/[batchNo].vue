@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CnOrderDetail, CnOrderItemRow, OrderLogsPage, OrderLogsParams, SubInventoryRow } from "~/utils/flowApi";
+import type { AdminUserRow, CnOrderDetail, CnOrderItemRow, OrderLogsPage, OrderLogsParams, SubInventoryRow } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
@@ -43,6 +43,35 @@ const shelfRows = ref<{ code: string; displayName?: string | null }[]>([]);
 const shelfOptions = computed<SearchableSelectOption[]>(() =>
   shelfRows.value.map((s) => ({ value: s.code, label: s.displayName || s.code }))
 );
+
+// Assignee editor (spec 2026-11-01): single-select from /admin/users, saves
+// immediately on change via the generic task-assignment endpoint (optimistic,
+// rolled back on error).
+const assigneeUsers = ref<AdminUserRow[]>([]);
+const assigneeOptions = computed<SearchableSelectOption[]>(() =>
+  assigneeUsers.value.map((u) => ({ value: u.username, label: `${u.displayName} (${u.username})` }))
+);
+const assigneeInput = ref(""); // username; "" = unassigned
+const assigneeSaving = ref(false);
+
+async function onAssigneeChange(value: string[] | string) {
+  if (!detail.value) return;
+  const next = typeof value === "string" ? value : "";
+  const prev = assigneeInput.value;
+  if (next === prev || assigneeSaving.value) return;
+  assigneeInput.value = next;
+  assigneeSaving.value = true;
+  error.value = "";
+  try {
+    await flow.setTaskAssignment("receiving-cn", detail.value.order.id, next || null);
+    logsKey.value++;
+  } catch (e: any) {
+    assigneeInput.value = prev;
+    error.value = `${t("taskAssignments.saveFailed")}: ${e?.message ?? String(e)}`;
+  } finally {
+    assigneeSaving.value = false;
+  }
+}
 
 // Regenerate the 收貨確認及付款通知書 from the latest order data and download it.
 // Built with exceljs (not SheetJS) because the community xlsx build cannot
@@ -97,6 +126,7 @@ async function load() {
   notFound.value = false;
   try {
     detail.value = await flow.getCnOrder(batchNo);
+    assigneeInput.value = detail.value.order.assignee ?? "";
     selected.value = new Set();
   } catch (e: any) {
     const message = e?.message ?? String(e);
@@ -119,6 +149,10 @@ onMounted(() => {
   api
     .get<{ code: string; displayName?: string | null }[]>("/admin/shelves")
     .then((rows) => (shelfRows.value = rows))
+    .catch(() => {}); // picker options stay empty; the order still loads
+  flow
+    .listAdminUsers()
+    .then((rows) => (assigneeUsers.value = rows))
     .catch(() => {}); // picker options stay empty; the order still loads
 });
 
@@ -482,6 +516,19 @@ function putAwayStatusClass(s: string): string {
             <span class="dt">{{ $t("admin.fields.createdDate") }}:</span>
             {{ formatDateTime(detail.order.createdDate) }}
           </div>
+          <div class="assignee-cell">
+            <span class="dt">{{ $t("taskAssignments.colAssignee") }}:</span>
+            <SearchableSelect
+              :model-value="assigneeInput"
+              :options="assigneeOptions"
+              :all-label="$t('taskAssignments.unassigned')"
+              :aria-label="$t('taskAssignments.colAssignee')"
+              :multiple="false"
+              :disabled="assigneeSaving"
+              class="assignee-select"
+              @update:model-value="onAssigneeChange"
+            />
+          </div>
         </div>
       </div>
 
@@ -697,6 +744,15 @@ function putAwayStatusClass(s: string): string {
 }
 .dt {
   font-weight: 600;
+}
+.assignee-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.assignee-select {
+  flex: 1;
+  min-width: 10rem;
 }
 .not-found p {
   color: #52606d;

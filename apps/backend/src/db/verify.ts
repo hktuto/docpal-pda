@@ -7,6 +7,7 @@ import { transactionLogs } from "./schema/index.js";
 import { isStepEnabled } from "../config.js";
 import { now } from "./now.js";
 import { resolveLabelPrintRulesForOrder } from "./labelPrint.js";
+import { assigneeFilter } from "./user-scope.js";
 
 // ---------------------------------------------------------------------------
 // Verify flow (box-scoped, 2026-08-11 design). A verify_tasks row is created
@@ -79,11 +80,14 @@ export interface VerifyTaskListRow {
   destinationCountry: string | null;
   packageCount: number;
   verifyVerifiedCount: number;
+  /** Optional assignee username (spec 2026-11-01-task-assignee-design.md). */
+  assignee: string | null;
   createdDate: Date;
 }
 
-/** List rows with per-box package/re-scan counts; `status` is a pass-through filter. */
-export async function listVerifyTasks(db: AppDb, status?: string): Promise<VerifyTaskListRow[]> {
+/** List rows with per-box package/re-scan counts; `status` is a pass-through filter.
+ *  `username` applies the assignee visibility filter. */
+export async function listVerifyTasks(db: AppDb, status?: string, username?: string): Promise<VerifyTaskListRow[]> {
   return queryAll<VerifyTaskListRow>(
     db,
     sql`
@@ -94,13 +98,15 @@ export async function listVerifyTasks(db: AppDb, status?: string): Promise<Verif
         sb.destination_country AS "destinationCountry",
         COUNT(pp.id)::int AS "packageCount",
         COUNT(pp.id) FILTER (WHERE pp.verify_verified)::int AS "verifyVerifiedCount",
+        vt.assignee,
         vt.created_date AS "createdDate"
       FROM verify_tasks vt
       JOIN shipping_boxes sb ON sb.id = vt.shipping_box_id
       LEFT JOIN picking_packages pp ON pp.shipping_box_id = sb.id
       LEFT JOIN picking_items pi ON pi.id = pp.picking_item_id
       LEFT JOIN picking_orders po ON po.id = pi.picking_order_id
-      ${status ? sql`WHERE vt.status = ${status}` : sql``}
+      ${status ? sql`WHERE vt.status = ${status}` : sql`WHERE TRUE`}
+      ${assigneeFilter(sql`vt.assignee`, username)}
       GROUP BY vt.id, sb.id
       ORDER BY vt.created_date DESC, vt.id DESC
     `
@@ -111,6 +117,8 @@ export interface VerifyTaskRow {
   id: string;
   status: string;
   shippingBoxId: string;
+  /** Optional assignee username (spec 2026-11-01-task-assignee-design.md). */
+  assignee: string | null;
   createdDate: Date;
 }
 
@@ -163,12 +171,14 @@ export interface VerifyTaskDetail {
   packages: VerifyPackageRow[];
 }
 
-/** Consolidated read: task + its box + the box's packages (part identity embedded). */
-export async function getVerifyTaskDetail(db: AppDb, taskId: string): Promise<VerifyTaskDetail> {
+/** Consolidated read: task + its box + the box's packages (part identity embedded).
+ *  404 verify_task_not_found when the task is assigned to another username. */
+export async function getVerifyTaskDetail(db: AppDb, taskId: string, username?: string): Promise<VerifyTaskDetail> {
   const task = await queryGet<VerifyTaskRow>(
     db,
-    sql`SELECT id, status, shipping_box_id AS "shippingBoxId", created_date AS "createdDate"
-        FROM verify_tasks WHERE id = ${taskId}`
+    sql`SELECT id, status, shipping_box_id AS "shippingBoxId", assignee, created_date AS "createdDate"
+        FROM verify_tasks WHERE id = ${taskId}
+        ${assigneeFilter(sql`assignee`, username)}`
   );
   if (!task) throw new HTTPException(404, { message: "verify_task_not_found" });
 

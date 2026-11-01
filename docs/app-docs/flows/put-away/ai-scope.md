@@ -10,6 +10,13 @@
   pending task per receiving order, auto-created in the arrival-confirm tx,
   completed by the auto-clear. The task detail (`GET /put-away-tasks/:id`) is
   the same per-order aggregate plus the task row.
+- Optional task assignee (spec
+  `docs/superpowers/specs/2026-11-01-task-assignee-design.md`):
+  `put_away_tasks.assignee` / `put_away_tasks_cn.assignee` (nullable username,
+  no FK) filter the task list + detail (detail 404s for others), and
+  `GET /put-away/candidates` hides an order whose task is assigned to another
+  user (LEFT JOIN). NULL = visible to all; admin-managed via
+  `GET`/`PATCH /admin/task-assignment`.
 - CN variant (flow config `cnReceiving`, spec
   `docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`):
   CN warehouses work a dedicated CN task queue instead — `GET

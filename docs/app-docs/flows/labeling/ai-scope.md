@@ -5,7 +5,9 @@
 - Labeling queue list (`/labeling`): picking orders with
   `status = 'picking_finished' AND labeling_pending`, served by
   `GET /labeling-orders?search=&limit=&offset=` → `{rows, total}`
-  (org-scoped + per-user sub-inventory scope like the picking list, ordered
+  (org-scoped + per-user sub-inventory scope + assignee filter like the
+  picking list — the queue reads the same `picking_orders.assignee`, spec
+  `docs/superpowers/specs/2026-11-01-task-assignee-design.md`, ordered
   `last_update_date` DESC; rows carry the picking-list aggregates plus
   `labelMatches` = the LIVE `resolveLabelPrintRulesForOrder` result per row).
   Page conventions follow the picking list: `useVisibleReload(load,

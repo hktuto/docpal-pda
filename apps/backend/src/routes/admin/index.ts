@@ -39,6 +39,7 @@ import { adminOutdatedWarningsRoute } from "./outdatedWarnings.js";
 import { adHocPutAwayRoute } from "./adHocPutAway.js";
 import { adminTestPickingOrderRoute } from "./testPickingOrder.js";
 import { adminReceivingCnRoute } from "./receivingCn.js";
+import { adminTaskAssignmentsRoute } from "./taskAssignments.js";
 import { parseScopeEntries, type UserScopeEntry } from "../../db/user-scope.js";
 
 // Optional id on create: use the client's when given, else generate one.
@@ -455,6 +456,10 @@ adminRoute.route("/", adminTestPickingOrderRoute);
 // Customer receiving (CN) upload tracking + Excel upload (spec
 // 2026-10-16-customer-receiving-upload-design.md).
 adminRoute.route("/", adminReceivingCnRoute);
+
+// Task assignee management for the PDA queues (spec
+// 2026-11-01-task-assignee-design.md).
+adminRoute.route("/", adminTaskAssignmentsRoute);
 
 // DocPal console link for the admin user popover — null when DOCPAL_URL is
 // not configured (login itself requires it, so real deployments always have it).

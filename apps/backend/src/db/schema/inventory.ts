@@ -150,6 +150,7 @@ export const putAwayTasks = pgTable(
     orgId: integer("org_id"), // 收货/移入办公室, 2: HK
     subInventoryCode: text("sub_inventory_code"), // 收货/移入子库存
     status: text("status").notNull().default("pending"), // pending | completed
+    assignee: text("assignee"), // optional assignee username — NULL = visible to everyone
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },

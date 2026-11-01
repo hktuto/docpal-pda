@@ -18,6 +18,7 @@
     >
       <span class="app-list-row__line1">
         <span class="app-list-row__title">{{ title }}</span>
+        <span v-if="mineText" class="badge badge--assigned app-list-row__chip">{{ mineText }}</span>
         <span v-if="chipText" class="badge app-list-row__chip" :class="chipClass">{{ chipText }}</span>
         <span v-if="warnText" class="badge badge--warning app-list-row__chip">{{ warnText }}</span>
       </span>
@@ -26,6 +27,7 @@
     <NuxtLink v-else-if="to" :to="to" class="app-list-row__main">
       <span class="app-list-row__line1">
         <span class="app-list-row__title">{{ title }}</span>
+        <span v-if="mineText" class="badge badge--assigned app-list-row__chip">{{ mineText }}</span>
         <span v-if="chipText" class="badge app-list-row__chip" :class="chipClass">{{ chipText }}</span>
         <span v-if="warnText" class="badge badge--warning app-list-row__chip">{{ warnText }}</span>
       </span>
@@ -34,6 +36,7 @@
     <div v-else class="app-list-row__main">
       <div class="app-list-row__line1">
         <span class="app-list-row__title">{{ title }}</span>
+        <span v-if="mineText" class="badge badge--assigned app-list-row__chip">{{ mineText }}</span>
         <span v-if="chipText" class="badge app-list-row__chip" :class="chipClass">{{ chipText }}</span>
         <span v-if="warnText" class="badge badge--warning app-list-row__chip">{{ warnText }}</span>
       </div>
@@ -70,6 +73,9 @@ const props = defineProps<{
   meta?: (string | null | undefined)[];
   chipText?: string;
   chipClass?: string;
+  /** "Assigned to me" badge, rendered before the chip (spec 2026-11-01 task
+   *  assignee); undefined hides it. */
+  mineText?: string;
   /** Optional second chip (amber) for advisory warnings, e.g. the unresolved
    *  outdated-scan warning count (spec 2026-10-07). */
   warnText?: string;

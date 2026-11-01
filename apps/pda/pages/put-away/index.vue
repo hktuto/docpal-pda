@@ -46,6 +46,7 @@
         :meta="rowMeta(task, $t('putAway.taskProgress', { unboxed: task.unboxedItems, received: task.receivedItems }))"
         :chip-text="rowChip(task)?.text"
         :chip-class="rowChip(task)?.cls"
+        :mine-text="mineText(task)"
       />
     </template>
     <template v-else>
@@ -57,6 +58,7 @@
         :meta="rowMeta(ro, $t('putAway.unboxedItems', { count: ro.unboxedItems }))"
         :chip-text="rowChip(ro)?.text"
         :chip-class="rowChip(ro)?.cls"
+        :mine-text="mineText(ro)"
         :warn-text="ro.outdatedWarningCount > 0 ? $t('outdatedWarning.chip', { count: ro.outdatedWarningCount }) : undefined"
       />
     </template>
@@ -77,6 +79,7 @@ const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const { showToast } = useToast();
 const warehouse = useWarehouse();
+const { mineText } = useAssignedToMe();
 const { putAwayConfig, cnReceiving, loadFlowSteps } = useFlowSteps();
 // Row title/meta/chip come from the warehouse's pdaViewConfig flow config
 // (spec 2026-10-04-pda-app-rewrite-design.md); tasks and candidates share the

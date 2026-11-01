@@ -61,12 +61,12 @@ function optString(body: Record<string, unknown>, key: string): string | undefin
 
 receivingCnRoute.get("/receiving-cn/scan-tasks", async (c) => {
   if (!cnReceiving()) throw new HTTPException(404, { message: "not_found" });
-  return c.json(await listCnScanTasks(db), 200);
+  return c.json(await listCnScanTasks(db, actorFrom(c).username), 200);
 });
 
 receivingCnRoute.get("/receiving-cn/scan-tasks/:id", async (c) => {
   if (!cnReceiving()) throw new HTTPException(404, { message: "not_found" });
-  return c.json(await getCnScanTaskDetail(db, c.req.param("id")), 200);
+  return c.json(await getCnScanTaskDetail(db, c.req.param("id"), actorFrom(c).username), 200);
 });
 
 // {qty, dateCode?, lotCode?, coo?, cow?, raw?} → updated item; qty ≠ line_qty

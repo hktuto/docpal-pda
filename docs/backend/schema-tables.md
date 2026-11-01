@@ -361,6 +361,7 @@ finalize cron matches on it).
 | status | text NOT NULL DEFAULT 'pending' | `pending` \| `in_hand` \| `clear` |
 | arrived_at | timestamp | Arrival time (stamped by the finalize cron) |
 | arrived_by | text FK → users(id) | User who confirmed arrival |
+| assignee | text | Optional PDA task assignee (username, no FK; spec `docs/superpowers/specs/2026-11-01-task-assignee-design.md`) — NULL = visible to every user; set = only that user sees the order in the PDA receiving-scan list/detail; admin-managed via `PATCH /admin/task-assignment` |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
@@ -433,6 +434,7 @@ uniform item pair; NULL when mixed).
 | org_id | integer | Item-derived stock location pair (NULL when mixed) |
 | sub_inventory_code | text | Item-derived stock location pair (NULL when mixed) |
 | status | text NOT NULL DEFAULT 'pending' | `pending` \| `completed` |
+| assignee | text | Optional PDA task assignee (username, no FK; spec `docs/superpowers/specs/2026-11-01-task-assignee-design.md`) — NULL = visible to every user; set = only that user sees the task in the PDA CN put-away list/detail |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
@@ -504,6 +506,7 @@ upstream database — the sync/dedup key is the caller-supplied UUID `id`
 | labeling_pending | boolean NOT NULL DEFAULT false | Labeling stage (spec `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`): set at picking finish when the `labeling` step is enabled and the order matches ≥ 1 active `label_print_rules` row; cleared by `POST /picking-orders/:id/labeling-finish` or an admin status override; holds the order's boxes out of measuring/verify |
 | labeling_done_at | timestamp | When the labeling stage was cleared (NULL while pending / never queued) |
 | labeling_done_by | text | User who cleared the labeling stage |
+| assignee | text | Optional PDA task assignee (username, no FK; spec `docs/superpowers/specs/2026-11-01-task-assignee-design.md`) — NULL = visible to every user; set = only that user sees the order in the PDA picking/labeling list + detail; admin-managed via `PATCH /admin/task-assignment` |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
@@ -549,6 +552,7 @@ completion.
 | id | text PK | Task id (UUID) |
 | shipping_box_id | text NOT NULL FK → shipping_boxes(id) ON DELETE CASCADE | Box being verified |
 | status | text NOT NULL DEFAULT 'pending' | Task status |
+| assignee | text | Optional PDA task assignee (username, no FK; spec `docs/superpowers/specs/2026-11-01-task-assignee-design.md`) — NULL = visible to every user; set = only that user sees the task in the PDA verify list/detail |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
@@ -572,6 +576,7 @@ Shipping cartons used at picking and measuring.
 | shipped_at | timestamp | Per-box shipping: when the box was marked shipped (admin) |
 | shipped_by | text FK → users(id) | User who marked the box shipped |
 | source_shelf_box_id | text FK → shelf_boxes(id) | Whole-box claim: the reused shelf carton this box was created from (migration 0008) |
+| assignee | text | Optional PDA task assignee (username, no FK; spec `docs/superpowers/specs/2026-11-01-task-assignee-design.md`) — NULL = visible to every user; set = only that user sees the box in the PDA measuring list/detail |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
@@ -726,6 +731,7 @@ source for manual mode.
 | org_id | integer | Item-derived stock location pair (NULL when the order's items are mixed) |
 | sub_inventory_code | text | Item-derived stock location pair (NULL when the order's items are mixed) |
 | status | text NOT NULL DEFAULT 'pending' | `pending` \| `completed` |
+| assignee | text | Optional PDA task assignee (username, no FK; spec `docs/superpowers/specs/2026-11-01-task-assignee-design.md`) — NULL = visible to every user; set = only that user sees the task in the PDA put-away list/detail (and the order drops out of `GET /put-away/candidates` for other users) |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 

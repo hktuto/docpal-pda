@@ -99,6 +99,9 @@ export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | 
   labelingDoneAt?: string | null;
   labelingDoneBy?: string | null;
   labelingDoneByName?: string | null;
+  /** Assigned username (spec 2026-11-01). Optional — backends predating the
+   *  task-assignee feature omit it. */
+  assignee?: string | null;
   items: PickingItemRow[];
   boxes: { id: string; status: string; boxSize: string | null; grossWeight: number | null; netWeight: number | null; destinationCountry: string | null; packageCount: number; shippedAt: string | null }[];
 }
@@ -500,6 +503,37 @@ export interface OutdatedWarningListParams {
   /** Absent = all. */
   resolved?: boolean;
   orderKind?: "picking" | "putaway";
+}
+
+// ---- task assignments (per-flow assignee editing, spec 2026-11-01) ----
+
+/** Flows the admin task-assignment endpoint accepts. */
+export type TaskAssignmentFlow =
+  | "receiving-cn"
+  | "picking"
+  | "labeling"
+  | "put-away"
+  | "put-away-cn"
+  | "measuring"
+  | "verify";
+
+/** GET /admin/task-assignments?flow= row — id/label/status/assignee are
+ *  guaranteed; any other keys are flow-specific context rendered as-is. */
+export interface TaskAssignmentRow {
+  id: string;
+  label: string;
+  status: string;
+  /** Username of the assignee, null = unassigned (visible to everyone). */
+  assignee: string | null;
+  [key: string]: unknown;
+}
+
+/** GET /admin/users row (assignee dropdown source). */
+export interface AdminUserRow {
+  id: string;
+  username: string;
+  displayName: string;
+  groupCodes: string[];
 }
 
 // ---- part availability (stock lots + open receiving sources for a part) ----
@@ -918,6 +952,9 @@ export interface CnOrderDetail {
     orgId: number;
     dateCode: string | null;
     createdDate: string;
+    /** Assigned username (spec 2026-11-01). Optional — backends predating the
+     *  task-assignee feature omit it. */
+    assignee?: string | null;
   };
   invoices: { id: string; invoiceNo: string; totalQty: number | null; totalCtn: number | null; deliveryDate: string | null }[];
   items: CnOrderItemRow[];
@@ -1324,6 +1361,18 @@ export function useFlowApi() {
         orderKind,
         orderId,
         ...(note?.trim() ? { note: note.trim() } : {}),
+      }),
+
+    // Task assignees (spec 2026-11-01): one generic endpoint for every PDA
+    // task queue; assignee is a username, null clears it.
+    listAdminUsers: () => api.get<AdminUserRow[]>("/admin/users"),
+    listTaskAssignments: (flow: TaskAssignmentFlow) =>
+      api.get<TaskAssignmentRow[]>(`/admin/task-assignments?flow=${encodeURIComponent(flow)}`),
+    setTaskAssignment: (flow: TaskAssignmentFlow, id: string, assignee: string | null) =>
+      api.patch<{ ok: true; flow: string; id: string; assignee: string | null }>(`/admin/task-assignment`, {
+        flow,
+        id,
+        assignee,
       }),
 
     // Flow config (warehouse_config row "flow"; applies at runtime on save

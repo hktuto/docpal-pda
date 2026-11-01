@@ -46,6 +46,7 @@
           :meta="rowMeta(po)"
           :chip-text="rowChip(po)?.text"
           :chip-class="rowChip(po)?.cls"
+          :mine-text="mineText(po)"
           :warn-text="rowWarnText(po)"
         >
           <template v-if="isSelectable(po.status)" #leading>
@@ -101,6 +102,7 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
+const { mineText } = useAssignedToMe();
 // Row title/meta/chip come from the warehouse's pdaViewConfig flow config
 // (spec 2026-10-04-pda-app-rewrite-design.md); on a backend without the key
 // the legacy listTemplates + the extra meta line + work-lock chip render.

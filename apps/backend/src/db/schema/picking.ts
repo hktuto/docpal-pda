@@ -23,6 +23,9 @@ export const pickingOrders = pgTable(
     // from being wiped by allocateAll. Expires 10 min after working_at.
     workingBy: text("working_by").references(() => users.id),
     workingAt: timestamp("working_at", { mode: "date" }),
+    // Optional assignee (username, no FK — survives DocPal re-provisioning):
+    // NULL = visible to everyone; set = only that user sees it on PDA.
+    assignee: text("assignee"),
     issueReason: text("issue_reason"),
     issueQty: integer("issue_qty"),
     issuePackSize: integer("issue_pack_size"),
@@ -85,6 +88,7 @@ export const verifyTasks = pgTable(
     id: text("id").primaryKey(),
     shippingBoxId: text("shipping_box_id").notNull().references(() => shippingBoxes.id, { onDelete: "cascade" }),
     status: text("status").notNull().default("pending"), // pending | completed
+    assignee: text("assignee"), // optional assignee username — NULL = visible to everyone
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
@@ -115,6 +119,8 @@ export const shippingBoxes = pgTable(
     cartonLabelVerified: boolean("carton_label_verified").notNull().default(false),
     cartonLabelVerifiedAt: timestamp("carton_label_verified_at", { mode: "date" }),
     cartonLabelVerifiedBy: text("carton_label_verified_by"),
+    // Measuring queue assignee (username, no FK) — NULL = visible to everyone.
+    assignee: text("assignee"),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },

@@ -22,6 +22,7 @@
       :meta="rowMeta(task)"
       :chip-text="rowChip(task)?.text"
       :chip-class="rowChip(task)?.cls"
+      :mine-text="mineText(task)"
     />
   </AppListPage>
 </template>
@@ -41,6 +42,7 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
+const { mineText } = useAssignedToMe();
 // Row title/meta/chip come from the warehouse's pdaViewConfig flow config
 // (spec 2026-10-04-pda-app-rewrite-design.md); on a backend without the key
 // the legacy listTemplates + the extra meta line render instead.

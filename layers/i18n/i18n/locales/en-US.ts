@@ -60,6 +60,7 @@ export default {
     serverDownChecking: "Checking…",
     noData: "—",
     stateNone: "—",
+    assignedToMe: "Assigned to me",
     searchByRefOrSupplier: "Search by ref or supplier…",
     searchByRefPoOrCustomer: "Search by ref, PO or customer…",
     searchPickingOrdersOrParts: "Search picking orders or parts…",
@@ -2594,5 +2595,25 @@ export default {
         }
       }
     }
+  },
+  taskAssignments: {
+    navLink: "Task Assignments",
+    title: "Task Assignments",
+    explainer: "Assign PDA tasks to a user; an unassigned task stays visible to everyone.",
+    flows: {
+      "receiving-cn": "Customer Receiving (CN)",
+      picking: "Picking",
+      labeling: "Labeling",
+      "put-away": "Put-away",
+      "put-away-cn": "Put-away (CN)",
+      measuring: "Measuring",
+      verify: "Verify"
+    },
+    colTask: "Task",
+    colStatus: "Status",
+    colAssignee: "Assignee",
+    unassigned: "Unassigned",
+    none: "No open tasks for this flow.",
+    saveFailed: "Failed to save the assignment"
   }
 } as const;

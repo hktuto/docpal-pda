@@ -53,6 +53,7 @@ Page and component locations mapped to source files.
 | ScanFab | `components/ScanFab.vue` |
 | FilterChipGroup (tap-to-toggle chip multi-select for filter panels; search box when > 8 options, grouped option headings, scrollable list) | `components/FilterChipGroup.vue` |
 | List rows (`.list-panel` / `.list-row` / `.list-toolbar` CSS, incl. expandable rows + group headers) | `assets/css/main.scss` |
+| AppListRow (shared list-row component; `mineText` prop renders the `badge--assigned` assigned-to-me badge — driven by `composables/useAssignedToMe.ts` comparing the row's `assignee` to the logged-in username on the six queue list pages) | `components/AppListRow.vue` (`badge--assigned` style in `assets/css/main.scss`) |
 
 ## Modals
 
@@ -83,7 +84,6 @@ Page and component locations mapped to source files.
 |-----------|-------------|
 | Items section | `components/picking/PickingItemsSection.vue` |
 | Boxes section | `components/picking/PickingBoxesSection.vue` |
-| Choose-box dialog (cross-order box picker, arms scan-into-box) | `components/picking/ChooseBoxDialog.vue` |
 | Issue banner | `components/picking/PickingIssueBanner.vue` |
 | Unified items list (evaluation — collapsed progress/allocation-chip rows, expanded pending/box/line/allocation views) | `components/picking/PickingUnifiedItems.vue` |
 | Unified scan-session routing (queue, sticky shelf context, pick-from-box, carton auto-queue, confirm with re-resolve) | `composables/usePickingScanSession.ts` |
@@ -174,6 +174,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Sidebar layout + userbox popover | — | `apps/admin/app.vue` |
 | User profiles (per-user sub-inventory scope) | `/user-profiles` | `apps/admin/pages/user-profiles.vue` + `apps/admin/components/SubInventoryScopePicker.vue` (shared org-grouped checkbox picker) + `apps/admin/utils/userScope.ts` |
 | Personal settings (own sub-inventory scope + date format preferences, from the user popover) | `/settings` | `apps/admin/pages/settings.vue`; formatting via `apps/admin/utils/dateFormat.ts` (token formatter) + `apps/admin/utils/datePreferences.ts` (reactive per-user store driving `formatDate`/`formatDateTime`, wired into `utils/format.ts` `formatCell`) |
+| Task assignments (per-flow tabs — receiving-cn / picking / labeling / put-away / put-away-cn / measuring / verify — with a SearchableSelect user picker over `GET /admin/users`; reads `GET /admin/task-assignments`, saves via `PATCH /admin/task-assignment`; inline assignee editors also on the picking-order and CN-receiving-order details) | `/task-assignments` | `apps/admin/pages/task-assignments.vue`, assignee editors in `apps/admin/pages/picking-orders/[id].vue` + `apps/admin/pages/receiving-cn/[batchNo].vue`, nav entry in `apps/admin/utils/entities.ts` (Settings) |
 | Flow API typed wrappers | — | `apps/admin/utils/flowApi.ts` |
 | Label print rules (template-selection rules CRUD + Activate/Deactivate; structured AND/OR conditions editor; detail-page edit with draft-condition match preview) | `/label-print-rules`, `/label-print-rules/:id` | `apps/admin/pages/label-print-rules/index.vue`, `apps/admin/pages/label-print-rules/[id].vue` (2fr/1fr edit form + match-preview panel over `POST /admin/label-print-rules/test-match`), `apps/admin/utils/entities.ts` (`entities.labelPrintRules`, `noEdit: true`), `apps/admin/components/RuleConditionsEditor.vue`; reusable CrudForm field types boolean/select/conditions in `apps/admin/components/CrudForm.vue` |
 | Outdated date-code scan warnings (pending/resolved lists, whole-order resolve with note; Issues nav section + pending-count badge; warning chip on picking/receiving detail headers; per-supplier "Outdated limit (months)" field) | `/outdated-warnings` | `apps/admin/pages/outdated-warnings.vue` (filters over `GET /admin/outdated-warnings`, resolve dialog → `POST /admin/outdated-warnings/resolve-order`, SSE `/admin/outdated-warnings` topic reload), `apps/admin/components/OutdatedWarningsBadge.vue` (sidebar badge in `app.vue`), `apps/admin/components/OutdatedWarningChip.vue` (picking/receiving detail headers), "Outdated limit (months)" field in `apps/admin/components/SupplierProfileEditor.vue` on `/suppliers/:code` (empty = NULL = no check, default 12 on create) |

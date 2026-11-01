@@ -9,6 +9,7 @@ import { emitEvent } from "./events.js";
 import { computeItemShelfSuggestions, type PutAwaySuggestionReason } from "./putaway.js";
 import { putAwayConfig, dateCodeFormat } from "../config.js";
 import { toCanonicalDateCode } from "./dateCode.js";
+import { assigneeFilter } from "./user-scope.js";
 
 // ---------------------------------------------------------------------------
 // CN put-away (spec docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md).
@@ -33,14 +34,17 @@ export interface CnPutAwayTaskListRow {
   subInventoryCode: string | null;
   receivedItems: number;
   remainingItems: number;
+  /** Optional assignee username (spec 2026-11-01-task-assignee-design.md). */
+  assignee: string | null;
   createdDate: Date;
 }
 
 /** CN task queue, oldest first. Item counts mirror the standard candidates
  *  formula minus the standard-only allocation/staging deductions. No
  *  allowedOrgIds filter — a task row only exists after its order arrived in
- *  this warehouse, so it's always actionable work here. */
-export async function listCnPutAwayTasks(db: AppDb, status?: string): Promise<CnPutAwayTaskListRow[]> {
+ *  this warehouse, so it's always actionable work here. `username` applies
+ *  the assignee filter. */
+export async function listCnPutAwayTasks(db: AppDb, status?: string, username?: string): Promise<CnPutAwayTaskListRow[]> {
   return queryAll<CnPutAwayTaskListRow>(
     db,
     sql`
@@ -54,6 +58,7 @@ export async function listCnPutAwayTasks(db: AppDb, status?: string): Promise<Cn
         t.sub_inventory_code AS "subInventoryCode",
         COUNT(rii.id) FILTER (WHERE rii.received_qty > 0)::int AS "receivedItems",
         COUNT(rii.id) FILTER (WHERE rii.received_qty - rii.picked_qty - rii.put_away_qty > 0)::int AS "remainingItems",
+        t.assignee,
         t.created_date AS "createdDate"
       FROM put_away_tasks_cn t
       JOIN receiving_orders_cn ro ON ro.id = t.receiving_order_cn_id
@@ -61,6 +66,7 @@ export async function listCnPutAwayTasks(db: AppDb, status?: string): Promise<Cn
       JOIN receiving_invoice_items_cn rii ON rii.receiving_invoice_id = ri.id
       WHERE TRUE
       ${status ? sql`AND t.status = ${status}` : sql``}
+      ${assigneeFilter(sql`t.assignee`, username)}
       GROUP BY t.id, ro.id
       ORDER BY t.created_date ASC, t.id
     `
@@ -127,11 +133,13 @@ export interface CnPutAwayTaskDetail {
  * order's put-away has created (matched via the ledger reference — CN lots
  * carry no inventory_lot_sources rows).
  */
-export async function getCnPutAwayTaskDetail(db: AppDb, taskId: string): Promise<CnPutAwayTaskDetail> {
+export async function getCnPutAwayTaskDetail(db: AppDb, taskId: string, username?: string): Promise<CnPutAwayTaskDetail> {
   const task = await queryGet<CnPutAwayTaskDetail["task"]>(
     db,
-    sql`SELECT id, status, receiving_order_cn_id AS "receivingOrderCnId", created_date AS "createdDate"
-        FROM put_away_tasks_cn WHERE id = ${taskId}`
+    sql`SELECT id, status, receiving_order_cn_id AS "receivingOrderCnId", assignee,
+               created_date AS "createdDate"
+        FROM put_away_tasks_cn WHERE id = ${taskId}
+        ${assigneeFilter(sql`assignee`, username)}`
   );
   if (!task) throw new HTTPException(404, { message: "put_away_task_cn_not_found" });
   const order = await queryGet<CnPutAwayTaskDetail["order"]>(

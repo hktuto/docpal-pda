@@ -384,6 +384,9 @@ export interface PickingOrderListRow {
   /** Any allocation whose source date code is older than the outdated-stock
    *  threshold (spec 2026-10-20). */
   hasOutdatedAllocations: boolean;
+  /** Username this task is assigned to; null/absent = unassigned (the backend
+   *  hides tasks assigned to other users). */
+  assignee?: string | null;
 }
 
 export interface PickingWorkLock {
@@ -443,6 +446,8 @@ export interface LabelingOrderRow {
   totalQty: number;
   labelMatches: Omit<LabelPrintRuleMatch, "labelCount">[];
   lastUpdateDate: string;
+  /** Username this task is assigned to; null/absent = unassigned. */
+  assignee?: string | null;
 }
 
 export interface PickingAllocationLot {
@@ -529,20 +534,6 @@ export interface PickingBox {
   packageCount: number;
   shippedAt: string | null;
   shippedBy: string | null;
-}
-
-/** GET /shipping-boxes row — an open shipping box, any picking order
- *  (orderId/orderNo = the creator order, informational only). */
-export interface OpenShippingBox {
-  id: string;
-  orderId: string | null;
-  orderNo: string | null;
-  packageCount: number;
-  boxSize: string | null;
-  netWeight: number | null;
-  grossWeight: number | null;
-  destinationCountry: string | null;
-  createdDate: string;
 }
 
 /** Whole-box claim hint on GET /picking-orders/:id — a fully-claimable shelf
@@ -700,6 +691,9 @@ export interface PutAwayTaskListRow {
   /** Order name per the warehouse's receivingOrderNameTemplate flow config. */
   displayName?: string;
   supplierCode: string | null;
+  /** Username the order's put-away task is assigned to (via the task join);
+   *  null/absent = unassigned. */
+  assignee?: string | null;
   supplierName: string | null;
   invoiceNos?: string | null;
   deliveryDate?: string | null;
@@ -723,6 +717,8 @@ export interface PutAwayExpectedItem {
    *  omit the field. */
   ctnNo?: string | null;
   /** CN put-away only: the invoice item's PO no / PO line — the detail list
+  /** Username this task is assigned to; null/absent = unassigned. */
+  assignee?: string | null;
    *  sorts by po_line, then part_no. Standard backends omit the fields. */
   poNo?: string | null;
   poLine?: string | null;
@@ -923,6 +919,8 @@ export interface CnScanTaskItem {
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
+  /** Username this task is assigned to; null/absent = unassigned. */
+  assignee?: string | null;
   cow: string | null;
   orgId: number;
   subInventoryCode: string | null;
@@ -1028,6 +1026,8 @@ export interface MeasuringOrderGroup {
 /** Package row inside a measuring box. partNo/wclItemNo are the SCANNED label
  *  identity when the pick scan recorded it (2026-10-05), falling back to the
  *  picking item's part for legacy rows. */
+  /** Username this box is assigned to; null/absent = unassigned. */
+  assignee?: string | null;
 export interface MeasuringPackage {
   id: string;
   qty: number;
@@ -1113,6 +1113,8 @@ export interface VerifyTaskDetail {
     id: string;
     pickingOrderId: string;
     status: string;
+  /** Username this task is assigned to; null/absent = unassigned. */
+  assignee?: string | null;
     boxSize: string | null;
     grossWeight: number | null;
     netWeight: number | null;

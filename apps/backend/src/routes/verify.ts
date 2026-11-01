@@ -15,7 +15,7 @@ export const verifyRoute = new Hono();
 // Box-keyed list with per-box package/re-scan counts;
 // `?status=` is a pass-through filter.
 verifyRoute.get("/verify-tasks", async (c) => {
-  return c.json(await listVerifyTasks(db, c.req.query("status")), 200);
+  return c.json(await listVerifyTasks(db, c.req.query("status"), actorFrom(c).username), 200);
 });
 
 // Box resolution by carton label: the raw scan matches a recorded carton
@@ -40,7 +40,7 @@ verifyRoute.post("/verify-tasks/:id/scan-label", async (c) => {
 // Consolidated detail: task + its box + the box's packages (part identity
 // embedded — no second request).
 verifyRoute.get("/verify-tasks/:id", async (c) => {
-  return c.json(await getVerifyTaskDetail(db, c.req.param("id")), 200);
+  return c.json(await getVerifyTaskDetail(db, c.req.param("id"), actorFrom(c).username), 200);
 });
 
 // Complete: pending task + box closed + every package re-scanned → 'completed'

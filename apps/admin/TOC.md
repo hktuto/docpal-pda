@@ -80,7 +80,7 @@
 - Ad-hoc Put-Aways
   - read-only list of ad-hoc put-away batches (supplier, shelf, date range filters) with detail view showing full item list
 - Settings
-  - flow config, display config (date-code display template, receiving order name template), PDA view config (per-page PDA list/detail view editor), app download, user badges, user scope
+  - flow config, display config (date-code display template, receiving order name template), PDA view config (per-page PDA list/detail view editor), app download, user badges, user scope, task assignments (per-flow PDA task assignee picker: receiving-cn / picking / labeling / put-away / put-away-cn / measuring / verify; also editable on the picking-order and receiving-cn detail pages)
 - Dropdown & Policy
   - Net Weight Formulas (was under Warehouse)
   - Box Sizes (was under Warehouse)

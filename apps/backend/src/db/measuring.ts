@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet } from "./query.js";
 import { cartonPrintExists, labeledOrderIds } from "./verify.js";
+import { assigneeFilter } from "./user-scope.js";
 
 // ---------------------------------------------------------------------------
 // Measuring reads (box-scoped, 2026-08-11 design). measuring_tasks is gone:
@@ -25,6 +26,8 @@ export interface MeasuringBoxListRow {
   orderNos: string[];
   packageCount: number;
   verifiedCount: number;
+  /** Optional assignee username (spec 2026-11-01-task-assignee-design.md). */
+  assignee: string | null;
   createdDate: Date;
 }
 
@@ -35,8 +38,8 @@ export interface MeasuringOrderGroup {
 }
 
 /** Open boxes with at least one package whose orders are all picking-complete,
- *  grouped by picking order. */
-export async function listMeasuringBoxes(db: AppDb): Promise<MeasuringOrderGroup[]> {
+ *  grouped by picking order. `username` applies the box assignee filter. */
+export async function listMeasuringBoxes(db: AppDb, username?: string): Promise<MeasuringOrderGroup[]> {
   const boxes = await queryAll<MeasuringBoxListRow>(
     db,
     sql`
@@ -45,6 +48,7 @@ export async function listMeasuringBoxes(db: AppDb): Promise<MeasuringOrderGroup
         COALESCE(array_agg(DISTINCT po.order_no) FILTER (WHERE po.order_no IS NOT NULL), '{}') AS "orderNos",
         COUNT(pp.id)::int AS "packageCount",
         COUNT(pp.id) FILTER (WHERE pp.verified)::int AS "verifiedCount",
+        sb.assignee,
         sb.created_date AS "createdDate"
       FROM shipping_boxes sb
       JOIN picking_packages pp ON pp.shipping_box_id = sb.id
@@ -60,6 +64,7 @@ export async function listMeasuringBoxes(db: AppDb): Promise<MeasuringOrderGroup
             AND (po2.status NOT IN ('picking_finished', 'measuring_finished', 'shipped')
                  OR po2.labeling_pending = true)
         )
+      ${assigneeFilter(sql`sb.assignee`, username)}
       GROUP BY sb.id
       ORDER BY sb.created_date DESC, sb.id DESC
     `
@@ -140,16 +145,18 @@ export interface MeasuringBoxDetail {
   packages: MeasuringPackageRow[];
 }
 
-/** Box + packages with part identity + the formula-driven suggested net weight. */
-export async function getMeasuringBoxDetail(db: AppDb, boxId: string): Promise<MeasuringBoxDetail> {
+/** Box + packages with part identity + the formula-driven suggested net weight.
+ *  404 shipping_box_not_found when the box is assigned to another username. */
+export async function getMeasuringBoxDetail(db: AppDb, boxId: string, username?: string): Promise<MeasuringBoxDetail> {
   const box = await queryGet<Omit<MeasuringBoxDetail, "packages" | "suggestedNetWeightKg" | "cartonLabelRequired">>(
     db,
-    sql`SELECT id AS "boxId", picking_order_id AS "pickingOrderId", status,
+    sql`SELECT id AS "boxId", picking_order_id AS "pickingOrderId", status, assignee,
                box_size AS "boxSize", gross_weight AS "grossWeight", net_weight AS "netWeight",
                destination_country AS "destinationCountry",
                shipped_at AS "shippedAt", created_date AS "createdDate",
                carton_label_verified AS "cartonLabelVerified"
-        FROM shipping_boxes WHERE id = ${boxId}`
+        FROM shipping_boxes WHERE id = ${boxId}
+        ${assigneeFilter(sql`assignee`, username)}`
   );
   if (!box) throw new HTTPException(404, { message: "shipping_box_not_found" });
 

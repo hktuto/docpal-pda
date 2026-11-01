@@ -11,7 +11,7 @@ import { workLockExpiry } from "./allocate.js";
 import { isStepEnabled, outdatedStockYears, pickingFromSubinventoryOrgs, pickingShelfScan, receivingSubInventoryRules, dateCodeFormat } from "../config.js";
 import { dateCodeRank, outdatedThresholdRank, toCanonicalDateCode } from "./dateCode.js";
 import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
-import { userScopeCondition, type UserScopeEntry } from "./user-scope.js";
+import { assigneeFilter, userScopeCondition, type UserScopeEntry } from "./user-scope.js";
 import { normalizePartNo } from "./scanParse.js";
 import { matchSubInventoryRule } from "./receiving.js";
 import { resolveLabelPrintRulesForOrder, type LabelPrintRuleMatch } from "./labelPrint.js";
@@ -582,6 +582,8 @@ export interface PickingOrderListRow {
   prioritySeq: number;
   workingBy: string | null;
   workingByName: string | null;
+  /** Optional assignee username (spec 2026-11-01-task-assignee-design.md). */
+  assignee: string | null;
   itemCount: number;
   totalQty: number;
   pickedQty: number;
@@ -651,6 +653,8 @@ export async function listPickingOrders(
      *  the default priority order. */
     sort?: string; dir?: "asc" | "desc";
     scope?: UserScopeEntry[] | null;
+    /** Assignee visibility filter (PDA lists); undefined = unfiltered (admin). */
+    username?: string;
     /** Delivery-date range bounds (YYYY-MM-DD, both inclusive). */
     deliveryDateFrom?: string; deliveryDateTo?: string;
   }
@@ -680,6 +684,7 @@ export async function listPickingOrders(
         po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode",
         po.priority_seq AS "prioritySeq",
         po.working_by AS "workingBy", w.display_name AS "workingByName",
+        po.assignee,
         COUNT(pi.id)::int AS "itemCount",
         COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
         COALESCE(SUM(pi.picked_qty), 0)::int AS "pickedQty",
@@ -710,6 +715,7 @@ export async function listPickingOrders(
       ${opts?.deliveryDateFrom ? sql`AND po.delivery_date >= ${opts.deliveryDateFrom}` : sql``}
       ${opts?.deliveryDateTo ? sql`AND po.delivery_date < (${opts.deliveryDateTo}::date + 1)` : sql``}
       ${pickingOrderOrgFilter(sql`po.org_id`, sql`po.sub_inventory_code`, sql`po.picking_order_type`, opts?.scope)}
+      ${assigneeFilter(sql`po.assignee`, opts?.username)}
       GROUP BY po.id, w.display_name
       ${pickingListOrderBy(opts)}
       ${opts?.limit && opts.limit > 0 ? sql`LIMIT ${opts.limit} OFFSET ${opts.offset ?? 0}` : sql``}
@@ -717,41 +723,6 @@ export async function listPickingOrders(
   );
   const total = rows[0]?.total ?? 0;
   return { rows: rows.map(({ total: _total, ...row }) => row), total };
-}
-
-// ---------------------------------------------------------------------------
-// Open shipping boxes (spec 2026-11-01-picking-box-operations-design.md): the
-// PDA choose-box dialog. Unscoped — a box accepts packages from any open
-// order (cross-order packing), so the dialog lists every open box.
-// ---------------------------------------------------------------------------
-
-export interface OpenShippingBoxRow {
-  id: string;
-  /** Creator order (informational only — the box may hold packages from any
-   *  open picking order); null for orderless boxes. */
-  orderId: string | null;
-  orderNo: string | null;
-  packageCount: number;
-  boxSize: string | null;
-  netWeight: number | null;
-  grossWeight: number | null;
-  destinationCountry: string | null;
-  createdDate: Date;
-}
-
-/** All open shipping boxes, oldest first. */
-export async function listOpenShippingBoxes(db: AppDb): Promise<OpenShippingBoxRow[]> {
-  return queryAll<OpenShippingBoxRow>(
-    db,
-    sql`SELECT sb.id, sb.picking_order_id AS "orderId", po.order_no AS "orderNo",
-               (SELECT COUNT(*)::int FROM picking_packages pp WHERE pp.shipping_box_id = sb.id) AS "packageCount",
-               sb.box_size AS "boxSize", sb.net_weight AS "netWeight", sb.gross_weight AS "grossWeight",
-               sb.destination_country AS "destinationCountry", sb.created_date AS "createdDate"
-        FROM shipping_boxes sb
-        LEFT JOIN picking_orders po ON po.id = sb.picking_order_id
-        WHERE sb.status = 'open'
-        ORDER BY sb.created_date ASC, sb.id ASC`
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -776,7 +747,7 @@ export interface LabelingOrderRow {
 
 export async function listLabelingOrders(
   db: AppDb,
-  opts?: { search?: string; limit?: number; offset?: number; scope?: UserScopeEntry[] | null }
+  opts?: { search?: string; limit?: number; offset?: number; scope?: UserScopeEntry[] | null; username?: string }
 ): Promise<{ rows: LabelingOrderRow[]; total: number }> {
   const search = opts?.search?.trim();
   const rows = await queryAll<Omit<LabelingOrderRow, "labelMatches"> & { total: number }>(
@@ -803,6 +774,8 @@ export async function listLabelingOrders(
   );
   const total = rows[0]?.total ?? 0;
   const withMatches = await Promise.all(
+  /** Optional assignee username (spec 2026-11-01-task-assignee-design.md). */
+  assignee: string | null;
     rows.map(async ({ total: _total, ...row }) => ({
       ...row,
       labelMatches: (await resolveLabelPrintRulesForOrder(db, row.id)).matches,
@@ -822,6 +795,7 @@ export async function listLabelingOrders(
 export interface WorkLockState {
   orderId: string;
   workingBy: string;
+        po.assignee,
 }
 
 function lockHeldResponse(holderId: string, holderName: string | null): HTTPException {
@@ -831,6 +805,7 @@ function lockHeldResponse(holderId: string, holderName: string | null): HTTPExce
       headers: { "content-type": "application/json" },
     }),
   });
+      ${assigneeFilter(sql`po.assignee`, opts?.username)}
 }
 
 /** Acquire or refresh the caller's work lock on an open picking order. */
@@ -948,6 +923,8 @@ export interface PickingLotDetail {
   totalQty: number;
   allocatedQty: number;
   availableQty: number;
+  /** Optional assignee username (spec 2026-11-01-task-assignee-design.md). */
+  assignee: string | null;
 }
 
 export interface PickingAllocationDetail {
@@ -1073,7 +1050,8 @@ interface AllocationQueryRow {
 export async function getPickingOrderDetail(
   db: AppDb,
   orderId: string,
-  scope?: UserScopeEntry[] | null
+  scope?: UserScopeEntry[] | null,
+  username?: string
 ): Promise<PickingOrderDetail> {
   const order = await queryGet<PickingOrderRow>(
     db,
@@ -1121,6 +1099,7 @@ export async function getPickingOrderDetail(
     `
   );
   const itemIds = items.map((i) => i.id);
+        po.assignee,
 
   const allocations = itemIds.length
     ? await queryAll<AllocationQueryRow>(
@@ -1137,6 +1116,7 @@ export async function getPickingOrderDetail(
             il.date_code AS "lotDateCode", il.lot_code AS "lotLotCode",
             il.coo AS "lotCoo", il.cow AS "lotCow",
             il.total_qty AS "lotTotalQty", il.allocated_qty AS "lotAllocatedQty",
+      ${assigneeFilter(sql`po.assignee`, username)}
             il.available_qty AS "lotAvailableQty",
             ro.batch_no AS "recvBatchNo", ri.invoice_no AS "recvInvoiceNo",
             ri.receiving_order_id AS "recvOrderId",
@@ -2465,60 +2445,6 @@ export async function addAllUnboxedToShippingBox(
   });
 }
 
-/** One new open box per unboxed package of the order (spec
- *  2026-11-01-picking-box-operations-design.md): each scanned-but-unboxed
- *  package gets its own freshly minted box (nextBoxId "S") and is packed into
- *  it immediately, oldest first. One box per package means no COO mixing, so
- *  the one-COO-per-box guard never fires. Returns {created, boxIds} —
- *  {created: 0} when nothing is unboxed. Never finishes the order. */
-export async function boxEachUnboxedPackage(
-  db: AppDb,
-  input: { pickingOrderId: string; actorId: string }
-): Promise<{ created: number; boxIds: string[] }> {
-  return db.transaction(async (tx) => {
-    const order = await loadOrderForWrite(tx, input.pickingOrderId);
-    assertOrderWritable(order);
-    await assertActor(tx, input.actorId);
-    const packages = await queryAll<{ id: string; pickingItemId: string; qty: number; partNo: string }>(
-      tx,
-      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pp.qty, pi.part_no AS "partNo"
-          FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
-          WHERE pi.picking_order_id = ${order.id} AND pp.shipping_box_id IS NULL
-          ORDER BY pp.created_date ASC, pp.id ASC`
-    );
-    const boxIds: string[] = [];
-    for (const pkg of packages) {
-      const boxId = await nextBoxId(tx, "S");
-      const at = now();
-      await queryRun(
-        tx,
-        sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_date, last_update_date)
-            VALUES (${boxId}, ${order.id}, 'open', ${at}, ${at})`
-      );
-      await logTransition(tx, {
-        entityType: "shipping_box",
-        entityId: boxId,
-        fromState: null,
-        toState: "open",
-        actorId: input.actorId,
-        metadata: { picking_order: order.id },
-      });
-      await assignPackageToBoxTx(tx, pkg.id, boxId);
-      await prefillShippingBoxFromSources(tx, boxId);
-      await logTransition(tx, {
-        entityType: "picking_item",
-        entityId: pkg.pickingItemId,
-        fromState: "scanned",
-        toState: "boxed",
-        actorId: input.actorId,
-        metadata: { qty: pkg.qty, box: boxId, partNo: pkg.partNo },
-      });
-      boxIds.push(boxId);
-    }
-    return { created: packages.length, boxIds };
-  });
-}
-
 /**
  * Remove a package from its box (back to scanned-unboxed; the verified flag
  * is cleared like the old code). Only 'issue' orders are blocked — unpacking
@@ -2579,14 +2505,9 @@ export async function cancelShippingBox(db: AppDb, input: { shippingBoxId: strin
 }
 
 /**
- * Close a shipping box (ported from measure.ts). Two modes by the measuring
- * step: measuring ON (the measuring page) requires all packages fully
- * rescanned (rescanned_qty >= qty), a box size, and positive weights with
- * gross ≥ net; measuring OFF (the picking-page close, spec
- * 2026-11-01-picking-box-operations-design.md) skips both the rescan guard
- * and the box-size/weights guards — there is no measuring re-scan, matching
- * the measuring-off verify-completion close in verify.ts. Both modes require
- * a non-empty open box. The destination is optional since the measuring
+ * Close a shipping box (ported from measure.ts): non-empty, all packages
+ * fully rescanned (rescanned_qty >= qty), box size, and positive weights with
+ * gross ≥ net are required. The destination is optional since the measuring
  * form dropped the field (2026-10-20): the resolved value (box destination,
  * else the order's ship_to) is stamped when one exists, and the box closes
  * with a NULL destination otherwise. Stamps the resolved destination and
@@ -2606,8 +2527,7 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
       sql`SELECT id, qty, rescanned_qty AS "rescannedQty" FROM picking_packages WHERE shipping_box_id = ${box.id}`
     );
     if (pkgs.length === 0) throw new HTTPException(409, { message: "cannot_close_empty_shipping_box" });
-    const measuring = isStepEnabled("measuring");
-    if (measuring && pkgs.some((p) => p.rescannedQty < p.qty)) throw new HTTPException(409, { message: "all_packages_must_be_verified" });
+    if (pkgs.some((p) => p.rescannedQty < p.qty)) throw new HTTPException(409, { message: "all_packages_must_be_verified" });
 
     let dest = box.destinationCountry;
     if (dest === null || dest.trim() === "") {
@@ -2619,12 +2539,10 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
     }
     // Destination is optional (measuring form dropped the field): stamp the
     // resolved value when one exists, close with NULL otherwise.
-    if (measuring) {
-      if (box.boxSize === null || box.boxSize.trim() === "") throw new HTTPException(409, { message: "box_size_required" });
-      if (box.netWeight === null || box.grossWeight === null) throw new HTTPException(409, { message: "weights_required" });
-      if (box.netWeight <= 0 || box.grossWeight <= 0) throw new HTTPException(409, { message: "weights_must_be_positive" });
-      if (box.grossWeight < box.netWeight) throw new HTTPException(409, { message: "gross_weight_must_be_gte_net_weight" });
-    }
+    if (box.boxSize === null || box.boxSize.trim() === "") throw new HTTPException(409, { message: "box_size_required" });
+    if (box.netWeight === null || box.grossWeight === null) throw new HTTPException(409, { message: "weights_required" });
+    if (box.netWeight <= 0 || box.grossWeight <= 0) throw new HTTPException(409, { message: "weights_must_be_positive" });
+    if (box.grossWeight < box.netWeight) throw new HTTPException(409, { message: "gross_weight_must_be_gte_net_weight" });
 
     await queryRun(
       tx,

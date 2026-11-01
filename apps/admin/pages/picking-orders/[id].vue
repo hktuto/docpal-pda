@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CountryRow, OrderLogsParams, OrderLogsPage, PickingItemRow, PickingOrderDetail, SubInventoryRow } from "~/utils/flowApi";
+import type { AdminUserRow, CountryRow, OrderLogsParams, OrderLogsPage, PickingItemRow, PickingOrderDetail, SubInventoryRow } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
@@ -40,6 +40,34 @@ const subInventories = ref<SubInventoryRow[]>([]);
 const editOrgId = ref(""); // "" = none
 const editSubInventory = ref(""); // "" = none
 const locationError = ref("");
+
+// Assignee editor (spec 2026-11-01): single-select from /admin/users, saves
+// immediately on change via the generic task-assignment endpoint (optimistic,
+// rolled back on error). Separate from the deferred info-section Save.
+const assigneeUsers = ref<AdminUserRow[]>([]);
+const assigneeOptions = computed<SearchableSelectOption[]>(() =>
+  assigneeUsers.value.map((u) => ({ value: u.username, label: `${u.displayName} (${u.username})` }))
+);
+const assigneeInput = ref(""); // username; "" = unassigned
+const assigneeSaving = ref(false);
+
+async function onAssigneeChange(value: string[] | string) {
+  const next = typeof value === "string" ? value : "";
+  const prev = assigneeInput.value;
+  if (next === prev || assigneeSaving.value) return;
+  assigneeInput.value = next;
+  assigneeSaving.value = true;
+  error.value = "";
+  try {
+    await flow.setTaskAssignment("picking", orderId, next || null);
+    logsKey.value++;
+  } catch (e: any) {
+    assigneeInput.value = prev;
+    error.value = `${t("taskAssignments.saveFailed")}: ${e?.message ?? String(e)}`;
+  } finally {
+    assigneeSaving.value = false;
+  }
+}
 
 const orgOptions = computed<SearchableSelectOption[]>(() => {
   const seen = new Set<number>();
@@ -296,6 +324,7 @@ async function load() {
     shipToInput.value = order.value.shipTo ?? "";
     editOrgId.value = order.value.orgId != null ? String(order.value.orgId) : "";
     editSubInventory.value = order.value.subInventoryCode ?? "";
+    assigneeInput.value = order.value.assignee ?? "";
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -573,6 +602,10 @@ onMounted(() => {
     .listCountries()
     .then((rows) => (countries.value = rows))
     .catch(() => {});
+  flow
+    .listAdminUsers()
+    .then((rows) => (assigneeUsers.value = rows))
+    .catch(() => {}); // picker options stay empty; the order still loads
 });
 
 // Reload when the order changes elsewhere (PDA picks, issue reports,
@@ -651,6 +684,21 @@ const {
     <template v-else-if="order">
       <div class="detail-grid">
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.status") }}</div><div class="dd">{{ $t(`status.picking.${order.status}`) }}</div></div>
+        <div>
+          <div class="dt">{{ $t("taskAssignments.colAssignee") }}</div>
+          <div class="dd date-edit">
+            <SearchableSelect
+              :model-value="assigneeInput"
+              :options="assigneeOptions"
+              :all-label="$t('taskAssignments.unassigned')"
+              :aria-label="$t('taskAssignments.colAssignee')"
+              :multiple="false"
+              :disabled="assigneeSaving"
+              class="ship-to-select"
+              @update:model-value="onAssigneeChange"
+            />
+          </div>
+        </div>
         <div v-if="order.labelingPending || order.labelingDoneAt">
           <div class="dt">{{ $t("admin.pages.pickingOrders.labeling") }}</div>
           <div class="dd">
