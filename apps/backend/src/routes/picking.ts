@@ -6,6 +6,7 @@ import {
   acquireWorkLock,
   addAllUnboxedToShippingBox,
   addPackageToBox,
+  boxEachUnboxedPackage,
   cancelShippingBox,
   claimShelfBox,
   closeShippingBox,
@@ -15,6 +16,7 @@ import {
   getPickingOrderDetail,
   getPickingShelfStock,
   listLabelingOrders,
+  listOpenShippingBoxes,
   listPickingOrders,
   releaseWorkLock,
   removePackageFromBox,
@@ -83,9 +85,9 @@ pickingRoute.get("/picking-orders", async (c) => {
       deliveryDateFrom: c.req.query("deliveryDateFrom"),
       deliveryDateTo: c.req.query("deliveryDateTo"),
       scope,
+      username: actor.username,
     }),
     200
-      username: actor.username,
   );
 });
 
@@ -271,6 +273,22 @@ pickingRoute.post("/picking-orders/:id/boxes", async (c) => {
   return c.json(box, 201);
 });
 
+// One new open box per scanned-but-unboxed package of the order →
+// {created, boxIds} (spec 2026-11-01-picking-box-operations-design.md).
+pickingRoute.post("/picking-orders/:id/box-each-unboxed", async (c) => {
+  const result = await boxEachUnboxedPackage(db, {
+    pickingOrderId: c.req.param("id"),
+    actorId: actorFrom(c).id,
+  });
+  return c.json(result, 201);
+});
+
+// All open shipping boxes, oldest first (the PDA choose-box dialog;
+// unscoped — cross-order packing means any open box is a valid target).
+pickingRoute.get("/shipping-boxes", async (c) => {
+  return c.json({ boxes: await listOpenShippingBoxes(db) }, 200);
+});
+
 // Edit box size / weights (kg) / destination country; open boxes only.
 pickingRoute.patch("/shipping-boxes/:id", async (c) => {
   const body = await readJson<{
@@ -394,6 +412,7 @@ pickingRoute.get("/labeling-orders", async (c) => {
       limit: Number.isNaN(limit) ? undefined : limit,
       offset: Number.isNaN(offset) ? undefined : offset,
       scope,
+      username: actor.username,
     }),
     200
   );
@@ -411,4 +430,3 @@ pickingRoute.delete("/picking-orders/:id/work-lock", async (c) => {
   await releaseWorkLock(db, { orderId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json({ ok: true }, 200);
 });
-      username: actor.username,

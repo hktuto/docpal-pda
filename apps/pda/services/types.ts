@@ -536,6 +536,20 @@ export interface PickingBox {
   shippedBy: string | null;
 }
 
+/** GET /shipping-boxes row — an open shipping box, any picking order
+ *  (orderId/orderNo = the creator order, informational only). */
+export interface OpenShippingBox {
+  id: string;
+  orderId: string | null;
+  orderNo: string | null;
+  packageCount: number;
+  boxSize: string | null;
+  netWeight: number | null;
+  grossWeight: number | null;
+  destinationCountry: string | null;
+  createdDate: string;
+}
+
 /** Whole-box claim hint on GET /picking-orders/:id — a fully-claimable shelf
  *  box whose current contents exactly equal the order's remaining demand. */
 export interface SuggestedShelfBox {
@@ -677,6 +691,9 @@ export interface PutAwayCandidate {
   unboxedItems: number;
   /** Unresolved outdated-scan warnings on the order (spec 2026-10-07). */
   outdatedWarningCount: number;
+  /** Username the order's put-away task is assigned to (via the task join);
+   *  null/absent = unassigned. */
+  assignee?: string | null;
 }
 
 /** GET /put-away-tasks?status= row — the auto-created put-away work queue
@@ -691,9 +708,6 @@ export interface PutAwayTaskListRow {
   /** Order name per the warehouse's receivingOrderNameTemplate flow config. */
   displayName?: string;
   supplierCode: string | null;
-  /** Username the order's put-away task is assigned to (via the task join);
-   *  null/absent = unassigned. */
-  assignee?: string | null;
   supplierName: string | null;
   invoiceNos?: string | null;
   deliveryDate?: string | null;
@@ -703,6 +717,8 @@ export interface PutAwayTaskListRow {
   receivedItems: number;
   unboxedItems: number;
   createdDate: string;
+  /** Username this task is assigned to; null/absent = unassigned. */
+  assignee?: string | null;
 }
 
 /** Expected (receivable) invoice item; remainingQty = received − picked −
@@ -717,8 +733,6 @@ export interface PutAwayExpectedItem {
    *  omit the field. */
   ctnNo?: string | null;
   /** CN put-away only: the invoice item's PO no / PO line — the detail list
-  /** Username this task is assigned to; null/absent = unassigned. */
-  assignee?: string | null;
    *  sorts by po_line, then part_no. Standard backends omit the fields. */
   poNo?: string | null;
   poLine?: string | null;
@@ -905,6 +919,8 @@ export interface CnScanTaskListRow {
   itemCount: number;
   resolvedCount: number;
   createdDate: string;
+  /** Username this task is assigned to; null/absent = unassigned. */
+  assignee?: string | null;
 }
 
 /** One expected item of a CN scan task with its scan outcome. */
@@ -919,8 +935,6 @@ export interface CnScanTaskItem {
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
-  /** Username this task is assigned to; null/absent = unassigned. */
-  assignee?: string | null;
   cow: string | null;
   orgId: number;
   subInventoryCode: string | null;
@@ -1012,6 +1026,8 @@ export interface MeasuringBoxListRow {
   packageCount: number;
   verifiedCount: number;
   createdDate: string;
+  /** Username this box is assigned to; null/absent = unassigned. */
+  assignee?: string | null;
 }
 
 /** GET /measuring-boxes group — boxes whose picking orders are ALL
@@ -1026,8 +1042,6 @@ export interface MeasuringOrderGroup {
 /** Package row inside a measuring box. partNo/wclItemNo are the SCANNED label
  *  identity when the pick scan recorded it (2026-10-05), falling back to the
  *  picking item's part for legacy rows. */
-  /** Username this box is assigned to; null/absent = unassigned. */
-  assignee?: string | null;
 export interface MeasuringPackage {
   id: string;
   qty: number;
@@ -1099,6 +1113,8 @@ export interface VerifyTaskListRow {
   packageCount: number;
   verifyVerifiedCount: number;
   createdDate: string;
+  /** Username this task is assigned to; null/absent = unassigned. */
+  assignee?: string | null;
 }
 
 /** GET /verify-tasks/:id — task + box + packages. */
@@ -1113,8 +1129,6 @@ export interface VerifyTaskDetail {
     id: string;
     pickingOrderId: string;
     status: string;
-  /** Username this task is assigned to; null/absent = unassigned. */
-  assignee?: string | null;
     boxSize: string | null;
     grossWeight: number | null;
     netWeight: number | null;
