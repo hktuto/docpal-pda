@@ -20,7 +20,7 @@ export const receivingOrdersCn = pgTable(
     deliveryDate: timestamp("delivery_date", { mode: "date" }),
     orgId: integer("org_id").notNull().default(2), // 收货办公室, 2: HK
     dateCode: text("date_code"),
-    status: text("status").notNull().default("pending"), // pending | in_hand | clear
+    status: text("status").notNull().default("pending"), // pending | scanning | in_hand | clear
     arrivedAt: timestamp("arrived_at", { mode: "date" }),
     arrivedBy: text("arrived_by").references(() => users.id),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
@@ -68,6 +68,15 @@ export const receivingInvoiceItemsCn = pgTable(
     drawingNo: text("drawing_no"),
     orgId: integer("org_id").notNull().default(2),
     subInventoryCode: text("sub_inventory_code"),
+    // PDF-path receiving scan (spec
+    // docs/superpowers/plans/2026-11-01-cn-receiving-scan.md): NULL scanStatus =
+    // unresolved; ok | warning | error once resolved by the PDA scan step.
+    scanStatus: text("scan_status"),
+    scanQty: integer("scan_qty"),
+    scanReason: text("scan_reason"), // qty_mismatch (auto warning) | missing | damaged | wrong_part | other (flag)
+    scanNote: text("scan_note"),
+    scannedBy: text("scanned_by").references(() => users.id),
+    scannedAt: timestamp("scanned_at", { mode: "date" }),
     reportedMismatch: integer("reported_mismatch").notNull().default(0),
     mismatchReason: text("mismatch_reason"),
     mismatchQty: integer("mismatch_qty"),

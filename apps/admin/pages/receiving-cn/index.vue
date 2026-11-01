@@ -9,7 +9,7 @@ import type { AdminColumnDef } from "~/composables/useAdminTable";
 type CnMergedRow = CnOrderRow | CnPendingRow;
 
 const flow = useFlowApi();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const rows = ref<CnMergedRow[]>([]);
 const loading = ref(false);
 const error = ref("");
@@ -141,11 +141,15 @@ const {
   justUpdated: changeUpdated,
   refreshNow,
   dismiss,
-} = useChangeNotice(["receiving_cn.completed", "receiving_cn.failed", "receiving_cn.cancelled"], load);
+} = useChangeNotice(
+  ["receiving_cn.completed", "receiving_cn.failed", "receiving_cn.cancelled", "receiving_cn.scan_started"],
+  load
+);
 
 function orderStatusClass(s: string): string {
   return {
     pending: "chip chip-muted",
+    scanning: "chip chip-processing",
     in_hand: "chip chip-info",
     clear: "chip chip-ok",
   }[s] ?? "chip";
@@ -212,7 +216,7 @@ function putAwayStatusClass(s: string): string {
         <span v-if="row.kind === 'pending'" class="chip chip-processing">
           {{ $t("admin.pages.receivingCn.statuses.processing") }}
         </span>
-        <span v-else :class="orderStatusClass(row.status)">{{ $t(`status.receiving.${row.status}`) }}</span>
+        <span v-else :class="orderStatusClass(row.status)">{{ cnOrderStatusLabel(row.status, t, locale) }}</span>
       </template>
       <template #cell-putAwayStatus="{ row }">
         <span v-if="row.kind === 'pending'" class="pending-text">—</span>

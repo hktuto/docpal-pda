@@ -44,3 +44,22 @@ Tap the floating camera button to scan a supplier label instead of confirming li
   rows stay editable for a retry.
 
   ![Multi-item scan review](./assets/receiving-scan-multi-item.png)
+
+## CN receiving scan (收貨掃描)
+
+For CN warehouses, orders confirmed from the admin PDF-upload path land in the **Receiving scan** queue instead of going straight to put-away (manual receiving skips this step — it is already a scan).
+
+### 1. Open the receiving scan list
+
+From the home screen, tap **收貨掃描**. The list shows orders waiting to be scanned with per-order progress (resolved items / total items).
+
+### 2. Scan each physical item
+
+Tap an order to open its detail. Scan each item's label with the hardware scanner or camera; the app parses the label and matches it against the expected items:
+
+- A match whose quantity equals the expected line quantity marks the item **ok**; a different quantity marks it **warning** (quantity mismatch).
+- If an item is not as expected, use the item's **Flag** action to mark it missing, damaged, wrong part, or other (with a note). Use **Reset** to clear an item's scan state and start over.
+
+### 3. Finalize
+
+When every item is resolved, tap **Finalize** (optionally marking all remaining items as missing). Only **ok** items receive stock and get a put-away task; warning/error items receive nothing and stay on the order for admin follow-up. The app then takes you to Put-away.

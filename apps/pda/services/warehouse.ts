@@ -30,6 +30,13 @@ import type {
   CnPutAwayCompleteItem,
   CnManualReceiptOrder,
   CnManualReceiptResult,
+  CnFlagItemInput,
+  CnScanFinalizeInput,
+  CnScanFinalizeResult,
+  CnScanItemInput,
+  CnScanTaskDetail,
+  CnScanTaskItem,
+  CnScanTaskListRow,
   ScanPickingItemResult,
   ScanIntoShippingBoxResult,
   Shelf,
@@ -211,6 +218,18 @@ export interface WarehouseService {
   // 2026-10-27-manual-receiving-pda-design): commits the whole PDA-staged
   // task in one call; 404 while the cnReceiving flag is off.
   createCnManualReceipt(orders: CnManualReceiptOrder[]): Promise<CnManualReceiptResult>;
+
+  // CN receiving scan (收貨掃描, spec 2026-11-01-cn-receiving-scan) —
+  // /receiving-cn/scan-tasks/*: PDF-upload CN orders confirmed via OCR sit
+  // in status `scanning`; the PDA scans/flags each item server-side (one
+  // small tx per action) and finalizes the order into put-away. 404 while
+  // the cnReceiving flag is off.
+  listCnScanTasks(): Promise<CnScanTaskListRow[]>;
+  getCnScanTask(id: string): Promise<CnScanTaskDetail>;
+  scanCnItem(taskId: string, itemId: string, input: CnScanItemInput): Promise<CnScanTaskItem>;
+  flagCnItem(taskId: string, itemId: string, input: CnFlagItemInput): Promise<CnScanTaskItem>;
+  resetCnItemScan(taskId: string, itemId: string): Promise<CnScanTaskItem>;
+  finalizeCnScanTask(taskId: string, input?: CnScanFinalizeInput): Promise<CnScanFinalizeResult>;
 
   // Measuring — box-scoped (no tasks): the list is the open boxes with
   // ≥1 package whose picking orders are ALL picking-complete (the order's

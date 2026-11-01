@@ -56,6 +56,13 @@ import type {
   CnPutAwayCompleteItem,
   CnManualReceiptOrder,
   CnManualReceiptResult,
+  CnFlagItemInput,
+  CnScanFinalizeInput,
+  CnScanFinalizeResult,
+  CnScanItemInput,
+  CnScanTaskDetail,
+  CnScanTaskItem,
+  CnScanTaskListRow,
   AdHocPutAwayItem,
   AdHocPutAwayResult,
   AdHocPutAwayLocation,
@@ -594,6 +601,30 @@ export function createBackendWarehouseService(
     // PDA-staged task (spec 2026-10-27-manual-receiving-pda-design).
     async createCnManualReceipt(orders: CnManualReceiptOrder[]): Promise<CnManualReceiptResult> {
       return client.post("/receiving-cn/manual-receipts", { orders });
+    },
+
+    // CN receiving scan (收貨掃描, spec 2026-11-01-cn-receiving-scan) — the
+    // responses already match the DTOs one-to-one, so no normalization.
+    async listCnScanTasks(): Promise<CnScanTaskListRow[]> {
+      return client.get("/receiving-cn/scan-tasks");
+    },
+    async getCnScanTask(id: string): Promise<CnScanTaskDetail> {
+      return client.get(`/receiving-cn/scan-tasks/${id}`);
+    },
+    async scanCnItem(taskId: string, itemId: string, input: CnScanItemInput): Promise<CnScanTaskItem> {
+      return client.post(`/receiving-cn/scan-tasks/${taskId}/items/${itemId}/scan`, input);
+    },
+    async flagCnItem(taskId: string, itemId: string, input: CnFlagItemInput): Promise<CnScanTaskItem> {
+      return client.post(`/receiving-cn/scan-tasks/${taskId}/items/${itemId}/flag`, input);
+    },
+    async resetCnItemScan(taskId: string, itemId: string): Promise<CnScanTaskItem> {
+      return client.post(`/receiving-cn/scan-tasks/${taskId}/items/${itemId}/reset`, {});
+    },
+    async finalizeCnScanTask(
+      taskId: string,
+      input: CnScanFinalizeInput = {}
+    ): Promise<CnScanFinalizeResult> {
+      return client.post(`/receiving-cn/scan-tasks/${taskId}/finalize`, input);
     },
 
     // Measuring — box-scoped reads (no tasks): open boxes with ≥1 package

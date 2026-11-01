@@ -82,9 +82,10 @@ adminReceivingCnRoute.get("/receiving-cn/orders/:batchNo", async (c) => {
   return c.json(await getCnOrderDetail(db, batchNo), 200);
 });
 
-// Admin confirm of a pending CN order (the pdf path's receipt moment):
-// pending → in_hand + arrival stamp, received_qty fill, CN put-away task,
-// audit + SSE. 404 receiving_cn_order_not_found; 409 order_not_pending.
+// Admin confirm of a pending CN order (the pdf path's scan-start moment):
+// pending → scanning + arrival stamp; the PDA receiving-scan step fills
+// received_qty and creates the CN put-away task on finalize. 404
+// receiving_cn_order_not_found; 409 order_not_pending.
 adminReceivingCnRoute.post("/receiving-cn/orders/:batchNo/confirm", async (c) => {
   const actor = actorFrom(c);
   return c.json(

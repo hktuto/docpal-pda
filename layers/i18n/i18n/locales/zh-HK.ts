@@ -23,6 +23,7 @@ export default {
     shelfExchange: "貨架調撥",
     settings: "設定",
     manualReceiving: "手動收貨",
+    receivingScan: "收貨掃描",
     labeling: "待貼標籤",
     labelingDetail: "貼標籤詳情"
   },
@@ -119,7 +120,8 @@ export default {
       stockSearch: { title: "庫存查詢" },
       adHocPutAway: { title: "臨時上架" },
       shelfExchange: { title: "貨架調撥" },
-      manualReceiving: { title: "手動收貨" }
+      manualReceiving: { title: "手動收貨" },
+      receivingScan: { title: "收貨掃描" }
     }
   },
   labeling: {
@@ -167,6 +169,45 @@ export default {
       coo: "COO",
       cow: "COW"
     }
+  },
+  receivingScan: {
+    title: "收貨掃描",
+    hint: "待掃描的收貨單 — 掃描實物標籤以核對項目。",
+    noTasks: "沒有待掃描的收貨單。",
+    noItems: "此收貨單沒有項目。",
+    progress: "{resolved}/{total}",
+    progressLabel: "進度",
+    invoices: "發票號",
+    deliveryDate: "送貨日期",
+    lineQty: "預期 {qty}",
+    status: {
+      unresolved: "未掃描",
+      ok: "已掃描 {qty}",
+      warning: "數量不符 {scanned}/{expected}"
+    },
+    reasons: {
+      qty_mismatch: "數量不符",
+      missing: "缺貨",
+      damaged: "損壞",
+      wrong_part: "錯料",
+      other: "其他"
+    },
+    flag: "標記",
+    flagTitle: "標記 {part}",
+    flagNote: "備註（可選）",
+    wrongPartNo: "實際料號",
+    wrongPartNoRequired: "請輸入實際料號。",
+    reset: "重設",
+    chooseItem: "選擇匹配的項目",
+    duplicateLabel: "此標籤已掃描過。",
+    noPartNo: "無法從標籤讀取料號。",
+    noQty: "標籤沒有數量，而且此項目沒有預期數量可作後備。",
+    noMatch: "此標籤與任何未掃描項目不符。",
+    finalize: "完成",
+    confirmFinalize: "確定完成此收貨掃描？已掃描的項目將會收貨並建立上架任務。",
+    confirmFinalizeUnresolved: "仍有 {count} 項未掃描。可將其餘項目標記為缺貨並完成，或取消繼續掃描。",
+    markRemainingMissing: "其餘標記為缺貨並完成",
+    finalized: "收貨掃描已完成 — 已建立上架任務。"
   },
   login: {
     brand: "DocPal",
@@ -1987,8 +2028,8 @@ export default {
         detailTitle: "客戶收貨單 {batchNo}",
         downloadExcel: "下載 Excel",
         confirmOrder: "確認收貨",
-        confirmOrderConfirm: "確認訂單 {batchNo} 已收貨（in hand）？此操作會建立上架任務。",
-        orderConfirmed: "訂單已確認 — 上架任務已建立。",
+        confirmOrderConfirm: "確認訂單 {batchNo}？訂單會進入收貨掃描 — PDA 掃描實貨後才會建立上架任務。",
+        orderConfirmed: "訂單已確認 — 等待 PDA 收貨掃描。",
         confirmFailed: "確認失敗",
         invalidQty: "數量必須為正整數。",
         putAway: "上架任務",

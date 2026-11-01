@@ -540,6 +540,10 @@ async function submit() {
   background: var(--surface);
   border-top: 1px solid var(--border);
 }
+/* Lift the camera FAB clear of the fixed confirm footer (footer ≈ 4rem tall). */
+:deep(.scan-fab) {
+  bottom: 4.75rem;
+}
 .modal-backdrop {
   position: fixed;
   inset: 0;

@@ -23,6 +23,7 @@ export default {
     shelfExchange: "Shelf Exchange",
     settings: "Settings",
     manualReceiving: "Manual Receiving",
+    receivingScan: "Receiving Scan",
     labeling: "Labeling",
     labelingDetail: "Labeling Detail"
   },
@@ -119,7 +120,8 @@ export default {
       stockSearch: { title: "Stock Search" },
       adHocPutAway: { title: "Ad-hoc Put-away" },
       shelfExchange: { title: "Shelf Exchange" },
-      manualReceiving: { title: "Manual Receiving" }
+      manualReceiving: { title: "Manual Receiving" },
+      receivingScan: { title: "Receiving Scan" }
     }
   },
   labeling: {
@@ -150,6 +152,7 @@ export default {
     duplicateOrderNo: "This order no. is already in the task.",
     duplicateLabel: "This label was already scanned.",
     noPartNo: "Could not read a part number from the label.",
+    noQty: "The label has no qty and this item has no expected qty to fall back to.",
     mixedBrand: "This task is locked to brand {brand} — scan other brands in a separate task.",
     brandRequired: "Brand unknown — scan a label that matches a supplier template first.",
     invalidItem: "A part no. and a positive whole-number qty are required.",
@@ -167,6 +170,44 @@ export default {
       coo: "COO",
       cow: "COW"
     }
+  },
+  receivingScan: {
+    title: "Receiving Scan",
+    hint: "Orders awaiting scanning — scan the physical labels to verify the items.",
+    noTasks: "No orders awaiting scanning.",
+    noItems: "This order has no items.",
+    progress: "{resolved}/{total}",
+    progressLabel: "Progress",
+    invoices: "Invoice nos.",
+    deliveryDate: "Delivery date",
+    lineQty: "Expected {qty}",
+    status: {
+      unresolved: "Unresolved",
+      ok: "Scanned {qty}",
+      warning: "Qty mismatch {scanned}/{expected}"
+    },
+    reasons: {
+      qty_mismatch: "Qty mismatch",
+      missing: "Missing",
+      damaged: "Damaged",
+      wrong_part: "Wrong part",
+      other: "Other"
+    },
+    flag: "Flag",
+    flagTitle: "Flag {part}",
+    flagNote: "Note (optional)",
+    wrongPartNo: "Actual part no.",
+    wrongPartNoRequired: "Enter the actual part no.",
+    reset: "Reset",
+    chooseItem: "Choose the matching item",
+    duplicateLabel: "This label was already scanned.",
+    noPartNo: "Could not read a part no. from the label.",
+    noMatch: "The label matches no unresolved item.",
+    finalize: "Finish",
+    confirmFinalize: "Finish this receiving scan? Scanned items will be received and a put-away task created.",
+    confirmFinalizeUnresolved: "{count} item(s) remain unscanned. Mark the rest as missing and finish, or cancel to keep scanning.",
+    markRemainingMissing: "Mark rest missing & finish",
+    finalized: "Receiving scan finished — put-away task created."
   },
   login: {
     brand: "DocPal",
@@ -1989,8 +2030,8 @@ export default {
         detailTitle: "CN Receiving Order {batchNo}",
         downloadExcel: "Download Excel",
         confirmOrder: "Confirm Receipt",
-        confirmOrderConfirm: "Confirm order {batchNo} as received (in hand)? This creates the put-away task.",
-        orderConfirmed: "Order confirmed — put-away task created.",
+        confirmOrderConfirm: "Confirm order {batchNo}? It moves to receiving scan — a PDA operator scans the physical items before put-away.",
+        orderConfirmed: "Order confirmed — awaiting PDA receiving scan.",
         confirmFailed: "Confirm failed",
         invalidQty: "Qty must be a positive whole number.",
         putAway: "Put-away Task",

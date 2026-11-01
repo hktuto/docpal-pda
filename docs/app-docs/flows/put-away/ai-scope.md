@@ -16,7 +16,11 @@
   /put-away-cn/tasks(/:id)` + `POST /put-away-cn/tasks/:id/complete`
   (`apps/backend/src/routes/putawayCn.ts` + `src/db/putawayCn.ts`, every
   route 404s while the flag is off). Tasks live in `put_away_tasks_cn`
-  (created by the CN finalize cron, one per CN receiving order); completion
+  (one per CN receiving order — created by the PDA manual-receiving commit,
+  or by the receiving-scan finalize on the PDF path, and only when the
+  order has ≥1 clean (ok) scanned item; spec
+  `docs/superpowers/specs/2026-11-01-cn-receiving-scan-design.md`);
+  completion
   writes per-item `put_away_qty` updates + a single PUT_AWAY `on_hand` ledger
   row (no dock row — the CN path has no RECEIVE_TO_DOCK ledger) with no
   `inventory_lot_sources` row (the CN item id lives in the ledger metadata,
@@ -120,7 +124,7 @@
   decoder is restricted to the supplier profile's `barcode_types` (when set),
   but the shelf/box QR symbologies always stay enabled — shelf scanning is
   core to this flow (`useSupplierSymbologyScope(..., { withShelfCodes: true })`,
-  xcheng/Movfast only); restored on page leave.
+  xcheng/Movfast + Honeywell); restored on page leave.
 - Boxes exist in the data model but are invisible to the operator: every
   commit lands in a `shelf_boxes` row found-or-created per (order, shelf)
   (`ensureOrderShelfBoxTx` — reuse the open box holding the order's items →

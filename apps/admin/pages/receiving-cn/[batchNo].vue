@@ -16,7 +16,7 @@ const route = useRoute();
 const batchNo = route.params.batchNo as string;
 const flow = useFlowApi();
 const api = useApi();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const detail = ref<CnOrderDetail | null>(null);
 const loading = ref(true);
@@ -221,6 +221,12 @@ const itemColumnDefs = computed<AdminColumnDef<CnOrderItemRow>[]>(() => [
   { key: "lineQty", label: t("admin.pages.receivingCn.itemsTable.lineQty"), size: 90 },
   { key: "receivedQty", label: t("admin.pages.receivingCn.itemsTable.receivedQty"), size: 90 },
   {
+    key: "scan",
+    label: cnScanColumnLabel(locale.value),
+    accessor: (it) => it.scanStatus ?? "",
+    size: 170,
+  },
+  {
     key: "putAway",
     label: t("admin.pages.receivingCn.itemsTable.putAwayStatus"),
     accessor: (it) => it.putAwayQty,
@@ -318,19 +324,23 @@ async function saveInline(item: CnOrderItemRow, field: InlineField) {
   }
 }
 
-// ---- confirm receipt (pending → in_hand + put-away task) ----
+// ---- confirm receipt (pending → scanning; the put-away task appears only
+// after the PDA receiving scan finalizes) ----
 
 const confirming = ref(false);
+const notice = ref("");
 
 async function confirmOrder() {
   if (!detail.value || confirming.value) return;
-  if (!window.confirm(t("admin.pages.receivingCn.confirmOrderConfirm", { batchNo: detail.value.order.batchNo }))) return;
+  if (!window.confirm(cnConfirmOrderConfirm(detail.value.order.batchNo, locale.value))) return;
   confirming.value = true;
   error.value = "";
+  notice.value = "";
   try {
     await flow.confirmCnOrder(batchNo);
     await load();
     logsKey.value++;
+    notice.value = cnConfirmOrderDone(locale.value);
   } catch (e: any) {
     error.value = `${t("admin.pages.receivingCn.confirmFailed")}: ${e?.message ?? String(e)}`;
   } finally {
@@ -378,9 +388,18 @@ async function saveEdit(
 function orderStatusClass(s: string): string {
   return {
     pending: "chip chip-muted",
+    scanning: "chip chip-processing",
     in_hand: "chip chip-info",
     clear: "chip chip-ok",
   }[s] ?? "chip";
+}
+
+function scanStatusClass(s: string | null | undefined): string {
+  return {
+    ok: "chip chip-ok",
+    warning: "chip chip-processing",
+    error: "chip chip-error",
+  }[s ?? ""] ?? "chip chip-muted";
 }
 
 function putAwayStatusClass(s: string): string {
@@ -423,12 +442,14 @@ function putAwayStatusClass(s: string): string {
 
     <div v-else-if="error" class="error-banner">{{ error }}</div>
 
+    <div v-if="notice" class="notice-banner">{{ notice }}</div>
+
     <template v-else-if="detail">
       <div class="card head-card">
         <div class="head-grid">
           <div>
             <span class="dt">{{ $t("admin.pages.receivingCn.status") }}:</span>
-            <span :class="orderStatusClass(detail.order.status)">{{ $t(`status.receiving.${detail.order.status}`) }}</span>
+            <span :class="orderStatusClass(detail.order.status)">{{ cnOrderStatusLabel(detail.order.status, t, locale) }}</span>
           </div>
           <div>
             <span class="dt">{{ $t("admin.pages.receivingCn.putAway") }}:</span>
@@ -611,6 +632,17 @@ function putAwayStatusClass(s: string): string {
             </select>
             <span v-else>{{ row.subInventoryCode ?? "—" }}</span>
           </template>
+          <template #cell-scan="{ row }">
+            <template v-if="row.scanStatus">
+              <span :class="scanStatusClass(row.scanStatus)">{{ cnScanStatusLabel(row.scanStatus, locale) }}</span>
+              <span v-if="row.scanQty != null" class="scan-qty">{{ row.scanQty }}/{{ row.lineQty ?? "—" }}</span>
+              <span v-if="row.scanReason && row.scanReason !== 'qty_mismatch'" class="scan-detail">
+                {{ cnScanReasonLabel(row.scanReason, locale) }}
+              </span>
+              <span v-if="row.scanNote" class="scan-detail">{{ row.scanNote }}</span>
+            </template>
+            <span v-else class="muted">{{ detail.order.status === "scanning" ? cnScanStatusLabel(null, locale) : "—" }}</span>
+          </template>
           <template #cell-putAway="{ row }">
             <span v-if="row.putAwayQty > 0 || row.putAwayLocations.length > 0">
               {{ row.putAwayQty }}/{{ row.receivedQty }}
@@ -730,6 +762,32 @@ function putAwayStatusClass(s: string): string {
 }
 .chip-muted {
   background: #e5e7eb;
+  color: #52606d;
+}
+.chip-processing {
+  background: #fef3c7;
+  color: #b45309;
+}
+.chip-error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.notice-banner {
+  margin-bottom: 1rem;
+  padding: 0.5rem 0.75rem;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  border-radius: 0.375rem;
+  color: #15803d;
+  font-size: 0.875rem;
+}
+.scan-qty {
+  margin-left: 0.375rem;
+  font-size: 0.75rem;
+}
+.scan-detail {
+  display: block;
+  font-size: 0.75rem;
   color: #52606d;
 }
 </style>

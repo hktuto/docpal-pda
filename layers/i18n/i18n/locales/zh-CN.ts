@@ -23,6 +23,7 @@ export default {
     shelfExchange: "货架调拨",
     settings: "设置",
     manualReceiving: "手动收货",
+    receivingScan: "收货扫描",
     labeling: "待贴标签",
     labelingDetail: "贴标签详情"
   },
@@ -119,7 +120,8 @@ export default {
       stockSearch: { title: "库存查询" },
       adHocPutAway: { title: "临时上架" },
       shelfExchange: { title: "货架调拨" },
-      manualReceiving: { title: "手动收货" }
+      manualReceiving: { title: "手动收货" },
+      receivingScan: { title: "收货扫描" }
     }
   },
   labeling: {
@@ -167,6 +169,45 @@ export default {
       coo: "COO",
       cow: "COW"
     }
+  },
+  receivingScan: {
+    title: "收货扫描",
+    hint: "待扫描的收货单 — 扫描实物标签以核对项目。",
+    noTasks: "没有待扫描的收货单。",
+    noItems: "此收货单没有项目。",
+    progress: "{resolved}/{total}",
+    progressLabel: "进度",
+    invoices: "发票号",
+    deliveryDate: "送货日期",
+    lineQty: "预期 {qty}",
+    status: {
+      unresolved: "未扫描",
+      ok: "已扫描 {qty}",
+      warning: "数量不符 {scanned}/{expected}"
+    },
+    reasons: {
+      qty_mismatch: "数量不符",
+      missing: "缺货",
+      damaged: "损坏",
+      wrong_part: "错料",
+      other: "其他"
+    },
+    flag: "标记",
+    flagTitle: "标记 {part}",
+    flagNote: "备注（可选）",
+    wrongPartNo: "实际料号",
+    wrongPartNoRequired: "请输入实际料号。",
+    reset: "重置",
+    chooseItem: "选择匹配的项目",
+    duplicateLabel: "此标签已扫描过。",
+    noPartNo: "无法从标签读取料号。",
+    noQty: "标签没有数量，而且此项目没有预期数量可作后备。",
+    noMatch: "此标签与任何未扫描项目不符。",
+    finalize: "完成",
+    confirmFinalize: "确定完成此收货扫描？已扫描的项目将会收货并创建上架任务。",
+    confirmFinalizeUnresolved: "仍有 {count} 项未扫描。可将其余项目标记为缺货并完成，或取消继续扫描。",
+    markRemainingMissing: "其余标记为缺货并完成",
+    finalized: "收货扫描已完成 — 已创建上架任务。"
   },
   login: {
     brand: "DocPal",
@@ -1987,8 +2028,8 @@ export default {
         detailTitle: "客户收货单 {batchNo}",
         downloadExcel: "下载 Excel",
         confirmOrder: "确认收货",
-        confirmOrderConfirm: "确认订单 {batchNo} 已收货（in hand）？此操作会创建上架任务。",
-        orderConfirmed: "订单已确认 — 上架任务已创建。",
+        confirmOrderConfirm: "确认订单 {batchNo}？订单会进入收货扫描 — PDA 扫描实货后才会创建上架任务。",
+        orderConfirmed: "订单已确认 — 等待 PDA 收货扫描。",
         confirmFailed: "确认失败",
         invalidQty: "数量必须为正整数。",
         putAway: "上架任务",

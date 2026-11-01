@@ -871,6 +871,101 @@ export interface CnManualReceiptResult {
   putAwayTaskId: string;
 }
 
+// ------------------------------------------------------------------
+// CN receiving scan task (收貨掃描, spec 2026-11-01-cn-receiving-scan):
+// PDF-upload CN orders confirmed via OCR land in status `scanning`; the
+// PDA scans each physical item against the OCR'd expected items, flags
+// problem items, and finalizes — only `ok` items flow into put-away.
+// Routes: /receiving-cn/scan-tasks/* (SSE topic
+// `/receiving-cn-scan-tasks`).
+// ------------------------------------------------------------------
+
+export type CnScanStatus = "ok" | "warning" | "error";
+
+export type CnScanReason = "qty_mismatch" | "missing" | "damaged" | "wrong_part" | "other";
+
+/** GET /receiving-cn/scan-tasks row. */
+export interface CnScanTaskListRow {
+  id: string;
+  batchNo: string;
+  /** Comma-joined invoice numbers (string_agg), NULL when the order has none. */
+  invoiceNos: string | null;
+  deliveryDate: string | null;
+  orgId: number;
+  itemCount: number;
+  resolvedCount: number;
+  createdDate: string;
+}
+
+/** One expected item of a CN scan task with its scan outcome. */
+export interface CnScanTaskItem {
+  id: string;
+  partNo: string;
+  wclItemNo: string | null;
+  poNo: string | null;
+  poLine: string | null;
+  lineQty: number | null;
+  ctnNo: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  orgId: number;
+  subInventoryCode: string | null;
+  /** NULL = unresolved. */
+  scanStatus: CnScanStatus | null;
+  /** Physically scanned qty (NULL until scanned). */
+  scanQty: number | null;
+  scanReason: CnScanReason | null;
+  scanNote: string | null;
+  scannedAt: string | null;
+  scannedBy: string | null;
+}
+
+/** GET /receiving-cn/scan-tasks/:id. */
+export interface CnScanTaskDetail {
+  order: {
+    id: string;
+    batchNo: string;
+    status: string;
+    deliveryDate: string | null;
+    /** Comma-joined invoice numbers (string_agg), NULL when none. */
+    invoiceNos: string | null;
+    dateCode: string | null;
+  };
+  items: CnScanTaskItem[];
+}
+
+/** POST /receiving-cn/scan-tasks/:id/items/:itemId/scan body. */
+export interface CnScanItemInput {
+  qty: number;
+  dateCode?: string;
+  lotCode?: string;
+  coo?: string;
+  cow?: string;
+  /** The scanned label text — traceability only. */
+  raw?: string;
+}
+
+/** POST /receiving-cn/scan-tasks/:id/items/:itemId/flag body. */
+export interface CnFlagItemInput {
+  reason: "missing" | "damaged" | "wrong_part" | "other";
+  note?: string;
+  wrongPartNo?: string;
+}
+
+/** POST /receiving-cn/scan-tasks/:id/finalize body. */
+export interface CnScanFinalizeInput {
+  unresolvedAs?: "missing";
+}
+
+export interface CnScanFinalizeResult {
+  id: string;
+  batchNo: string;
+  /** NULL when every item was flagged (nothing to put away). */
+  putAwayTaskId: string | null;
+}
+
 /** POST /shelf-boxes response (a real, non-staging box). */
 export interface ShelfBox {
   id: string;

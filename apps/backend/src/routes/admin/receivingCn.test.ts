@@ -1173,7 +1173,7 @@ test("order detail prepare: pending order — items re-derived from po_no, arriv
   assert.equal(new Date(after!.arrivedAt).getTime(), new Date(before!.arrivedAt).getTime());
 });
 
-test("confirm: pending → in_hand + received fill + put-away task; 409 when not pending; 404 unknown", async () => {
+test("confirm: pending → scanning (NO received fill, NO put-away task); 409 when not pending; 404 unknown", async () => {
   await reseed(client);
   const token = await login("admin", "DocPalAdmin2026!");
   await seedDerivedOrgInfoPairs();
@@ -1186,14 +1186,14 @@ test("confirm: pending → in_hand + received fill + put-away task; 409 when not
   assert.equal(res.status, 200);
   const body = (await res.json()) as { id: string; batchNo: string; putAwayTaskId: string | null };
   assert.equal(body.batchNo, "TE-CONF-1");
-  assert.ok(body.putAwayTaskId);
+  assert.equal(body.putAwayTaskId, null); // the scan finalize creates the task
 
   const order = await queryGet<{ status: string; arrivedAt: string | null; arrivedBy: string | null }>(
     client.db,
     sql`SELECT status, arrived_at AS "arrivedAt", arrived_by AS "arrivedBy"
         FROM receiving_orders_cn WHERE batch_no = 'TE-CONF-1'`
   );
-  assert.equal(order!.status, "in_hand");
+  assert.equal(order!.status, "scanning"); // awaits the PDA receiving scan
   assert.ok(order!.arrivedAt);
   assert.ok(order!.arrivedBy);
   const item = await queryGet<{ receivedQty: number; orgId: number; subInventoryCode: string }>(
@@ -1201,26 +1201,22 @@ test("confirm: pending → in_hand + received fill + put-away task; 409 when not
     sql`SELECT received_qty AS "receivedQty", org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
         FROM receiving_invoice_items_cn WHERE id = 'cn-item-TE-CONF-1'`
   );
-  assert.equal(item!.receivedQty, 100); // filled from line_qty
+  assert.equal(item!.receivedQty, 0); // untouched until the scan finalize
   assert.equal(item!.orgId, 14); // po_no cleanup ran on confirm too
   assert.equal(item!.subInventoryCode, "GZSZ");
-  const task = await queryGet<{ orgId: number; subInventoryCode: string; status: string }>(
+  const tasks = await queryAll<{ id: string }>(
     client.db,
-    sql`SELECT org_id AS "orgId", sub_inventory_code AS "subInventoryCode", status
-        FROM put_away_tasks_cn WHERE receiving_order_cn_id = 'cn-order-TE-CONF-1'`
+    sql`SELECT id FROM put_away_tasks_cn WHERE receiving_order_cn_id = 'cn-order-TE-CONF-1'`
   );
-  assert.deepEqual(task, { orgId: 14, subInventoryCode: "GZSZ", status: "pending" });
+  assert.equal(tasks.length, 0);
   const logs = await queryAll<{ entityType: string; toState: string }>(
     client.db,
     sql`SELECT entity_type AS "entityType", to_state AS "toState" FROM transaction_logs
-        WHERE entity_id IN ('cn-order-TE-CONF-1', ${body.putAwayTaskId}) ORDER BY created_date`
+        WHERE entity_type = 'receiving_order_cn' AND entity_id = 'cn-order-TE-CONF-1' ORDER BY created_date`
   );
   assert.deepEqual(
     logs.map((l) => [l.entityType, l.toState]),
-    [
-      ["receiving_order_cn", "in_hand"],
-      ["put_away_task_cn", "pending"],
-    ]
+    [["receiving_order_cn", "scanning"]]
   );
 
   // Second confirm → 409; unknown batch → 404.

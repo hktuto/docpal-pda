@@ -66,7 +66,7 @@
 - Scanner symbology whitelist: while the detail page is open, the hardware
   decoder is restricted to the supplier profile's `barcode_types` (when set),
   so other symbologies on multi-barcode labels don't decode at all; restored
-  on page leave (`useSupplierSymbologyScope`, xcheng/Movfast devices only).
+  on page leave (`useSupplierSymbologyScope`, xcheng/Movfast + Honeywell devices).
 - Customer receiving (CN warehouses; spec
   `docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`) —
   a separate world from the standard receiving flow, with two intake paths:
@@ -88,13 +88,51 @@
   `RECEIVING_CN_SYNC=off`) polls running workflows; on completion it reads
   the `receiving_orders_cn` / `receiving_invoices_cn` /
   `receiving_invoice_items_cn` trio — written by the external upstream-sync
-  service, matched by `batch_no` = the CN 編號 — flips the order `in_hand` +
-  stamps `arrived_at`, and creates the dedicated CN put-away task
-  (`put_away_tasks_cn`, unique per order = idempotent). Warehouses on this
+  service, matched by `batch_no` = the CN 編號 — moves the order to
+  **`scanning`** + stamps `arrived_at` (NO `received_qty` fill, NO put-away
+  task). Admin confirm of the OCR'd order
+  (`POST /admin/receiving-cn/orders/:batchNo/confirm`, `confirmCnOrder`)
+  does the same via `startCnReceivingScanTx`. The order then waits for the
+  PDA **receiving scan** task (收貨掃描; spec
+  `docs/superpowers/specs/2026-11-01-cn-receiving-scan-design.md`): home
+  tile (gated by the same `receiving-cn` flow-step flag) →
+  `apps/pda/pages/receiving-cn-scan/index.vue` (task list with progress,
+  `useVisibleReload` on `/receiving-cn-scan-tasks`) →
+  `apps/pda/pages/receiving-cn-scan/[id].vue` (hardware scanner + camera
+  OCR, client-side template parse + match against the order's unresolved
+  items in `apps/pda/utils/cnReceivingScan.ts` — no-match → error feedback,
+  multi-match → chooser, duplicate raw label → rejected; per-item Flag
+  dialog for missing/damaged/wrong part/other + note, and Reset). Each
+  scan/flag/reset is its own small server tx (the order is a shared
+  server-side entity the admin console also sees): `GET
+  /receiving-cn/scan-tasks(/:id)`, `POST
+  /receiving-cn/scan-tasks/:id/items/:itemId/scan|flag|reset`, `POST
+  /receiving-cn/scan-tasks/:id/finalize` (`{unresolvedAs?: 'missing'}`;
+  409 `unresolved_items`) in
+  `apps/backend/src/routes/receivingCn.ts` over
+  `apps/backend/src/db/receivingCnScan.ts` (all `cnReceiving()`-gated).
+  Scan state lives in new `receiving_invoice_items_cn` columns
+  (`scan_status` NULL/ok/warning/error, `scan_qty`, `scan_reason`
+  qty_mismatch/missing/damaged/wrong_part/other, `scan_note`,
+  `scanned_by`/`scanned_at`); a qty ≠ `line_qty` scan is an automatic
+  `warning`, user flags are `error` (mirrored into the pre-existing
+  mismatch columns for the admin mismatch display), and a successful scan
+  overwrites the item's date_code/lot_code/COO/COW with the physically
+  scanned values. **Finalize is the receipt moment**: one tx sets
+  `received_qty = scan_qty` on ok items only (warning/error stay 0 so they
+  can never enter put-away — CN put-away remaining derives as
+  received − picked − put_away), stamps the order `in_hand`, and creates
+  the `put_away_tasks_cn` task (`ON CONFLICT DO NOTHING`) only when ≥1 ok
+  item exists; SSE `receiving_cn.scan_started` /
+  `receiving_cn_scan.item_updated` / `receiving_cn.completed` on topics
+  `/receiving-cn-scan-tasks` (+ `/admin/receiving-cn`, `/put-away-tasks`).
+  The admin console shows the `scanning` status (list filter +
+  `apps/admin/pages/receiving-cn/index.vue` / `[batchNo].vue`) and per-item
+  scan outcomes (status, scanned vs line qty, reason, note). Warehouses on this
   flow (flow-config `cnReceiving`) do not use the standard receiving flow;
   CN stock only becomes allocatable after CN put-away completes (no dock
-  ledger). Phase 2 (PDF + OCR) is not implemented (`getOcrResult` throws, no
-  `/pdf` routes or UI branch).
+  ledger). Re-admitting a held-back (warning/error) item to stock is
+  deliberately out of scope (admin-side correction flow).
 - Report, edit, confirm, and cancel receiving item mismatches — **item-keyed**
   (every call addresses the receiving invoice item id; the mismatch is a set
   of flat columns on the item, no separate table, no status/reporter).
@@ -304,6 +342,14 @@
   editing; confirming uploads the file + verified JSON and starts the DocPal
   workflow; each item carries a 1-based `index` = its excel row order, passed
   through to the workflow payload).
+- `apps/pda/pages/receiving-cn-scan/index.vue` +
+  `apps/pda/pages/receiving-cn-scan/[id].vue` +
+  `apps/pda/utils/cnReceivingScan.ts` — PDA 收貨掃描 receiving scan task
+  (PDF path): task list with progress, scan detail (client-side label
+  parse/match, flag/reset, finalize).
+- `apps/backend/src/db/receivingCnScan.ts` — CN receiving scan domain
+  module (`startCnReceivingScanTx`, per-item scan/flag/reset, finalize
+  tx); routes in `apps/backend/src/routes/receivingCn.ts`.
 
 ## Known limitations
 
@@ -332,3 +378,5 @@
 - `docs/superpowers/specs/2026-09-22-admin-receiving-status-override-design.md`
 - `docs/superpowers/specs/2026-10-02-excel-order-barcode-scan-to-open-design.md`
 - `docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`
+- `docs/superpowers/specs/2026-10-27-manual-receiving-pda-design.md`
+- `docs/superpowers/specs/2026-11-01-cn-receiving-scan-design.md`

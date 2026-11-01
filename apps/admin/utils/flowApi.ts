@@ -835,7 +835,7 @@ export interface CnOrderRow {
   batchNo: string;
   invoiceNo: string;
   supplier: string;
-  /** receiving_orders_cn.status (pending | in_hand | clear). */
+  /** receiving_orders_cn.status (pending | scanning | in_hand | clear). */
   status: string;
   deliveryDate: string | null;
   arrivedAt: string | null;
@@ -895,6 +895,15 @@ export interface CnOrderItemRow {
   additionalData?: Record<string, unknown> | null;
   /** Order-level upstream extras jsonb passthrough. */
   orderData?: Record<string, unknown> | null;
+  /** PDA receiving-scan outcome: null = unresolved, else ok | warning | error. */
+  scanStatus?: "ok" | "warning" | "error" | null;
+  /** Physically scanned qty (null until scanned). */
+  scanQty?: number | null;
+  /** qty_mismatch (auto warning) | missing | damaged | wrong_part | other. */
+  scanReason?: string | null;
+  scanNote?: string | null;
+  scannedBy?: string | null;
+  scannedAt?: string | null;
 }
 
 export interface CnOrderDetail {
@@ -1268,7 +1277,8 @@ export function useFlowApi() {
         >
       > & { lineQty?: number }
     ) => api.patch<CnOrderItemRow>(`/admin/receiving-cn/items/${id}`, fields),
-    // Admin confirm of a pending CN order (pdf path): → in_hand + put-away task.
+    // Admin confirm of a pending CN order (pdf path): → scanning (no put-away
+    // task — it is created only when the PDA receiving scan finalizes).
     confirmCnOrder: (batchNo: string) =>
       api.post<{ id: string; batchNo: string; putAwayTaskId: string | null }>(
         `/admin/receiving-cn/orders/${encodeURIComponent(batchNo)}/confirm`,

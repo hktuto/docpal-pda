@@ -930,11 +930,12 @@ export async function prepareCnOrderDetail(db: AppDb, batchNo: string, actorId: 
 }
 
 /**
- * Admin confirm of a pending CN order (spec phase 2): the receipt moment for
- * the pdf path — re-runs the po_no cleanup, fills received_qty from line_qty,
- * stamps the order in_hand + arrived, creates the CN put-away task, audit rows
- * + receiving_cn.completed SSE. 404 receiving_cn_order_not_found; 409
- * order_not_pending unless the order is pending.
+ * Admin confirm of a pending CN order (spec phase 2 + the CN receiving scan
+ * plan): the pdf path no longer receives here — the order moves to `scanning`
+ * (+ arrived stamp) and waits for the PDA receiving-scan step, which fills
+ * received_qty and creates the put-away task on finalize. Re-runs the po_no
+ * cleanup, audit row + receiving_cn.scan_started SSE. 404
+ * receiving_cn_order_not_found; 409 order_not_pending unless pending.
  */
 export async function confirmCnOrder(
   db: AppDb,
@@ -948,19 +949,17 @@ export async function confirmCnOrder(
   );
   if (!order) throw new HTTPException(404, { message: "receiving_cn_order_not_found" });
   if (order.status !== "pending") throw new HTTPException(409, { message: "order_not_pending" });
-  let taskId: string | null = null;
   await db.transaction(async (tx) => {
     const at = now();
     await rederiveCnItemOrgSubTx(tx, order.id, at);
-    const result = await receiveCnOrderTx(tx, order, actor.id, at, { source: "admin_confirm" });
-    taskId = result.taskId;
+    await startCnReceivingScanTx(tx, order, actor.id, at, { source: "admin_confirm" });
     await emitEvent(tx, {
-      type: "receiving_cn.completed",
-      topics: ["/admin/receiving-cn", "/put-away-tasks"],
-      data: { receivingOrderCnId: order.id, batchNo, source: "admin_confirm", putAwayTaskCreated: taskId !== null },
+      type: "receiving_cn.scan_started",
+      topics: ["/admin/receiving-cn", "/receiving-cn-scan-tasks"],
+      data: { receivingOrderCnId: order.id, batchNo, source: "admin_confirm" },
     });
   });
-  return { id: order.id, batchNo, putAwayTaskId: taskId };
+  return { id: order.id, batchNo, putAwayTaskId: null };
 }
 
 // --- order audit logs -----------------------------------------------------------------
@@ -1241,8 +1240,9 @@ export async function updateCnReceivingItemFields(
 // --- finalize (cron) ----------------------------------------------------------
 
 /** The CN order's item-derived uniform stock-location pair (orderPair mirror
- *  over the _cn tables): the single DISTINCT item pair, NULL when mixed. */
-async function cnOrderPair(
+ *  over the _cn tables): the single DISTINCT item pair, NULL when mixed.
+ *  Shared with the CN receiving-scan finalize (put-away task insert). */
+export async function cnOrderPair(
   tx: DbOrTx,
   orderCnId: string
 ): Promise<{ orgId: number | null; subInventoryCode: string | null }> {
@@ -1257,46 +1257,24 @@ async function cnOrderPair(
   return { orgId: null, subInventoryCode: null };
 }
 
-/**
- * Workflow-terminal completion (spec): the upstream sync has written the CN
- * order stamped with the workflow's batch_no — if not there yet, return false
- * so the cron retries on the next poll. Workflows predating the batch_no
- * column (NULL) fall back to the legacy invoice_no match. One tx: order →
- * in_hand (+arrived stamp), idempotent put_away_tasks_cn insert, audit logs,
- * workflow → completed, SSE.
- */
-/** The receipt moment shared by the workflow finalize (cron) and the admin
- *  confirm: fill received_qty from line_qty (date code falls back to the
- *  order's), stamp the order in_hand + arrived, insert the CN put-away task
- *  (uniform item pair wins; else the order's org with NULL sub-inventory),
- *  with the audit rows. `orderLogMetadata` rides on the order's log row. */
-async function receiveCnOrderTx(
+/** The scan-start moment shared by the workflow finalize (cron) and the admin
+ *  confirm: stamp the order `scanning` + arrived with the audit row — NO
+ *  received_qty fill and NO put-away task; the PDA receiving-scan step
+ *  (src/db/receivingCnScan.ts) produces those on finalize. `orderLogMetadata`
+ *  rides on the order's log row. */
+async function startCnReceivingScanTx(
   tx: AppDb,
   order: { id: string; status: string; orgId: number; dateCode: string | null },
   actorId: string | null,
   at: Date,
   orderLogMetadata: Record<string, unknown>
-): Promise<{ changed: boolean; taskId: string | null }> {
-  // Rows the sync left at received_qty = 0 inherit line_qty; rows with a real
-  // received qty are untouched.
-  await queryRun(
-    tx,
-    sql`UPDATE receiving_invoice_items_cn rii
-        SET received_qty = rii.line_qty,
-            date_code = COALESCE(rii.date_code, ${order.dateCode}),
-            last_update_date = ${at}
-        FROM receiving_invoices_cn ri
-        WHERE rii.receiving_invoice_id = ri.id AND ri.receiving_order_id = ${order.id}
-          AND rii.received_qty = 0 AND rii.line_qty IS NOT NULL`
-  );
-  const derived = await cnOrderPair(tx, order.id);
-  const pair = { orgId: derived.orgId ?? order.orgId, subInventoryCode: derived.subInventoryCode };
+): Promise<void> {
   const changed = await queryGet<{ id: string }>(
     tx,
     sql`UPDATE receiving_orders_cn
-        SET status = 'in_hand', arrived_at = ${at},
+        SET status = 'scanning', arrived_at = COALESCE(arrived_at, ${at}),
             arrived_by = COALESCE(${actorId}, arrived_by), last_update_date = ${at}
-        WHERE id = ${order.id} AND status <> 'in_hand'
+        WHERE id = ${order.id} AND status <> 'scanning'
         RETURNING id`
   );
   if (changed) {
@@ -1305,34 +1283,22 @@ async function receiveCnOrderTx(
       entityType: "receiving_order_cn",
       entityId: order.id,
       fromState: order.status,
-      toState: "in_hand",
+      toState: "scanning",
       actorId,
       metadata: orderLogMetadata,
       createdDate: at,
     });
   }
-  const task = await queryAll<{ id: string }>(
-    tx,
-    sql`INSERT INTO put_away_tasks_cn (id, receiving_order_cn_id, org_id, sub_inventory_code, status, created_date)
-        VALUES (${newId()}, ${order.id}, ${pair.orgId}, ${pair.subInventoryCode}, 'pending', ${at})
-        ON CONFLICT (receiving_order_cn_id) DO NOTHING
-        RETURNING id`
-  );
-  if (task.length > 0) {
-    await tx.insert(transactionLogs).values({
-      id: newId(),
-      entityType: "put_away_task_cn",
-      entityId: task[0].id,
-      fromState: null,
-      toState: "pending",
-      actorId,
-      metadata: { receivingOrderCnId: order.id },
-      createdDate: at,
-    });
-  }
-  return { changed: !!changed, taskId: task[0]?.id ?? null };
 }
 
+/**
+ * Workflow-terminal completion (spec + the CN receiving scan plan): the
+ * upstream sync has written the CN order stamped with the workflow's batch_no
+ * — if not there yet, return false so the cron retries on the next poll.
+ * Workflows predating the batch_no column (NULL) fall back to the legacy
+ * invoice_no match. One tx: order → scanning (+arrived stamp), audit logs,
+ * workflow → completed, SSE. The PDA receiving-scan step takes it from there.
+ */
 export async function finalizeCnOrder(db: AppDb, workflowRow: CnWorkflowRow, actorId: string | null): Promise<boolean> {
   const matchKey = workflowRow.batchNo ?? workflowRow.invoiceNo;
   if (!matchKey) return false;
@@ -1346,7 +1312,7 @@ export async function finalizeCnOrder(db: AppDb, workflowRow: CnWorkflowRow, act
 
   await db.transaction(async (tx) => {
     const at = now();
-    const { taskId } = await receiveCnOrderTx(tx, order, actorId, at, { workflowId: workflowRow.id });
+    await startCnReceivingScanTx(tx, order, actorId, at, { workflowId: workflowRow.id });
     await tx.insert(transactionLogs).values({
       id: newId(),
       entityType: "receiving_cn_workflow",
@@ -1362,9 +1328,9 @@ export async function finalizeCnOrder(db: AppDb, workflowRow: CnWorkflowRow, act
       .set({ status: "completed", error: null, lastUpdateDate: at })
       .where(sql`id = ${workflowRow.id}`);
     await emitEvent(tx, {
-      type: "receiving_cn.completed",
-      topics: ["/admin/receiving-cn"],
-      data: { workflowId: workflowRow.id, receivingOrderCnId: order.id, putAwayTaskCreated: taskId !== null },
+      type: "receiving_cn.scan_started",
+      topics: ["/admin/receiving-cn", "/receiving-cn-scan-tasks"],
+      data: { workflowId: workflowRow.id, receivingOrderCnId: order.id },
     });
   });
   return true;

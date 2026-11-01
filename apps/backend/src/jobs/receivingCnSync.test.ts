@@ -1,8 +1,10 @@
 // CN receiving workflow-status cron (spec
-// docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md):
-// terminal-state handling — completed → finalizeCnOrder (order in_hand +
-// CN put-away task, idempotent), failed/cancelled → status + error, and the
-// not-yet-synced order case stays workflow_running for the next poll.
+// docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md +
+// docs/superpowers/plans/2026-11-01-cn-receiving-scan.md):
+// terminal-state handling — completed → finalizeCnOrder (order → scanning,
+// NO put-away task — the PDA receiving-scan finalize creates it),
+// failed/cancelled → status + error, and the not-yet-synced order case stays
+// workflow_running for the next poll.
 
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
@@ -72,7 +74,7 @@ async function withFake(fn: () => Promise<void>): Promise<void> {
   }
 }
 
-test("cron: completed process finalizes the CN order (in_hand + put-away task) and is idempotent", async () => {
+test("cron: completed process starts the CN receiving scan (scanning, NO put-away task) and is idempotent", async () => {
   await reseed(client);
   const orderId = await seedCnOrder("TE20261010-2");
   await seedWorkflow("wf-1", "TE20261010-2");
@@ -88,31 +90,22 @@ test("cron: completed process finalizes the CN order (in_hand + put-away task) a
       client.db,
       sql`SELECT status, arrived_at AS "arrivedAt" FROM receiving_orders_cn WHERE id = ${orderId}`
     );
-    assert.equal(order!.status, "in_hand");
+    assert.equal(order!.status, "scanning");
     assert.ok(order!.arrivedAt);
 
-    const task = await queryGet<{ id: string; status: string; orgId: number | null; subInventoryCode: string | null }>(
+    // No put-away task yet — the PDA receiving-scan finalize creates it.
+    const task = await queryGet<{ id: string }>(
       client.db,
-      sql`SELECT id, status, org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
-          FROM put_away_tasks_cn WHERE receiving_order_cn_id = ${orderId}`
+      sql`SELECT id FROM put_away_tasks_cn WHERE receiving_order_cn_id = ${orderId}`
     );
-    assert.ok(task);
-    assert.equal(task!.status, "pending");
-    assert.equal(task!.orgId, 2); // uniform pair from the order's items
-    assert.equal(task!.subInventoryCode, "STORE1");
+    assert.equal(task, undefined);
 
     const wf = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_cn_workflows WHERE id = 'wf-1'`);
     assert.equal(wf!.status, "completed");
 
-    // Second tick: the workflow is no longer running — nothing re-runs, the
-    // task insert stays idempotent (unique receiving_order_cn_id).
+    // Second tick: the workflow is no longer running — nothing re-runs.
     await runReceivingCnSyncOnce(client.db);
-    const tasks = await queryAll<{ id: string }>(
-      client.db,
-      sql`SELECT id FROM put_away_tasks_cn WHERE receiving_order_cn_id = ${orderId}`
-    );
-    assert.equal(tasks.length, 1);
-    assert.equal((await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_orders_cn WHERE id = ${orderId}`))!.status, "in_hand");
+    assert.equal((await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_orders_cn WHERE id = ${orderId}`))!.status, "scanning");
   });
 });
 
@@ -169,17 +162,14 @@ test("cron: completed process finalizes the order matched by the generated batch
   await withFake(async () => {
     await runReceivingCnSyncOnce(client.db);
     const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_orders_cn WHERE id = ${orderId}`);
-    assert.equal(order!.status, "in_hand");
+    assert.equal(order!.status, "scanning");
     const wf = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_cn_workflows WHERE id = 'wf-6'`);
     assert.equal(wf!.status, "completed");
   });
 });
 
-test("cron: mixed-item order finalizes with the ORDER's org as the task-org fallback (sub-inventory NULL)", async () => {
+test("cron: mixed-item order also goes to scanning (the put-away pair derivation now lives in the scan finalize)", async () => {
   await reseed(client);
-  // Order org 2 with two items of differing pairs (STORE1 vs NULL) — the
-  // uniform-pair derivation yields NULL, so the task must fall back to the
-  // order's org instead of writing a NULL-org ghost task.
   await client.db.execute(sql`INSERT INTO receiving_orders_cn (id, batch_no, status, org_id) VALUES ('cn-order-mixed', 'CN-MIXED-1', 'pending', 2)`);
   await client.db.execute(sql`INSERT INTO receiving_invoices_cn (id, receiving_order_id, invoice_no, org_id) VALUES ('cn-inv-mixed', 'cn-order-mixed', 'INV-MIXED', 2)`);
   await client.db.execute(sql`INSERT INTO receiving_invoice_items_cn (id, receiving_invoice_id, part_no, received_qty, org_id, sub_inventory_code)
@@ -191,24 +181,22 @@ test("cron: mixed-item order finalizes with the ORDER's org as the task-org fall
 
   await withFake(async () => {
     await runReceivingCnSyncOnce(client.db);
-    const task = await queryGet<{ orgId: number | null; subInventoryCode: string | null }>(
+    const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_orders_cn WHERE id = 'cn-order-mixed'`);
+    assert.equal(order!.status, "scanning");
+    const tasks = await queryAll<{ id: string }>(
       client.db,
-      sql`SELECT org_id AS "orgId", sub_inventory_code AS "subInventoryCode" FROM put_away_tasks_cn WHERE receiving_order_cn_id = 'cn-order-mixed'`
+      sql`SELECT id FROM put_away_tasks_cn WHERE receiving_order_cn_id = 'cn-order-mixed'`
     );
-    assert.ok(task);
-    assert.equal(task!.orgId, 2); // the order's org, not NULL
-    assert.equal(task!.subInventoryCode, null);
+    assert.equal(tasks.length, 0);
   });
 });
 
-test("cron: finalize is the receipt moment — received_qty=0 items inherit line_qty (others untouched), date code falls back to the order's", async () => {
+test("cron: finalize is the scan start — received_qty and date_code stay untouched (the scan fills them)", async () => {
   await reseed(client);
   await client.db.execute(sql`INSERT INTO receiving_orders_cn (id, batch_no, status, org_id, date_code) VALUES ('cn-order-rcv', 'CN-RCV-1', 'pending', 2, '2640')`);
   await client.db.execute(sql`INSERT INTO receiving_invoices_cn (id, receiving_order_id, invoice_no, org_id) VALUES ('cn-inv-rcv', 'cn-order-rcv', 'INV-RCV', 2)`);
-  // received_qty 0 + line_qty → inherits line_qty and the order's date code
   await client.db.execute(sql`INSERT INTO receiving_invoice_items_cn (id, receiving_invoice_id, part_no, line_qty, received_qty, org_id, sub_inventory_code)
       VALUES ('cn-item-rcv-1', 'cn-inv-rcv', 'PART-A', 500, 0, 2, 'STORE1')`);
-  // real received qty + own date code → untouched
   await client.db.execute(sql`INSERT INTO receiving_invoice_items_cn (id, receiving_invoice_id, part_no, line_qty, received_qty, date_code, org_id, sub_inventory_code)
       VALUES ('cn-item-rcv-2', 'cn-inv-rcv', 'PART-B', 600, 550, '2634', 2, 'STORE1')`);
   await seedWorkflow("wf-9", "TE-RCV-1", "proc-9", "CN-RCV-1");
@@ -216,13 +204,15 @@ test("cron: finalize is the receipt moment — received_qty=0 items inherit line
 
   await withFake(async () => {
     await runReceivingCnSyncOnce(client.db);
+    const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_orders_cn WHERE id = 'cn-order-rcv'`);
+    assert.equal(order!.status, "scanning");
     const rows = await queryAll<{ id: string; receivedQty: number; dateCode: string | null }>(
       client.db,
       sql`SELECT id, received_qty AS "receivedQty", date_code AS "dateCode"
           FROM receiving_invoice_items_cn WHERE receiving_invoice_id = 'cn-inv-rcv' ORDER BY id`
     );
     assert.deepEqual(rows, [
-      { id: "cn-item-rcv-1", receivedQty: 500, dateCode: "2640" },
+      { id: "cn-item-rcv-1", receivedQty: 0, dateCode: null }, // no fill anymore
       { id: "cn-item-rcv-2", receivedQty: 550, dateCode: "2634" },
     ]);
   });
@@ -237,7 +227,7 @@ test("cron: legacy workflow without batch_no still finalizes via invoice_no fall
   await withFake(async () => {
     await runReceivingCnSyncOnce(client.db);
     const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_orders_cn WHERE id = ${orderId}`);
-    assert.equal(order!.status, "in_hand");
+    assert.equal(order!.status, "scanning");
     const wf = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_cn_workflows WHERE id = 'wf-7'`);
     assert.equal(wf!.status, "completed");
   });
