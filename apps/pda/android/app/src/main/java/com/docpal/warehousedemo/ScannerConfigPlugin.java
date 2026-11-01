@@ -3,6 +3,8 @@ package com.docpal.warehousedemo;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.util.Log;
 
 import com.getcapacitor.JSArray;
@@ -30,6 +32,9 @@ import java.util.Set;
  * config. Callers re-apply on screen enter and must call restoreAll() on leave
  * and on app start (crash recovery). On non-xcheng devices the broadcasts hit
  * no receiver and are harmless no-ops.
+ *
+ * On Honeywell devices the same JS API is served by HoneywellScannerClient,
+ * which applies the equivalent DEC_* properties through the DCS claim API.
  */
 @CapacitorPlugin(name = "ScannerConfig")
 public class ScannerConfigPlugin extends Plugin {
@@ -65,6 +70,15 @@ public class ScannerConfigPlugin extends Plugin {
                 if (name != null && !name.isEmpty()) enabled.add(name);
             }
         }
+        if (isHoneywell()) {
+            HoneywellScannerClient client = HoneywellScannerClient.getInstance();
+            Context context = getContext();
+            if (context != null) client.bind(context);
+            client.setSymbologies(enabled);
+            Log.i(TAG, "setSymbologies (honeywell): enabled=" + enabled);
+            call.resolve();
+            return;
+        }
         int enables = 0;
         int disables = 0;
         for (String name : ALL_SYMBOLOGIES) {
@@ -83,11 +97,60 @@ public class ScannerConfigPlugin extends Plugin {
     /** Re-enable every known symbology (device-wide neutral state). */
     @PluginMethod
     public void restoreAll(PluginCall call) {
+        if (isHoneywell()) {
+            HoneywellScannerClient client = HoneywellScannerClient.getInstance();
+            Context context = getContext();
+            if (context != null) client.bind(context);
+            client.restoreAll();
+            Log.i(TAG, "restoreAll (honeywell): re-enabled all mapped symbologies");
+            call.resolve();
+            return;
+        }
         for (String name : ALL_SYMBOLOGIES) {
             send(ACTION_ENABLE, name);
         }
         Log.i(TAG, "restoreAll: re-enabled " + ALL_SYMBOLOGIES.length + " symbologies");
         call.resolve();
+    }
+
+    /**
+     * Scanner platform detection. Returns the device brand/manufacturer/model
+     * plus which hardware-scanner control path this build can drive:
+     * "xcheng" (Movfast broadcast API), "honeywell" (DCS claim API), or "none".
+     */
+    @PluginMethod
+    public void getDeviceInfo(PluginCall call) {
+        String manufacturer = Build.MANUFACTURER != null ? Build.MANUFACTURER : "";
+        String platform = "none";
+        if (manufacturer.equalsIgnoreCase("honeywell")
+                || hasPackage("com.intermec.datacollectionservice")) {
+            platform = "honeywell";
+        } else if (hasPackage(RECEIVER_PACKAGE)) {
+            platform = "xcheng";
+        }
+        JSObject result = new JSObject();
+        result.put("brand", Build.BRAND != null ? Build.BRAND : "");
+        result.put("manufacturer", manufacturer);
+        result.put("model", Build.MODEL != null ? Build.MODEL : "");
+        result.put("platform", platform);
+        call.resolve(result);
+    }
+
+    private boolean isHoneywell() {
+        String manufacturer = Build.MANUFACTURER != null ? Build.MANUFACTURER : "";
+        return manufacturer.equalsIgnoreCase("honeywell")
+                || hasPackage("com.intermec.datacollectionservice");
+    }
+
+    private boolean hasPackage(String pkg) {
+        Context context = getContext();
+        if (context == null) return false;
+        try {
+            context.getPackageManager().getPackageInfo(pkg, 0);
+            return true;
+        } catch (PackageManager.NameNotFoundException e) {
+            return false;
+        }
     }
 
     /** Symbology name list for the JS side (admin UI checkbox grid). */

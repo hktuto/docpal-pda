@@ -17,7 +17,8 @@ Composables live in `composables/` and contain reusable Vue logic.
 | `useVisibleReload.ts` | Reload data on mount and visibility/focus events for Capacitor. |
 | `useLabelScanReview.ts` | Review-modal state for label scans. |
 | `useHardwareScanner.ts` | Hardware scan input: fast intent-broadcast path (via `useScannerBroadcast`) plus keyboard-wedge fallback; broadcast scans replace the value of a focused `data-scan-fill` input instead of running the match pipeline; used by receiving/picking detail pages. |
-| `useScannerBroadcast.ts` | Capacitor wrapper for the native `ScannerBroadcast` plugin (no-op in browser). |
+| `useScannerBroadcast.ts` | Capacitor wrapper for the native `ScannerBroadcast` plugin (no-op in browser); on Honeywell devices the native side feeds it from the DCS claim path instead of the manifest receiver. |
+| `useScannerConfig.ts` | Scanner symbology whitelist (`useSupplierSymbologyScope` / `useBrandSymbologyScope`, auto-branches xcheng vs Honeywell natively) + `getScannerDeviceInfo()` platform detection. |
 
 ## Agent note
 

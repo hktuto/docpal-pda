@@ -31,6 +31,21 @@ export const SCANNER_SYMBOLOGIES: readonly string[] = [
 export interface ScannerConfigPlugin {
   setSymbologies(options: { enabled: string[] }): Promise<void>;
   restoreAll(): Promise<void>;
+  getDeviceInfo(): Promise<ScannerDeviceInfo>;
+}
+
+/**
+ * Hardware-scanner platform reported by the native plugin: "xcheng" (Movfast
+ * broadcast API), "honeywell" (DCS claim API), or "none" (browser / unknown
+ * device — all symbology control calls no-op there).
+ */
+export type ScannerPlatform = "xcheng" | "honeywell" | "none";
+
+export interface ScannerDeviceInfo {
+  brand: string;
+  manufacturer: string;
+  model: string;
+  platform: ScannerPlatform;
 }
 
 export const ScannerConfig = registerPlugin<ScannerConfigPlugin>("ScannerConfig", {
@@ -38,8 +53,24 @@ export const ScannerConfig = registerPlugin<ScannerConfigPlugin>("ScannerConfig"
     Promise.resolve({
       async setSymbologies(): Promise<void> {},
       async restoreAll(): Promise<void> {},
+      async getDeviceInfo(): Promise<ScannerDeviceInfo> {
+        return { brand: "", manufacturer: "", model: "", platform: "none" };
+      },
     } as ScannerConfigPlugin),
 });
+
+let deviceInfoPromise: Promise<ScannerDeviceInfo> | null = null;
+
+/** Cached native device/scanner-platform info (never changes at runtime). */
+export function getScannerDeviceInfo(): Promise<ScannerDeviceInfo> {
+  if (!deviceInfoPromise) {
+    deviceInfoPromise = ScannerConfig.getDeviceInfo().catch((e) => {
+      console.warn("[ScannerConfig] getDeviceInfo failed", e);
+      return { brand: "", manufacturer: "", model: "", platform: "none" as const };
+    });
+  }
+  return deviceInfoPromise;
+}
 
 // Serialize apply/restore so page-leave restoreAll and page-enter apply can't
 // interleave into a stale state.

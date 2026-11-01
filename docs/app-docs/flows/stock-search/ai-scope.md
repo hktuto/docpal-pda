@@ -26,7 +26,7 @@
   (`GET /admin/suppliers`). Selecting a supplier also restricts the hardware
   decoder to that supplier profile's `barcode_types` whitelist (when set);
   cleared/restored when the filter changes or the page is left
-  (`useSupplierSymbologyScope`, xcheng/Movfast only).
+  (`useSupplierSymbologyScope`, xcheng/Movfast + Honeywell devices).
 
 ## Out of scope
 

@@ -17,6 +17,17 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   superseded by bearer-token auth — see the auth bullet below.)
 - [Old API Review](./api-review-old-api.md) — design review of the deprecated
   `apps/api` this replaces (what carried over, what got redesigned and why).
+- [Schema Conventions and Keys](./schema-conventions.md) — table PK/timestamp
+  conventions, business keys (`wcl_item_no`), supplier-profile scan parsing.
+- [Flow Config](./flow-config.md) — every `warehouse_config` `"flow"` key:
+  org scoping, date-code format, sub-inventory rules, PDA view config,
+  picking shelf scan, CN receiving.
+- [Allocation Engine](./allocation.md) — `allocateAll` semantics, manual pins,
+  perfect-match pre-pass, admin per-item actions, scoped recompute.
+- [Verify / Measuring Re-scan](./verify-measuring.md) — aggregate re-scan
+  credit, labeling stage, measuring-off verify path.
+- [Label Printing](./label-printing.md) — print proxy, `label_print_rules`,
+  picking-finish print prompt, `label_prints` records.
 
 ## API surface (current)
 

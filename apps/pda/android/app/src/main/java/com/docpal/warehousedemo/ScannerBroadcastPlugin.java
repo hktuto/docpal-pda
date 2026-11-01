@@ -23,6 +23,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  *  - ScannerBroadcastReceiver (manifest component): catches explicit
  *    broadcasts targeted at package/class, even when the app is not running
  *    (dropped then — no active plugin instance).
+ *  - HoneywellScannerClient (Honeywell devices only): claims the internal
+ *    imager via the DCS bind API and delivers barcode events directly.
  *
  * Device setup (Scanner app → Function settings / directional output):
  *   Barcode data output mode = "Output to broadcast"
@@ -70,6 +72,14 @@ public class ScannerBroadcastPlugin extends Plugin {
             Log.i(TAG, "scan broadcast without barcode extra, extras: " + dumpExtras(intent));
             return;
         }
+        dispatchScan(value, "scan broadcast received: " + value + ", extras: " + dumpExtras(intent));
+    }
+
+    /**
+     * Shared dedup + notify path for every scan source (broadcast receivers on
+     * xcheng/Urovo, HoneywellScannerClient callback on Honeywell devices).
+     */
+    public static void dispatchScan(String value, String logLine) {
         long now = System.currentTimeMillis();
         if (value.equals(lastValue) && now - lastAt < DEDUP_WINDOW_MS) {
             Log.i(TAG, "duplicate delivery suppressed: " + value);
@@ -77,7 +87,7 @@ public class ScannerBroadcastPlugin extends Plugin {
         }
         lastValue = value;
         lastAt = now;
-        Log.i(TAG, "scan broadcast received: " + value + ", extras: " + dumpExtras(intent));
+        Log.i(TAG, logLine);
         ScannerBroadcastPlugin instance = activeInstance;
         if (instance == null) {
             Log.i(TAG, "app not ready, scan dropped: " + value);
@@ -120,10 +130,33 @@ public class ScannerBroadcastPlugin extends Plugin {
     }
 
     private BroadcastReceiver receiver;
+    private boolean honeywell;
+
+    private static boolean isHoneywell(Context context) {
+        if (Build.MANUFACTURER != null && Build.MANUFACTURER.equalsIgnoreCase("honeywell")) {
+            return true;
+        }
+        try {
+            context.getPackageManager().getPackageInfo("com.intermec.datacollectionservice", 0);
+            return true;
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            return false;
+        }
+    }
 
     @Override
     public void load() {
         activeInstance = this;
+        Context context = getContext();
+        if (context != null && isHoneywell(context)) {
+            honeywell = true;
+            HoneywellScannerClient client = HoneywellScannerClient.getInstance();
+            client.setBarcodeCallback(value ->
+                dispatchScan(value, "honeywell scan received: " + value));
+            client.bind(context); // connect + addListener + claim happen on bind
+            Log.i(TAG, "honeywell device: using DCS claim path, broadcast receiver not registered");
+            return;
+        }
         receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
@@ -131,7 +164,6 @@ public class ScannerBroadcastPlugin extends Plugin {
             }
         };
         IntentFilter filter = new IntentFilter(ACTION_BARCODE_SCANNED);
-        Context context = getContext();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // Exported: the broadcast is sent by the scanner service (another app).
             context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
@@ -142,7 +174,28 @@ public class ScannerBroadcastPlugin extends Plugin {
     }
 
     @Override
+    protected void handleOnResume() {
+        if (honeywell) {
+            // Re-claim the scanner released in handleOnPause().
+            HoneywellScannerClient.getInstance().claim();
+        }
+        super.handleOnResume();
+    }
+
+    @Override
+    protected void handleOnPause() {
+        if (honeywell) {
+            // Return the scanner to the system wedge for other apps.
+            HoneywellScannerClient.getInstance().release();
+        }
+        super.handleOnPause();
+    }
+
+    @Override
     protected void handleOnDestroy() {
+        if (honeywell) {
+            HoneywellScannerClient.getInstance().release();
+        }
         if (receiver != null) {
             getContext().unregisterReceiver(receiver);
             receiver = null;

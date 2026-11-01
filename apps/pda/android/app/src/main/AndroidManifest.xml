@@ -6,6 +6,15 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
+    <!-- Honeywell DCS (DataCollectionService) bind permission, protectionLevel normal. -->
+    <uses-permission android:name="com.honeywell.decode.permission.DECODE" />
+
+    <!-- Package visibility for scanner platform detection + explicit binds. -->
+    <queries>
+        <package android:name="com.xcheng.scannere3" />
+        <package android:name="com.intermec.datacollectionservice" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
