@@ -57,15 +57,17 @@ console.log(`App URL (WebView + maintenance page): ${appUrl}`);
 // c. Patch the app name in capacitor.config.ts and strings.xml.
 const capacitorConfigPath = join(webDir, 'capacitor.config.ts');
 const capacitorConfig = readFileSync(capacitorConfigPath, 'utf8');
-const patchedCapacitor = capacitorConfig.replace(
-  /appName:\s*['"]([^'"]+)['"]/,
-  `appName: '${regionConfig.appName}'`,
-);
-if (patchedCapacitor === capacitorConfig) {
+const appNameMatch = capacitorConfig.match(/appName:\s*['"]([^'"]+)['"]/);
+if (!appNameMatch) {
   console.error(`appName not found in ${capacitorConfigPath} — cannot patch.`);
   process.exit(1);
 }
-writeFileSync(capacitorConfigPath, patchedCapacitor);
+if (appNameMatch[1] !== regionConfig.appName) {
+  writeFileSync(
+    capacitorConfigPath,
+    capacitorConfig.replace(/appName:\s*['"]([^'"]+)['"]/, `appName: '${regionConfig.appName}'`),
+  );
+}
 
 const stringsXml = readFileSync(stringsFile, 'utf8');
 const patchedStrings = stringsXml
