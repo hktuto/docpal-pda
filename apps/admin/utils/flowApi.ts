@@ -839,15 +839,16 @@ export async function submitCnExcelUpload(file: File, data: unknown): Promise<Cn
   return (await res.json()) as CnWorkflowRow;
 }
 
-/** POST /admin/receiving-cn/pdf — the scanned receiving confirmation PDF only
- *  (phase 2: DocPal OCR extracts the data inside the workflow). 400
+/** POST /admin/receiving-cn/pdf — the scanned receiving confirmation PDF(s)
+ *  only (phase 2: DocPal OCR extracts the data inside the workflow). One or
+ *  more PDFs per upload — all are kicked under the same workflow. 400
  *  file_required / invalid_file_type; 502 docpal_workflow: …; 500
  *  docpal_workflow_token_not_configured /
  *  docpal_workflow_definition_not_configured. Returns the created workflow
  *  row. */
-export async function submitCnPdfUpload(file: File): Promise<CnWorkflowRow> {
+export async function submitCnPdfUpload(files: File[]): Promise<CnWorkflowRow> {
   const form = new FormData();
-  form.append("file", file, file.name);
+  for (const file of files) form.append("file", file, file.name);
   const res = await fetch(`${cnApiBaseUrl()}/admin/receiving-cn/pdf`, {
     method: "POST",
     headers: cnAuthHeaders(),

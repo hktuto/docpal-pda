@@ -3,11 +3,12 @@ import { submitCnPdfUpload } from "~/utils/flowApi";
 
 const { t } = useI18n();
 
-// Phase 2 (PDF + OCR): pick the scanned receiving confirmation PDF and start
-// the DocPal workflow — DocPal extracts the receiving data (no browser-side
-// verify step; the workflow-verify screen comes later).
+// Phase 2 (PDF + OCR): pick the scanned receiving confirmation PDF(s) and
+// start the DocPal workflow — DocPal extracts the receiving data (no
+// browser-side verify step; the workflow-verify screen comes later). Multiple
+// PDFs go into ONE upload: all are kicked under the same workflow.
 const fileInput = ref<HTMLInputElement | null>(null);
-const file = ref<File | null>(null);
+const files = ref<File[]>([]);
 const error = ref("");
 const submitting = ref(false);
 
@@ -17,10 +18,9 @@ function triggerPick() {
 
 function onFilePicked(e: Event) {
   const input = e.target as HTMLInputElement;
-  const picked = input.files?.[0];
+  const picked = input.files ? Array.from(input.files) : [];
   input.value = ""; // reset so the same file can be re-selected
-  if (!picked) return;
-  acceptFile(picked);
+  acceptFiles(picked);
 }
 
 // ---- drag & drop ----
@@ -48,31 +48,33 @@ function onDrop(e: DragEvent) {
   e.preventDefault();
   dragDepth = 0;
   dragOver.value = false;
-  const dropped = e.dataTransfer?.files?.[0];
-  if (!dropped) return;
-  acceptFile(dropped);
+  const dropped = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : [];
+  acceptFiles(dropped);
 }
 
-function acceptFile(picked: File) {
-  if (!picked.name.toLowerCase().endsWith(".pdf")) {
+function acceptFiles(picked: File[]) {
+  const rejected = picked.filter((f) => !f.name.toLowerCase().endsWith(".pdf"));
+  if (rejected.length > 0) {
     error.value = t("admin.pages.receivingCn.invalidFileType");
     return;
   }
-  file.value = picked;
+  // Skip exact duplicates (same name + size already in the list).
+  const existing = new Set(files.value.map((f) => `${f.name}:${f.size}`));
+  files.value = [...files.value, ...picked.filter((f) => !existing.has(`${f.name}:${f.size}`))];
   error.value = "";
 }
 
-function clearFile() {
-  file.value = null;
+function removeFile(index: number) {
+  files.value = files.value.filter((_, i) => i !== index);
   error.value = "";
 }
 
 async function submit() {
-  if (!file.value || submitting.value) return;
+  if (files.value.length === 0 || submitting.value) return;
   submitting.value = true;
   error.value = "";
   try {
-    await submitCnPdfUpload(file.value);
+    await submitCnPdfUpload(files.value);
     await navigateTo("/receiving-cn");
   } catch (e: any) {
     error.value = e?.message ?? String(e);
@@ -120,19 +122,21 @@ function cancel() {
         ref="fileInput"
         type="file"
         accept=".pdf,application/pdf"
+        multiple
         style="display: none"
         @change="onFilePicked"
       />
 
-      <div v-if="file" class="selected-file">
-        <span class="dt">{{ $t("admin.pages.receivingCn.filename") }}:</span>
-        {{ file.name }}
-        <button class="btn btn-small" @click="clearFile">×</button>
-      </div>
+      <ul v-if="files.length > 0" class="selected-files">
+        <li v-for="(f, i) in files" :key="`${f.name}:${f.size}`" class="selected-file">
+          {{ f.name }}
+          <button class="btn btn-small" @click="removeFile(i)">×</button>
+        </li>
+      </ul>
 
       <div class="wizard-actions">
         <button class="btn" @click="cancel">{{ $t("admin.common.cancel") }}</button>
-        <button class="btn btn-primary" :disabled="submitting || !file" @click="submit">
+        <button class="btn btn-primary" :disabled="submitting || files.length === 0" @click="submit">
           {{ submitting ? $t("admin.pages.receivingCn.submitting") : $t("admin.pages.receivingCn.submit") }}
         </button>
       </div>
@@ -182,14 +186,18 @@ function cancel() {
   font-size: 0.8125rem;
   color: #7d8a97;
 }
+.selected-files {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+}
 .selected-file {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
-}
-.selected-file .dt {
-  font-weight: 600;
 }
 .wizard-actions {
   display: flex;

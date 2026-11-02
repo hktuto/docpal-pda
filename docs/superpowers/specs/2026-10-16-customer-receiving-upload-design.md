@@ -74,7 +74,7 @@ Self-rescheduling `setTimeout` loop (pattern: `jobs/goodsVerifyDayEnd.ts`; `unre
 - `GET /admin/receiving-cn/orders/:batchNo` — one CN order: order + invoices + items (each item carries its invoice's `invoiceNo`) + the put-away task; 404 `receiving_cn_order_not_found` (a pending-only workflow has no order yet).
 - `GET /admin/receiving-cn/:id` — detail incl. payload items.
 - `POST /admin/receiving-cn/excel` — multipart (`file` + `data` JSON string) → validate payload → `createCnUpload(phase: "excel")`. (Superseded in the UI by the PDF form; kept for existing workflow definitions.)
-- `POST /admin/receiving-cn/pdf` — **phase 2**: multipart `file` only (PDF) → `createCnUpload(phase: "pdf")`; the kick sends the file entry under `variables.pdfFiles` (no `excel_result_data` — DocPal OCR extracts the data inside the workflow; the in-admin verify step is a later phase). 400 `invalid_file_type` for non-PDF.
+- `POST /admin/receiving-cn/pdf` — **phase 2**: multipart `file` only (PDF; repeat the field for multiple PDFs — one upload can carry several, all kicked under one workflow) → `createCnUpload(phase: "pdf")`; the kick sends the file entries under `variables.pdfFiles` (no `excel_result_data` — DocPal OCR extracts the data inside the workflow; the in-admin verify step is a later phase). 400 `invalid_file_type` for non-PDF.
 
 Payload validation: header fields are strings; `items` non-empty; each item needs `partNo`/`poNo` non-empty, `qty` positive-integer-like. 400 `invalid_payload` otherwise.
 
@@ -97,12 +97,12 @@ New `receiving-cn` flow step (default **disabled**) on the `warehouse_config` "f
 
 - `utils/cnReceivingExcel.ts` (+ vitest): AOA → `{receivedOffice, supplier, receiptNo, invoiceNo, receivedDate, items[]}`. Find the item header row by col-0 `訂單號`; map 9 columns by header text; stop at col-0 `合计` / `收貨注意事項`; label-scan the header fields; convert Excel serial dates (`XLSX.SSF.parse_date_code`); coerce `qty`/`cartonNo`/`dateCode` to strings; keep `poNo` as string (large numbers).
 - `pages/receiving-cn/index.vue` — tracking list (`useAdminTable` + `useUrlQueryState`, SSE reload on `/admin/receiving-cn`), "New upload" button.
-- `pages/receiving-cn/new.vue` — single-step PDF upload (phase 2): dropzone/picker (`.pdf` only) → submit `FormData` (`file`) to `/admin/receiving-cn/pdf`; 502 → error banner. (The phase-1 Excel verify/edit wizard is superseded; `utils/cnReceivingExcel.ts` and the `/excel` endpoint remain for existing workflow definitions.)
+- `pages/receiving-cn/new.vue` — single-step PDF upload (phase 2): dropzone/picker (`.pdf` only, multi-select — picked/dropped files accumulate in a removable list, one upload = one workflow carrying every PDF) → submit `FormData` (repeated `file` fields) to `/admin/receiving-cn/pdf`; 502 → error banner. (The phase-1 Excel verify/edit wizard is superseded; `utils/cnReceivingExcel.ts` and the `/excel` endpoint remain for existing workflow definitions.)
 - `utils/flowApi.ts` typed wrappers; nav entry in `utils/entities.ts`; i18n keys in `layers/i18n` all three locales; `apps/admin/TOC.md`.
 
 ## Phase 2 (PDF + OCR) — admin-verify flow (revised 2026-10-28)
 
-The admin new-upload form (`pages/receiving-cn/new.vue`) is a single-step PDF picker posting to `POST /admin/receiving-cn/pdf`: the backend uploads the file to DocPal and kicks `DOCPAL_CN_PDF_WORKFLOW_ID` with the file entry under `variables.pdfFiles` (plus the `batch_no` correlation key and the real-user creator variables); the tracking row stores `phase: "pdf"` with `payload: {}` (invoiceNo/supplier NULL until OCR).
+The admin new-upload form (`pages/receiving-cn/new.vue`) is a single-step PDF picker (multi-select — several PDFs per upload) posting to `POST /admin/receiving-cn/pdf`: the backend uploads each file to DocPal (one document per file) and kicks `DOCPAL_CN_PDF_WORKFLOW_ID` once with all file entries under `variables.pdfFiles` (plus the `batch_no` correlation key and the real-user creator variables); the tracking row stores `phase: "pdf"` with `payload: {}` (invoiceNo/supplier NULL until OCR), the first document id in `docpal_document_id`, and the ", "-joined filenames in `filename`.
 
 The verification does NOT happen inside DocPal — the OCR workflow never reaches a completed state for this flow. Instead (implemented 2026-10-28):
 

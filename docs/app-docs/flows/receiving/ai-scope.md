@@ -77,8 +77,10 @@
   `POST /receiving-cn/manual-receipts`, which writes `receiving_orders_cn`
   (in_hand) + one invoice per order number + items + the CN put-away task in
   one tx; (b) admin PDF upload (phase 2) on
-  `apps/admin/pages/receiving-cn/new.vue` → `POST /admin/receiving-cn/pdf` —
-  the backend forwards the file to DocPal
+  `apps/admin/pages/receiving-cn/new.vue` → `POST /admin/receiving-cn/pdf`
+  (one upload accepts multiple PDFs — all are kicked under one workflow's
+  `pdfFiles`) —
+  the backend forwards the file(s) to DocPal
   (`apps/backend/src/docpalWorkflow.ts` — one configured
   `DOCPAL_WORKFLOW_TOKEN` for all workflow/file calls, the real admin sent as
   the workflow creator) and tracks the workflow in `receiving_cn_workflows`

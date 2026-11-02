@@ -141,7 +141,9 @@ export interface CreateCnUploadInput {
   /** "excel" = phase 1 (verified rows sent along); "pdf" = phase 2 (DocPal
    *  OCR extracts the data inside the workflow — no payload). */
   phase: "excel" | "pdf";
-  file: { filename: string; mime: string; bytes: Uint8Array };
+  /** Uploaded files — excel always carries exactly one; pdf carries one or
+   *  more (all kicked under the same workflow's `pdfFiles`). */
+  files: { filename: string; mime: string; bytes: Uint8Array }[];
   /** Verified excel rows — required for phase "excel", omitted for "pdf". */
   payload?: CnUploadPayload;
   actor: CnUploadActor;
@@ -188,14 +190,17 @@ export async function nextCnBrandedNo(db: AppDb, brand: string, at: Date = new D
 }
 
 /**
- * Upload flow per spec: file → DocPal upload, kick the workflow definition
- * with the upload entry + the real-user creator variables, then one tx
+ * Upload flow per spec: file(s) → DocPal upload, kick the workflow definition
+ * with the upload entries + the real-user creator variables, then one tx
  * inserting the tracking row (batch no in its own column; the stored payload
  * jsonb stays the verified data as sent by the client — `{}` for pdf) + audit
  * log. Phase shapes: "excel" adds `excelFiles` + `excel_result_data` (with the
  * generated batchNo); "pdf" adds `pdfFiles` only (DocPal OCR extracts the data
- * inside the workflow; the verify step is a later phase). A kick failure after
- * a successful upload deletes the orphaned attachment before the 502 escapes.
+ * inside the workflow; the verify step is a later phase) and accepts multiple
+ * PDFs — one DocPal document per file, all entries under one workflow kick.
+ * The tracking row keeps the first document id and the ", "-joined filenames.
+ * A kick failure after the uploads deletes the orphaned attachments before
+ * the 502 escapes.
  */
 export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Promise<{ id: string }> {
   const definitionId = input.phase === "excel" ? docpalCnExcelWorkflowId() : docpalCnPdfWorkflowId();
@@ -205,28 +210,41 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
   if (input.phase === "excel" && !input.payload) {
     throw new HTTPException(400, { message: "invalid_payload" });
   }
+  if (input.files.length === 0) {
+    throw new HTTPException(400, { message: "file_required" });
+  }
   // pdf uploads are always TE and number like manual receipts
   // (`TE-yyyymmdd-seq`); the retired excel phase keeps the random CN- key.
   const batchNo = input.phase === "pdf" ? await nextCnBrandedNo(db, "TE") : generateCnBatchNo();
-  const { filename, mime, bytes } = input.file;
-  const data = await uploadWorkflowFile(filename, mime, bytes, filename);
-  const extension = filename.includes(".") ? filename.slice(filename.lastIndexOf(".") + 1).toLowerCase() : "";
-  const uploadName = typeof data.name === "string" && data.name ? data.name : filename;
-  const fileEntry = {
-    extension,
-    file_name: filename,
-    id: data.id,
-    mime_type: mime,
-    name: uploadName,
-    response: {
-      data: {
-        fileContent: { mime_type: mime },
-        fileContentExtension: extension,
-        id: data.id,
-        name: uploadName,
+  const fileEntries: {
+    extension: string;
+    file_name: string;
+    id: string;
+    mime_type: string;
+    name: string;
+    response: { data: { fileContent: { mime_type: string }; fileContentExtension: string; id: string; name: string } };
+  }[] = [];
+  for (const { filename, mime, bytes } of input.files) {
+    const data = await uploadWorkflowFile(filename, mime, bytes, filename);
+    const extension = filename.includes(".") ? filename.slice(filename.lastIndexOf(".") + 1).toLowerCase() : "";
+    const uploadName = typeof data.name === "string" && data.name ? data.name : filename;
+    fileEntries.push({
+      extension,
+      file_name: filename,
+      id: data.id,
+      mime_type: mime,
+      name: uploadName,
+      response: {
+        data: {
+          fileContent: { mime_type: mime },
+          fileContentExtension: extension,
+          id: data.id,
+          name: uploadName,
+        },
       },
-    },
-  };
+    });
+  }
+  const filename = input.files.map((f) => f.filename).join(", ");
   const variables: Record<string, unknown> = {
     start_user_id: input.actor.username,
     batch_no: batchNo,
@@ -234,17 +252,19 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
     __system__user_creator_name: input.actor.displayName,
   };
   if (input.phase === "excel") {
-    variables.excelFiles = [fileEntry];
+    variables.excelFiles = fileEntries;
     variables.excel_result_data = [{ ...input.payload!, batchNo }];
   } else {
-    variables.pdfFiles = [fileEntry];
+    variables.pdfFiles = fileEntries;
   }
   let process: { id: string; business_key?: string };
   try {
     process = await startProcess(definitionId, variables);
   } catch (e) {
-    // The attachment is orphaned by the failed kick — best-effort cleanup.
-    await deleteWorkflowAttachment(data.id).catch(() => undefined);
+    // The attachments are orphaned by the failed kick — best-effort cleanup.
+    for (const entry of fileEntries) {
+      await deleteWorkflowAttachment(entry.id).catch(() => undefined);
+    }
     throw e;
   }
 
@@ -257,7 +277,7 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
       invoiceNo: input.payload?.invoiceNo ?? null,
       supplier: input.payload?.supplier ?? null,
       filename,
-      docpalDocumentId: data.id,
+      docpalDocumentId: fileEntries[0]!.id,
       docpalProcessId: process.id,
       docpalBusinessKey: process.business_key ?? null,
       batchNo,

@@ -225,29 +225,37 @@ adminReceivingCnRoute.post("/receiving-cn/excel", async (c) => {
   const payload = validateCnPayload(parsedJson);
   const result = await createCnUpload(db, {
     phase: "excel",
-    file: { filename: file.name || "upload.xls", mime: file.type || "application/octet-stream", bytes: new Uint8Array(await file.arrayBuffer()) },
+    files: [{ filename: file.name || "upload.xls", mime: file.type || "application/octet-stream", bytes: new Uint8Array(await file.arrayBuffer()) }],
     payload,
     actor: await cnUploadActor(c),
   });
   return c.json(result, 201);
 });
 
-// PDF upload (phase 2): multipart file only — no verified payload; DocPal OCR
-// extracts the receiving data inside the workflow (the verify step comes
-// later). The kick sends the file entry under variables.pdfFiles. 400
-// file_required / invalid_file_type; 502 docpal_workflow: ...; 500
+// PDF upload (phase 2): multipart file(s) only — no verified payload; DocPal
+// OCR extracts the receiving data inside the workflow (the verify step comes
+// later). One or more PDFs per upload (repeat the `file` field); the kick
+// sends all file entries under variables.pdfFiles. 400 file_required /
+// invalid_file_type; 502 docpal_workflow: ...; 500
 // docpal_workflow_token_not_configured / docpal_workflow_definition_not_configured.
 adminReceivingCnRoute.post("/receiving-cn/pdf", async (c) => {
-  const body = await c.req.parseBody();
-  const file = body.file;
-  if (!(file instanceof File)) throw new HTTPException(400, { message: "file_required" });
-  const filename = file.name || "upload.pdf";
-  if (file.type !== "application/pdf" && !filename.toLowerCase().endsWith(".pdf")) {
-    throw new HTTPException(400, { message: "invalid_file_type" });
+  const body = await c.req.parseBody({ all: true });
+  const raw = body.file;
+  const files = (Array.isArray(raw) ? raw : raw !== undefined ? [raw] : []).filter(
+    (f): f is File => f instanceof File
+  );
+  if (files.length === 0) throw new HTTPException(400, { message: "file_required" });
+  const inputs: { filename: string; mime: string; bytes: Uint8Array }[] = [];
+  for (const file of files) {
+    const filename = file.name || "upload.pdf";
+    if (file.type !== "application/pdf" && !filename.toLowerCase().endsWith(".pdf")) {
+      throw new HTTPException(400, { message: "invalid_file_type" });
+    }
+    inputs.push({ filename, mime: file.type || "application/pdf", bytes: new Uint8Array(await file.arrayBuffer()) });
   }
   const result = await createCnUpload(db, {
     phase: "pdf",
-    file: { filename, mime: file.type || "application/pdf", bytes: new Uint8Array(await file.arrayBuffer()) },
+    files: inputs,
     actor: await cnUploadActor(c),
   });
   return c.json(result, 201);

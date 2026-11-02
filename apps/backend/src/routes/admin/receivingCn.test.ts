@@ -31,6 +31,8 @@ interface FakeWorkflowState {
   startFails: boolean;
   processState: string;
   requests: { method: string; url: string; body: string; headers: Record<string, unknown> }[];
+  /** Opt-in upload ids — shifted per upload when set; default is "doc-1". */
+  docIds: string[];
 }
 
 let fake: FakeWorkflowState;
@@ -38,7 +40,7 @@ let fakeServer: Server;
 let fakeUrl: string;
 
 function startFakeWorkflowServer(): Promise<string> {
-  fake = { startFails: false, processState: "running", requests: [] };
+  fake = { startFails: false, processState: "running", requests: [], docIds: [] };
   fakeServer = createServer((req, res) => {
     const json = (status: number, body: unknown) => {
       res.writeHead(status, { "Content-Type": "application/json" });
@@ -50,7 +52,8 @@ function startFakeWorkflowServer(): Promise<string> {
       fake.requests.push({ method: req.method ?? "", url: req.url ?? "", body: raw, headers: req.headers as Record<string, unknown> });
       const url = req.url ?? "";
       if (req.method === "POST" && url === "/api/docpal/workflow/upload/file") {
-        return json(200, { code: 200, result: true, data: { id: "doc-1", name: "TE20261010-2.xls" } });
+        const id = fake.docIds.length > 0 ? fake.docIds.shift()! : "doc-1";
+        return json(200, { code: 200, result: true, data: { id, name: "TE20261010-2.xls" } });
       }
       if (req.method === "DELETE" && url.startsWith("/api/docpal/workflow/task/attachment")) {
         return json(200, { code: 200, result: true, data: null });
@@ -442,6 +445,77 @@ test("pdf upload: upload + kick → 201 tracking row; kick carries pdfFiles and 
     assert.equal(pdf.response.data.fileContent.mime_type, "application/pdf");
     assert.equal(pdf.response.data.fileContentExtension, "pdf");
   });
+});
+
+test("pdf upload: multiple files → one kick carrying every entry under pdfFiles", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  fake.requests = [];
+  fake.docIds = ["doc-a", "doc-b"];
+  try {
+    await withWorkflowFake(async () => {
+      const form = new FormData();
+      form.append("file", new Blob(["%PDF-1.4 a"], { type: "application/pdf" }), "TE扫描原件1.pdf");
+      form.append("file", new Blob(["%PDF-1.4 b"], { type: "application/pdf" }), "TE扫描原件2.pdf");
+      const res = await postPdf(token, form);
+      assert.equal(res.status, 201);
+      const { id } = (await res.json()) as { id: string };
+
+      // Both files uploaded to DocPal (one document each), one process kick.
+      const uploads = fake.requests.filter((r) => r.method === "POST" && r.url === "/api/docpal/workflow/upload/file");
+      assert.equal(uploads.length, 2);
+      const kicks = fake.requests.filter((r) => r.method === "POST" && r.url === "/oniflow/api/v1/processes");
+      assert.equal(kicks.length, 1);
+
+      const row = await queryGet<{ filename: string; docpalDocumentId: string; batchNo: string }>(
+        client.db,
+        sql`SELECT filename, docpal_document_id AS "docpalDocumentId", batch_no AS "batchNo"
+            FROM receiving_cn_workflows WHERE id = ${id}`
+      );
+      assert.equal(row!.filename, "TE扫描原件1.pdf, TE扫描原件2.pdf");
+      assert.equal(row!.docpalDocumentId, "doc-a"); // first document id
+      assert.match(row!.batchNo, /^TE-\d{8}-01$/);
+
+      const startBody = JSON.parse(kicks[0]!.body);
+      assert.equal(startBody.variables.batch_no, row!.batchNo);
+      const pdfs = startBody.variables.pdfFiles;
+      assert.equal(pdfs.length, 2);
+      assert.equal(pdfs[0].id, "doc-a");
+      assert.equal(pdfs[0].file_name, "TE扫描原件1.pdf");
+      assert.equal(pdfs[1].id, "doc-b");
+      assert.equal(pdfs[1].file_name, "TE扫描原件2.pdf");
+    });
+  } finally {
+    fake.docIds = [];
+  }
+});
+
+test("pdf upload: kick failure with multiple files deletes every orphaned attachment → 502", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  fake.requests = [];
+  fake.docIds = ["doc-a", "doc-b"];
+  fake.startFails = true;
+  try {
+    await withWorkflowFake(async () => {
+      const form = new FormData();
+      form.append("file", new Blob(["%PDF-1.4 a"], { type: "application/pdf" }), "a.pdf");
+      form.append("file", new Blob(["%PDF-1.4 b"], { type: "application/pdf" }), "b.pdf");
+      const res = await postPdf(token, form);
+      assert.equal(res.status, 502);
+      const deletes = fake.requests.filter(
+        (r) => r.method === "DELETE" && r.url.startsWith("/api/docpal/workflow/task/attachment?attachmentId=")
+      );
+      assert.equal(deletes.length, 2);
+      assert.ok(deletes.some((r) => r.url.endsWith("attachmentId=doc-a")));
+      assert.ok(deletes.some((r) => r.url.endsWith("attachmentId=doc-b")));
+      const count = await queryGet<{ n: number }>(client.db, sql`SELECT COUNT(*)::int AS n FROM receiving_cn_workflows`);
+      assert.equal(count!.n, 0);
+    });
+  } finally {
+    fake.docIds = [];
+    fake.startFails = false;
+  }
 });
 
 // --- list / detail ------------------------------------------------------------------
