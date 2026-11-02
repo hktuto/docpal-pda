@@ -13,6 +13,7 @@ const { t } = useI18n();
 const FLOWS: TaskAssignmentFlow[] = [
   "receiving-cn",
   "picking",
+  "label-printing",
   "labeling",
   "put-away",
   "put-away-cn",

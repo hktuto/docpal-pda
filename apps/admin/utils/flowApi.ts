@@ -99,6 +99,12 @@ export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | 
   labelingDoneAt?: string | null;
   labelingDoneBy?: string | null;
   labelingDoneByName?: string | null;
+  /** Label-printing stage state (spec 2026-11-02). Optional — backends
+   *  predating the label-printing step omit the fields. */
+  labelPrintingPending?: boolean;
+  labelPrintingDoneAt?: string | null;
+  labelPrintingDoneBy?: string | null;
+  labelPrintingDoneByName?: string | null;
   /** Assigned username (spec 2026-11-01). Optional — backends predating the
    *  task-assignee feature omit it. */
   assignee?: string | null;
@@ -511,6 +517,7 @@ export interface OutdatedWarningListParams {
 export type TaskAssignmentFlow =
   | "receiving-cn"
   | "picking"
+  | "label-printing"
   | "labeling"
   | "put-away"
   | "put-away-cn"

@@ -62,7 +62,8 @@ export async function listMeasuringBoxes(db: AppDb, username?: string): Promise<
           JOIN picking_orders po2 ON po2.id = pi2.picking_order_id
           WHERE pp2.shipping_box_id = sb.id
             AND (po2.status NOT IN ('picking_finished', 'measuring_finished', 'shipped')
-                 OR po2.labeling_pending = true)
+                 OR po2.labeling_pending = true
+                 OR po2.label_printing_pending = true)
         )
       ${assigneeFilter(sql`sb.assignee`, username)}
       GROUP BY sb.id

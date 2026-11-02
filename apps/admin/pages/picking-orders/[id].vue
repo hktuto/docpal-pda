@@ -699,6 +699,18 @@ const {
             />
           </div>
         </div>
+        <div v-if="order.labelPrintingPending || order.labelPrintingDoneAt">
+          <div class="dt">{{ $t("admin.pages.pickingOrders.labelPrinting") }}</div>
+          <div class="dd">
+            <template v-if="order.labelPrintingPending">{{ $t("admin.pages.pickingOrders.labelPrintingPending") }}</template>
+            <template v-else>
+              {{ $t("admin.pages.pickingOrders.labelPrintingDone", {
+                at: order.labelPrintingDoneAt ? formatDateTime(order.labelPrintingDoneAt) : "—",
+                by: order.labelPrintingDoneByName ?? order.labelPrintingDoneBy ?? "—",
+              }) }}
+            </template>
+          </div>
+        </div>
         <div v-if="order.labelingPending || order.labelingDoneAt">
           <div class="dt">{{ $t("admin.pages.pickingOrders.labeling") }}</div>
           <div class="dd">

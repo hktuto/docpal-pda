@@ -25,7 +25,9 @@ export default {
     manualReceiving: "手動收貨",
     receivingScan: "收貨掃描",
     labeling: "待貼標籤",
-    labelingDetail: "貼標籤詳情"
+    labelingDetail: "貼標籤詳情",
+    labelPrinting: "打印標籤",
+    labelPrintingDetail: "打印標籤詳情"
   },
   actions: {
     scan: "掃描",
@@ -114,6 +116,7 @@ export default {
       receiving: { title: "收貨" },
       picking: { title: "揀貨" },
       labeling: { title: "待貼標籤" },
+      labelPrinting: { title: "打印標籤" },
       putAway: { title: "上架" },
       goodsVerify: { title: "查貨" },
       measuring: { title: "測量" },
@@ -137,6 +140,19 @@ export default {
     totals: "總數",
     boxesItems: "{boxes} 箱 · {items} 項",
     noLongerMatch: "標籤打印規則已不再符合此訂單 — 請直接完成貼標籤以繼續。"
+  },
+  labelPrinting: {
+    title: "打印標籤",
+    searchPlaceholder: "按訂單號或客戶搜尋…",
+    empty: "沒有待打印標籤的訂單",
+    labelsChip: "{count} 個標籤",
+    finish: "完成打印",
+    confirmFinish: "確認訂單 {orderNo} 已完成標籤打印？",
+    finished: "標籤打印已完成",
+    alreadyDone: "該訂單已完成標籤打印",
+    totals: "總數",
+    boxesItems: "{boxes} 箱 · {items} 項",
+    noLongerMatch: "標籤打印規則已不再符合此訂單 — 請直接完成打印以繼續。"
   },
   manualReceiving: {
     title: "手動收貨",
@@ -997,6 +1013,7 @@ export default {
     unresolved_outdated_warnings: "此訂單有 {count} 條未解決的日期碼過期警告 — 請先聯絡管理員解決，再完成訂單。",
     box_coo_mismatch: "箱內已有產地（COO）為 {coos} 的貨品 — 請將相同產地的貨品裝入同一箱。",
     labeling_not_pending: "此訂單不在待貼標籤狀態",
+    label_printing_not_pending: "此訂單不在待打印標籤狀態",
     labels_not_all_verified: "完成覆核前必須掃描所有已列印的標籤（箱標籤及物料標籤）",
     label_item_mismatch: "掃描的物料與已列印標籤不符（{fields}）"
   },
@@ -1787,6 +1804,9 @@ export default {
         labeling: "貼標籤",
         labelingPending: "待貼標籤（揀貨完成起）",
         labelingDone: "貼標籤已於 {at} 由 {by} 完成",
+        labelPrinting: "打印標籤",
+        labelPrintingPending: "待打印標籤（揀貨完成起）",
+        labelPrintingDone: "標籤打印已於 {at} 由 {by} 完成",
         items: "明細數",
         pickedTotal: "已揀 / 總數",
         allocation: "分配狀態",
@@ -2320,6 +2340,7 @@ export default {
           measuring: "度箱",
           verify: "覆核",
           labeling: "待貼標籤",
+          "label-printing": "打印標籤",
           "stock-search": "庫存查詢",
           "shelf-exchange": "貨架調撥"
         },
@@ -2415,6 +2436,7 @@ export default {
           receiving: "收貨",
           picking: "揀貨",
           labeling: "待貼標籤",
+          labelPrinting: "打印標籤",
           putAway: "上架",
           goodsVerify: "查貨",
           verify: "覆核",
@@ -2601,6 +2623,7 @@ export default {
       "receiving-cn": "客戶收貨 (CN)",
       picking: "揀貨",
       labeling: "貼標籤",
+      "label-printing": "打印標籤",
       "put-away": "上架",
       "put-away-cn": "上架 (CN)",
       measuring: "測量",

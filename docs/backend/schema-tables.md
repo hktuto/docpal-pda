@@ -506,6 +506,9 @@ upstream database — the sync/dedup key is the caller-supplied UUID `id`
 | labeling_pending | boolean NOT NULL DEFAULT false | Labeling stage (spec `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`): set at picking finish when the `labeling` step is enabled and the order matches ≥ 1 active `label_print_rules` row; cleared by `POST /picking-orders/:id/labeling-finish` or an admin status override; holds the order's boxes out of measuring/verify |
 | labeling_done_at | timestamp | When the labeling stage was cleared (NULL while pending / never queued) |
 | labeling_done_by | text | User who cleared the labeling stage |
+| label_printing_pending | boolean NOT NULL DEFAULT false | Label-printing stage (spec `docs/superpowers/specs/2026-11-02-label-printing-step-design.md`): set at picking finish when the `label-printing` step is enabled and the order matches ≥ 1 active `label_print_rules` row with `label_source = 'internal'`; cleared by `POST /picking-orders/:id/label-printing-finish` (which then enters the order into labeling when the `labeling` step is enabled) or an admin status override; holds the order's boxes out of measuring/verify, runs before labeling |
+| label_printing_done_at | timestamp | When the label-printing stage was cleared (NULL while pending / never queued) |
+| label_printing_done_by | text | User who cleared the label-printing stage |
 | assignee | text | Optional PDA task assignee (username, no FK; spec `docs/superpowers/specs/2026-11-01-task-assignee-design.md`) — NULL = visible to every user; set = only that user sees the order in the PDA picking/labeling list + detail; admin-managed via `PATCH /admin/task-assignment` |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |

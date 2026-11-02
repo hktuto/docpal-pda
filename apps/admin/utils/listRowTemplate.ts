@@ -13,9 +13,10 @@ export type PdaListKey =
   | "measuring";
 
 /** List keys addressable by pdaViewConfig.lists — the six template lists plus
- *  stock-search (spec 2026-10-04-pda-app-rewrite-design.md) and labeling
- *  (spec 2026-10-28; never had a legacy pdaListTemplates entry). */
-export type PdaViewListKey = PdaListKey | "labeling" | "stock-search";
+ *  stock-search (spec 2026-10-04-pda-app-rewrite-design.md), labeling
+ *  (spec 2026-10-28; never had a legacy pdaListTemplates entry) and
+ *  label-printing (spec 2026-11-02). */
+export type PdaViewListKey = PdaListKey | "labeling" | "label-printing" | "stock-search";
 
 export const PDA_LIST_KEYS: PdaListKey[] = [
   "receiving",
@@ -146,6 +147,18 @@ export const PDA_LIST_FIELDS: Record<PdaViewListKey, Record<string, PdaListField
     labelCount: { field: "labelCount" },
     assignee: { field: "assignee" },
   },
+  // Label-printing list (spec 2026-11-02): same row shape as labeling.
+  "label-printing": {
+    order_no: { field: "orderNo" },
+    picking_order_type: { field: "pickingOrderType" },
+    customer_code: { field: "customerCode" },
+    ship_to: { field: "shipTo" },
+    delivery_date: { field: "deliveryDate", kind: "date" },
+    item_count: { field: "itemCount" },
+    total_qty: { field: "totalQty" },
+    labelCount: { field: "labelCount" },
+    assignee: { field: "assignee" },
+  },
   // View-config only (no pdaListTemplates list): the stock-search part group.
   "stock-search": {
     wcl_item_no: { field: "wclItemNo" },
@@ -202,6 +215,8 @@ export function primaryListRowId(listKey: PdaViewListKey, fields: PdaListRow): s
     case "measuring":
       return String(fields.boxId ?? "");
     case "labeling":
+      return String(fields.orderNo ?? "");
+    case "label-printing":
       return String(fields.orderNo ?? "");
     case "stock-search":
       return String(fields.wclItemNo ?? fields.partNo ?? "");

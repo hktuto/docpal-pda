@@ -25,7 +25,9 @@ export default {
     manualReceiving: "Manual Receiving",
     receivingScan: "Receiving Scan",
     labeling: "Labeling",
-    labelingDetail: "Labeling Detail"
+    labelingDetail: "Labeling Detail",
+    labelPrinting: "Label Printing",
+    labelPrintingDetail: "Label Printing Detail"
   },
   actions: {
     scan: "Scan",
@@ -114,6 +116,7 @@ export default {
       receiving: { title: "Receiving" },
       picking: { title: "Picking" },
       labeling: { title: "Labeling" },
+      labelPrinting: { title: "Label Printing" },
       putAway: { title: "Put-away" },
       goodsVerify: { title: "Goods Verify" },
       measuring: { title: "Measuring" },
@@ -137,6 +140,19 @@ export default {
     totals: "Total",
     boxesItems: "{boxes} box(es) · {items} item(s)",
     noLongerMatch: "Label print rules no longer match this order — mark labeling done to continue."
+  },
+  labelPrinting: {
+    title: "Label Printing",
+    searchPlaceholder: "Search by order no or customer…",
+    empty: "No orders waiting for label printing",
+    labelsChip: "{count} label(s)",
+    finish: "Finish printing",
+    confirmFinish: "Mark label printing for order {orderNo} as finished?",
+    finished: "Label printing finished",
+    alreadyDone: "Label printing was already finished",
+    totals: "Total",
+    boxesItems: "{boxes} box(es) · {items} item(s)",
+    noLongerMatch: "Label print rules no longer match this order — mark label printing done to continue."
   },
   manualReceiving: {
     title: "Manual Receiving",
@@ -997,6 +1013,7 @@ export default {
     unresolved_outdated_warnings: "This order has {count} unresolved outdated date-code warning(s) — ask an admin to resolve them before finishing.",
     box_coo_mismatch: "This box already holds items with COO {coos} — pack items with the same COO in one box.",
     labeling_not_pending: "This order is not waiting for labeling",
+    label_printing_not_pending: "Label printing is not pending for this order",
     labels_not_all_verified: "Every printed label (carton and item) must be scanned before completing the verify task",
     label_item_mismatch: "The scanned item does not match its printed label ({fields})"
   },
@@ -1788,6 +1805,9 @@ export default {
         labeling: "Labeling",
         labelingPending: "Labeling pending (since picking finish)",
         labelingDone: "Labeling done {at} by {by}",
+        labelPrinting: "Label Printing",
+        labelPrintingPending: "Label printing pending (since picking finish)",
+        labelPrintingDone: "Label printing done {at} by {by}",
         items: "Items",
         pickedTotal: "Picked / Total",
         allocation: "Allocation",
@@ -2323,6 +2343,7 @@ export default {
           measuring: "Measuring",
           verify: "Verify",
           labeling: "Labeling",
+          "label-printing": "Label Printing",
           "stock-search": "Stock Search",
           "shelf-exchange": "Shelf Exchange"
         },
@@ -2418,6 +2439,7 @@ export default {
           receiving: "Receiving",
           picking: "Picking",
           labeling: "Labeling",
+          labelPrinting: "Label Printing",
           putAway: "Put-away",
           goodsVerify: "Goods verify",
           verify: "Verify",
@@ -2604,6 +2626,7 @@ export default {
       "receiving-cn": "Customer Receiving (CN)",
       picking: "Picking",
       labeling: "Labeling",
+      "label-printing": "Label Printing",
       "put-away": "Put-away",
       "put-away-cn": "Put-away (CN)",
       measuring: "Measuring",

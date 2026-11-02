@@ -45,6 +45,13 @@ export const pickingOrders = pgTable(
     labelingPending: boolean("labeling_pending").notNull().default(false),
     labelingDoneAt: timestamp("labeling_done_at", { mode: "date" }),
     labelingDoneBy: text("labeling_done_by"),
+    // Label printing stage (打印标签, spec 2026-11-02-label-printing-step-design.md):
+    // set at picking finish when the label-printing step is on and the order
+    // matches an internal label print rule; cleared by label-printing finish /
+    // admin status override. Runs before the labeling stage.
+    labelPrintingPending: boolean("label_printing_pending").notNull().default(false),
+    labelPrintingDoneAt: timestamp("label_printing_done_at", { mode: "date" }),
+    labelPrintingDoneBy: text("label_printing_done_by"),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },

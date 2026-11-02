@@ -450,6 +450,31 @@ export interface LabelingOrderRow {
   assignee?: string | null;
 }
 
+// Label printing (打印标签) — the first of the two label stages (spec
+// 2026-11-02-label-printing-step-design.md): GET /label-printing-orders
+// mirrors GET /labeling-orders over label_printing_pending with the same
+// row shape.
+export type LabelPrintingOrderListQuery = LabelingOrderListQuery;
+export type LabelPrintingOrderRow = LabelingOrderRow;
+
+/** POST /picking-orders/:id/finish result (spec 2026-11-02): the two
+ *  pending flags tell the PDA which label stage the order entered. */
+export interface FinishPickingOrderResult {
+  id: string;
+  status: string;
+  labelingPending: boolean;
+  labelPrintingPending: boolean;
+}
+
+/** POST /picking-orders/:id/label-printing-finish result: labelingPending
+ *  true = the order moved on to the labeling queue. */
+export interface FinishLabelPrintingResult {
+  id: string;
+  status: string;
+  labelPrintingPending: boolean;
+  labelingPending: boolean;
+}
+
 export interface PickingAllocationLot {
   id: string;
   shelfCode: string | null;
@@ -592,6 +617,12 @@ export interface PickingOrderDetail {
   labelingDoneAt?: string | null;
   labelingDoneBy?: string | null;
   labelingDoneByName?: string | null;
+  /** Label-printing stage state (spec 2026-11-02). Optional — backends
+   *  predating the label-printing step omit the fields. */
+  labelPrintingPending?: boolean;
+  labelPrintingDoneAt?: string | null;
+  labelPrintingDoneBy?: string | null;
+  labelPrintingDoneByName?: string | null;
   items: PickingItem[];
   boxes: PickingBox[];
   suggestedBox: SuggestedShelfBox | null;
@@ -1188,6 +1219,7 @@ export type FlowStep =
   | "receiving-cn"
   | "put-away"
   | "picking"
+  | "label-printing"
   | "labeling"
   | "goods-verify"
   | "measuring"

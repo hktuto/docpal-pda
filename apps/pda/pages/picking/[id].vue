@@ -552,9 +552,10 @@ async function finish() {
     // verify tasks instead, so hand the operator straight over to verify.
     const result = await warehouse.finishPickingOrder(orderId);
     await load();
-    // labelingPending (spec 2026-10-28): the order waits in the labeling
-    // queue — route to its labeling detail instead of the verify jump.
+    // labelPrintingPending (spec 2026-11-02) wins over labelingPending: the
+    // order waits in the label-printing queue first.
     const postFinishRoute = resolvePickingFinishRoute({
+      labelPrintingPending: result.labelPrintingPending === true,
       labelingPending: result.labelingPending === true,
       measuringEnabled: flowSteps.value.measuring,
       verifyEnabled: flowSteps.value.verify,

@@ -193,3 +193,11 @@ The picking labeling stage (spec
 `POST /picking-orders/:id/labeling-finish` after it clears the order's
 `labeling_pending`, topics `["/picking-orders", "/labeling-orders"]`, so the
 PDA labeling queue and picking pages converge.
+
+The picking label-printing stage (spec
+`docs/superpowers/specs/2026-11-02-label-printing-step-design.md`):
+`picking.label_printing_finished` — emitted by
+`POST /picking-orders/:id/label-printing-finish` after it clears the order's
+`label_printing_pending`, topics `["/picking-orders", "/label-printing-orders",
+"/labeling-orders"]`, so the PDA label-printing queue, labeling queue (the
+order may have just entered it), and picking pages converge.

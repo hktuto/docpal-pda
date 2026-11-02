@@ -5,7 +5,8 @@ The app supports these warehouse flows. Each flow has an overview, a step-by-ste
 | Flow | Purpose | Entry page | Operator guide | AI scope |
 |------|---------|------------|----------------|----------|
 | [Picking](./picking/overview.md) | Pick items from inventory to fulfill outgoing orders. | `/picking` | [Steps](./picking/steps.md) | [Scope](./picking/ai-scope.md) |
-| [Labeling](./labeling/overview.md) | Print and confirm labels for finished picking orders before measuring/verify. | `/labeling` | [Steps](./labeling/steps.md) | [Scope](./labeling/ai-scope.md) |
+| [Label Printing](./label-printing/overview.md) | Print internal labels for finished picking orders before labeling. | `/label-printing` | [Steps](./label-printing/steps.md) | [Scope](./label-printing/ai-scope.md) |
+| [Labeling](./labeling/overview.md) | Confirm labels are stuck on finished picking orders before measuring/verify. | `/labeling` | [Steps](./labeling/steps.md) | [Scope](./labeling/ai-scope.md) |
 | [Receiving](./receiving/overview.md) | Confirm incoming shipments and create receiving-area stock. | `/receiving` | [Steps](./receiving/steps.md) | [Scope](./receiving/ai-scope.md) |
 | [Put-away](./put-away/overview.md) | Move received goods from receiving area onto shelves. | `/put-away` | [Steps](./put-away/steps.md) | [Scope](./put-away/ai-scope.md) |
 | [Measuring](./measuring/overview.md) | Verify and measure open shipping boxes, then close them. | `/measuring` | [Steps](./measuring/steps.md) | [Scope](./measuring/ai-scope.md) |

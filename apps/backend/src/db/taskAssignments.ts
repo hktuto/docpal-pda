@@ -17,6 +17,7 @@ import { transactionLogs } from "./schema/index.js";
 export const TASK_ASSIGNMENT_FLOWS = [
   "receiving-cn",
   "picking",
+  "label-printing",
   "labeling",
   "put-away",
   "put-away-cn",
@@ -61,6 +62,13 @@ export async function listTaskAssignments(db: AppDb, flow: TaskAssignmentFlow): 
         sql`SELECT id, order_no AS "label", order_no AS "orderNo", status, assignee
             FROM picking_orders
             WHERE status NOT IN ('picking_finished', 'measuring_finished', 'shipped', 'skip')
+            ORDER BY order_no, id`
+      );
+    case "label-printing":
+      return queryAll<TaskAssignmentRow>(
+        db,
+        sql`SELECT id, order_no AS "label", order_no AS "orderNo", status, assignee
+            FROM picking_orders WHERE label_printing_pending = true
             ORDER BY order_no, id`
       );
     case "labeling":
@@ -109,7 +117,8 @@ export async function listTaskAssignments(db: AppDb, flow: TaskAssignmentFlow): 
                 JOIN picking_orders po2 ON po2.id = pi2.picking_order_id
                 WHERE pp2.shipping_box_id = sb.id
                   AND (po2.status NOT IN ('picking_finished', 'measuring_finished', 'shipped')
-                       OR po2.labeling_pending = true)
+                       OR po2.labeling_pending = true
+                       OR po2.label_printing_pending = true)
               )
             GROUP BY sb.id
             ORDER BY sb.id`
@@ -131,6 +140,7 @@ export async function listTaskAssignments(db: AppDb, flow: TaskAssignmentFlow): 
 const FLOW_TABLES: Record<TaskAssignmentFlow, { table: SQL; entityType: string }> = {
   "receiving-cn": { table: sql`receiving_orders_cn`, entityType: "receiving_order_cn" },
   picking: { table: sql`picking_orders`, entityType: "picking_order" },
+  "label-printing": { table: sql`picking_orders`, entityType: "picking_order" },
   labeling: { table: sql`picking_orders`, entityType: "picking_order" },
   "put-away": { table: sql`put_away_tasks`, entityType: "put_away_task" },
   "put-away-cn": { table: sql`put_away_tasks_cn`, entityType: "put_away_task_cn" },

@@ -200,6 +200,7 @@ export const FLOW_STEPS = [
   "receiving-cn",
   "put-away",
   "picking",
+  "label-printing",
   "labeling",
   "goods-verify",
   "measuring",
@@ -343,8 +344,9 @@ export function defaultPdaListTemplates(): PdaListTemplates {
 /** PDA list pages addressable by pdaViewConfig.lists — the six pdaListTemplates
  *  lists plus stock-search (spec 2026-10-04-pda-app-rewrite-design.md) and the
  *  labeling queue (spec 2026-10-28-picking-labeling-step-design.md; labeling
- *  never had a legacy pdaListTemplates entry). */
-export const PDA_VIEW_LIST_KEYS = [...PDA_LIST_KEYS, "stock-search", "labeling"] as const;
+ *  never had a legacy pdaListTemplates entry) and the label-printing queue
+ *  (spec 2026-11-02-label-printing-step-design.md). */
+export const PDA_VIEW_LIST_KEYS = [...PDA_LIST_KEYS, "stock-search", "label-printing", "labeling"] as const;
 export type PdaViewListKey = (typeof PDA_VIEW_LIST_KEYS)[number];
 
 /** Fully-resolved view config for one PDA list row. meta holds 1–2 templates. */
@@ -399,6 +401,7 @@ export const PDA_LIST_CHIP_FIELDS: Record<PdaViewListKey, readonly string[]> = {
   verify: ["box_status", "package_count", "verify_verified_count", "none"],
   measuring: ["status", "package_count", "verified_count", "none"],
   "stock-search": ["none"],
+  "label-printing": ["status", "allocation_status", "working_by_name", "labelCount", "none"],
   labeling: ["status", "allocation_status", "working_by_name", "labelCount", "none"],
 };
 
@@ -432,6 +435,7 @@ export function defaultPdaViewConfig(): PdaViewConfig {
     ]),
   ) as Record<PdaViewListKey, PdaListViewConfig>;
   lists["stock-search"] = { title: "[wcl_item_no]", meta: ["[part_no]"], chip: "none" };
+  lists["label-printing"] = { title: "[order_no]", meta: ["[customer_code] · [ship_to]"], chip: "labelCount" };
   lists["labeling"] = { title: "[order_no]", meta: ["[customer_code] · [ship_to]"], chip: "labelCount" };
   return {
     lists,

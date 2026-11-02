@@ -761,8 +761,9 @@ export async function listOpenShippingBoxes(db: AppDb): Promise<OpenShippingBoxR
 }
 
 // ---------------------------------------------------------------------------
-// Labeling queue (spec 2026-10-28-picking-labeling-step-design.md): picking-
-// finished orders whose labeling stage is still pending. labelMatches are
+// Labeling queue (spec 2026-10-28-picking-labeling-step-design.md) and label-
+// printing queue (spec 2026-11-02-label-printing-step-design.md): picking-
+// finished orders whose label stage is still pending. labelMatches are
 // resolved LIVE per row (rules are few, lists are small) so the list can show
 // the label count even when the rules were edited after the finish snapshot.
 // ---------------------------------------------------------------------------
@@ -803,6 +804,47 @@ export async function listLabelingOrders(
       FROM picking_orders po
       LEFT JOIN picking_items pi ON pi.picking_order_id = po.id
       WHERE po.status = 'picking_finished' AND po.labeling_pending = true
+      ${search ? sql`AND (po.order_no ILIKE ${"%" + search + "%"} OR po.customer_code ILIKE ${"%" + search + "%"} OR po.ship_to ILIKE ${"%" + search + "%"})` : sql``}
+      ${pickingOrderOrgFilter(sql`po.org_id`, sql`po.sub_inventory_code`, sql`po.picking_order_type`, opts?.scope)}
+      ${assigneeFilter(sql`po.assignee`, opts?.username)}
+      GROUP BY po.id
+      ORDER BY po.last_update_date DESC, po.order_no
+      ${opts?.limit && opts.limit > 0 ? sql`LIMIT ${opts.limit} OFFSET ${opts.offset ?? 0}` : sql``}
+    `
+  );
+  const total = rows[0]?.total ?? 0;
+  const withMatches = await Promise.all(
+    rows.map(async ({ total: _total, ...row }) => ({
+      ...row,
+      labelMatches: (await resolveLabelPrintRulesForOrder(db, row.id)).matches,
+    }))
+  );
+  return { rows: withMatches, total };
+}
+
+/** Mirror of listLabelingOrders over label_printing_pending (spec
+ *  2026-11-02-label-printing-step-design.md). Same row shape. */
+export async function listLabelPrintingOrders(
+  db: AppDb,
+  opts?: { search?: string; limit?: number; offset?: number; scope?: UserScopeEntry[] | null; username?: string }
+): Promise<{ rows: LabelingOrderRow[]; total: number }> {
+  const search = opts?.search?.trim();
+  const rows = await queryAll<Omit<LabelingOrderRow, "labelMatches"> & { total: number }>(
+    db,
+    sql`
+      SELECT
+        po.id, po.order_no AS "orderNo",
+        po.picking_order_type AS "pickingOrderType",
+        po.customer_code AS "customerCode", po.ship_to AS "shipTo",
+        po.delivery_date AS "deliveryDate",
+        po.assignee,
+        COUNT(pi.id)::int AS "itemCount",
+        COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
+        po.last_update_date AS "lastUpdateDate",
+        COUNT(*) OVER ()::int AS "total"
+      FROM picking_orders po
+      LEFT JOIN picking_items pi ON pi.picking_order_id = po.id
+      WHERE po.status = 'picking_finished' AND po.label_printing_pending = true
       ${search ? sql`AND (po.order_no ILIKE ${"%" + search + "%"} OR po.customer_code ILIKE ${"%" + search + "%"} OR po.ship_to ILIKE ${"%" + search + "%"})` : sql``}
       ${pickingOrderOrgFilter(sql`po.org_id`, sql`po.sub_inventory_code`, sql`po.picking_order_type`, opts?.scope)}
       ${assigneeFilter(sql`po.assignee`, opts?.username)}
@@ -940,6 +982,11 @@ export interface PickingOrderRow {
   labelingDoneAt: Date | null;
   labelingDoneBy: string | null;
   labelingDoneByName: string | null;
+  /** Label-printing stage state (spec 2026-11-02-label-printing-step-design.md). */
+  labelPrintingPending: boolean;
+  labelPrintingDoneAt: Date | null;
+  labelPrintingDoneBy: string | null;
+  labelPrintingDoneByName: string | null;
   createdDate: Date;
   lastUpdateDate: Date;
 }
@@ -1109,11 +1156,15 @@ export async function getPickingOrderDetail(
         po.labeling_pending AS "labelingPending",
         po.labeling_done_at AS "labelingDoneAt", po.labeling_done_by AS "labelingDoneBy",
         lu.display_name AS "labelingDoneByName",
+        po.label_printing_pending AS "labelPrintingPending",
+        po.label_printing_done_at AS "labelPrintingDoneAt", po.label_printing_done_by AS "labelPrintingDoneBy",
+        lpu.display_name AS "labelPrintingDoneByName",
         po.created_date AS "createdDate", po.last_update_date AS "lastUpdateDate"
       FROM picking_orders po
       LEFT JOIN users w ON w.id = po.working_by
       LEFT JOIN users ru ON ru.id = po.issue_reported_by
       LEFT JOIN users lu ON lu.id = po.labeling_done_by
+      LEFT JOIN users lpu ON lpu.id = po.label_printing_done_by
       WHERE po.id = ${orderId}
       ${pickingOrderOrgFilter(sql`po.org_id`, sql`po.sub_inventory_code`, sql`po.picking_order_type`, scope)}
       ${assigneeFilter(sql`po.assignee`, username)}
@@ -2671,13 +2722,16 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
 }
 
 /**
- * Post-picking-finish progression, shared by finishPickingOrder and
- * finishLabeling (labeling defers it — spec
+ * Post-picking-finish progression, shared by finishPickingOrder,
+ * finishLabelPrinting and finishLabeling (the label stages defer it — specs
+ * 2026-11-02-label-printing-step-design.md,
  * 2026-10-28-picking-labeling-step-design.md). Measuring on → nothing to
  * spawn (the box surfaces in listMeasuringBoxes once no member order is
- * labeling-pending); measuring disabled + verify enabled → spawn the verify
+ * label-printing/labeling-pending); measuring disabled + verify enabled →
+ * spawn the verify
  * task directly on the order's still-open boxes (a cross-order box waits
- * until every order in it is finished AND clear of labeling — the same gate
+ * until every order in it is finished AND clear of both label stages — the
+ * same gate
  * as listMeasuringBoxes). The verify pass re-scans from zero; the box closes
  * at verify completion.
  */
@@ -2697,7 +2751,8 @@ async function advanceAfterPickingFinish(tx: DbOrTx, orderId: string): Promise<v
               JOIN picking_orders po2 ON po2.id = pi2.picking_order_id
               WHERE pp2.shipping_box_id = sb.id
                 AND (po2.status NOT IN ('picking_finished', 'measuring_finished', 'shipped')
-                     OR po2.labeling_pending = true)
+                     OR po2.labeling_pending = true
+                     OR po2.label_printing_pending = true)
             )`
     );
     for (const box of boxes) {
@@ -2729,7 +2784,7 @@ async function advanceAfterPickingFinish(tx: DbOrTx, orderId: string): Promise<v
 export async function finishPickingOrder(
   db: AppDb,
   input: { pickingOrderId: string; actorId: string }
-): Promise<{ id: string; status: string; labelingPending: boolean }> {
+): Promise<{ id: string; status: string; labelPrintingPending: boolean; labelingPending: boolean }> {
   return db.transaction(async (tx) => {
     const order = await loadOrderForWrite(tx, input.pickingOrderId);
     assertOrderWritable(order);
@@ -2754,14 +2809,31 @@ export async function finishPickingOrder(
       toState: "picking_finished",
       actorId: input.actorId,
     });
-    // Labeling stage (spec 2026-10-28-picking-labeling-step-design.md): with
-    // the step on and ≥1 matching label print rule, the order enters the
-    // labeling queue (snapshot at finish) and the measuring-off/verify-on
-    // progression is deferred to labeling finish.
+    // Label printing + labeling stages (specs
+    // 2026-11-02-label-printing-step-design.md and
+    // 2026-10-28-picking-labeling-step-design.md): with the label-printing
+    // step on and ≥1 matching INTERNAL label print rule, the order enters the
+    // label-printing queue first (external labels are not printed by us); with
+    // the labeling step on and ≥1 matching rule of any source it enters the
+    // labeling queue directly. Both queue entries snapshot at finish and defer
+    // the measuring-off/verify-on progression to the stage finish.
+    let labelPrintingPending = false;
     let labelingPending = false;
-    if (isStepEnabled("labeling")) {
+    if (isStepEnabled("label-printing") || isStepEnabled("labeling")) {
       const { matches } = await resolveLabelPrintRulesForOrder(tx, order.id);
-      if (matches.length > 0) {
+      const internal = matches.filter((m) => m.labelSource === "internal");
+      if (isStepEnabled("label-printing") && internal.length > 0) {
+        labelPrintingPending = true;
+        await queryRun(tx, sql`UPDATE picking_orders SET label_printing_pending = true, last_update_date = ${now()} WHERE id = ${order.id}`);
+        await logTransition(tx, {
+          entityType: "picking_order",
+          entityId: order.id,
+          fromState: "picking_finished",
+          toState: "label_printing_pending",
+          actorId: input.actorId,
+          metadata: { ruleIds: internal.map((m) => m.ruleId) },
+        });
+      } else if (isStepEnabled("labeling") && matches.length > 0) {
         labelingPending = true;
         await queryRun(tx, sql`UPDATE picking_orders SET labeling_pending = true, last_update_date = ${now()} WHERE id = ${order.id}`);
         await logTransition(tx, {
@@ -2774,10 +2846,71 @@ export async function finishPickingOrder(
         });
       }
     }
-    if (!labelingPending) {
+    if (!labelPrintingPending && !labelingPending) {
       await advanceAfterPickingFinish(tx, order.id);
     }
-    return { id: order.id, status: "picking_finished", labelingPending };
+    return { id: order.id, status: "picking_finished", labelPrintingPending, labelingPending };
+  });
+}
+
+/**
+ * Label-printing finish (spec 2026-11-02-label-printing-step-design.md):
+ * clears label_printing_pending on a picking_finished order, audits who/when,
+ * then either hands the order to the labeling queue (labeling step on — entry
+ * guaranteed by the finish-time internal-match snapshot, rules may have been
+ * edited since) or runs the deferred post-finish progression. Any operator
+ * may finish printing (shared printer-bench task — no work-lock check).
+ */
+export async function finishLabelPrinting(
+  db: AppDb,
+  input: { pickingOrderId: string; actorId: string }
+): Promise<{ id: string; status: string; labelPrintingPending: boolean; labelingPending: boolean }> {
+  return db.transaction(async (tx) => {
+    const order = await queryGet<{ id: string; status: string; labelPrintingPending: boolean }>(
+      tx,
+      sql`SELECT id, status, label_printing_pending AS "labelPrintingPending" FROM picking_orders WHERE id = ${input.pickingOrderId}`
+    );
+    if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+    await assertActor(tx, input.actorId);
+    if (order.status !== "picking_finished" || !order.labelPrintingPending) {
+      throw new HTTPException(409, { message: "label_printing_not_pending" });
+    }
+    const at = now();
+    await queryRun(
+      tx,
+      sql`UPDATE picking_orders
+          SET label_printing_pending = false, label_printing_done_at = ${at}, label_printing_done_by = ${input.actorId}, last_update_date = ${at}
+          WHERE id = ${order.id}`
+    );
+    await logTransition(tx, {
+      entityType: "picking_order",
+      entityId: order.id,
+      fromState: "label_printing_pending",
+      toState: "label_printing_done",
+      actorId: input.actorId,
+    });
+    let labelingPending = false;
+    if (isStepEnabled("labeling")) {
+      const { matches } = await resolveLabelPrintRulesForOrder(tx, order.id);
+      labelingPending = true;
+      await queryRun(tx, sql`UPDATE picking_orders SET labeling_pending = true, last_update_date = ${now()} WHERE id = ${order.id}`);
+      await logTransition(tx, {
+        entityType: "picking_order",
+        entityId: order.id,
+        fromState: "label_printing_done",
+        toState: "labeling_pending",
+        actorId: input.actorId,
+        metadata: { ruleIds: matches.map((m) => m.ruleId) },
+      });
+    } else {
+      await advanceAfterPickingFinish(tx, order.id);
+    }
+    await emitEvent(tx, {
+      type: "picking.label_printing_finished",
+      topics: ["/picking-orders", "/label-printing-orders", "/labeling-orders"],
+      data: { orderId: order.id, actorId: input.actorId },
+    });
+    return { id: order.id, status: "picking_finished", labelPrintingPending: false, labelingPending };
   });
 }
 
@@ -3164,6 +3297,7 @@ export async function overridePickingOrderStatus(
               working_by = NULL,
               working_at = NULL,
               labeling_pending = false,
+              label_printing_pending = false,
               shipped_at = ${shippedAtVal},
               shipped_by = ${shippedByVal},
               issue_reason = ${issueVal(sql`issue_reason`)},

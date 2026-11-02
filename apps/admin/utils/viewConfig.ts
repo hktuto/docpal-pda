@@ -13,7 +13,7 @@ import {
   type PdaViewListKey,
 } from "./listRowTemplate";
 
-export const PDA_VIEW_LIST_KEYS: PdaViewListKey[] = [...PDA_LIST_KEYS, "stock-search", "labeling"];
+export const PDA_VIEW_LIST_KEYS: PdaViewListKey[] = [...PDA_LIST_KEYS, "stock-search", "label-printing", "labeling"];
 
 export interface PdaListViewConfig {
   title: string;
@@ -58,6 +58,8 @@ export const PDA_LIST_CHIP_FIELDS: Record<PdaViewListKey, string[]> = {
   picking: ["status", "allocation_status", "working_by_name", "none"],
   // Labeling (spec 2026-10-28): the picking order-field chips + labelCount.
   labeling: ["status", "allocation_status", "working_by_name", "labelCount", "none"],
+  // Label printing (spec 2026-11-02): same catalog as labeling.
+  "label-printing": ["status", "allocation_status", "working_by_name", "labelCount", "none"],
   "put-away": ["status", "unboxed_items", "received_items", "none"],
   "goods-verify": ["status", "verified_by", "none"],
   verify: ["box_status", "package_count", "verify_verified_count", "none"],
@@ -94,6 +96,7 @@ export const DEFAULT_PDA_VIEW_CONFIG: PdaViewConfig = {
     receiving: { title: "[name]", meta: ["[supplier_name] · [delivery_date]"], chip: "status" },
     picking: { title: "[order_no]", meta: ["[customer_code] · [po_no]"], chip: "status" },
     labeling: { title: "[order_no]", meta: ["[customer_code] · [ship_to]"], chip: "labelCount" },
+    "label-printing": { title: "[order_no]", meta: ["[customer_code] · [ship_to]"], chip: "labelCount" },
     "put-away": { title: "[batch_no]", meta: ["[supplier_name]"], chip: "status" },
     "goods-verify": { title: "[wcl_item_no]", meta: ["[shelf_code] · [box_id]"], chip: "status" },
     verify: { title: "[shipping_box_id]", meta: ["[order_nos] · [destination_country]"], chip: "box_status" },

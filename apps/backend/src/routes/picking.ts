@@ -13,9 +13,11 @@ import {
   createShippingBox,
   finishPickingOrder,
   finishLabeling,
+  finishLabelPrinting,
   getPickingOrderDetail,
   getPickingShelfStock,
   listLabelingOrders,
+  listLabelPrintingOrders,
   listOpenShippingBoxes,
   listPickingOrders,
   releaseWorkLock,
@@ -399,6 +401,14 @@ pickingRoute.post("/picking-orders/:id/labeling-finish", async (c) => {
   return c.json(result, 200);
 });
 
+// Label-printing finish (spec 2026-11-02-label-printing-step-design.md):
+// clears the order's label-printing stage, then hands it to the labeling
+// queue (labeling step on) or runs the deferred post-finish progression.
+pickingRoute.post("/picking-orders/:id/label-printing-finish", async (c) => {
+  const result = await finishLabelPrinting(db, { pickingOrderId: c.req.param("id"), actorId: actorFrom(c).id });
+  return c.json(result, 200);
+});
+
 // Labeling queue: picking-finished orders still pending labeling, scoped like
 // the picking list; ?search= + ?limit=/?offset= page server-side.
 pickingRoute.get("/labeling-orders", async (c) => {
@@ -408,6 +418,25 @@ pickingRoute.get("/labeling-orders", async (c) => {
   const scope = await getUserScope(db, actor.username);
   return c.json(
     await listLabelingOrders(db, {
+      search: c.req.query("search"),
+      limit: Number.isNaN(limit) ? undefined : limit,
+      offset: Number.isNaN(offset) ? undefined : offset,
+      scope,
+      username: actor.username,
+    }),
+    200
+  );
+});
+
+// Label-printing queue: picking-finished orders still pending label printing,
+// scoped like the picking list; ?search= + ?limit=/?offset= page server-side.
+pickingRoute.get("/label-printing-orders", async (c) => {
+  const limit = Number(c.req.query("limit"));
+  const offset = Number(c.req.query("offset"));
+  const actor = actorFrom(c);
+  const scope = await getUserScope(db, actor.username);
+  return c.json(
+    await listLabelPrintingOrders(db, {
       search: c.req.query("search"),
       limit: Number.isNaN(limit) ? undefined : limit,
       offset: Number.isNaN(offset) ? undefined : offset,

@@ -34,6 +34,7 @@ const { t } = useI18n();
 const PDA_LIST_PAGE_I18N: Record<PdaViewListKey, string> = {
   receiving: "receiving",
   picking: "picking",
+  "label-printing": "labelPrinting",
   labeling: "labeling",
   "put-away": "putAway",
   "goods-verify": "goodsVerify",
@@ -134,6 +135,16 @@ const PDA_SAMPLE_FULL: Record<PdaViewListKey, Record<string, unknown>> = {
     totalQty: 120,
     labelCount: 2,
   },
+  "label-printing": {
+    orderNo: "SO-100234",
+    pickingOrderType: "SO",
+    customerCode: "CUST-01",
+    shipTo: "Hong Kong",
+    deliveryDate: "2026-09-22",
+    itemCount: 8,
+    totalQty: 120,
+    labelCount: 2,
+  },
 };
 
 const PDA_SAMPLE_PARTIAL: Record<PdaViewListKey, Record<string, unknown>> = {
@@ -144,6 +155,7 @@ const PDA_SAMPLE_PARTIAL: Record<PdaViewListKey, Record<string, unknown>> = {
   verify: { shippingBoxId: "BOX-HK-001" },
   measuring: { boxId: "BOX-HK-001" },
   labeling: { orderNo: "SO-100234" },
+  "label-printing": { orderNo: "SO-100234" },
   "stock-search": { partNo: "PN-001" },
 };
 

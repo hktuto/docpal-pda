@@ -17,6 +17,10 @@ import type {
   PrintPickingLabelResult,
   LabelingOrderListQuery,
   LabelingOrderRow,
+  LabelPrintingOrderListQuery,
+  LabelPrintingOrderRow,
+  FinishPickingOrderResult,
+  FinishLabelPrintingResult,
   ScanPickingItemInput,
   PickingShelfStockQuery,
   ShippingBoxUpdateInput,
@@ -422,10 +426,23 @@ export function createBackendWarehouseService(
     },
     // Explicit finish: all items fully boxed → order finished. Boxing the
     // last package also auto-finishes (no task is created either way).
-    // labelingPending (spec 2026-10-28): true when the order entered the
-    // labeling stage — the PDA routes the operator to /labeling/[id].
-    async finishPickingOrder(id: string): Promise<{ id: string; status: string; labelingPending: boolean }> {
+    // labelPrintingPending (spec 2026-11-02) wins over labelingPending — the
+    // PDA routes the operator to /label-printing/[id] first.
+    async finishPickingOrder(id: string): Promise<FinishPickingOrderResult> {
       return client.post(`/picking-orders/${id}/finish`, {});
+    },
+    // Label-printing queue (spec 2026-11-02): picking_finished orders
+    // awaiting their internal labels; label-printing-finish clears the stage
+    // (409 label_printing_not_pending when already done).
+    async getLabelPrintingOrders(query?: LabelPrintingOrderListQuery): Promise<ListPage<LabelPrintingOrderRow>> {
+      return client.get("/label-printing-orders", {
+        search: query?.search,
+        limit: query?.limit,
+        offset: query?.offset,
+      });
+    },
+    async finishLabelPrinting(orderId: string): Promise<FinishLabelPrintingResult> {
+      return client.post(`/picking-orders/${orderId}/label-printing-finish`, {});
     },
     // Labeling queue (spec 2026-10-28): picking_finished orders awaiting
     // their labels; labeling-finish clears the stage (409

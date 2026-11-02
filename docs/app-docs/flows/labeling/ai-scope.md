@@ -15,12 +15,17 @@
   List-row rendering comes from `pdaViewConfig.lists.labeling` (chip catalog
   `status`/`allocation_status`/`working_by_name`/`labelCount`/`none`; default
   `{title:"[order_no]", meta:["[customer_code] · [ship_to]"], chip:"labelCount"}`).
-- Queue entry is **snapshotted** at picking finish: `finishPickingOrder`
+- Queue entry is **snapshotted** at stage entry: `finishPickingOrder`
   (`apps/backend/src/db/picking.ts`) sets `picking_orders.labeling_pending =
   true` (+ a `labeling_pending` transition log with the matched rule ids)
-  when the `labeling` flow step is enabled AND the order matches ≥ 1 active
-  `label_print_rules` row (first match per label type). Later rule edits do
-  not move orders in/out of the queue. The finish response carries
+  directly when the `label-printing` step does not apply (disabled, or no
+  internal match) AND the `labeling` flow step is enabled AND the order
+  matches ≥ 1 active `label_print_rules` row of any source (first match per
+  label type); otherwise `finishLabelPrinting` sets the flag when the
+  printing stage is finished (guaranteed by the finish-time snapshot, spec
+  2026-11-02 — see [Label Printing](../label-printing/ai-scope.md)). Later
+  rule edits do not move orders in/out of the queue. When entered directly at
+  picking finish the response carries
   `labelingPending` so the PDA routes to `/labeling/[id]` after the immediate
   print prompt instead of `/verify` (see the picking flow).
 - Labeling detail (`/labeling/[id]`): order header + the print UI reused from
@@ -114,6 +119,7 @@
 
 ## Related specs/plans
 
+- `docs/superpowers/specs/2026-11-02-label-printing-step-design.md` (+ [Label Printing AI scope](../label-printing/ai-scope.md))
 - `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`
 - `docs/superpowers/specs/2026-10-30-label-source-and-label-verify-design.md`
 - `docs/superpowers/plans/2026-10-28-picking-labeling-step.md`

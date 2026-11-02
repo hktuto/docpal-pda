@@ -17,6 +17,10 @@ import type {
   PrintPickingLabelResult,
   LabelingOrderListQuery,
   LabelingOrderRow,
+  LabelPrintingOrderListQuery,
+  LabelPrintingOrderRow,
+  FinishPickingOrderResult,
+  FinishLabelPrintingResult,
   ScanPickingItemInput,
   PickingShelfStockQuery,
   ShippingBoxUpdateInput,
@@ -150,9 +154,15 @@ export interface WarehouseService {
   ): Promise<ScanIntoShippingBoxResult>;
   // Explicit finish: all items fully boxed → order finished. Boxing the
   // last package also auto-finishes (no task is created either way).
-  // labelingPending (spec 2026-10-28): true when the labeling step is on and
-  // a label print rule matched — the order waits in the labeling queue.
-  finishPickingOrder(id: string): Promise<{ id: string; status: string; labelingPending: boolean }>;
+  // labelPrintingPending/labelingPending (specs 2026-11-02 / 2026-10-28):
+  // true when the order entered the label-printing / labeling stage.
+  finishPickingOrder(id: string): Promise<FinishPickingOrderResult>;
+  // Label-printing queue (spec 2026-11-02): picking_finished orders awaiting
+  // their internal labels at the printer bench; finishLabelPrinting clears
+  // the stage (409 label_printing_not_pending when already done — treat as
+  // done) and reports whether the order moved on to labeling.
+  getLabelPrintingOrders(query?: LabelPrintingOrderListQuery): Promise<ListPage<LabelPrintingOrderRow>>;
+  finishLabelPrinting(orderId: string): Promise<FinishLabelPrintingResult>;
   // Labeling queue (spec 2026-10-28): picking_finished orders still awaiting
   // their labels, paged like the picking list; finishLabeling clears the
   // stage (409 labeling_not_pending when already done — treat as done).
