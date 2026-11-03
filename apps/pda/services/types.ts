@@ -28,9 +28,45 @@ export interface SupplierQrcodeTemplate {
   brands?: string[] | null;
 }
 
-/** Month-counter date-code period row (GET /date-code-periods) — the
- *  canonical type + decode live in utils/parseOcrScan.ts. */
-export type { DateCodePeriod } from "~/utils/parseOcrScan";
+/** Request for POST /scan/decode — the server-side decode authority (spec
+ *  docs/superpowers/specs/2026-11-03-backend-scan-decode-design.md). Order
+ *  context rides along like the retired parseQrCapture options did. */
+export interface ScanDecodeInput {
+  raw: string;
+  /** Part numbers (or WCL item nos) of the order being scanned — a template
+   *  match only wins when its part/wclItemNo is among them. */
+  targets?: string[];
+  /** Profile whose template is tried first. */
+  supplierCode?: string;
+  /** Brands of the order's items — brand-intersecting templates try next. */
+  brands?: string[];
+}
+
+/** Response: the old OcrParseResult shape minus `raw` (the capture is the
+ *  client's own). matched:false → the client's no-DB OCR heuristics take
+ *  over (utils/labelDecode.ts). */
+export interface ScanDecodeResult {
+  matched: boolean;
+  parsed: {
+    itemId: string | null;
+    qty?: number;
+    coo?: string;
+    dateCode?: string;
+    lotCode?: string;
+    cow?: string;
+    wclItemNo?: string;
+    serialNo?: string;
+  };
+  options: {
+    itemIds: string[];
+    qtys: number[];
+    coos: string[];
+    dateCodes: string[];
+    lotCodes: string[];
+    cows: string[];
+  };
+  supplier?: { code: string; brands?: string[] };
+}
 
 // ------------------------------------------------------------------
 // Receiving — DTOs matching apps/backend (:3002), see

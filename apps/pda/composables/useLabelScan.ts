@@ -7,12 +7,12 @@ import {
 import { runScanMatcher, useScanMatchers, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
 import { I18nError } from '~/composables/i18nError';
 import { useErrorMessage } from '~/composables/errorMessage';
-import { useFlowSteps } from '~/composables/useFlowSteps';
 import { useWarehouse } from '~/composables/useWarehouse';
-import { parseAndIdentify, parseQrCapture, type CandidateOptions, type OcrParseResult, type RawOcrCapture, type OcrBarcode, type ParsedFields } from '~/utils/parseOcrScan';
+import { parseAndIdentify, type CandidateOptions, type OcrParseResult, type RawOcrCapture, type OcrBarcode, type ParsedFields } from '~/utils/parseOcrScan';
+import { decodeLabel } from '~/utils/labelDecode';
 import { playScanError, playScanSuccess } from '~/utils/scanBeep';
 import type { OcrInput } from '~/utils/ocrNormalize';
-import type { SupplierQrcodeTemplate, DateCodePeriod } from '~/services/types';
+import type { SupplierQrcodeTemplate } from '~/services/types';
 import type { WarehouseService } from '~/services/warehouse';
 
 let supplierTemplateCache: SupplierQrcodeTemplate[] | null = null;
@@ -30,23 +30,6 @@ export async function getCachedSupplierQrTemplates(
     });
   }
   return supplierTemplateCachePromise;
-}
-
-let dateCodePeriodCache: DateCodePeriod[] | null = null;
-let dateCodePeriodCachePromise: Promise<DateCodePeriod[]> | null = null;
-
-/** Shared cache of the /date-code-periods list (month-counter decoding periods). */
-export async function getCachedDateCodePeriods(
-  warehouse: WarehouseService
-): Promise<DateCodePeriod[]> {
-  if (dateCodePeriodCache) return dateCodePeriodCache;
-  if (!dateCodePeriodCachePromise) {
-    dateCodePeriodCachePromise = warehouse.getDateCodePeriods().then((periods) => {
-      dateCodePeriodCache = periods;
-      return periods;
-    });
-  }
-  return dateCodePeriodCachePromise;
 }
 
 function parseBarcodes(barcodesJson: string): RawOcrCapture['barcodes'] {
@@ -125,7 +108,6 @@ export function useLabelScan() {
   const errorMessage = useErrorMessage();
   const matchers = useScanMatchers();
   const warehouse = useWarehouse();
-  const { dateCodeFormat } = useFlowSteps();
 
   async function processCapture(
     capture: LabelScanCapture,
@@ -137,20 +119,12 @@ export function useLabelScan() {
 
     if (isQrOnlyCapture(capture, barcodes)) {
       const qrValue = barcodes[0]?.value ?? capture.text;
-      console.log('[SCAN-TIME] fetching supplier QR templates...');
       const t1 = performance.now();
-      const suppliers = await getCachedSupplierQrTemplates(warehouse);
-      const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
-      console.log('[SCAN-TIME] getSupplierQrTemplates', (performance.now() - t1).toFixed(1), 'ms');
-      const t2 = performance.now();
-      parsedResult = parseQrCapture(qrValue, {
-        supplierTemplates: suppliers,
+      parsedResult = await decodeLabel(warehouse, qrValue, {
         targets: contextInput.targets ?? [],
-        contextSupplierCode: contextInput.supplierCode,
-        dateCodePeriods,
-        dateCodeFormat: dateCodeFormat.value,
+        supplierCode: contextInput.supplierCode,
       });
-      console.log('[SCAN-TIME] parseQrCapture', (performance.now() - t2).toFixed(1), 'ms');
+      console.log('[SCAN-TIME] /scan/decode', (performance.now() - t1).toFixed(1), 'ms');
     } else {
       const t1 = performance.now();
       parsedResult = parseAndIdentify(
@@ -204,16 +178,7 @@ export function useLabelScan() {
     const barcodes = parseBarcodes(capture.barcodes);
 
     if (isQrOnlyCapture(capture, barcodes)) {
-      const suppliers = await getCachedSupplierQrTemplates(warehouse);
-      const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
-      return parseQrCapture(rawValue, {
-        supplierTemplates: suppliers,
-        targets: [],
-        contextSupplierCode: supplierCode,
-        contextBrands,
-        dateCodePeriods,
-        dateCodeFormat: dateCodeFormat.value,
-      });
+      return decodeLabel(warehouse, rawValue, { supplierCode, brands: contextBrands });
     }
 
     return parseAndIdentify({ text: rawValue, barcodes }, []);

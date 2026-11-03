@@ -144,7 +144,8 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Scanner symbology scope (per-supplier whitelist apply/restore) | `composables/useScannerConfig.ts` + native `apps/pda/android/.../ScannerConfigPlugin.java` (xcheng broadcast path) / `HoneywellScannerClient.java` (Honeywell DCS claim path, auto-branched by detected platform) |
 | Scanner platform detection (xcheng / honeywell / none) | native `ScannerConfigPlugin.getDeviceInfo()`; JS `getScannerDeviceInfo()` in `composables/useScannerConfig.ts` |
 | Picking one/many-item OCR review (full fields, add/remove, per-item results) | `components/picking/PickingScanReviewModal.vue` |
-| OCR/QR parser and candidate extraction (picking drafts via `extractPickingScanDrafts`) | `utils/parseOcrScan.ts` |
+| OCR text heuristics + candidate extraction (picking drafts via `extractPickingScanDrafts`) | `utils/parseOcrScan.ts` |
+| Label decode (QR/template) — endpoint-first + heuristic fallback | `utils/labelDecode.ts` → `POST /scan/decode` (backend authority `apps/backend/src/decode/`) |
 | Mismatch form validation (pure) | `utils/mismatch.ts` |
 
 - `composables/useLabelScan.ts` — orchestrates native scan; in browsers falls back to `window.prompt()` + JSON.

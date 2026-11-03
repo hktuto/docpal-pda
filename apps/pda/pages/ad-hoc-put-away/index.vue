@@ -150,10 +150,11 @@ import { useToast } from "~/composables/useToast";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useBrandSymbologyScope } from "~/composables/useScannerConfig";
 import { I18nError } from "~/composables/i18nError";
-import { parseQrCapture, parseAndIdentify, type OcrParseResult } from "~/utils/parseOcrScan";
+import { parseAndIdentify, type OcrParseResult } from "~/utils/parseOcrScan";
+import { decodeLabel } from "~/utils/labelDecode";
 import { dateToDateCode, toLabelDateCode } from "~/utils/dateCode";
 import { useFlowSteps } from "~/composables/useFlowSteps";
-import { captureLabel, getCachedSupplierQrTemplates, getCachedDateCodePeriods } from "~/composables/useLabelScan";
+import { captureLabel } from "~/composables/useLabelScan";
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import SearchableSelect from "~/components/SearchableSelect.vue";
 import ScanFab from "~/components/ScanFab.vue";
@@ -257,15 +258,8 @@ async function handleHardwareScan(code: string) {
     return;
   }
 
-  // Parse as item label via supplier QR template
-  const templates = await getCachedSupplierQrTemplates(warehouse);
-  const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
-  const result = parseQrCapture(code, {
-    supplierTemplates: templates,
-    contextBrands: [selectedBrand.value],
-    dateCodePeriods,
-    dateCodeFormat: dateCodeFormat.value,
-  });
+  // Parse as item label via the backend decode authority (POST /scan/decode)
+  const result = await decodeLabel(warehouse, code, { brands: [selectedBrand.value] });
   if (result.matched) {
     await addParsedItem(result, code);
     playScanSuccess();
@@ -280,21 +274,14 @@ async function openScan() {
   const capture = await captureLabel();
   if (!capture) return;
   const barcodes = JSON.parse(capture.barcodes || "[]");
-  const templates = await getCachedSupplierQrTemplates(warehouse);
-  const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
-
-  // A single detected barcode always goes through the supplier-template
-  // parser — symbology-agnostic (QR, Data Matrix, …), the template regexes
-  // decide what matches. Generic OCR text parsing needs an expected part
-  // number to match against, which this blind page does not have.
+  // A single detected barcode always goes through the backend decode
+  // authority (POST /scan/decode) — symbology-agnostic (QR, Data Matrix, …),
+  // the supplier template regexes decide what matches. Generic OCR text
+  // parsing needs an expected part number to match against, which this
+  // blind page does not have.
   const single = barcodes.length === 1 ? barcodes[0] : undefined;
   const result = single
-    ? parseQrCapture(single.value, {
-        supplierTemplates: templates,
-        contextBrands: [selectedBrand.value],
-        dateCodePeriods,
-        dateCodeFormat: dateCodeFormat.value,
-      })
+    ? await decodeLabel(warehouse, single.value, { brands: [selectedBrand.value] })
     : parseAndIdentify(
         { text: capture.text, barcodes },
         []

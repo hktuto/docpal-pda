@@ -52,7 +52,8 @@ import type {
   SupplierListRow,
   CountryRow,
   SupplierQrcodeTemplate,
-  DateCodePeriod,
+  ScanDecodeInput,
+  ScanDecodeResult,
   BoxSearchResult,
   LabelsData,
   ScanPickingItemResult,
@@ -98,15 +99,6 @@ interface ScanTemplateRow {
   dateCodeEncoding: string | null;
   barcodeTypes: string[] | null;
   brands: string[] | null;
-}
-
-/** Backend date-code-periods row (GET /date-code-periods). */
-interface DateCodePeriodRow {
-  encoding: string;
-  direction: "forward" | "backward";
-  counterFrom: number;
-  counterTo: number;
-  periodStart: string;
 }
 
 // --- CN put-away (GET /put-away-cn/*) raw rows — normalized onto the
@@ -741,16 +733,10 @@ export function createBackendWarehouseService(
       }));
     },
 
-    // Month-counter date-code periods for koa_month_counter label decoding
-    async getDateCodePeriods(): Promise<DateCodePeriod[]> {
-      const rows = await client.get<DateCodePeriodRow[]>("/date-code-periods");
-      return rows.map((row) => ({
-        encoding: row.encoding,
-        direction: row.direction,
-        counterFrom: row.counterFrom,
-        counterTo: row.counterTo,
-        periodStart: row.periodStart,
-      }));
+    // Server-side label decode — templates, month-counter periods and NCC
+    // drawing-code resolution require DB lookups (POST /scan/decode).
+    async decodeScan(input: ScanDecodeInput): Promise<ScanDecodeResult> {
+      return client.post<ScanDecodeResult>("/scan/decode", input);
     },
 
     // Stock search — one aggregate read; filters are optional ANDed query

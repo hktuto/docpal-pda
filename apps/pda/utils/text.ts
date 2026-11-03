@@ -33,7 +33,8 @@ export interface ScannedPartKeys {
 /**
  * Filter candidate items by scanned part keys with WCL-item-no preference:
  * when the scan carries a wclItemNo (a template group, or the brand-prefix
- * derivation for single-brand profiles like ABLIC — see parseQrCapture) and
+ * derivation for single-brand profiles like ABLIC — done server-side in the
+ * decode authority, POST /scan/decode) and
  * at least one item matches it, only those items match (parts.part_no is NOT
  * unique — the same MPN can appear under several WCL item numbers, so the
  * bare partNo alone cannot disambiguate). With no wcl match the fallback is

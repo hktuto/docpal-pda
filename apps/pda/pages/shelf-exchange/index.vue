@@ -107,8 +107,9 @@ import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useBrandSymbologyScope } from "~/composables/useScannerConfig";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { I18nError } from "~/composables/i18nError";
-import { parseQrCapture, parseAndIdentify } from "~/utils/parseOcrScan";
-import { captureLabel, getCachedSupplierQrTemplates, getCachedDateCodePeriods } from "~/composables/useLabelScan";
+import { parseAndIdentify } from "~/utils/parseOcrScan";
+import { decodeLabel } from "~/utils/labelDecode";
+import { captureLabel } from "~/composables/useLabelScan";
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import ScanFab from "~/components/ScanFab.vue";
 import ShelfExchangeConfirmModal from "~/components/ShelfExchangeConfirmModal.vue";
@@ -122,7 +123,6 @@ definePageMeta({ title: "meta.shelfExchange" });
 
 const { t } = useI18n();
 const warehouse = useWarehouse();
-const { dateCodeFormat } = useFlowSteps();
 const { showToast } = useToast();
 
 const loading = ref(true);
@@ -203,9 +203,7 @@ async function handleHardwareScan(code: string) {
     return false;
   }
 
-  const templates = await getCachedSupplierQrTemplates(warehouse);
-  const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
-  const result = parseQrCapture(code, { supplierTemplates: templates, dateCodePeriods, dateCodeFormat: dateCodeFormat.value });
+  const result = await decodeLabel(warehouse, code);
   if (!result.matched) {
     showToast(t("shelfExchange.errors.scanParse"));
     return false;
@@ -222,7 +220,7 @@ async function handleHardwareScan(code: string) {
 }
 
 // Camera capture — same parse path as the hardware scan: a single detected
-// barcode goes through the supplier templates (symbology-agnostic — QR, Data
+// barcode goes through the backend decode authority (symbology-agnostic — QR, Data
 // Matrix, …); generic OCR text parsing needs an expected part number, which
 // this blind page does not have.
 async function openScan() {
@@ -234,12 +232,9 @@ async function openScan() {
   const capture = await captureLabel();
   if (!capture) return;
   const barcodes = JSON.parse(capture.barcodes || "[]");
-  const templates = await getCachedSupplierQrTemplates(warehouse);
-  const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
-
   const single = barcodes.length === 1 ? barcodes[0] : undefined;
   const result = single
-    ? parseQrCapture(single.value, { supplierTemplates: templates, dateCodePeriods, dateCodeFormat: dateCodeFormat.value })
+    ? await decodeLabel(warehouse, single.value)
     : parseAndIdentify({ text: capture.text, barcodes }, []);
 
   if (!result.matched) {

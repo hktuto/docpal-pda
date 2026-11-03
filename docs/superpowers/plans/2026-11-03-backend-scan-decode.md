@@ -19,9 +19,10 @@ endpoint is field-tested.
   kept HEAD building during the `db/scanParse.ts → decode/codecs.ts` move;
   `bb1b44bb` swept part of the rename). Some import-sweeps already landed via
   those commits (e.g. `shelfExchange.ts`).
-- Committed as its own decode-set commit (Phase 5 ✅); endpoint deployed
-  alongside the app but not called by any client yet — field test (🧪) gates
-  the Phase 6 cutover.
+- Phase 5 shipped as `8d19ba4c`; Phase 6 (PDA cutover) landed the same day —
+  `fd0c7097`'s NCC drawing-code lookup made server-side decode the only
+  correct path. The field test remains as cutover validation (🧪): real
+  DB-lookup label + PDA Wi-Fi latency + review-sheet fallback on a device.
 - Verified: `pnpm --filter @warehouse/backend build` clean;
   `src/decode/decode.test.ts` 6/6; decode+labels+receiving 47/47; full suite
   A/B against clean HEAD = identical 11 failures (labeling ×6, picking
@@ -71,12 +72,29 @@ the `db/scanParse.ts` stopgap, import-site sweep, `src/index.ts` mount),
 `docs/backend/{README,api-design,schema-conventions}.md`, AGENTS.md, spec + plan.
 (`docs/superpowers/audits/` and `task-list-*.xlsx` are foreign — left untracked.)
 
-## Phase 6 — PDA cutover ⏳ (after Phase 4 passes)
+## Phase 6 — PDA cutover ✅ (2026-11-03)
 
-1. `WarehouseService`/`backendWarehouse`/`services/types`: add `decodeScan(raw, ctx)`; response maps 1:1 to `OcrParseResult` (rebuild `raw` locally).
-2. `useLabelScan.processCapture` + `parseRawValue`: QR branch → `await decodeScan(...)`; on `matched:false` run local `parseAndIdentify` fallback (identical to today's fallthrough). Keep `[SCAN-TIME]` logging; one POST per scan.
-3. Delete the duplicated decoders from `parseOcrScan.ts` (`parseQrCapture`, codecs, `DEFAULT_KOA_PERIODS`, `DateCodePeriod`) — keep the no-DB OCR heuristics; port/remove their vitest mirror cases (backend already covers them). Drop `getCachedDateCodePeriods`.
-4. `pnpm --filter @warehouse/pda test` + `nuxt prepare` + manual scan flows (receiving / put-away / measuring).
+Done the same day: `fd0c7097` added NCC drawing-code resolution to
+`decodeScan` — labels the PDA's local copy **cannot** decode. The field test
+became a cutover acceptance check, not a pre-cutover gate.
+
+- `utils/labelDecode.ts` — `decodeLabel(warehouse, raw, opts)`: POST
+  /scan/decode; `matched:false` → local `parseAndIdentify` (1:1 with the
+  retired `parseQrCapture` fallback); matched → rebuilds `raw` locally.
+- 7 call sites swapped: `useLabelScan` ×2, ad-hoc-put-away ×2,
+  shelf-exchange ×2, put-away `[id]` ×1.
+- Deleted the client decoders from `utils/parseOcrScan.ts` (1063 → ~684
+  lines): `parseQrCapture`, codecs, `DEFAULT_KOA_PERIODS` — OCR heuristics
+  (`parseAndIdentify`, `extract*`, drafts) stay.
+- Service layer: `WarehouseService.decodeScan` + adapter;
+  `getDateCodePeriods`/`DateCodePeriod` removed from the PDA (GET
+  /date-code-periods now has no PDA consumer).
+- Test port: 17 synthetic-template cases →
+  `apps/backend/src/decode/template.test.ts` (pure, no DB);
+  `tests/labelDecode.test.ts` covers pass-through/fallback/context-forward;
+  `backendWarehouse.test.ts` decodeScan case replaced the
+  getDateCodePeriods one. PDA vitest 438/438; backend 32/32
+  (template+decode+partDrawno).
 
 ## Phase 7 — admin cutover ⏳
 

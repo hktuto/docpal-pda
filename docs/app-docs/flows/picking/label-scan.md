@@ -16,8 +16,10 @@ Typical label fields:
 1. The operator taps the scan button (receiving detail, picking detail,
    put-away detail, or measuring box page).
 2. The label is captured (camera on Android, or a typed/pasted value).
-3. `useLabelScan` + `utils/parseOcrScan.ts` parse and normalize the input
-   against the supplier's QR template (fetched from `GET /scan-templates`).
+3. `useLabelScan` + `utils/labelDecode.ts` send the raw value to
+   `POST /scan/decode` — the backend (`src/decode/`) applies the supplier QR
+   templates and DB lookups. When no template matches, the local OCR-text
+   heuristics in `utils/parseOcrScan.ts` take over.
 4. What happens next depends on the flow:
    - **Receiving** — the raw label is sent to
      `POST /receiving-orders/:id/scan`; the server parses and matches it.

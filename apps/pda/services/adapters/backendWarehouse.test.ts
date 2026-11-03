@@ -173,22 +173,25 @@ describe('backendWarehouse receiving flow', () => {
     ]);
   });
 
-  it('getDateCodePeriods maps the date-code-periods DTO to the client shape', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse([
-        { encoding: 'koa_month_counter', direction: 'forward', counterFrom: 10, counterTo: 94, periodStart: '2025-12-01' },
-        { encoding: 'koa_month_counter', direction: 'backward', counterFrom: 99, counterTo: 71, periodStart: '2025-11-01' },
-      ])
-    );
+  it('decodeScan POSTs the input and passes the decode result through', async () => {
+    const decoded = {
+      matched: true,
+      parsed: { itemId: 'RK73H1JTTD3302F', qty: 500 },
+      options: { itemIds: ['RK73H1JTTD3302F'], qtys: [500], coos: [], dateCodes: [], lotCodes: [], cows: [] },
+      supplier: { code: 'KOA', brands: ['KOA'] },
+    };
+    fetchMock.mockResolvedValue(jsonResponse(decoded));
 
-    const periods = await service().getDateCodePeriods();
+    const result = await service().decodeScan({ raw: ':RK73H1JTTD3302F::502:X:1223:900001:KOA+RK73H1JTTD3302F', targets: ['RK73H1JTTD3302F'], supplierCode: 'KOA' });
 
-    expect(lastCall().url).toBe(`${BASE_URL}/date-code-periods`);
-    expect(lastCall().init.method).toBe('GET');
-    expect(periods).toEqual([
-      { encoding: 'koa_month_counter', direction: 'forward', counterFrom: 10, counterTo: 94, periodStart: '2025-12-01' },
-      { encoding: 'koa_month_counter', direction: 'backward', counterFrom: 99, counterTo: 71, periodStart: '2025-11-01' },
-    ]);
+    expect(lastCall().url).toBe(`${BASE_URL}/scan/decode`);
+    expect(lastCall().init.method).toBe('POST');
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({
+      raw: ':RK73H1JTTD3302F::502:X:1223:900001:KOA+RK73H1JTTD3302F',
+      targets: ['RK73H1JTTD3302F'],
+      supplierCode: 'KOA',
+    });
+    expect(result).toEqual(decoded);
   });
 
   it('maps the shipping-box / package mutations used by the receiving picking tab', async () => {

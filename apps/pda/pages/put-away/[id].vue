@@ -77,8 +77,6 @@ import { I18nError } from "~/composables/i18nError";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import {
   captureLabel,
-  getCachedSupplierQrTemplates,
-  getCachedDateCodePeriods,
   ocrResultToInput,
   useLabelScan,
   type LabelScanResult,
@@ -87,6 +85,7 @@ import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
 import { scrollToItem } from "~/utils/scroll";
 import { rawCode } from "~/utils/text";
+import { decodeLabel } from "~/utils/labelDecode";
 import { compareByPoLineThenPartNo, compareNumericAware, findCnPutAwayTargets, findPutAwayTargets } from "~/utils/putAwayScan";
 import {
   groupPutAwayItems,
@@ -94,7 +93,6 @@ import {
 } from "~/utils/putAwayGroups";
 import {
   extractMultiItemRows,
-  parseQrCapture,
   parseAndIdentify,
   type ScanMultiRow,
   type ScanMultiRowResult,
@@ -193,7 +191,7 @@ usePageHeader({
 
 const warehouse = useWarehouse();
 const { viewConfig } = useViewConfig();
-const { cnReceiving, loadFlowSteps, dateCodeFormat } = useFlowSteps();
+const { cnReceiving, loadFlowSteps } = useFlowSteps();
 
 // CN customer-receiving mode: the detail reads the CN task aggregate
 // (/put-away-cn/tasks/:id, normalized onto the standard types) and scanned
@@ -806,17 +804,10 @@ async function openScan(group: PutAwayItemGroup) {
         return;
       }
       const barcodes = JSON.parse(capture.barcodes || "[]");
-      const templates = await getCachedSupplierQrTemplates(warehouse);
-      const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
       const isQrOnly =
         barcodes.length === 1 && barcodes[0]?.format === "4" && !capture.imagePath;
       const result = isQrOnly
-        ? parseQrCapture(barcodes[0].value, {
-            supplierTemplates: templates,
-            targets: [group.partNo],
-            dateCodePeriods,
-            dateCodeFormat: dateCodeFormat.value,
-          })
+        ? await decodeLabel(warehouse, barcodes[0].value, { targets: [group.partNo] })
         : parseAndIdentify({ text: capture.text, barcodes }, [group.partNo]);
       if (!result.matched) {
         playScanError();

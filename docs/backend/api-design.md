@@ -264,10 +264,10 @@ Implemented: `GET /scan-templates` (see
 `apps/backend/src/routes/scantemplates.ts` + `src/db/scantemplates.ts`) and
 `POST /scan/decode` (see `src/routes/decode.ts` + `src/decode/`, spec
 `docs/superpowers/specs/2026-11-03-backend-scan-decode-design.md`).
-Receiving scans parse server-side, but picking / put-away / measuring scans
-still validate labels on the client — this public read hands the client every
-supplier's QR template + qty encoding (from `supplier_profiles`) so it never
-hardcodes templates. `POST /scan/decode` is the new DB-backed decode authority
+Receiving scans parse server-side, and since the 2026-11-03 cutover picking /
+put-away / measuring / shelf-exchange scans decode through `POST /scan/decode`
+(`utils/labelDecode.ts`) — `GET /scan-templates` now mainly feeds the hardware
+scanner symbology whitelist (`barcodeTypes`) and the admin supplier editor. `POST /scan/decode` is the new DB-backed decode authority
 (templates + `date_code_counter_periods` + flow-config `dateCodeFormat`); the
 client-side copies retire when the PDA/admin cutover lands.
 

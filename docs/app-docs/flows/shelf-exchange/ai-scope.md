@@ -31,7 +31,7 @@
 - `useWarehouse()` — service layer
 - `useToast()` — success/error messages
 - `useHardwareScanner()` — hardware scanner input (handler returns `false` on rejection; the composable beeps; disabled while the confirm modal is open)
-- `useLabelScan()` + `utils/parseOcrScan.ts` — camera capture and label parsing
+- `useLabelScan()` + `utils/labelDecode.ts` + `utils/parseOcrScan.ts` — camera capture; item-label parse via `POST /scan/decode` (OCR heuristics local on `matched:false`)
 - `useBrandSymbologyScope()` — no brand context on this page, so no symbology whitelist is applied (shelf QRs stay decodable)
 - `useVisibleReload()` — reload shelves on mount + visibility regain
 

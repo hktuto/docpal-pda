@@ -1,7 +1,9 @@
 # Backend Scan Decode (POST /scan/decode)
 
 Date: 2026-11-03
-Status: implemented (PDA/admin cutover deliberately deferred)
+Status: implemented; PDA cutover done 2026-11-03 (same day, after the NCC
+drawno requirement made server-side decode the only correct path); admin
+supplier-editor preview still pending cutover
 
 ## Context
 

@@ -65,7 +65,8 @@ import type {
   SupplierListRow,
   CountryRow,
   SupplierQrcodeTemplate,
-  DateCodePeriod,
+  ScanDecodeInput,
+  ScanDecodeResult,
   BoxSearchResult,
   LabelsData,
   AdHocPutAwayItem,
@@ -284,12 +285,13 @@ export interface WarehouseService {
   getGoodsVerifyTask(id: string): Promise<GoodsVerifyTaskDetail>;
   verifyGoodsVerifyTask(id: string, countedQty?: number): Promise<GoodsVerifyTaskListRow>;
 
-  // Supplier QR templates for client-side label parsing (GET /scan-templates)
+  // Supplier QR templates — barcode-type whitelists for the hardware
+  // scanner (GET /scan-templates). Label decoding moved server-side.
   getSupplierQrTemplates(): Promise<SupplierQrcodeTemplate[]>;
 
-  // Month-counter date-code periods for koa_month_counter label decoding
-  // (GET /date-code-periods)
-  getDateCodePeriods(): Promise<DateCodePeriod[]>;
+  // Server-side label decode (POST /scan/decode): supplier templates +
+  // month-counter periods + NCC drawing-code resolution need DB lookups.
+  decodeScan(input: ScanDecodeInput): Promise<ScanDecodeResult>;
 
   // Stock search — one aggregate read (GET /stock-search) replaces the old
   // suppliers → parts → lots cascade; zero-qty lots come back by design.

@@ -658,8 +658,9 @@
   **Scan item into box** cross-order toggle),
   `components/picking/PickingIssueBanner.vue` — detail sub-views.
 - `components/PickingIssueReportModal.vue` — batch issue report dialog.
-- `composables/useLabelScan.ts` + `utils/parseOcrScan.ts` — label parsing
-  (QR templates from `GET /scan-templates`, OCR fallback).
+- `composables/useLabelScan.ts` + `utils/labelDecode.ts` + `utils/parseOcrScan.ts` —
+  label parsing (raw value → `POST /scan/decode` server-side decode; OCR-text
+  heuristics stay local on `matched:false`).
 - `components/OutdatedWarningDialog.vue` — dismissible outdated date-code
   alert shown when a scan response carries `outdatedWarning` (picking scan
   page + put-away detail page).
