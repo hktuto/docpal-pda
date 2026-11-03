@@ -163,10 +163,20 @@ async function handleRawScan(raw: string): Promise<boolean | void> {
         return false;
       }
     }
+    // Display the canonical master keys resolved from the parts table — the
+    // client-side single-brand derivation (<brand>/<mpn>) is only a guess and
+    // is wrong for e.g. TE (TE-AMP(<pn>)). Unknown parts keep the parsed
+    // values; the commit re-resolves against the master regardless.
+    let master: { partNo: string; wclItemNo: string } | null = null;
+    try {
+      master = await warehouse.lookupAdHocPutAwayPart(parsed.itemId);
+    } catch {
+      master = null;
+    }
     const item: ManualReceivingDraftItem = {
       uid: nextUid++,
-      partNo: parsed.itemId,
-      wclItemNo: parsed.wclItemNo,
+      partNo: master?.partNo ?? parsed.itemId,
+      wclItemNo: master?.wclItemNo ?? parsed.wclItemNo,
       brand: scanBrand ?? taskBrand.value ?? undefined,
       supplierCode: result.supplier?.code,
       qty: parsed.qty ?? 0,

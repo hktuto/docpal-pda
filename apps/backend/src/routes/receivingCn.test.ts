@@ -297,3 +297,35 @@ test("po_no prefix rules: unmatched prefix falls back to org 7 / STORE1", async 
   assert.equal(item!.orgId, 7);
   assert.equal(item!.subInventoryCode, "STORE1");
 });
+
+test("parts master is authoritative: a TE bare-MPN scan stores the canonical wrapped keys", async () => {
+  await reseed(client);
+  await seedOrgInfoPairs();
+  // Master carries the wrapped TE keys; the label scans the bare MPN and the
+  // client guesses the wrong single-brand wcl shape (TE/<mpn>).
+  await client.db.execute(
+    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no, description)
+        VALUES ('part-cn-te-1', 'TE', 'AMP(5172070-CN)', 'TE-AMP(5172070-CN)', 'TE manual receiving test part')
+        ON CONFLICT DO NOTHING`
+  );
+  const token = await login("operator", "DocPal2026!");
+  const res = await postManual(token, {
+    orders: [
+      {
+        orderNo: "329063176T3",
+        items: [{ partNo: "5172070-CN", wclItemNo: "TE/5172070-CN", qty: 720, brand: "TE" }],
+      },
+    ],
+  });
+  assert.equal(res.status, 201);
+  const created = (await res.json()) as { id: string };
+  const item = await queryGet<{ partNo: string; wclItemNo: string | null }>(
+    client.db,
+    sql`SELECT rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo"
+        FROM receiving_invoice_items_cn rii
+        JOIN receiving_invoices_cn ri ON ri.id = rii.receiving_invoice_id
+        WHERE ri.receiving_order_id = ${created.id}`
+  );
+  assert.equal(item!.partNo, "AMP(5172070-CN)");
+  assert.equal(item!.wclItemNo, "TE-AMP(5172070-CN)");
+});

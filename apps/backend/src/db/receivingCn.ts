@@ -321,8 +321,9 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
 export interface CnManualReceiptItemInput {
   partNo: string;
   qty: number;
-  /** Client-resolved parts key (from the label parse); the backend falls
-   *  back to its own parts lookup when absent. */
+  /** Client-resolved parts key (from the label parse); the parts master
+   *  overrides both keys when the scan resolves to a master row, and the
+   *  backend falls back to its own parts lookup when absent. */
   wclItemNo?: string;
   dateCode?: string;
   lotCode?: string;
@@ -430,6 +431,20 @@ async function resolveWclItemNo(tx: DbOrTx, partNo: string): Promise<string | nu
   return rows.length === 1 ? rows[0].wclItemNo : null;
 }
 
+/** The parts-master row for any scanned key — a unique space/case-insensitive
+ *  unwrapped match on EITHER parts column, else NULL. Used to backfill the
+ *  canonical keys at manual-receipt commit. */
+async function resolvePartByKey(tx: DbOrTx, key: string): Promise<{ partNo: string; wclItemNo: string } | null> {
+  const k = normalizePartNo(key);
+  const rows = await queryAll<{ partNo: string; wclItemNo: string }>(
+    tx,
+    sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo" FROM parts
+        WHERE ${unwrappedPartCol(sql`part_no`)} = ${k} OR ${unwrappedPartCol(sql`wcl_item_no`)} = ${k}
+        GROUP BY part_no, wcl_item_no`
+  );
+  return rows.length === 1 ? rows[0] : null;
+}
+
 /** The parts-master row for a wcl_item_no — only on a unique space/case-
  *  insensitive match, else NULL. A wcl_item_no edit applies the matched
  *  part_no alongside (the admin combobox picks wcl_item_no values). */
@@ -514,11 +529,19 @@ export async function createCnManualReceipt(
     for (const order of orders) {
       const pair = deriveCnManualOrgSub(order.orderNo);
       for (const item of order.items) {
+        // The parts master is authoritative once matched (same rule as
+        // commitAdHocPutAway): the client-side single-brand derivation
+        // (<brand>/<mpn>) is wrong for brands whose wcl key has a different
+        // shape (TE-AMP(<pn>)) — overwrite both keys from the master so the
+        // item joins stock lots keyed by the canonical forms.
+        const master =
+          (await resolvePartByKey(tx, item.partNo)) ??
+          (item.wclItemNo ? await resolvePartByKey(tx, item.wclItemNo) : null);
         await tx.insert(receivingInvoiceItemsCn).values({
           id: newId(),
           receivingInvoiceId: invoiceId,
-          partNo: item.partNo,
-          wclItemNo: item.wclItemNo ?? (await resolveWclItemNo(tx, item.partNo)),
+          partNo: master?.partNo ?? item.partNo,
+          wclItemNo: master?.wclItemNo ?? item.wclItemNo ?? null,
           poNo: order.orderNo,
           lineQty: item.qty,
           receivedQty: item.qty,
