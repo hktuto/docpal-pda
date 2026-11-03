@@ -1,7 +1,6 @@
 import { HTTPException } from "hono/http-exception";
 import { sql, type SQL } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
-import { env } from 'hono/adapter'
 import type { AppDb } from "../db.js";
 import { newId } from "./id.js";
 import { now } from "./now.js";
@@ -217,9 +216,10 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
   // pdf uploads are always TE and number like manual receipts
   // (`TE-yyyymmdd-seq`); the retired excel phase keeps the random CN- key.
   const batchNo = input.phase === "pdf" ? await nextCnBrandedNo(db, "TE") : generateCnBatchNo();
-  const { WAREHOUSE_CODE } = env<any>()
-  const warehouse = (WAREHOUSE_CODE ?? "sz").toLowerCase()
-  const warehouseToOrg = warehouse === 'sz' ? 7 : warehouse === 'sh' ? 5 : warehouse === 'bj' ? 12 : 14
+  // globalThis: this function's DocPal workflow `process` variable (below)
+  // shadows the Node global.
+  const warehouse = (globalThis.process.env.WAREHOUSE_CODE ?? "hk").toLowerCase();
+  const warehouseToOrg = warehouse === "sz" ? 7 : warehouse === "sh" ? 5 : warehouse === "bj" ? 12 : 14;
   const fileEntries: {
     extension: string;
     file_name: string;
