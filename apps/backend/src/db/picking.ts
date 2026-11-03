@@ -35,6 +35,13 @@ import {
 // `AND (...)` fragment for interpolation after a WHERE.
 const TN_ORG_ID = 143;
 
+/** SQL mirror of normalizePartNo (codecs.ts): whitespace collapsed out,
+ *  uppercase, TE "AMP(...)"/"TE-AMP(...)" wrapper unwrapped. Compare against a
+ *  normalizePartNo'd key so a label's bare MPN matches wrapped master/lot
+ *  keys on either side. */
+const unwrappedPartCol = (col: SQL) =>
+  sql`regexp_replace(upper(regexp_replace(${col}, '\\s', '', 'g')), '^(TE-)?AMP\\((.+)\\)$', '\\2')`;
+
 function pickingOrderOrgFilter(orgCol: SQL, subCol: SQL, typeCol: SQL, scope?: UserScopeEntry[] | null): SQL {
   const invoiceConds = [allowedOrgCondition(orgCol), userScopeCondition(orgCol, subCol, scope)]
     .filter((c): c is SQL => c !== undefined);
@@ -1428,7 +1435,9 @@ async function resolveScannedShelfLot(
     sql`SELECT il.id, il.total_qty AS "totalQty", il.shelf_code AS "shelfCode", il.box_id AS "boxId",
                il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow
         FROM inventory_lots il
-        WHERE (il.part_no = ${item.partNo} OR il.wcl_item_no = ${item.partNo})
+        WHERE (il.part_no = ${item.partNo} OR il.wcl_item_no = ${item.partNo}
+               OR ${unwrappedPartCol(sql`il.part_no`)} = ${normalizePartNo(item.partNo)}
+               OR ${unwrappedPartCol(sql`il.wcl_item_no`)} = ${normalizePartNo(item.partNo)})
           AND ${input.boxId ? sql`il.box_id = ${input.boxId}` : sql`il.shelf_code = ${input.shelfCode}`}
           AND (${scope.orgId}::int IS NULL OR il.org_id = ${scope.orgId})
           AND (${scope.subInventoryCode}::text IS NULL
@@ -1485,8 +1494,6 @@ export async function getPickingShelfStock(
   // Unwrapped copy of every key (bare PN for wrapped TE parts) — the SQL
   // unwraps the stored columns the same way before comparing.
   const unwrappedKeys = [...new Set(partKeys.map((k) => normalizePartNo(k)))];
-  const unwrappedCol = (col: SQL) =>
-    sql`regexp_replace(upper(regexp_replace(${col}, '\\s', '', 'g')), '^(TE-)?AMP\\((.+)\\)$', '\\2')`;
   let orgId = params.orgId ?? null;
   let subInventoryCode = params.subInventoryCode ?? null;
   if (params.orderId) {
@@ -1507,9 +1514,9 @@ export async function getPickingShelfStock(
                 AND (${inArray(sql`pi.part_no`, partKeys)}
                      OR ${inArray(sql`p.part_no`, partKeys)}
                      OR ${inArray(sql`p.wcl_item_no`, partKeys)}
-                     OR ${inArray(unwrappedCol(sql`pi.part_no`), unwrappedKeys)}
-                     OR ${inArray(unwrappedCol(sql`p.part_no`), unwrappedKeys)}
-                     OR ${inArray(unwrappedCol(sql`p.wcl_item_no`), unwrappedKeys)})
+                     OR ${inArray(unwrappedPartCol(sql`pi.part_no`), unwrappedKeys)}
+                     OR ${inArray(unwrappedPartCol(sql`p.part_no`), unwrappedKeys)}
+                     OR ${inArray(unwrappedPartCol(sql`p.wcl_item_no`), unwrappedKeys)})
               ORDER BY pi.created_date, pi.id
               LIMIT 1`
         )
@@ -1525,8 +1532,8 @@ export async function getPickingShelfStock(
     sql`SELECT COALESCE(SUM(il.total_qty), 0)::int AS "qty"
         FROM inventory_lots il
         WHERE (${inArray(sql`il.part_no`, partKeys)} OR ${inArray(sql`il.wcl_item_no`, partKeys)}
-               OR ${inArray(unwrappedCol(sql`il.part_no`), unwrappedKeys)}
-               OR ${inArray(unwrappedCol(sql`il.wcl_item_no`), unwrappedKeys)})
+               OR ${inArray(unwrappedPartCol(sql`il.part_no`), unwrappedKeys)}
+               OR ${inArray(unwrappedPartCol(sql`il.wcl_item_no`), unwrappedKeys)})
           AND ${params.boxId ? sql`il.box_id = ${params.boxId}` : sql`il.shelf_code = ${params.shelfCode}`}
           AND (${orgId}::int IS NULL OR il.org_id = ${orgId})
           AND (${subInventoryCode}::text IS NULL
@@ -1849,6 +1856,10 @@ export async function scanIntoShippingBox(
 ): Promise<{ packageIds: string[]; outdatedWarning: OutdatedWarningInfo | null }> {
   const barcode = input.barcode.trim();
   if (barcode === "") throw new HTTPException(400, { message: "barcode_required" });
+  // The barcode may be a label's bare MPN while the order/master keys are
+  // TE-wrapped (AMP(<mpn>) / TE-AMP(<mpn>)) — match the unwrapped forms on
+  // both sides too, or a TE box scan 404s no_matching_picking_item.
+  const barcodeKey = normalizePartNo(barcode);
   const rows = await queryAll<{
     pickingItemId: string;
     allocationId: string;
@@ -1867,7 +1878,10 @@ export async function scanIntoShippingBox(
           FROM picking_packages GROUP BY picking_item_id
         ) pkg ON pkg.picking_item_id = pi.id
         WHERE po.status IN ('pending', 'picking', 'allocated')
-          AND (pi.part_no = ${barcode} OR p.wcl_item_no = ${barcode})
+          AND (pi.part_no = ${barcode} OR p.part_no = ${barcode} OR p.wcl_item_no = ${barcode}
+               OR ${unwrappedPartCol(sql`pi.part_no`)} = ${barcodeKey}
+               OR ${unwrappedPartCol(sql`p.part_no`)} = ${barcodeKey}
+               OR ${unwrappedPartCol(sql`p.wcl_item_no`)} = ${barcodeKey})
           AND pi.picked_qty < pi.qty
         ORDER BY a.created_date, a.id`
   );
@@ -1883,8 +1897,9 @@ export async function scanIntoShippingBox(
     qty,
     shippingBoxId: input.shippingBoxId,
     barcode: input.barcode,
-    // The barcode itself is the scanned part key (it matched part_no or
-    // wcl_item_no verbatim) — record it as the package's scanned identity.
+    // The barcode itself is the scanned part key (it matched the item/master
+    // keys verbatim or unwrapped) — record it as the package's scanned
+    // identity.
     scannedPartNo: barcode,
     shelfCode: input.shelfCode ?? null,
     boxId: input.boxId ?? null,
@@ -2267,11 +2282,15 @@ export async function verifyPackage(
     if (pkg.shippingBoxId === null) throw new HTTPException(409, { message: "package_not_in_box" });
     await assertActor(tx, input.actorId);
     if (pkg.labelVerified) {
+      // Part keys compare unwrapped both sides (the record may be the raw
+      // bare-MPN barcode or the canonical wrapped master key). Batch fields
+      // hard-compare only when the record carries a value — an empty record
+      // field cannot contradict the label.
       const differing: string[] = [];
-      if (input.partNo !== undefined && input.partNo !== pkg.partNo) differing.push("partNo");
-      if (input.wclItemNo !== undefined && input.wclItemNo !== (pkg.wclItemNo ?? "")) differing.push("wclItemNo");
-      if (input.coo !== undefined && input.coo !== (pkg.coo ?? "")) differing.push("coo");
-      if (input.dateCode !== undefined && input.dateCode !== (pkg.dateCode ?? "")) differing.push("dateCode");
+      if (input.partNo !== undefined && normalizePartNo(input.partNo) !== normalizePartNo(pkg.partNo)) differing.push("partNo");
+      if (input.wclItemNo !== undefined && pkg.wclItemNo && normalizePartNo(input.wclItemNo) !== normalizePartNo(pkg.wclItemNo)) differing.push("wclItemNo");
+      if (input.coo !== undefined && pkg.coo && input.coo !== pkg.coo) differing.push("coo");
+      if (input.dateCode !== undefined && pkg.dateCode && input.dateCode !== pkg.dateCode) differing.push("dateCode");
       if (differing.length > 0) {
         throw new HTTPException(409, {
           res: new Response(JSON.stringify({ error: "label_item_mismatch", fields: differing }), {

@@ -5,6 +5,7 @@ import type { DateCodeFormat } from "~/utils/dateCode";
 import { usePickingScanQueue, type ScanQueueRow } from "~/composables/usePickingScanQueue";
 import { useLabelScan, ocrResultToInput } from "~/composables/useLabelScan";
 import { createShelfStockChecker } from "~/utils/shelfStockCheck";
+import { normalizePartNo } from "~/utils/text";
 import type { PickFromBoxEntry } from "~/components/picking/PickFromBoxDialog.vue";
 
 export type PickingShelfScanMode = "off" | "require-match" | "require-any";
@@ -216,8 +217,10 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
     const parsedResult = await parseRawValue(rawValue, undefined, orderBrands.value);
     if (!parsedResult.matched) return { ok: false, message: "no_match" };
     const parsed = ocrResultToInput(parsedResult.parsed);
-    const wanted = String(parsed.partNo ?? "").trim().toUpperCase();
-    const entry = boxPickEntries.value.find((e) => e.partNo.trim().toUpperCase() === wanted);
+    // Unwrapped both sides — a TE label's bare MPN must match the box
+    // entry's wrapped master key (AMP(<mpn>)/TE-AMP(<mpn>)).
+    const wanted = normalizePartNo(String(parsed.partNo ?? ""));
+    const entry = boxPickEntries.value.find((e) => normalizePartNo(e.partNo) === wanted);
     if (!entry) return { ok: false, message: "part_not_in_box" };
     const result = addAllocationScan(entry.itemId, entry.allocationId, parsed, rawValue, "qr");
     return result.ok ? { ok: true, kind: "queued" } : { ok: false, message: result.message };

@@ -63,4 +63,13 @@ describe("findCnScanMatches", () => {
     expect(findCnScanMatches(items, {})).toEqual([]);
     expect(findCnScanMatches(items, { itemId: "   " })).toEqual([]);
   });
+
+  it("matches a TE label's bare MPN against AMP-wrapped item keys", () => {
+    const teItems = [
+      item({ id: "te1", partNo: "AMP(5172070-1)", wclItemNo: "TE-AMP(5172070-1)" }),
+      item({ id: "te2", partNo: "OTHER-9", wclItemNo: null }),
+    ];
+    expect(findCnScanMatches(teItems, { itemId: "5172070-1" }).map((i) => i.id)).toEqual(["te1"]);
+    expect(findCnScanMatches(teItems, { itemId: "5172070-1", wclItemNo: "TE/5172070-1" }).map((i) => i.id)).toEqual(["te1"]);
+  });
 });

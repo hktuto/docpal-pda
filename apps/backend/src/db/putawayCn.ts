@@ -1,5 +1,5 @@
 import { HTTPException } from "hono/http-exception";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { newId } from "./id.js";
 import { now } from "./now.js";
@@ -10,6 +10,27 @@ import { computeItemShelfSuggestions, type PutAwaySuggestionReason } from "./put
 import { putAwayConfig, dateCodeFormat } from "../config.js";
 import { toCanonicalDateCode } from "./dateCode.js";
 import { assigneeFilter } from "./user-scope.js";
+import { normalizePartNo } from "../decode/codecs.js";
+
+/** SQL mirror of normalizePartNo (codecs.ts): whitespace collapsed out,
+ *  uppercase, TE "AMP(...)"/"TE-AMP(...)" wrapper unwrapped. */
+const unwrappedPartCol = (col: SQL) =>
+  sql`regexp_replace(upper(regexp_replace(${col}, '\\s', '', 'g')), '^(TE-)?AMP\\((.+)\\)$', '\\2')`;
+
+/** The parts-master row for a CN item's part key — a unique unwrapped match
+ *  on EITHER parts column, else NULL. CN items can carry a label's bare MPN
+ *  (upstream sync writes the label text) while the master and existing lots
+ *  use the wrapped forms (TE AMP(<mpn>)/TE-AMP(<mpn>)). */
+async function resolveCnMasterPart(tx: DbOrTx, partNo: string): Promise<{ partNo: string; wclItemNo: string } | null> {
+  const key = normalizePartNo(partNo);
+  const rows = await queryAll<{ partNo: string; wclItemNo: string }>(
+    tx,
+    sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo" FROM parts
+        WHERE ${unwrappedPartCol(sql`part_no`)} = ${key} OR ${unwrappedPartCol(sql`wcl_item_no`)} = ${key}
+        GROUP BY part_no, wcl_item_no`
+  );
+  return rows.length === 1 ? rows[0] : null;
+}
 
 // ---------------------------------------------------------------------------
 // CN put-away (spec docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md).
@@ -290,15 +311,14 @@ export async function completeCnPutAwayTx(
     if (!shelf) throw new HTTPException(404, { message: "shelf_not_found" });
     const boxId = entry.boxId?.trim() || null;
 
-    // The lot's wcl_item_no is the parts-master value (stock search joins
-    // parts ON p.wcl_item_no = il.wcl_item_no); fall back to the item's copy.
-    const partWclItemNo =
-      (
-        await queryGet<{ wclItemNo: string | null }>(
-          tx,
-          sql`SELECT wcl_item_no AS "wclItemNo" FROM parts WHERE part_no = ${item.partNo} LIMIT 1`
-        )
-      )?.wclItemNo ?? item.wclItemNo;
+    // The lot's keys are the parts-master values (stock search joins parts
+    // ON p.wcl_item_no = il.wcl_item_no, and lots merge on the canonical
+    // part_no) — a bare-MPN item key would otherwise spawn a duplicate lot
+    // invisible to stock search; fall back to the item's own keys when the
+    // part is unknown.
+    const master = await resolveCnMasterPart(tx, item.partNo);
+    const lotPartNo = master?.partNo ?? item.partNo;
+    const partWclItemNo = master?.wclItemNo ?? item.wclItemNo;
 
     // Enclave → canonical: the CN item's date code stays in the label format;
     // the lot stores canonical YYWW (spec 2026-10-22-datecode-format-config-design.md).
@@ -309,7 +329,7 @@ export async function completeCnPutAwayTx(
     const lot = await queryGet<{ id: string }>(
       tx,
       sql`SELECT id FROM inventory_lots
-          WHERE part_no = ${item.partNo} AND shelf_code = ${entry.shelfCode} AND box_id IS NOT DISTINCT FROM ${boxId}
+          WHERE part_no = ${lotPartNo} AND shelf_code = ${entry.shelfCode} AND box_id IS NOT DISTINCT FROM ${boxId}
             AND date_code IS NOT DISTINCT FROM ${canonicalDateCode}
             AND lot_code IS NOT DISTINCT FROM ${item.lotCode}
             AND coo IS NOT DISTINCT FROM ${item.coo}
@@ -333,7 +353,7 @@ export async function completeCnPutAwayTx(
         tx,
         sql`INSERT INTO inventory_lots (id, part_no, wcl_item_no, date_code, lot_code, coo, cow, shelf_code, box_id,
                                        org_id, sub_inventory_code, total_qty, allocated_qty)
-            VALUES (${lotId}, ${item.partNo}, ${partWclItemNo}, ${canonicalDateCode}, ${item.lotCode}, ${item.coo}, ${item.cow},
+            VALUES (${lotId}, ${lotPartNo}, ${partWclItemNo}, ${canonicalDateCode}, ${item.lotCode}, ${item.coo}, ${item.cow},
                     ${entry.shelfCode}, ${boxId}, ${item.orgId}, ${item.subInventoryCode},
                     ${entry.qty}, 0)`
       );
@@ -350,7 +370,7 @@ export async function completeCnPutAwayTx(
     await tx.insert(inventoryTransactions).values({
       id: newId(),
       inventoryLotId: lotId,
-      partNo: item.partNo,
+      partNo: lotPartNo,
       shelfCode: entry.shelfCode,
       boxId,
       txnType: "PUT_AWAY",

@@ -1,13 +1,16 @@
 // CN receiving scan (收貨掃描) client-side matching — a parsed supplier label
 // is matched against the scan task's UNRESOLVED items by part no / WCL item
-// no, space- and case-insensitive (same convention as manual receiving and
-// the backend scan-parse matcher; spec 2026-11-01-cn-receiving-scan).
+// no, space- and case-insensitive with TE AMP(...) wrappers unwrapped (same
+// convention as manual receiving and the backend scan-parse matcher; spec
+// 2026-11-01-cn-receiving-scan).
 
 import type { CnScanTaskItem } from "~/services/types";
+import { normalizePartNo } from "./text";
 
-/** Trim, uppercase, and strip ALL whitespace — "AB 123" === "ab123". */
+/** Null-safe normalizePartNo — "AB 123" === "ab123", "AMP(640385-8)" ===
+ *  "640385-8" (TE labels carry the bare PN, master keys may be wrapped). */
 export function normalizePartKey(value: string | null | undefined): string {
-  return (value ?? "").trim().toUpperCase().replace(/\s+/g, "");
+  return value == null ? "" : normalizePartNo(value);
 }
 
 /** The label fields that identify a part (from parseOcrScan's ParsedFields). */
