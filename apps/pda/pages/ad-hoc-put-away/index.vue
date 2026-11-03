@@ -266,11 +266,13 @@ async function openScan() {
   const templates = await getCachedSupplierQrTemplates(warehouse);
   const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
 
-  // Use supplier QR template parsing for QR-only captures (same as normal
-  // put-away); fall back to generic text parsing for non-QR captures.
-  const isQrOnly = barcodes.length === 1 && barcodes[0].format === "4" && !capture.imagePath;
-  const result = isQrOnly
-    ? parseQrCapture(barcodes[0].value, {
+  // A single detected barcode always goes through the supplier-template
+  // parser — symbology-agnostic (QR, Data Matrix, …), the template regexes
+  // decide what matches. Generic OCR text parsing needs an expected part
+  // number to match against, which this blind page does not have.
+  const single = barcodes.length === 1 ? barcodes[0] : undefined;
+  const result = single
+    ? parseQrCapture(single.value, {
         supplierTemplates: templates,
         contextBrands: [selectedBrand.value],
         dateCodePeriods,
@@ -293,7 +295,7 @@ async function openScan() {
       serialNo: result.parsed.serialNo ?? null,
       orgId: 0,
       subInventoryCode: "",
-    }, isQrOnly ? barcodes[0].value : undefined);
+    }, single?.value);
     playScanSuccess();
   } else {
     playScanError();

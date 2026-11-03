@@ -137,6 +137,13 @@ function parseQrRaw(raw, template, qtyEncoding, dateCodeEncoding) {
   if (dateCodeEncoding === "koa_month_counter") dateCode = rawLotCode ? decodeKoaDateCode(rawLotCode) : undefined;
   if (dateCodeEncoding === "ncc_lot_ymmdd") dateCode = rawLotCode ? decodeNccDateCode(rawLotCode) : undefined;
   if (dateCodeEncoding === "ymmdd") dateCode = rawLotCode ? decodeYmmddDateCode(rawLotCode) : undefined;
+  // TE 5-digit YYWWD: day digit dropped, YYWW swapped to WWYY
+  // (scanParse.ts decodeYywwdDateCode).
+  if (dateCodeEncoding === "yywwd") {
+    dateCode = groups.dateCode && /^\d{5}$/.test(groups.dateCode)
+      ? `${groups.dateCode.slice(2, 4)}${groups.dateCode.slice(0, 2)}`
+      : undefined;
+  }
   return {
     // COPAL resCode group: appended to the itemId (parts.part_no stores the
     // resistance code) — keep in sync with scanParse.ts parseQrRaw.
@@ -153,8 +160,8 @@ function parseQrRaw(raw, template, qtyEncoding, dateCodeEncoding) {
 const TEMPLATES = {
   // Restored from BVSDB RegPattern Id=161 (KOA, canonical 'Primary Key' row).
   // Same template as the seeded KOA profile: itemId = MPN field 1 (new-system
-  // convention), qty = field 3 with koa_zeros, dateCode = field 5 with
-  // koa_month_counter (month counter + week, re-mapped from lotCode 2026-10),
+  // convention), qty = field 3 with koa_zeros, lotCode = field 5 (raw
+  // preserved) with koa_month_counter deriving the WWYY dateCode from it,
   // serial = field 6, wclItemNo = field 7 (WCL item no on newer reels; older
   // reels carry a "KOA+<mpn>" marking there), trailing fields + optional ':'
   // ignored.
@@ -163,7 +170,7 @@ const TEMPLATES = {
     dateCodeEncoding: "koa_month_counter",
     qrType: "pdf417",
     template:
-      "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<dateCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
+      "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]*):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
   },
   // Restored from RegPattern Id=165 (NCC) + Id=167 (NCC+KOA, identical layout)
   // + Id=195 (NCC_KTD, 10-char item code). Fixed-width ITF reel barcode.
@@ -206,9 +213,10 @@ const TEMPLATES = {
   // GS control char emit NBSP instead (and may drop the RS after "[)>").
   TE: {
     qtyEncoding: null,
+    dateCodeEncoding: "yywwd",
     qrType: "datamatrix",
     template:
-      "^\\[\\)>[\\x1d\\x1e\\xA0]?06[\\x1d\\xA0]LT(?<serialNo>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]PN(?<itemId>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]RV[^\\x1d\\xA0]*[\\x1d\\xA0]QT(?<qty>\\d+)[\\x1d\\xA0]PO[^\\x1d\\xA0]*[\\x1d\\xA0]BT(?<lotCode>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]BX[^\\x1d\\xA0]+[\\x1d\\xA0]DC(?<dateCode>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1e\\x04]*$",
+      "^\\[\\)>[\\x1d\\x1e\\xA0]?06[\\x1d\\xA0]LT(?<serialNo>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]PN(?<itemId>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]RV[^\\x1d\\xA0]*[\\x1d\\xA0]QT(?<qty>\\d+)[\\x1d\\xA0]PO[^\\x1d\\xA0]*[\\x1d\\xA0]BT(?<lotCode>[^\\x1d\\xA0\\x1e\\x04]*)[\\x1d\\xA0]BX[^\\x1d\\xA0]+[\\x1d\\xA0]DC(?<dateCode>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1e\\x04]*$",
   },
   // Restored from RegPattern Id=170 (NDK_16M) — modern MH10.8.2 QR verified by
   // decoding label photos NDK-01/02: P=cust PN, 1T=control no, Q=qty, 1P=NDK P/N.

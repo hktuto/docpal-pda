@@ -221,8 +221,10 @@ async function handleHardwareScan(code: string) {
   });
 }
 
-// Camera capture — same parse path as the hardware scan (QR-only captures go
-// through the supplier templates; other captures fall back to generic parsing).
+// Camera capture — same parse path as the hardware scan: a single detected
+// barcode goes through the supplier templates (symbology-agnostic — QR, Data
+// Matrix, …); generic OCR text parsing needs an expected part number, which
+// this blind page does not have.
 async function openScan() {
   if (!sourceShelf.value) {
     playScanError();
@@ -235,9 +237,9 @@ async function openScan() {
   const templates = await getCachedSupplierQrTemplates(warehouse);
   const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
 
-  const isQrOnly = barcodes.length === 1 && barcodes[0].format === "4" && !capture.imagePath;
-  const result = isQrOnly
-    ? parseQrCapture(barcodes[0].value, { supplierTemplates: templates, dateCodePeriods, dateCodeFormat: dateCodeFormat.value })
+  const single = barcodes.length === 1 ? barcodes[0] : undefined;
+  const result = single
+    ? parseQrCapture(single.value, { supplierTemplates: templates, dateCodePeriods, dateCodeFormat: dateCodeFormat.value })
     : parseAndIdentify({ text: capture.text, barcodes }, []);
 
   if (!result.matched) {

@@ -168,10 +168,11 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
     supplierCode: "15915", // TE CONNECTIVITY HK LIMITED
     qrTemplate: TE_TEMPLATE,
     qrType: "datamatrix",
+    dateCodeEncoding: "yywwd",
     barcodeTypes: ["DATA MATRIX"],
     brands: ["TE"],
     remark:
-      "Restored from BVSDB RegPattern Id=194 (WHHK), 2026-08-13 backup. Photo-verified only (no BVSDB scans). Parts master stores the PN wrapped as AMP(<pn>) (legacy TE-AMP(<pn>)) while labels carry the bare PN — normalizePartNo unwraps the wrapper so scans match (2026-10-16).",
+      "Restored from BVSDB RegPattern Id=194 (WHHK), 2026-08-13 backup. Photo-verified only (no BVSDB scans). Parts master stores the PN wrapped as AMP(<pn>) (legacy TE-AMP(<pn>)) while labels carry the bare PN — normalizePartNo unwraps the wrapper so scans match (2026-10-16). DC is a 5-digit YYWWD date code (day digit dropped, decoded to WWYY via 'yywwd', 2026-11-03).",
   },
   {
     supplierCode: "69915", // NDK ELECTRONICS (HK) LTD.
