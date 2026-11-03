@@ -42,8 +42,14 @@
   and PDA `ncc_lot_ymmdd` decoders. The one-digit year resolves to the latest
   matching year not after the scan year. Fixed-width assertions prevent the
   28- and 32-digit templates from backtracking into each other; NCC_KTD parsing
-  is preserved, and drawing-number-to-item-number lookup is not implemented
-  (spec `docs/superpowers/specs/2026-10-26-ncc-lot-date-code-design.md`).
+  is preserved (spec `docs/superpowers/specs/2026-10-26-ncc-lot-date-code-design.md`).
+  The drawing code is not the MPN, so when the normal part_no / wcl_item_no
+  match finds nothing the scan resolves it via the externally-managed
+  `wcl_part_drawno` table (`lookupPartsByDrawingNo` in
+  `apps/backend/src/db/partDrawno.ts` — drawno exact match, then substring;
+  NCC-brands orders only) and re-runs the item match with the resolved
+  wcl_item_no / part_no; the same resolution powers `POST /scan/decode` (spec
+  `docs/superpowers/specs/2026-11-03-ncc-drawno-part-lookup-design.md`).
 - COPAL fixed-width reel labels (supplier 19915): the model may be followed by
   an optional numeric spec token and/or a `<n>K ohm(<resCode>)` resistance spec
   (lowercase `ohm` on newer reels); the `resCode` is appended to the itemId by

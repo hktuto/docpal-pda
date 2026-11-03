@@ -273,7 +273,7 @@ client-side copies retire when the PDA/admin cutover lands.
 | Endpoint | Description |
 |---|---|
 | `GET /scan-templates` | → `[{supplierCode, qrTemplate, qtyEncoding, dateCodeEncoding, barcodeTypes, brands}]`, every profile ordered by `supplier_code`; `qrTemplate` null when the supplier has none (clients filter). `brands` = parts.brand values the supplier covers — clients try brand-matching templates first. `dateCodeEncoding` (e.g. `koa_month_counter`) decodes the template's dateCode group. |
-| `POST /scan/decode` | Server-side decode of a raw label value: body `{raw, targets?, supplierCode?, brands?}` → PDA `OcrParseResult` shape minus `raw` (`{matched, parsed, options, supplier?}`); templates, month-counter periods and `dateCodeFormat` are read from the DB/config (see `src/decode/`, spec `docs/superpowers/specs/2026-11-03-backend-scan-decode-design.md`). `matched:false` when no template hits — the client's OCR-text heuristics then take over. |
+| `POST /scan/decode` | Server-side decode of a raw label value: body `{raw, targets?, supplierCode?, brands?}` → PDA `OcrParseResult` shape minus `raw` (`{matched, parsed, options, supplier?}`); templates, month-counter periods and `dateCodeFormat` are read from the DB/config (see `src/decode/`, spec `docs/superpowers/specs/2026-11-03-backend-scan-decode-design.md`). `matched:false` when no template hits — the client's OCR-text heuristics then take over. NCC drawing codes (the numeric itemId on Chemi-Con labels) are resolved to `wcl_item_no` via `wcl_part_drawno` when the label otherwise can't match — including past the targets gate (spec `docs/superpowers/specs/2026-11-03-ncc-drawno-part-lookup-design.md`). |
 
 ## Label printing
 

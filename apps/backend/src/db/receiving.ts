@@ -8,6 +8,7 @@ import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { normalizePartNo, parseQrRaw } from "../decode/codecs.js";
 import { listDateCodePeriods } from "./dateCodePeriods.js";
+import { lookupPartsByDrawingNo } from "./partDrawno.js";
 import { createPutAwayTaskTx } from "./putawaytasks.js";
 import { isStepEnabled, putAwayConfig, receivingSubInventoryRules, dateCodeFormat, type SubInventoryRuleGroup } from "../config.js";
 import { logTransition } from "./picking.js";
@@ -358,6 +359,21 @@ export async function scanReceivingOrder(
     if (matches.length === 0) {
       const norms = new Set(
         [partNo, parsed.wclItemNo ?? null]
+          .filter((v): v is string => v !== null)
+          .map((v) => normalizePartNo(v))
+      );
+      matches = norms.size
+        ? items.filter((it) => itemKeys(it).some((v) => v !== null && norms.has(normalizePartNo(v))))
+        : [];
+    }
+    // NCC labels carry the numeric drawing code as itemId (never the MPN or
+    // WCL item no) — resolve it via wcl_part_drawno and retry the union match
+    // with the resolved wcl_item_no / part_no values.
+    if (matches.length === 0 && partNo && ro.brands?.includes("NCC")) {
+      const drawnoMatches = await lookupPartsByDrawingNo(tx, partNo);
+      const norms = new Set(
+        drawnoMatches
+          .flatMap((m) => [m.wclItemNo, m.partNo])
           .filter((v): v is string => v !== null)
           .map((v) => normalizePartNo(v))
       );

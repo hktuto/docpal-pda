@@ -4,9 +4,11 @@
 
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { setupTestDb, TEST_DATABASE_URL, type TestDb } from "../db/test-helper.js";
 import { queryGet } from "../db/query.js";
+import { builtinSupplierProfiles } from "../db/seed-supplier-profiles.js";
 import { buildKoaLabelRaw } from "./codecs.js";
 import { decodeScan } from "./index.js";
 
@@ -143,4 +145,57 @@ test("POST /scan/decode returns the OcrParseResult-shaped body", async () => {
   assert.equal(body.parsed.itemId, PART_NO);
   assert.equal(body.supplier.code, "KOA");
   assert.equal("raw" in body, false, "the client's capture is never echoed back");
+});
+
+// --- NCC drawing-number → wcl_item_no resolution (spec 2026-11-03-ncc-drawno-part-lookup) ---
+
+const NCC_WCL_ITEM_NO = "NCC-EKLJ401ELL470MM20S";
+// 28-char layout: drawing(6) + lot(13) + qty(5) + serial(4); itemId = "424307".
+const NCC_RAW = "424307" + "6030912801026" + "00200" + "0460";
+
+before(async () => {
+  // wcl_part_drawno is externally managed (not in the schema/migrations) and
+  // reseed() never truncates it — created + populated by the test itself.
+  await client.db.execute(sql`CREATE TABLE IF NOT EXISTS wcl_part_drawno (
+    id varchar(100) PRIMARY KEY,
+    wcl_part_no varchar(255) NOT NULL,
+    drawno varchar(2000) NOT NULL
+  )`);
+  await client.db.execute(sql`DELETE FROM wcl_part_drawno`);
+  await client.db.execute(
+    sql`INSERT INTO wcl_part_drawno (id, wcl_part_no, drawno) VALUES (${randomUUID()}, ${NCC_WCL_ITEM_NO}, '424307')`
+  );
+  const nccProfile = builtinSupplierProfiles.find((p) => p.supplierCode === "23")!;
+  await client.db.execute(
+    sql`INSERT INTO supplier_profiles (id, supplier_code, qr_template, date_code_encoding, brands)
+        VALUES (${randomUUID()}, '23', ${nccProfile.qrTemplate}, ${nccProfile.dateCodeEncoding ?? null}, ${`{${(nccProfile.brands ?? []).join(",")}}`}::text[])
+        ON CONFLICT (supplier_code) DO NOTHING`
+  );
+  await client.db.execute(
+    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no)
+        VALUES (${randomUUID()}, 'NCC', 'EKLJ401ELL470MM20S', ${NCC_WCL_ITEM_NO})
+        ON CONFLICT (wcl_item_no) DO NOTHING`
+  );
+});
+
+test("decodeScan resolves an NCC drawing code past the targets gate (Case B)", async () => {
+  // The drawing code is never among the order targets — the gated decode
+  // alone would reject the NCC template hit.
+  const result = await decodeScan(client.db, { raw: NCC_RAW, targets: [NCC_WCL_ITEM_NO] });
+  assert.equal(result.matched, true);
+  assert.equal(result.parsed.itemId, "424307"); // stays the drawing code
+  assert.equal(result.parsed.wclItemNo, NCC_WCL_ITEM_NO);
+  assert.equal(result.supplier?.code, "23");
+});
+
+test("decodeScan attaches the resolved wclItemNo without targets (Case A)", async () => {
+  const result = await decodeScan(client.db, { raw: NCC_RAW });
+  assert.equal(result.matched, true);
+  assert.equal(result.parsed.itemId, "424307");
+  assert.equal(result.parsed.wclItemNo, NCC_WCL_ITEM_NO);
+});
+
+test("decodeScan with targets naming a different part stays unmatched", async () => {
+  const result = await decodeScan(client.db, { raw: NCC_RAW, targets: ["NCC-SOME-OTHER-PART"] });
+  assert.equal(result.matched, false);
 });

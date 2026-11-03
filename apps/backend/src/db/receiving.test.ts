@@ -601,6 +601,91 @@ test("scan: ABLIC raw QR matches via the derived brand-prefixed wcl_item_no", as
   assert.equal(other!.receivedQty, 0);
 });
 
+// NCC drawing-number → part lookup (spec 2026-11-03-ncc-drawno-part-lookup).
+// wcl_part_drawno is externally managed (not in the schema/migrations) and
+// reseed() never truncates it — created here, rows cleared per test.
+async function setupNccDrawnoWorld(): Promise<void> {
+  await client.db.execute(sql`CREATE TABLE IF NOT EXISTS wcl_part_drawno (
+    id varchar(100) PRIMARY KEY,
+    wcl_part_no varchar(255) NOT NULL,
+    drawno varchar(2000) NOT NULL
+  )`);
+  await client.db.execute(sql`DELETE FROM wcl_part_drawno`);
+  // the scan query joins supplier_profiles via suppliers — both must exist.
+  await client.db.execute(
+    sql`INSERT INTO suppliers (id, code, name) VALUES (${randomUUID()}, '23', 'HONGKONG CHEMI-CON LTD') ON CONFLICT (code) DO NOTHING`
+  );
+  const nccProfile = builtinSupplierProfiles.find((p) => p.supplierCode === "23")!;
+  await client.db.execute(
+    sql`INSERT INTO supplier_profiles (id, supplier_code, qr_template, date_code_encoding, brands)
+        VALUES (${randomUUID()}, '23', ${nccProfile.qrTemplate}, ${nccProfile.dateCodeEncoding ?? null}, ${`{${(nccProfile.brands ?? []).join(",")}}`}::text[])
+        ON CONFLICT (supplier_code) DO NOTHING`
+  );
+  await client.db.execute(
+    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no)
+        VALUES (${randomUUID()}, 'NCC', 'EKLJ401ELL470MM20S', 'NCC-EKLJ401ELL470MM20S')
+        ON CONFLICT (wcl_item_no) DO NOTHING`
+  );
+}
+
+// 28-char layout: drawing(6) + lot(13) + qty(5) + serial(4).
+const NCC_RAW = "424307" + "6030912801026" + "00200" + "0460";
+
+test("scan: NCC raw QR matches via the wcl_part_drawno drawing-number lookup", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("operator");
+  await setupNccDrawnoWorld();
+  await client.db.execute(
+    sql`INSERT INTO wcl_part_drawno (id, wcl_part_no, drawno) VALUES (${randomUUID()}, 'NCC-EKLJ401ELL470MM20S', '424307')`
+  );
+  const orderId = await insertReceivingOrder(client.db, "NCC-SCAN-1", {
+    order: { supplierCode: "23" },
+    invoices: [
+      {
+        invoiceNo: "INV-NCC-1",
+        items: [{ partNo: "EKLJ401ELL470MM20S", wclItemNo: "NCC-EKLJ401ELL470MM20S", lineQty: 200 }],
+      },
+    ],
+  });
+
+  // The label's itemId is the drawing code "424307" — no order item carries it.
+  const item = await scanReceivingOrder(client.db, orderId, { actorId, raw: NCC_RAW });
+  assert.equal(item.wclItemNo, "NCC-EKLJ401ELL470MM20S");
+  assert.equal(item.partNo, "EKLJ401ELL470MM20S");
+  assert.equal(item.receivedQty, 200);
+
+  // the ledger row records the REAL part number, not the drawing code
+  const txn = await queryGet<{ partNo: string; qtyDelta: number; serialNo: string | null }>(
+    client.db,
+    sql`SELECT part_no AS "partNo", qty_delta AS "qtyDelta"
+        FROM inventory_transactions
+        WHERE receiving_invoice_item_id = ${item.id} AND txn_type = 'RECEIVE_TO_DOCK'`
+  );
+  assert.equal(txn!.partNo, "EKLJ401ELL470MM20S");
+  assert.equal(txn!.qtyDelta, 200);
+});
+
+test("scan: NCC raw QR without a drawno row still 409s no_match (fallback preserved)", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("operator");
+  await setupNccDrawnoWorld();
+  const orderId = await insertReceivingOrder(client.db, "NCC-SCAN-2", {
+    order: { supplierCode: "23" },
+    invoices: [
+      {
+        invoiceNo: "INV-NCC-2",
+        items: [{ partNo: "EKLJ401ELL470MM20S", wclItemNo: "NCC-EKLJ401ELL470MM20S", lineQty: 200 }],
+      },
+    ],
+  });
+
+  const err = await catchHttp(scanReceivingOrder(client.db, orderId, { actorId, raw: NCC_RAW }));
+  assert.equal(err.status, 409);
+  const body = await err.getResponse().json();
+  assert.equal(body.message, "no_match");
+});
+
+
 test("scan: 409 when qty exceeds the remaining qty", async () => {
   await reseed(client);
   const actorId = await actorIdOf("operator");

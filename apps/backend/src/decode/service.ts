@@ -11,7 +11,9 @@
 import { dateCodeFormat } from "../config.js";
 import type { AppDb } from "../db.js";
 import { listDateCodePeriods } from "../db/dateCodePeriods.js";
+import { lookupPartsByDrawingNo } from "../db/partDrawno.js";
 import { listScanTemplates } from "../db/scantemplates.js";
+import { normalizePartNo } from "./codecs.js";
 import { decodeWithTemplates, type DecodedScan, type ScanDecodeInput } from "./template.js";
 
 export async function decodeScan(db: AppDb, input: ScanDecodeInput): Promise<DecodedScan> {
@@ -19,5 +21,37 @@ export async function decodeScan(db: AppDb, input: ScanDecodeInput): Promise<Dec
     listScanTemplates(db),
     listDateCodePeriods(db),
   ]);
-  return decodeWithTemplates(input, templates, periods, dateCodeFormat());
+  const result = decodeWithTemplates(input, templates, periods, dateCodeFormat());
+
+  // NCC labels carry the numeric drawing code as itemId — resolve it to the
+  // WCL item no via wcl_part_drawno (spec 2026-11-03-ncc-drawno-part-lookup).
+  if (result.matched && !result.parsed.wclItemNo && result.parsed.itemId && result.supplier?.brands?.includes("NCC")) {
+    const drawnoMatches = await lookupPartsByDrawingNo(db, result.parsed.itemId);
+    const wclItemNos = [...new Set(drawnoMatches.map((m) => m.wclItemNo))];
+    if (wclItemNos.length === 1) {
+      // itemId stays the drawing code; only the wclItemNo is attached.
+      result.parsed.wclItemNo = wclItemNos[0];
+    }
+    return result;
+  }
+
+  // Targets-gate rejection: the drawing code is never among the order
+  // targets, so re-run ungated and accept the match only when exactly one
+  // drawno resolution lands inside the (normalized) targets.
+  if (!result.matched && input.targets?.length) {
+    const ungated = decodeWithTemplates({ ...input, targets: undefined }, templates, periods, dateCodeFormat());
+    if (ungated.matched && !ungated.parsed.wclItemNo && ungated.parsed.itemId && ungated.supplier?.brands?.includes("NCC")) {
+      const drawnoMatches = await lookupPartsByDrawingNo(db, ungated.parsed.itemId);
+      const targetNorms = new Set(input.targets.map(normalizePartNo));
+      const onOrder = [...new Set(drawnoMatches.map((m) => m.wclItemNo))].filter((w) =>
+        targetNorms.has(normalizePartNo(w))
+      );
+      if (onOrder.length === 1) {
+        ungated.parsed.wclItemNo = onOrder[0];
+        return ungated;
+      }
+    }
+  }
+
+  return result;
 }
