@@ -27,7 +27,11 @@ confirm.
 ## Scope decisions
 
 - **Item matching = lot by label fields** (part_no / wcl_item_no space-
-  insensitive, date code + lot code must match when the label carries them),
+  insensitive, extended with the parts master's canonical raw key forms so a
+  TE bare-MPN label scan matches AMP(...)/TE-AMP(...) wrapped lot keys;
+  batch fields follow the picking scan validation rules — a carried scan
+  date code must not be *newer* than the record's, lot code / coo / cow
+  hard-match only when the record carries them),
   FIFO by `date_code` — same resolution style as the picking shelf-scan
   (`resolveScannedShelfLot`), minus order org/sub-inventory context.
 - **Qty = label qty** (validated: positive integer, ≤ the lot's *available*
@@ -93,8 +97,12 @@ coo?, cow?}` (PDA-parsed label fields).
 
 Logic: validate source shelf exists (404 `shelf_not_found`); resolve the
 lot on that shelf — part keys matched space-insensitively against
-`part_no`/`wcl_item_no`, `date_code`/`lot_code`/`coo`/`cow` must match when
-carried, `allowedOrgFilter`, exclude lots whose shelf is missing from
+`part_no`/`wcl_item_no` (plus the parts master's canonical raw key forms
+when the scan resolves to a master row), batch fields per the picking scan
+validation rules (spec 2026-10-14): a carried scan date code passes when
+not newer than the record's (canonical YYWW; record NULL passes),
+`lot_code`/`coo`/`cow` hard-match only when the record carries them,
+`allowedOrgFilter`, exclude lots whose shelf is missing from
 `shelves` (FK-update guard, same as picking), FIFO `date_code ASC NULLS
 LAST`. Lot with `total_qty >= qty` required, else 409
 `no_stock_at_location`; `available_qty < qty` → 409

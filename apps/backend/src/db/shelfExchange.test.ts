@@ -168,6 +168,72 @@ test("shelf exchange — preview", async () => {
     await db.delete(inventoryLots).where(eq(inventoryLots.id, "lot-sx-te"));
   });
 
+  // NB: subtests share DB state within the "preview" test (beforeEach runs
+  // once per top-level test) — these use distinct part numbers so earlier
+  // subtests' leftover lots can't shadow the assertion.
+  await test("scan date code not newer than the record passes (house rule)", async () => {
+    // Record wk40 (canonical 4026); label carries wk39 (WWYY 2639 -> 3926).
+    await insertLot({ id: "lot-sx-dc-older", shelfCode: SOURCE_SHELF, qty: 100, partNo: "PART-SX-DC1", lotCode: null });
+    const result = await previewShelfExchange(db, {
+      sourceShelfCode: SOURCE_SHELF,
+      partNo: "PART-SX-DC1",
+      qty: 10,
+      dateCode: "2639",
+    });
+    assert.equal(result.lotId, "lot-sx-dc-older");
+  });
+
+  await test("409 scan date code newer than the record", async () => {
+    // Record wk40 (4026); label carries wk41 (WWYY 2641 -> 4126) — the scan
+    // claims stock newer than what the shelf record knows.
+    await insertLot({ id: "lot-sx-dc-newer", shelfCode: SOURCE_SHELF, qty: 100, partNo: "PART-SX-DC2" });
+    await assertHttpError(
+      previewShelfExchange(db, {
+        sourceShelfCode: SOURCE_SHELF,
+        partNo: "PART-SX-DC2",
+        qty: 10,
+        dateCode: "2641",
+      }),
+      409,
+      "no_stock_at_location"
+    );
+  });
+
+  await test("record with no date code passes any carried scan date code", async () => {
+    await insertLot({ id: "lot-sx-dc-null", shelfCode: SOURCE_SHELF, qty: 100, partNo: "PART-SX-DC3", dateCode: null, lotCode: null });
+    const result = await previewShelfExchange(db, {
+      sourceShelfCode: SOURCE_SHELF,
+      partNo: "PART-SX-DC3",
+      qty: 10,
+      dateCode: "2601",
+    });
+    assert.equal(result.lotId, "lot-sx-dc-null");
+  });
+
+  await test("empty record lot code is a wildcard; carried record lot code hard-matches", async () => {
+    // Record carries no lot code -> label's lot code passes.
+    await insertLot({ id: "lot-sx-lc-empty", shelfCode: SOURCE_SHELF, qty: 100, partNo: "PART-SX-LC1", lotCode: "" });
+    const ok = await previewShelfExchange(db, {
+      sourceShelfCode: SOURCE_SHELF,
+      partNo: "PART-SX-LC1",
+      qty: 10,
+      lotCode: "0",
+    });
+    assert.equal(ok.lotId, "lot-sx-lc-empty");
+    // Record carries LOT-A -> a different label lot code rejects.
+    await insertLot({ id: "lot-sx-lc-a", shelfCode: SOURCE_SHELF, qty: 100, partNo: "PART-SX-LC2", lotCode: "LOT-A" });
+    await assertHttpError(
+      previewShelfExchange(db, {
+        sourceShelfCode: SOURCE_SHELF,
+        partNo: "PART-SX-LC2",
+        qty: 10,
+        lotCode: "LOT-B",
+      }),
+      409,
+      "no_stock_at_location"
+    );
+  });
+
   await test("404 unknown source shelf", async () => {
     await assertHttpError(
       previewShelfExchange(db, {

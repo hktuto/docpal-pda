@@ -9,7 +9,7 @@ import { newId } from "./id.js";
 import { now } from "./now.js";
 import { queryGet } from "./query.js";
 import { allowedOrgFilter } from "./org-filter.js";
-import { normalizePartNo } from "./scanParse.js";
+import { normalizePartNo } from "../decode/codecs.js";
 import { lookupAdHocPutAwayPart } from "./adhocPutaway.js";
 import { toCanonicalDateCode } from "./dateCode.js";
 import { dateCodeFormat } from "../config.js";
@@ -72,10 +72,13 @@ type ResolvedLot = {
  * Resolve the lot on the source shelf for a scanned label: part keys matched
  * space-insensitively against both part_no and wcl_item_no, extended with the
  * parts master's canonical raw key forms when the scan resolves to a master
- * row (TE AMP(...)/TE-AMP(...) wrapped lot keys vs the label's bare MPN),
- * label batch fields (dateCode/lotCode/coo/cow) must match when carried, org
- * filter from the flow config, lots whose shelf is missing from shelves
- * excluded (the allocate.ts FK-update guard), FIFO by date_code. 409
+ * row (TE AMP(...)/TE-AMP(...) wrapped lot keys vs the label's bare MPN).
+ * Batch fields follow the picking scan validation rules (spec
+ * 2026-10-14): a carried scan date code must not be NEWER than the
+ * record's (canonical YYWW compare; record NULL passes); lot code / coo /
+ * cow hard-match only when the record carries them. Org filter from the
+ * flow config, lots whose shelf is missing from shelves excluded (the
+ * allocate.ts FK-update guard), FIFO by date_code. 409
  * no_stock_at_location when no lot covers the qty; 409
  * insufficient_available_qty when lots exist but all are (partially)
  * allocated.
@@ -153,10 +156,17 @@ export async function previewShelfExchange(
         )})
           AND il.shelf_code = ${sourceShelfCode}
           ${allowedOrgFilter(sql`il.org_id`)}
-          AND (${scannedDateCode ?? null}::text IS NULL OR il.date_code = ${scannedDateCode ?? null})
-          AND (${input.lotCode ?? null}::text IS NULL OR il.lot_code = ${input.lotCode ?? null})
-          AND (${input.coo ?? null}::text IS NULL OR upper(il.coo) = upper(${input.coo ?? null}))
-          AND (${input.cow ?? null}::text IS NULL OR upper(il.cow) = upper(${input.cow ?? null}))
+          -- Batch-field rules mirror the picking scan batch validation (spec
+          -- 2026-10-14-picking-scan-batch-validation-design.md): a carried
+          -- scan date code passes when it is not newer than the record's
+          -- (canonical YYWW string compare); a record with no date code
+          -- cannot contradict the label.
+          AND (${scannedDateCode ?? null}::text IS NULL OR il.date_code IS NULL OR il.date_code >= ${scannedDateCode ?? null})
+          -- Lot code hard-matches only when the record carries one — an
+          -- empty/NULL record lot code is a wildcard.
+          AND (${input.lotCode ?? null}::text IS NULL OR il.lot_code IS NULL OR il.lot_code = '' OR il.lot_code = ${input.lotCode ?? null})
+          AND (${input.coo ?? null}::text IS NULL OR il.coo IS NULL OR il.coo = '' OR upper(il.coo) = upper(${input.coo ?? null}))
+          AND (${input.cow ?? null}::text IS NULL OR il.cow IS NULL OR il.cow = '' OR upper(il.cow) = upper(${input.cow ?? null}))
           -- Same guard as allocate.ts: lots whose shelf is missing from
           -- shelves fail the FK on UPDATE, never touch them.
           AND EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code)
