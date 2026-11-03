@@ -203,6 +203,34 @@ test("ad-hoc put-away", async () => {
     assert.equal(lots.length, 2);
   });
 
+  await test("master wcl_item_no overrides a wrong client-derived value", async () => {
+    // Client-side single-brand derivation (<brand>/<mpn>) is wrong for brands
+    // whose wcl key has a different shape (TE-AMP(<pn>) / TE+<pn>) — the
+    // master is authoritative once the part matches.
+    const result = await commitAdHocPutAway(db, {
+      brand: TEST_BRAND,
+      shelfCode: TEST_SHELF_CODE,
+      items: [{
+        partNo: TEST_PART_NO,
+        wclItemNo: "TEST/WRONG-DERIVED",
+        qty: 10,
+        dateCode: null,
+        lotCode: null,
+        coo: null,
+        cow: null,
+        serialNo: null,
+        orgId: TEST_ORG_ID,
+        subInventoryCode: TEST_SUB_INVENTORY,
+      }],
+      actorId: await actorId(),
+    });
+
+    assert.equal(result.itemCount, 1);
+    const lots = await db.select().from(inventoryLots).where(eq(inventoryLots.partNo, TEST_PART_NO));
+    assert.equal(lots.length, 1);
+    assert.equal(lots[0].wclItemNo, "WCL-TEST-001");
+  });
+
   await test("throws on unknown part", async () => {
     await assert.rejects(
       commitAdHocPutAway(db, {

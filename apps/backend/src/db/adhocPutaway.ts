@@ -116,11 +116,12 @@ export async function commitAdHocPutAway(
       if (!match) {
         throw new Error(`part_not_found:${item.partNo}`);
       }
-      // Backfill canonical part_no and wcl_item_no from the master
+      // Backfill canonical part_no and wcl_item_no from the master — the
+      // master is authoritative once the part is matched: client-side single
+      // brand derivation (<brand>/<mpn>) is wrong for brands whose wcl key
+      // has a different shape (TE-AMP(<pn>) / TE+<pn>).
       item.partNo = match.partNo;
-      if (!item.wclItemNo) {
-        item.wclItemNo = match.wclItemNo;
-      }
+      item.wclItemNo = match.wclItemNo;
     }
 
     // 3. For each item: find-or-create lot, increment qty, write ledger
