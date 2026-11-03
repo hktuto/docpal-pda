@@ -1196,6 +1196,52 @@ test("scan from receiving sources: order-level (no box) and box-level allocation
   assert.equal(revByType.get("on_hand")!.riiId, resItem);
 });
 
+test("scan from receiving order-level source matches lines by wcl_item_no when part_no differs", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf();
+  const roId = await receivingOrderIdOf("100002");
+
+  // hermetic world: no competing demands or shelf stock
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE order_no IN ('SO-DEMO-0001', 'SO-DEMO-0002')`);
+  await client.db.execute(sql`DELETE FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0002'`);
+
+  // the picking item carries the WCL business key while the receiving line
+  // stores the supplier part number — the engine matched via wcl_item_no
+  const g181ItemId = await receivingItemIdOf(roId, "RK73B1JTTD181G");
+  await client.db.execute(
+    sql`UPDATE receiving_invoice_items SET ctn_no = NULL, line_qty = 1000, wcl_item_no = 'WCL/181G' WHERE id = ${g181ItemId}`
+  );
+
+  const orderId = await insertPickingOrder("SO-2026-0002", "pending");
+  const itemId = await insertPickingItem(orderId, "WCL/181G", 600);
+
+  await confirmReceivingArrival(client.db, roId, actorId);
+  await allocateAll(client.db);
+
+  const alloc = await allocationOf(itemId);
+  assert.equal(alloc.qty, 600);
+  assert.equal(alloc.receivingOrderId, roId);
+
+  // previously 409 receiving_source_qty_not_available: the FIFO distribution
+  // matched only rii.part_no and found no lines
+  const scan = await scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 600 });
+  assert.equal(scan.packageIds.length, 1);
+  const rii = await queryGet<{ pickedQty: number }>(
+    client.db,
+    sql`SELECT picked_qty AS "pickedQty" FROM receiving_invoice_items WHERE id = ${g181ItemId}`
+  );
+  assert.equal(rii!.pickedQty, 600);
+
+  // removal credits the line back through the same wcl_item_no match
+  await removeScannedPackage(client.db, { packageId: scan.packageIds[0], actorId });
+  const rii2 = await queryGet<{ pickedQty: number }>(
+    client.db,
+    sql`SELECT picked_qty AS "pickedQty" FROM receiving_invoice_items WHERE id = ${g181ItemId}`
+  );
+  assert.equal(rii2!.pickedQty, 0);
+  assert.equal((await allocationOf(itemId)).qty, 600);
+});
+
 // --- report issues --------------------------------------------------------------------------
 
 test("report-issues: reported/skipped, issue fields + log; validations", async () => {

@@ -12,7 +12,7 @@ import { isStepEnabled, outdatedStockYears, pickingFromSubinventoryOrgs, picking
 import { dateCodeRank, outdatedThresholdRank, toCanonicalDateCode } from "./dateCode.js";
 import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
 import { assigneeFilter, userScopeCondition, type UserScopeEntry } from "./user-scope.js";
-import { normalizePartNo } from "./scanParse.js";
+import { normalizePartNo } from "../decode/codecs.js";
 import { matchSubInventoryRule } from "./receiving.js";
 import { resolveLabelPrintRulesForOrder, type LabelPrintRuleMatch } from "./labelPrint.js";
 import {
@@ -1458,7 +1458,7 @@ async function resolveScannedShelfLot(
  * shelf before its label is accepted. Same part matching and org/sub-inventory
  * scoping as resolveScannedShelfLot, without the label batch-field match;
  * returns SUM(total_qty) over the matching lots (0 when none). Part matching
- * mirrors normalizePartNo (scanParse.ts): whitespace-insensitive, and the
+ * mirrors normalizePartNo (codecs.ts): whitespace-insensitive, and the
  * TE Connectivity "AMP(...)" / "TE-AMP(...)" wrapper is unwrapped on BOTH
  * sides — labels carry the bare PN while parts master rows are wrapped, so a
  * literal match would report 0 for wrapped parts.
@@ -1666,7 +1666,8 @@ export async function scanPickingItem(
                    (rii.received_qty - rii.picked_qty - rii.put_away_qty)::int AS "remaining"
             FROM receiving_invoice_items rii
             JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-            WHERE ri.receiving_order_id = ${alloc.receivingOrderId} AND rii.part_no = ${item.partNo}
+            WHERE ri.receiving_order_id = ${alloc.receivingOrderId}
+              AND (rii.part_no = ${item.partNo} OR rii.wcl_item_no = ${item.partNo})
               AND (rii.received_qty - rii.picked_qty - rii.put_away_qty) > 0
             ORDER BY rii.date_code ASC NULLS LAST, rii.id`
       );
@@ -2168,7 +2169,9 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
         sql`SELECT rii.id, rii.picked_qty AS "pickedQty", rii.ctn_no AS "boxId"
             FROM receiving_invoice_items rii
             JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-            WHERE ri.receiving_order_id = ${pkg.sourceId} AND rii.part_no = ${pkg.partNo} AND rii.picked_qty > 0
+            WHERE ri.receiving_order_id = ${pkg.sourceId}
+              AND (rii.part_no = ${pkg.partNo} OR rii.wcl_item_no = ${pkg.partNo})
+              AND rii.picked_qty > 0
             ORDER BY rii.date_code DESC NULLS FIRST, rii.id DESC`
       );
       let left = pkg.qty;
