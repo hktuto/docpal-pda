@@ -1,6 +1,7 @@
 import { HTTPException } from "hono/http-exception";
 import { sql, type SQL } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
+import { env } from 'hono/adapter'
 import type { AppDb } from "../db.js";
 import { newId } from "./id.js";
 import { now } from "./now.js";
@@ -216,6 +217,9 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
   // pdf uploads are always TE and number like manual receipts
   // (`TE-yyyymmdd-seq`); the retired excel phase keeps the random CN- key.
   const batchNo = input.phase === "pdf" ? await nextCnBrandedNo(db, "TE") : generateCnBatchNo();
+  const { WAREHOUSE_CODE } = env<any>()
+  const warehouse = (WAREHOUSE_CODE ?? "sz").toLowerCase()
+  const warehouseToOrg = warehouse === 'sz' ? 7 : warehouse === 'sh' ? 5 : warehouse === 'bj' ? 12 : 14
   const fileEntries: {
     extension: string;
     file_name: string;
@@ -248,6 +252,7 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
   const variables: Record<string, unknown> = {
     start_user_id: input.actor.username,
     batch_no: batchNo,
+    org_id: warehouseToOrg,
     __system__user_creator_id: input.actor.username,
     __system__user_creator_name: input.actor.displayName,
   };
@@ -259,6 +264,7 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
   }
   let process: { id: string; business_key?: string };
   try {
+    console.log("start workflow", variables)
     process = await startProcess(definitionId, variables);
   } catch (e) {
     // The attachments are orphaned by the failed kick — best-effort cleanup.
