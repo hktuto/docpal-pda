@@ -192,17 +192,14 @@ adminReceivingCnRoute.get("/receiving-cn/:id", async (c) => {
   return c.json(await getCnWorkflow(db, c.req.param("id")), 200);
 });
 
-/** Token user + users.display_name for the workflow creator variables. */
-async function cnUploadActor(c: Context): Promise<{ id: string; username: string; displayName: string }> {
+/** Token user + users.display_name/email for the workflow creator variables. */
+async function cnUploadActor(c: Context): Promise<{ id: string; username: string; displayName: string; email: string | null }> {
   const tokenUser = actorFrom(c);
-  const displayName =
-    (
-      await queryGet<{ displayName: string }>(
-        db,
-        sql`SELECT display_name AS "displayName" FROM users WHERE id = ${tokenUser.id}`
-      )
-    )?.displayName ?? tokenUser.username;
-  return { id: tokenUser.id, username: tokenUser.username, displayName };
+  const row = await queryGet<{ displayName: string; email: string | null }>(
+    db,
+    sql`SELECT display_name AS "displayName", email FROM users WHERE id = ${tokenUser.id}`
+  );
+  return { id: tokenUser.id, username: tokenUser.username, displayName: row?.displayName ?? tokenUser.username, email: row?.email ?? null };
 }
 
 // Excel upload (phase 1, superseded by the PDA manual receiving flow — kept

@@ -8,6 +8,8 @@ import { docpalBaseUrl, docpalFetchTimeoutMs } from "../config.js";
 export interface DocpalUser {
   username: string;
   displayName: string;
+  /** NULL when the profile carries no email — never blocks login. */
+  email: string | null;
   groups: { id: string; name: string }[];
 }
 
@@ -132,6 +134,7 @@ export async function docpalGetUser(accessToken: string): Promise<DocpalUser> {
       userId?: unknown;
       firstName?: unknown;
       lastName?: unknown;
+      email?: unknown;
       aclUserDetail?: { groups?: { groupId?: unknown; groupName?: unknown }[] } | null;
     } | null;
   } | null;
@@ -155,5 +158,6 @@ export async function docpalGetUser(accessToken: string): Promise<DocpalUser> {
   const groups = (Array.isArray(rawGroups) ? rawGroups : [])
     .filter((g): g is { groupId: string; groupName?: unknown } => typeof g?.groupId === "string" && g.groupId.length > 0)
     .map((g) => ({ id: g.groupId, name: typeof g.groupName === "string" ? g.groupName : g.groupId }));
-  return { username, displayName: name || username, groups };
+  const email = typeof data.email === "string" && data.email.trim() !== "" ? data.email.trim() : null;
+  return { username, displayName: name || username, email, groups };
 }

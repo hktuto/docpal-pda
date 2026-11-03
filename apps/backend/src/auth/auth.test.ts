@@ -160,6 +160,7 @@ const fakeState = {
   password: "good-pass",
   firstName: "Doc",
   lastName: "Pal",
+  email: "doc.pal@example.com" as string | null,
   groups: [
     { groupId: "WMS_Admin_Group_(HK)", groupName: "WMS Admin Group (HK)" },
     { groupId: "WMS_Dashboard_Group_(HK)", groupName: "WMS Dashboard Group (HK)" },
@@ -199,6 +200,7 @@ function startFakeDocpal(): Promise<{ server: Server; url: string }> {
           userId: username,
           firstName: fakeState.firstName,
           lastName: fakeState.lastName,
+          ...(fakeState.email !== null ? { email: fakeState.email } : {}),
           aclUserDetail: { groups: fakeState.groups },
         },
       });
@@ -228,11 +230,13 @@ test("docpal login: happy path provisions the local user and maps groups to loca
   // WMS_Admin_Group_(HK) → admin + PDA Group; the dashboard group maps to nothing.
   assert.deepEqual(body.user.groupCodes, ["PDA Group", "admin"]);
 
-  const row = await queryGet<{ passwordHash: string }>(
+  const row = await queryGet<{ passwordHash: string; email: string | null }>(
     client.db,
-    sql`SELECT password_hash AS "passwordHash" FROM users WHERE username = 'chris'`
+    sql`SELECT password_hash AS "passwordHash", email FROM users WHERE username = 'chris'`
   );
   assert.equal(row!.passwordHash, "");
+  // The DocPal profile email is stored on the local users row.
+  assert.equal(row!.email, "doc.pal@example.com");
 
   const memberships = await queryAll<{ groupCode: string }>(
     client.db,
@@ -289,6 +293,25 @@ test("docpal login: second login keeps the id, refreshes name, replaces groups",
     sql`SELECT group_code AS "groupCode" FROM user_group_members WHERE user_id = ${first.id}`
   );
   assert.deepEqual(memberships, [{ groupCode: "PDA Group" }]);
+});
+
+test("docpal login: profile without email keeps the stored one", async (t) => {
+  const { server, url } = await startFakeDocpal();
+  t.after(() => server.close());
+  process.env.DOCPAL_URL = url;
+  t.after(() => { process.env.DOCPAL_URL = FAKE_DOCPAL_URL; });
+  await reseed(client);
+
+  await login("chris", "good-pass");
+  fakeState.email = null;
+  t.after(() => { fakeState.email = "doc.pal@example.com"; });
+  await login("chris", "good-pass");
+
+  const row = await queryGet<{ email: string | null }>(
+    client.db,
+    sql`SELECT email FROM users WHERE username = 'chris'`
+  );
+  assert.equal(row!.email, "doc.pal@example.com");
 });
 
 test("docpal login: user with no mapped group gets 403", async (t) => {

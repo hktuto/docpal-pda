@@ -10,6 +10,8 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   displayName: text("display_name").notNull(),
+  // From the DocPal profile at login (null when DocPal doesn't return one).
+  email: text("email"),
   createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 });

@@ -13,7 +13,7 @@ import {
   receivingOrdersCn,
   transactionLogs,
 } from "./schema/index.js";
-import { normalizePartNo } from "./scanParse.js";
+import { normalizePartNo } from "../decode/codecs.js";
 import { emitEvent } from "./events.js";
 import {
   deleteWorkflowAttachment,
@@ -135,6 +135,8 @@ export interface CnUploadActor {
   id: string;
   username: string;
   displayName: string;
+  /** users.email — from the DocPal profile at login; null when unknown. */
+  email: string | null;
 }
 
 export interface CreateCnUploadInput {
@@ -255,6 +257,7 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
     org_id: warehouseToOrg,
     __system__user_creator_id: input.actor.username,
     __system__user_creator_name: input.actor.displayName,
+    __system__user_creator_email: input.actor.email ?? null,
   };
   if (input.phase === "excel") {
     variables.excelFiles = fileEntries;

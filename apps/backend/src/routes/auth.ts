@@ -87,9 +87,10 @@ async function provisionAndSign(profile: DocpalUser): Promise<LoginResponse> {
     );
     const userId = existing?.id ?? newId();
     if (existing) {
-      await tx.execute(sql`UPDATE users SET display_name = ${profile.displayName}, last_update_date = now() WHERE id = ${userId}`);
+      // COALESCE: a DocPal profile without an email never wipes a stored one.
+      await tx.execute(sql`UPDATE users SET display_name = ${profile.displayName}, email = COALESCE(${profile.email}, email), last_update_date = now() WHERE id = ${userId}`);
     } else {
-      await tx.execute(sql`INSERT INTO users (id, username, password_hash, display_name) VALUES (${userId}, ${profile.username}, '', ${profile.displayName})`);
+      await tx.execute(sql`INSERT INTO users (id, username, password_hash, display_name, email) VALUES (${userId}, ${profile.username}, '', ${profile.displayName}, ${profile.email})`);
     }
     // Replace membership with the mapped local groups (admin / PDA Group).
     await tx.execute(sql`DELETE FROM user_group_members WHERE user_id = ${userId}`);

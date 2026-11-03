@@ -210,6 +210,7 @@ sentinel. Roles were replaced by group membership
 | username | text NOT NULL UNIQUE | Login name |
 | password_hash | text NOT NULL | unused — empty-string sentinel (DocPal verifies credentials) |
 | display_name | text NOT NULL | Display name |
+| email | text | From the DocPal profile at login; null when DocPal returns none (a later email-less profile never clears a stored value) |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
