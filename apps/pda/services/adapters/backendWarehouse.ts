@@ -853,6 +853,18 @@ export function createBackendWarehouseService(
       adHocPutAwayBrandsCache = result.brands;
       return adHocPutAwayBrandsCache;
     },
+    // Canonical master keys for a scanned part — 404 = unknown part → null.
+    async lookupAdHocPutAwayPart(partNo: string) {
+      try {
+        return await client.get<{ partNo: string; wclItemNo: string; brand: string }>(
+          "/ad-hoc-put-away/part-lookup",
+          { partNo }
+        );
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }
+    },
     async commitAdHocPutAway(input: {
       brand: string;
       shelfCode: string;

@@ -2,7 +2,7 @@ import { test, before, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
-import { commitAdHocPutAway, listAdHocPutAwayLocations } from "./adhocPutaway.js";
+import { commitAdHocPutAway, listAdHocPutAwayLocations, lookupAdHocPutAwayPart } from "./adhocPutaway.js";
 import { inventoryLots } from "./schema/inventory.js";
 import { inventoryTransactions } from "./schema/audit.js";
 import { adHocPutAways } from "./schema/adhocPutaway.js";
@@ -229,6 +229,21 @@ test("ad-hoc put-away", async () => {
     const lots = await db.select().from(inventoryLots).where(eq(inventoryLots.partNo, TEST_PART_NO));
     assert.equal(lots.length, 1);
     assert.equal(lots[0].wclItemNo, "WCL-TEST-001");
+  });
+
+  await test("part lookup resolves canonical master keys", async () => {
+    assert.deepEqual(await lookupAdHocPutAwayPart(db, TEST_PART_NO), {
+      partNo: TEST_PART_NO,
+      wclItemNo: "WCL-TEST-001",
+      brand: "TEST",
+    });
+    // matched via the wcl_item_no key too (space/case-insensitive)
+    assert.deepEqual(await lookupAdHocPutAwayPart(db, " wcl-test-001 "), {
+      partNo: TEST_PART_NO,
+      wclItemNo: "WCL-TEST-001",
+      brand: "TEST",
+    });
+    assert.equal(await lookupAdHocPutAwayPart(db, "NOPE-UNKNOWN"), null);
   });
 
   await test("throws on unknown part", async () => {

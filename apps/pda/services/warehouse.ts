@@ -325,6 +325,9 @@ export interface WarehouseService {
   // batch.
   getAdHocPutAwayLocations(): Promise<AdHocPutAwayLocation[]>;
   getAdHocPutAwayBrands(): Promise<string[]>;
+  /** Canonical parts-master row for a scanned part (null when unknown) — the
+   *  screen shows these keys instead of the client-side single-brand guess. */
+  lookupAdHocPutAwayPart(partNo: string): Promise<{ partNo: string; wclItemNo: string; brand: string } | null>;
   commitAdHocPutAway(input: {
     brand: string;
     shelfCode: string;

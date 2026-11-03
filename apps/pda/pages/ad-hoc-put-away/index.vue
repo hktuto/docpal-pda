@@ -150,7 +150,7 @@ import { useToast } from "~/composables/useToast";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useBrandSymbologyScope } from "~/composables/useScannerConfig";
 import { I18nError } from "~/composables/i18nError";
-import { parseQrCapture, parseAndIdentify } from "~/utils/parseOcrScan";
+import { parseQrCapture, parseAndIdentify, type OcrParseResult } from "~/utils/parseOcrScan";
 import { dateToDateCode, toLabelDateCode } from "~/utils/dateCode";
 import { useFlowSteps } from "~/composables/useFlowSteps";
 import { captureLabel, getCachedSupplierQrTemplates, getCachedDateCodePeriods } from "~/composables/useLabelScan";
@@ -219,6 +219,34 @@ async function load() {
 
 load();
 
+// Add a parsed label to the batch, displaying the canonical master keys
+// (part_no / wcl_item_no) resolved from the parts table — the client-side
+// single-brand derivation (<brand>/<mpn>) is only a guess and is wrong for
+// e.g. TE (TE-AMP(<pn>)). Unknown parts / lookup failures keep the parsed
+// values; the commit re-validates against the master regardless.
+async function addParsedItem(result: OcrParseResult, rawScan?: string) {
+  let master: { partNo: string; wclItemNo: string } | null = null;
+  if (result.parsed.itemId) {
+    try {
+      master = await warehouse.lookupAdHocPutAwayPart(result.parsed.itemId);
+    } catch {
+      master = null;
+    }
+  }
+  addItem({
+    partNo: master?.partNo ?? result.parsed.itemId ?? "",
+    wclItemNo: master?.wclItemNo ?? result.parsed.wclItemNo ?? null,
+    qty: result.parsed.qty ?? 1,
+    dateCode: result.parsed.dateCode ?? null,
+    lotCode: result.parsed.lotCode ?? null,
+    coo: result.parsed.coo ?? null,
+    cow: result.parsed.cow ?? null,
+    serialNo: result.parsed.serialNo ?? null,
+    orgId: 0,
+    subInventoryCode: "",
+  }, rawScan);
+}
+
 // Hardware scan handler
 async function handleHardwareScan(code: string) {
   // Check if it's a shelf code
@@ -239,18 +267,7 @@ async function handleHardwareScan(code: string) {
     dateCodeFormat: dateCodeFormat.value,
   });
   if (result.matched) {
-    addItem({
-      partNo: result.parsed.itemId ?? "",
-      wclItemNo: result.parsed.wclItemNo ?? null,
-      qty: result.parsed.qty ?? 1,
-      dateCode: result.parsed.dateCode ?? null,
-      lotCode: result.parsed.lotCode ?? null,
-      coo: result.parsed.coo ?? null,
-      cow: result.parsed.cow ?? null,
-      serialNo: result.parsed.serialNo ?? null,
-      orgId: 0,
-      subInventoryCode: "",
-    }, code);
+    await addParsedItem(result, code);
     playScanSuccess();
   } else {
     playScanError();
@@ -284,18 +301,7 @@ async function openScan() {
       );
 
   if (result.matched) {
-    addItem({
-      partNo: result.parsed.itemId ?? "",
-      wclItemNo: result.parsed.wclItemNo ?? null,
-      qty: result.parsed.qty ?? 1,
-      dateCode: result.parsed.dateCode ?? null,
-      lotCode: result.parsed.lotCode ?? null,
-      coo: result.parsed.coo ?? null,
-      cow: result.parsed.cow ?? null,
-      serialNo: result.parsed.serialNo ?? null,
-      orgId: 0,
-      subInventoryCode: "",
-    }, single?.value);
+    await addParsedItem(result, single?.value);
     playScanSuccess();
   } else {
     playScanError();

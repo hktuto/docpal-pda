@@ -6,6 +6,7 @@ import {
   commitAdHocPutAway,
   listAdHocPutAwayLocations,
   listAdHocPutAwayBrands,
+  lookupAdHocPutAwayPart,
   scheduleAllocateAll,
 } from "../db/adhocPutaway.js";
 import { actorFrom } from "../auth/middleware.js";
@@ -25,6 +26,14 @@ export const adHocPutAwayRoute = new Hono();
 // Valid (org_id, sub_inventory_code) pairs for the PDA location selector.
 adHocPutAwayRoute.get("/ad-hoc-put-away/locations", async (c) => {
   return c.json(await listAdHocPutAwayLocations(db), 200);
+});
+
+// Canonical part_no/wcl_item_no for a scanned label, so the PDA can show the
+// master values right after the scan instead of the client-side guess.
+adHocPutAwayRoute.get("/ad-hoc-put-away/part-lookup", async (c) => {
+  const row = await lookupAdHocPutAwayPart(db, c.req.query("partNo") ?? "");
+  if (!row) throw new HTTPException(404, { message: "part_not_found" });
+  return c.json(row, 200);
 });
 
 // Distinct brand values from parts for the PDA brand dropdown.

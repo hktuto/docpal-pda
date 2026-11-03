@@ -71,6 +71,30 @@ function lotKey(item: AdHocPutAwayItemInput, shelfCode: string): LotKey {
 }
 
 /**
+ * Resolve a scanned part number to the canonical parts-master row for
+ * display — same normalization/matching as commitAdHocPutAway (spaces
+ * stripped, TE AMP(...) wrapper unwrapped, matched against part_no and
+ * wcl_item_no). Returns null when the part is unknown. Lets the PDA show the
+ * master wcl_item_no right after the scan instead of the client-side
+ * single-brand guess (<brand>/<mpn>), which is wrong for brands whose wcl
+ * key has a different shape (TE-AMP(<pn>) / TE+<pn>).
+ */
+export async function lookupAdHocPutAwayPart(
+  db: AppDb,
+  scanned: string
+): Promise<{ partNo: string; wclItemNo: string; brand: string } | null> {
+  const needle = normalizePartNo(scanned);
+  if (!needle) return null;
+  const allParts = await db
+    .select({ partNo: parts.partNo, wclItemNo: parts.wclItemNo, brand: parts.brand })
+    .from(parts);
+  for (const p of allParts) {
+    if (normalizePartNo(p.partNo) === needle || normalizePartNo(p.wclItemNo) === needle) return p;
+  }
+  return null;
+}
+
+/**
  * Commit an ad-hoc put-away batch. Single transaction:
  * 1. Validate shelf exists.
  * 2. Validate each item's part exists.
