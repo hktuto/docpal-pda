@@ -39,13 +39,16 @@ some drawno values embed the code in a longer string (e.g. `REF#826558`).
   the resolved wcl_item_no / part_no values; the existing zero/multiple-match
   409 handling then applies unchanged.
 - **Decode service hook** (`decodeScan` in `src/decode/service.ts`):
-  - Case A: a matched NCC template hit without a wclItemNo gets
-    `parsed.wclItemNo` attached when the drawing code resolves to exactly one
-    wcl_item_no (itemId stays the drawing code).
+  - Case A: a matched NCC-brand template hit gets `parsed.wclItemNo` attached
+    when the drawing code resolves to exactly one wcl_item_no (itemId stays
+    the drawing code). The NCC profile is single-brand, so `parseQrRaw`'s
+    brand derivation always fills a bogus `NCC/<drawing>` wclItemNo first —
+    a unique resolution must override it, not merely fill a missing one.
   - Case B: when the order-targets gate rejected the match, the decode is
     re-run ungated; the ungated match is returned (with the resolved
     wclItemNo) only when exactly one resolution lands inside the normalized
     targets. `template.ts` stays pure — all DB access is in `service.ts`.
-- **Out of scope**: the PDA's client-side picking/put-away label matching is
-  NOT covered — it needs the deferred `/scan/decode` cutover (spec
-  `docs/superpowers/specs/2026-11-03-backend-scan-decode-design.md`).
+- **Out of scope**: the PDA's client-side picking/put-away label matching —
+  since covered by the 2026-11-03 PDA cutover (`f83f6332`, Phase 6 of spec
+  `docs/superpowers/specs/2026-11-03-backend-scan-decode-design.md`): scans
+  decode through `POST /scan/decode`, so the hook above is what the device sees.

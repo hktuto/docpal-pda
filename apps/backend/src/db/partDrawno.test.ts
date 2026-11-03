@@ -34,7 +34,7 @@ async function insertDrawno(wclPartNo: string, drawno: string): Promise<void> {
 
 async function insertPart(partNo: string, wclItemNo: string): Promise<void> {
   await client.db.execute(
-    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no) VALUES (${randomUUID()}, 'NCC', ${partNo}, ${wclItemNo})`
+    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no) VALUES (${randomUUID()}, 'NCC', ${partNo}, ${wclItemNo}) ON CONFLICT (wcl_item_no) DO NOTHING`
   );
 }
 

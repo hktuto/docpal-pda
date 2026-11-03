@@ -25,7 +25,9 @@ export async function decodeScan(db: AppDb, input: ScanDecodeInput): Promise<Dec
 
   // NCC labels carry the numeric drawing code as itemId — resolve it to the
   // WCL item no via wcl_part_drawno (spec 2026-11-03-ncc-drawno-part-lookup).
-  if (result.matched && !result.parsed.wclItemNo && result.parsed.itemId && result.supplier?.brands?.includes("NCC")) {
+  // The single-brand profile derivation (`NCC/<itemId>`) yields a bogus
+  // wclItemNo for NCC, so a unique resolution overrides it.
+  if (result.matched && result.parsed.itemId && result.supplier?.brands?.includes("NCC")) {
     const drawnoMatches = await lookupPartsByDrawingNo(db, result.parsed.itemId);
     const wclItemNos = [...new Set(drawnoMatches.map((m) => m.wclItemNo))];
     if (wclItemNos.length === 1) {
@@ -40,7 +42,7 @@ export async function decodeScan(db: AppDb, input: ScanDecodeInput): Promise<Dec
   // drawno resolution lands inside the (normalized) targets.
   if (!result.matched && input.targets?.length) {
     const ungated = decodeWithTemplates({ ...input, targets: undefined }, templates, periods, dateCodeFormat());
-    if (ungated.matched && !ungated.parsed.wclItemNo && ungated.parsed.itemId && ungated.supplier?.brands?.includes("NCC")) {
+    if (ungated.matched && ungated.parsed.itemId && ungated.supplier?.brands?.includes("NCC")) {
       const drawnoMatches = await lookupPartsByDrawingNo(db, ungated.parsed.itemId);
       const targetNorms = new Set(input.targets.map(normalizePartNo));
       const onOrder = [...new Set(drawnoMatches.map((m) => m.wclItemNo))].filter((w) =>

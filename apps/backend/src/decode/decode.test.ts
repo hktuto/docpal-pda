@@ -22,6 +22,32 @@ let app: (typeof import("../index.js"))["app"];
 before(async () => {
   client = await setupTestDb();
   ({ app } = await import("../index.js"));
+  // NCC drawno fixtures — wcl_part_drawno is externally managed (not in the
+  // schema/migrations) and reseed() never truncates it, so the test creates
+  // and populates it itself.
+  await client.db.execute(sql`CREATE TABLE IF NOT EXISTS wcl_part_drawno (
+    id varchar(100) PRIMARY KEY,
+    wcl_part_no varchar(255) NOT NULL,
+    drawno varchar(2000) NOT NULL
+  )`);
+  await client.db.execute(sql`DELETE FROM wcl_part_drawno`);
+  await client.db.execute(
+    sql`INSERT INTO wcl_part_drawno (id, wcl_part_no, drawno) VALUES (${randomUUID()}, ${NCC_WCL_ITEM_NO}, '424307')`
+  );
+  const nccProfile = builtinSupplierProfiles.find((p) => p.supplierCode === "23")!;
+  await client.db.execute(
+    sql`INSERT INTO suppliers (id, code, name) VALUES (${randomUUID()}, '23', 'HONGKONG CHEMI-CON LTD') ON CONFLICT (code) DO NOTHING`
+  );
+  await client.db.execute(
+    sql`INSERT INTO supplier_profiles (id, supplier_code, qr_template, date_code_encoding, brands)
+        VALUES (${randomUUID()}, '23', ${nccProfile.qrTemplate}, ${nccProfile.dateCodeEncoding ?? null}, ${`{${(nccProfile.brands ?? []).join(",")}}`}::text[])
+        ON CONFLICT (supplier_code) DO NOTHING`
+  );
+  await client.db.execute(
+    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no)
+        VALUES (${randomUUID()}, 'NCC', 'EKLJ401ELL470MM20S', ${NCC_WCL_ITEM_NO})
+        ON CONFLICT (wcl_item_no) DO NOTHING`
+  );
 });
 
 after(async () => {
@@ -152,31 +178,6 @@ test("POST /scan/decode returns the OcrParseResult-shaped body", async () => {
 const NCC_WCL_ITEM_NO = "NCC-EKLJ401ELL470MM20S";
 // 28-char layout: drawing(6) + lot(13) + qty(5) + serial(4); itemId = "424307".
 const NCC_RAW = "424307" + "6030912801026" + "00200" + "0460";
-
-before(async () => {
-  // wcl_part_drawno is externally managed (not in the schema/migrations) and
-  // reseed() never truncates it — created + populated by the test itself.
-  await client.db.execute(sql`CREATE TABLE IF NOT EXISTS wcl_part_drawno (
-    id varchar(100) PRIMARY KEY,
-    wcl_part_no varchar(255) NOT NULL,
-    drawno varchar(2000) NOT NULL
-  )`);
-  await client.db.execute(sql`DELETE FROM wcl_part_drawno`);
-  await client.db.execute(
-    sql`INSERT INTO wcl_part_drawno (id, wcl_part_no, drawno) VALUES (${randomUUID()}, ${NCC_WCL_ITEM_NO}, '424307')`
-  );
-  const nccProfile = builtinSupplierProfiles.find((p) => p.supplierCode === "23")!;
-  await client.db.execute(
-    sql`INSERT INTO supplier_profiles (id, supplier_code, qr_template, date_code_encoding, brands)
-        VALUES (${randomUUID()}, '23', ${nccProfile.qrTemplate}, ${nccProfile.dateCodeEncoding ?? null}, ${`{${(nccProfile.brands ?? []).join(",")}}`}::text[])
-        ON CONFLICT (supplier_code) DO NOTHING`
-  );
-  await client.db.execute(
-    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no)
-        VALUES (${randomUUID()}, 'NCC', 'EKLJ401ELL470MM20S', ${NCC_WCL_ITEM_NO})
-        ON CONFLICT (wcl_item_no) DO NOTHING`
-  );
-});
 
 test("decodeScan resolves an NCC drawing code past the targets gate (Case B)", async () => {
   // The drawing code is never among the order targets — the gated decode
