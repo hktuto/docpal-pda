@@ -137,6 +137,37 @@ test("shelf exchange — preview", async () => {
     assert.equal(result.lotId, "lot-sx-old");
   });
 
+  await test("resolves a TE-wrapped lot key via the parts master (bare-MPN scan)", async () => {
+    // Real-world TE shape (192.168.3.99 / GRC01): master + lots carry the
+    // wrapped keys, the Data Matrix label carries the bare MPN.
+    await db.insert(parts).values({
+      id: "part-sx-te-001",
+      brand: "TE",
+      partNo: "AMP(5172070-SX)",
+      wclItemNo: "TE-AMP(5172070-SX)",
+      description: "Shelf exchange TE test part",
+    }).onConflictDoNothing();
+    await insertLot({
+      id: "lot-sx-te",
+      shelfCode: SOURCE_SHELF,
+      qty: 100,
+      partNo: "AMP(5172070-SX)",
+      wclItemNo: "TE-AMP(5172070-SX)",
+      lotCode: null,
+    });
+    const result = await previewShelfExchange(db, {
+      sourceShelfCode: SOURCE_SHELF,
+      partNo: "5172070-SX",
+      wclItemNo: "TE/5172070-SX",
+      qty: 10,
+      dateCode: "2640",
+    });
+    assert.equal(result.lotId, "lot-sx-te");
+    assert.equal(result.partNo, "AMP(5172070-SX)");
+    assert.equal(result.wclItemNo, "TE-AMP(5172070-SX)");
+    await db.delete(inventoryLots).where(eq(inventoryLots.id, "lot-sx-te"));
+  });
+
   await test("404 unknown source shelf", async () => {
     await assertHttpError(
       previewShelfExchange(db, {

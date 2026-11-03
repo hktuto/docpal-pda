@@ -10,6 +10,7 @@ import { now } from "./now.js";
 import { queryGet } from "./query.js";
 import { allowedOrgFilter } from "./org-filter.js";
 import { normalizePartNo } from "./scanParse.js";
+import { lookupAdHocPutAwayPart } from "./adhocPutaway.js";
 import { toCanonicalDateCode } from "./dateCode.js";
 import { dateCodeFormat } from "../config.js";
 import { scheduleAllocateAll } from "./allocate.js";
@@ -69,12 +70,15 @@ type ResolvedLot = {
 
 /**
  * Resolve the lot on the source shelf for a scanned label: part keys matched
- * space-insensitively against both part_no and wcl_item_no, label batch
- * fields (dateCode/lotCode/coo/cow) must match when carried, org filter from
- * the flow config, lots whose shelf is missing from shelves excluded (the
- * allocate.ts FK-update guard), FIFO by date_code. 409 no_stock_at_location
- * when no lot covers the qty; 409 insufficient_available_qty when lots exist
- * but all are (partially) allocated.
+ * space-insensitively against both part_no and wcl_item_no, extended with the
+ * parts master's canonical raw key forms when the scan resolves to a master
+ * row (TE AMP(...)/TE-AMP(...) wrapped lot keys vs the label's bare MPN),
+ * label batch fields (dateCode/lotCode/coo/cow) must match when carried, org
+ * filter from the flow config, lots whose shelf is missing from shelves
+ * excluded (the allocate.ts FK-update guard), FIFO by date_code. 409
+ * no_stock_at_location when no lot covers the qty; 409
+ * insufficient_available_qty when lots exist but all are (partially)
+ * allocated.
  */
 export async function previewShelfExchange(
   db: AppDb,
@@ -89,6 +93,23 @@ export async function previewShelfExchange(
     .map(normalizePartNo);
   if (partKeys.length === 0) {
     throw new HTTPException(400, { message: "part_no_required" });
+  }
+
+  // Lots are keyed by the parts master's canonical part_no/wcl_item_no,
+  // which for TE are the wrapped forms (AMP(<mpn>) / TE-AMP(<mpn>)) while
+  // the label carries the bare MPN — the SQL side only strips spaces, so a
+  // bare-MPN scan never matches a wrapped lot key. Resolve the scan against
+  // the master (same normalization as commitAdHocPutAway) and add the
+  // master's raw key forms — uppercased, spaces stripped, mirroring the SQL
+  // side — to the match set.
+  const matchKeys = new Set(partKeys);
+  for (const scanned of [input.partNo, input.wclItemNo]) {
+    if (!scanned) continue;
+    const master = await lookupAdHocPutAwayPart(db, scanned);
+    if (master) {
+      matchKeys.add(master.partNo.toUpperCase().replace(/\s+/g, ""));
+      matchKeys.add(master.wclItemNo.toUpperCase().replace(/\s+/g, ""));
+    }
   }
 
   const shelf = await queryGet<{ code: string }>(
@@ -124,12 +145,12 @@ export async function previewShelfExchange(
                il.total_qty AS "totalQty", il.allocated_qty AS "allocatedQty",
                (il.total_qty - il.allocated_qty) AS "availableQty"
         FROM inventory_lots il
-        WHERE ${sql.join(
-          partKeys.map(
+        WHERE (${sql.join(
+          [...matchKeys].map(
             (k) => sql`(upper(replace(il.part_no, ' ', '')) = ${k} OR upper(replace(il.wcl_item_no, ' ', '')) = ${k})`
           ),
           sql` OR `
-        )}
+        )})
           AND il.shelf_code = ${sourceShelfCode}
           ${allowedOrgFilter(sql`il.org_id`)}
           AND (${scannedDateCode ?? null}::text IS NULL OR il.date_code = ${scannedDateCode ?? null})
