@@ -7,7 +7,7 @@
 
 import { sql } from "drizzle-orm";
 import { queryAll, type DbOrTx } from "./query.js";
-import { buildKoaLabelRaw } from "./scanParse.js";
+import { buildKoaLabelRaw } from "../decode/codecs.js";
 import { listDateCodePeriods } from "./dateCodePeriods.js";
 import { toCanonicalDateCode } from "./dateCode.js";
 import { dateCodeFormat } from "../config.js";

@@ -5,7 +5,7 @@ import { inArray, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
-import { decodeKoaDateCode, decodeKoaQty, decodeYywwDateCode, decodeYyyymmMidmonthDateCode, normalizePartNo, parseQrRaw } from "./scanParse.js";
+import { decodeKoaDateCode, decodeKoaQty, decodeYywwDateCode, decodeYyyymmMidmonthDateCode, normalizePartNo, parseQrRaw } from "../decode/codecs.js";
 import { builtinSupplierProfiles } from "./seed-supplier-profiles.js";
 import { insertReceivingOrder } from "./test-fixtures.js";
 import { _setReceivingSubInventoryRulesForTests } from "../config.js";
@@ -61,7 +61,7 @@ async function catchHttp(p: Promise<unknown>): Promise<HTTPException> {
   assert.fail("expected HTTPException");
 }
 
-// --- scanParse unit cases ----------------------------------------------------
+// --- codecs unit cases ----------------------------------------------------
 
 test("decodeKoaQty: last digit is the trailing-zero count", () => {
   assert.equal(decodeKoaQty("253"), 25000);

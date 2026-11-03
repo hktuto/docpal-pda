@@ -455,7 +455,7 @@ arrive via upstream sync / DocPal auth.
   reseeded DB, covered by a `parseQrRaw` outer-label test).
 - **S-key scan dedup (DONE):** the `ignore2` segment (S613 outer / S611
   inner) is a serial key, unique for every label in an order. Implemented:
-  the seeded KOA template group is now `(?<serialNo>…)`, `scanParse.ts`
+  the seeded KOA template group is now `(?<serialNo>…)`, `codecs.ts`
   surfaces `serialNo`, and the `receiving_scan_labels` table (migration
   0012, recording item/qty/actor/scanned_at; migrations 0036/0037 scope
   the dedup key to order + part with a nullable `part_no` — KOA reel labels

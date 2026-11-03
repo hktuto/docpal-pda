@@ -253,7 +253,7 @@ describe("decodeKoaQty", () => {
 });
 
 describe("decodeKoaDateCode", () => {
-  // Mirrors apps/backend/src/db/scanParse.ts decodeKoaDateCode with the
+  // Mirrors apps/backend/src/decode/codecs.ts decodeKoaDateCode with the
   // DEFAULT_KOA_PERIODS rows (three forward cycles, counter 10→99 per
   // 90-month cycle); always pass an explicit referenceDate.
   const REF_2026_10 = new Date(Date.UTC(2026, 9, 16));

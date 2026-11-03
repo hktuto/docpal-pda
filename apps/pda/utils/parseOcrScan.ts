@@ -725,7 +725,7 @@ function getIsoYear(date: Date): number {
 /** A month-counter period row (date_code_counter_periods). A counter value
  *  may belong to several periods (rotation era) — the decoder picks the
  *  latest candidate not in the future relative to the scan date.
- *  Keep in sync with apps/backend/src/db/scanParse.ts DateCodePeriod. */
+ *  Keep in sync with apps/backend/src/decode/codecs.ts DateCodePeriod. */
 export interface DateCodePeriod {
   encoding: string;
   direction: "forward" | "backward";
@@ -740,7 +740,7 @@ export interface DateCodePeriod {
  *  months, one row per cycle (anchors: 10 = 2025-12 … 99 = 2033-05; previous
  *  cycles 10 = 2018-06 … 99 = 2025-11 and 10 = 2010-12 … 99 = 2018-05); a
  *  rotation inserts the next cycle row. Keep in sync with
- *  apps/backend/src/db/scanParse.ts DEFAULT_KOA_PERIODS and the
+ *  apps/backend/src/decode/codecs.ts DEFAULT_KOA_PERIODS and the
  *  date_code_counter_periods seed rows. */
 export const DEFAULT_KOA_PERIODS: DateCodePeriod[] = [
   { encoding: "koa_month_counter", direction: "forward", counterFrom: 10, counterTo: 99, periodStart: "2010-12-01" },
@@ -772,7 +772,7 @@ function parsePeriodStart(periodStart: string): { year: number; month0: number }
  * not in the future relative to `referenceDate` (default: today) wins,
  * falling back to the earliest candidate when all are in the future. The raw
  * value stays the lot code.
- * Keep in sync with apps/backend/src/db/scanParse.ts decodeKoaDateCode.
+ * Keep in sync with apps/backend/src/decode/codecs.ts decodeKoaDateCode.
  */
 export function decodeKoaDateCode(
   raw: string,
@@ -822,7 +822,7 @@ export function decodeKoaDateCode(
  * to the label date code (pair-swapped WWYY under the default "wwyy" label
  * format; identity under "yyww"). Returns undefined for non-4-digit input or
  * an invalid week.
- * Keep in sync with apps/backend/src/db/scanParse.ts decodeYywwDateCode.
+ * Keep in sync with apps/backend/src/decode/codecs.ts decodeYywwDateCode.
  */
 export function decodeYywwDateCode(raw: string, dateCodeFormat: DateCodeFormat = "wwyy"): string | undefined {
   if (!/^\d{4}$/.test(raw)) return undefined;
@@ -837,7 +837,7 @@ export function decodeYywwDateCode(raw: string, dateCodeFormat: DateCodeFormat =
  * dropped and the YYWW pair renders in the label format (pair-swapped WWYY
  * under the default "wwyy"; identity under "yyww"). Returns undefined for
  * non-5-digit input or an invalid week.
- * Keep in sync with apps/backend/src/db/scanParse.ts decodeYywwdDateCode.
+ * Keep in sync with apps/backend/src/decode/codecs.ts decodeYywwdDateCode.
  */
 export function decodeYywwdDateCode(raw: string, dateCodeFormat: DateCodeFormat = "wwyy"): string | undefined {
   if (!/^\d{5}$/.test(raw)) return undefined;
@@ -855,7 +855,7 @@ export function formatNccLotCode(raw: string): string {
  * label carries no day — the convention anchors the month on the 15th
  * ("202606" → 2026-06-15 → ISO week 25 → WWYY "2526"). Returns undefined for
  * non-6-digit input or an invalid month.
- * Keep in sync with apps/backend/src/db/scanParse.ts decodeYyyymmMidmonthDateCode.
+ * Keep in sync with apps/backend/src/decode/codecs.ts decodeYyyymmMidmonthDateCode.
  */
 export function decodeYyyymmMidmonthDateCode(raw: string, dateCodeFormat: DateCodeFormat = "wwyy"): string | undefined {
   if (!/^\d{6}$/.test(raw)) return undefined;
@@ -869,7 +869,7 @@ export function decodeYyyymmMidmonthDateCode(raw: string, dateCodeFormat: DateCo
 
 /** Decode the 13-digit NCC lot's YMMDD prefix to an ISO week date code.
  *  The one-digit year resolves to the latest matching year not after the scan
- *  year. Keep in sync with apps/backend/src/db/scanParse.ts decodeNccDateCode. */
+ *  year. Keep in sync with apps/backend/src/decode/codecs.ts decodeNccDateCode. */
 export function decodeNccDateCode(
   raw: string,
   referenceDate: Date = new Date(),
@@ -891,7 +891,7 @@ export function decodeNccDateCode(
  *  the serial field, e.g. "61013" = 2026-10-13) to an ISO week date code.
  *  The one-digit year resolves to the latest matching year not after the scan
  *  year (same rule as the NCC lot prefix). Keep in sync with
- *  apps/backend/src/db/scanParse.ts decodeYmmddDateCode. */
+ *  apps/backend/src/decode/codecs.ts decodeYmmddDateCode. */
 export function decodeYmmddDateCode(
   raw: string,
   referenceDate: Date = new Date(),
@@ -977,7 +977,7 @@ export function parseQrCapture(
     // COPAL OHM-spec trimmer labels carry the resistance code ("104" of
     // SM-3TW 104) in a resCode group after the model; parts.part_no stores
     // it, so append it to the item identity. Keep in sync with
-    // apps/backend/src/db/scanParse.ts parseQrRaw.
+    // apps/backend/src/decode/codecs.ts parseQrRaw.
     const normalizedItemId = collapseSpaces(
       (groups.resCode ? `${groups.itemId} ${groups.resCode}` : groups.itemId).toUpperCase()
     );
@@ -1026,7 +1026,7 @@ export function parseQrCapture(
     // $-reel QRs) still reach parts.wcl_item_no when the profile covers
     // exactly one brand: derive "<brand>/<mpn>" (ABLIC parts are stored as
     // "ABLIC/S-812C33AMC-C2NT2U"). Multi-brand/unknown-brand profiles skip
-    // the derivation. Keep in sync with apps/backend/src/db/scanParse.ts
+    // the derivation. Keep in sync with apps/backend/src/decode/codecs.ts
     // deriveWclItemNo.
     const wclItemNo = groups.wclItemNo ||
       (supplier.brands?.length === 1 ? `${supplier.brands[0]}/${groups.itemId}` : undefined);

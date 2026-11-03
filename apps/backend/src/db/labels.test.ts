@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { setupTestDb, type TestDb } from "./test-helper.js";
 import { getLabelsData } from "./labels.js";
 import { allocateAll } from "./allocate.js";
-import { buildKoaLabelRaw, decodeKoaQty, encodeKoaQty, parseQrRaw } from "./scanParse.js";
+import { buildKoaLabelRaw, decodeKoaQty, encodeKoaQty, parseQrRaw } from "../decode/codecs.js";
 import { queryGet } from "./query.js";
 
 let client: TestDb;

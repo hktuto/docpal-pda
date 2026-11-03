@@ -1,13 +1,13 @@
 import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll } from "./query.js";
-import type { DateCodePeriod } from "./scanParse.js";
+import type { DateCodePeriod } from "../decode/codecs.js";
 
 // ---------------------------------------------------------------------------
 // Label date-code month-counter periods (date_code_counter_periods). The
 // KOA counter rolls 10→99 and restarts; each 90-month cycle is one row here
 // and the decoder picks the latest candidate not in the future (see
-// scanParse.ts decodeKoaDateCode). A rotation = inserting the next cycle's
+// codecs.ts decodeKoaDateCode). A rotation = inserting the next cycle's
 // row via the admin CRUD — no code change.
 // ---------------------------------------------------------------------------
 

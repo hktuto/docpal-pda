@@ -4,7 +4,7 @@ import { queryAll } from "./query.js";
 
 // ---------------------------------------------------------------------------
 // Scan support: supplier QR templates for client-side label parsing. The
-// receiving scan parses server-side (scanParse.ts), but picking / put-away /
+// receiving scan parses server-side (codecs.ts), but picking / put-away /
 // measuring scans validate labels on the client against these templates.
 // ---------------------------------------------------------------------------
 

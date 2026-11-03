@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll } from "./query.js";
-import { normalizePartNo } from "./scanParse.js";
+import { normalizePartNo } from "../decode/codecs.js";
 import { allowedOrgFilter } from "./org-filter.js";
 import { userScopeFilter, type UserScopeEntry } from "./user-scope.js";
 import { outdatedStockYears } from "../config.js";

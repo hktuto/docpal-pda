@@ -231,7 +231,7 @@ Implemented: `GET /receiving-orders`, `GET /receiving-orders/:id`,
 `POST /receiving-invoice-items/:id/mismatch/confirm`,
 `POST /receiving-invoice-items/:id/mismatch/cancel` (see
 `apps/backend/src/routes/receiving.ts` + `src/db/receiving.ts` +
-`src/db/scanParse.ts`; confirm-arrival applies full receipt + date-code
+`src/decode/codecs.ts`; confirm-arrival applies full receipt + date-code
 fallback, scan applies QR-template-parsed partial receipts moving the order to
 `provisional_received`, both write RECEIVE_TO_DOCK ledger rows + transition
 logs and run `allocateAll` best-effort; scans carrying a serial (`serialNo`
@@ -260,15 +260,20 @@ item columns (no separate mismatch table).
 ## Scan support
 
 Implemented: `GET /scan-templates` (see
-`apps/backend/src/routes/scantemplates.ts` + `src/db/scantemplates.ts`).
+`apps/backend/src/routes/scantemplates.ts` + `src/db/scantemplates.ts`) and
+`POST /scan/decode` (see `src/routes/decode.ts` + `src/decode/`, spec
+`docs/superpowers/specs/2026-11-03-backend-scan-decode-design.md`).
 Receiving scans parse server-side, but picking / put-away / measuring scans
-validate labels on the client — this public read hands the client every
+still validate labels on the client — this public read hands the client every
 supplier's QR template + qty encoding (from `supplier_profiles`) so it never
-hardcodes templates.
+hardcodes templates. `POST /scan/decode` is the new DB-backed decode authority
+(templates + `date_code_counter_periods` + flow-config `dateCodeFormat`); the
+client-side copies retire when the PDA/admin cutover lands.
 
 | Endpoint | Description |
 |---|---|
 | `GET /scan-templates` | → `[{supplierCode, qrTemplate, qtyEncoding, dateCodeEncoding, barcodeTypes, brands}]`, every profile ordered by `supplier_code`; `qrTemplate` null when the supplier has none (clients filter). `brands` = parts.brand values the supplier covers — clients try brand-matching templates first. `dateCodeEncoding` (e.g. `koa_month_counter`) decodes the template's dateCode group. |
+| `POST /scan/decode` | Server-side decode of a raw label value: body `{raw, targets?, supplierCode?, brands?}` → PDA `OcrParseResult` shape minus `raw` (`{matched, parsed, options, supplier?}`); templates, month-counter periods and `dateCodeFormat` are read from the DB/config (see `src/decode/`, spec `docs/superpowers/specs/2026-11-03-backend-scan-decode-design.md`). `matched:false` when no template hits — the client's OCR-text heuristics then take over. |
 
 ## Label printing
 
@@ -279,7 +284,7 @@ open receiving order's invoices/items, current shelf-stock lots, and
 `pickLabels` — one label per open-order allocation with the exact share qty
 (a lot/carton split across orders gets one label per share). Part-label
 `qrValue`s are built per the supplier QR template (`encodeKoaQty` /
-`buildKoaLabelRaw` in `src/db/scanParse.ts`; null for template-less
+`buildKoaLabelRaw` in `src/decode/codecs.ts`; null for template-less
 suppliers); receiving items and lots carry `pickingOrderRefs` for page
 filtering. Read-only.
 

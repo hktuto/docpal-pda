@@ -6,7 +6,7 @@ import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs, inventoryTransactions, receivingScanLabels } from "./schema/index.js";
 import { now } from "./now.js";
 import { emitEvent } from "./events.js";
-import { normalizePartNo, parseQrRaw } from "./scanParse.js";
+import { normalizePartNo, parseQrRaw } from "../decode/codecs.js";
 import { listDateCodePeriods } from "./dateCodePeriods.js";
 import { createPutAwayTaskTx } from "./putawaytasks.js";
 import { isStepEnabled, putAwayConfig, receivingSubInventoryRules, dateCodeFormat, type SubInventoryRuleGroup } from "../config.js";

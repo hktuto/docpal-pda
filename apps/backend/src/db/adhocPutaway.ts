@@ -9,7 +9,7 @@ import { newId } from "./id.js";
 import { now } from "./now.js";
 import { scheduleAllocateAll } from "./allocate.js";
 import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
-import { normalizePartNo } from "./scanParse.js";
+import { normalizePartNo } from "../decode/codecs.js";
 import { toCanonicalDateCode } from "./dateCode.js";
 import { dateCodeFormat } from "../config.js";
 

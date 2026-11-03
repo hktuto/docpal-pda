@@ -20,6 +20,7 @@ import { stockSearchRoute } from "./routes/stocksearch.js";
 import { boxesRoute } from "./routes/boxes.js";
 import { labelsRoute } from "./routes/labels.js";
 import { scanTemplatesRoute } from "./routes/scantemplates.js";
+import { scanDecodeRoute } from "./routes/decode.js";
 import { eventsRoute } from "./routes/events.js";
 import { printRoute } from "./routes/print.js";
 import { devRoute } from "./routes/dev.js";
@@ -59,6 +60,7 @@ app.route("/", stockSearchRoute);
 app.route("/", boxesRoute);
 app.route("/", labelsRoute);
 app.route("/", scanTemplatesRoute);
+app.route("/", scanDecodeRoute);
 app.route("/", eventsRoute);
 app.route("/", printRoute);
 // Demo-only routes (/dev/reset, /dev/allocate); disable with DEV_ROUTES=off.
