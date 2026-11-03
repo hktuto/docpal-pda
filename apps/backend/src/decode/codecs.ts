@@ -11,7 +11,7 @@
 // and convert it to the label format before KOA raw encoding.
 // ---------------------------------------------------------------------------
 
-import { toLabelDateCode, type DateCodeFormat } from "./dateCode.js";
+import { toLabelDateCode, type DateCodeFormat } from "../db/dateCode.js";
 
 const QTY_ENCODING_KOA_ZEROS = "koa_zeros";
 export const DATE_CODE_ENCODING_KOA_MONTH_COUNTER = "koa_month_counter";
