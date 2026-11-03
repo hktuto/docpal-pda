@@ -33,7 +33,6 @@ import {
   verifyPackage,
   type PickingIssueEntry,
 } from "../db/picking.js";
-import { scheduleAllocateAll } from "../db/allocate.js";
 import { resolveLabelPrintRulesForOrder } from "../db/labelPrint.js";
 import { labelCountForMatch, printOrderLabel } from "../db/labelPrintParams.js";
 import { actorFrom } from "../auth/middleware.js";
@@ -51,18 +50,11 @@ async function readJson<T>(c: Context): Promise<T> {
   }
 }
 
-// Priority/status-changing mutations (admin reorder / issue resolve)
-// recalculate allocations after commit — scheduled in the background, never
-// rolled back into the mutation response. Pick scans and package removal
-// deliberately do NOT: a pick consumes exactly what its allocation reserved
+// Allocation is manual-only: mutations never trigger a recompute. Pick scans
+// and package removals consume exactly what the allocation rows reserved
 // (reduceAllocation shrinks the row in the same tx, and scans are capped at
-// the allocation qty), so the fleet-wide invariant is preserved without a
-// rebuild — the old per-scan allocateAll only reshuffled priorities at the
-// cost of a multi-second full-fleet transaction blocking every concurrent
-// scan/finish on the same rows.
-function reallocateBestEffort(after: string): void {
-  scheduleAllocateAll(db, after);
-}
+// the allocation qty). Reorder / issue-resolve / admin edits leave the fleet
+// as-is — the admin applies changes via the per-order Re-allocate button.
 
 export const pickingRoute = new Hono();
 
@@ -102,13 +94,13 @@ pickingRoute.post("/picking-orders/report-issues", async (c) => {
   return c.json(result, 200);
 });
 
-// Admin reorder: { orderIds } in priority order → priority_seq 1..n, then
-// re-allocate. Registered before /picking-orders/:id like report-issues.
+// Admin reorder: { orderIds } in priority order → priority_seq 1..n. No
+// recompute — the new priority applies at the next Re-allocate. Registered
+// before /picking-orders/:id like report-issues.
 pickingRoute.post("/picking-orders/reorder", async (c) => {
   const body = await readJson<{ orderIds?: string[] }>(c);
   if (!Array.isArray(body.orderIds)) throw new HTTPException(400, { message: "orderIds is required" });
   const result = await reorderPickingOrders(db, { actorId: actorFrom(c).id, orderIds: body.orderIds });
-  reallocateBestEffort("reorder");
   return c.json(result, 200);
 });
 
@@ -375,8 +367,8 @@ pickingRoute.post("/shipping-boxes/:id/reopen", async (c) => {
   return c.json({ ok: true }, 200);
 });
 
-// Admin resolve of an open issue: back to pending (issue fields cleared),
-// then re-allocate so the order takes part in allocation again.
+// Admin resolve of an open issue: back to pending (issue fields cleared), so
+// the order re-enters allocation demand at the next Re-allocate.
 pickingRoute.post("/picking-orders/:id/resolve-issue", async (c) => {
   const body = await readJson<{ resolutionNote?: string }>(c);
   const result = await resolvePickingOrderIssue(db, {
@@ -384,7 +376,6 @@ pickingRoute.post("/picking-orders/:id/resolve-issue", async (c) => {
     actorId: actorFrom(c).id,
     resolutionNote: body.resolutionNote ?? null,
   });
-  reallocateBestEffort("issue resolve");
   return c.json(result, 200);
 });
 

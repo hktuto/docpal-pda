@@ -342,7 +342,8 @@
 - Per-order issue reporting (`POST /picking-orders/report-issues`). An issued
   order is frozen (scan/unpack 409, excluded from `allocateAll`) until an
   admin resolves it — `POST /picking-orders/:id/resolve-issue` returns it to
-  `pending`, clears the `issue_*` columns and re-allocates (admin Issues page
+  `pending` and clears the `issue_*` columns; the order re-enters demand at the
+  next recompute (admin Issues page
   `apps/admin/pages/issues/picking.vue` + picking order detail). The full
   history (report, resolve, and all other transitions) is visible on the
   admin detail's audit-log table (`GET /admin/picking-orders/:id/logs`,
@@ -356,12 +357,13 @@
   a read-only page with a "held by <name>" banner.
 - Allocation priority: `picking_orders.priority_seq` (lower = allocated
   first) drives both `allocateAll` demand order and the picking list order;
-  `POST /picking-orders/reorder` rewrites it and re-allocates (admin UI
-  comes with the console revamp).
+  `POST /picking-orders/reorder` rewrites it; the new order applies at the next
+  recompute (allocation is manual-only).
 - Admin manual allocation triggers (spec
-  `docs/superpowers/specs/2026-09-14-admin-allocation-buttons-design.md`):
-  "Allocate all" on the admin picking-order list page awaits the full
-  `allocateAll` via `POST /admin/allocation/run`; "Re-allocate" on the admin
+  `docs/superpowers/specs/2026-09-14-admin-allocation-buttons-design.md`; the
+  fleet-wide "Allocate all" button and `POST /admin/allocation/run` were removed
+  by `docs/superpowers/specs/2026-11-03-allocation-manual-only-design.md`):
+  "Re-allocate" on the admin
   picking-order detail page (visible while pending/picking/allocated) awaits
   `POST /admin/picking-orders/:id/reallocate` — a recompute scoped to that
   order's part keys (`allocateForPickingOrder`), which also rebuilds sibling
@@ -480,9 +482,8 @@
   clears it) via `PATCH /admin/picking-orders/:id`
   (`apps/backend/src/db/adminedits.ts` `updatePickingDeliveryDate` /
   `updatePickingOrderFields`). Each change writes a `transaction_logs`
-  `admin_edit` audit row (metadata field/from/to); a location change also
-  schedules a background `allocateAll` because location-matched allocations
-  go stale. The detail grid also shows the read-only `picking_order_type`
+  `admin_edit` audit row (metadata field/from/to); a location change leaves
+  location-matched allocations stale until the admin re-allocates. The detail grid also shows the read-only `picking_order_type`
   and `remark` (also list columns; the list filters type client-side,
   invoice/tn).
 - Admin status override (spec
@@ -502,8 +503,9 @@
   leaving `issue` clears the issue fields. Same-status calls are no-ops
   (`changed: false`, no audit row). On change: one tx writes the status +
   `transaction_logs` transition (`metadata.override = true`, optional
-  `reason`) + `picking_order.updated` SSE, and the route schedules a
-  background `allocateAll` (reopening re-enters demand). The batch action
+  `reason`) + `picking_order.updated` SSE, and the route schedules no
+  recompute (allocation is manual-only — reopening re-enters demand at the
+  next Re-allocate). The batch action
   (`flow.overridePickingOrdersStatus`) loops the route per id with
   per-order failure aggregation, same contract as `shipShippingBoxes`; both
   pages share `apps/admin/components/picking-orders/StatusOverrideModal.vue`
@@ -718,8 +720,9 @@
   an app kill/crash relies on the 10-min expiry — an abandoned order can hold
   its allocations for up to 10 minutes. No force-release yet (admin console
   revamp); no lock stealing.
-- **Allocation ids are unstable between scan and boxing:** post-scan
-  `allocateAll` rebuilds an item's allocation rows with new ids until its
+- **Allocation ids are unstable between scan and boxing:** a recompute
+  (manual Re-allocate / confirm-arrival) rebuilds an item's allocation rows
+  with new ids until its
   packages are boxed, so the detail page re-fetches after every scan/box
   mutation instead of caching allocation ids (documented in
   `docs/backend/README.md`).

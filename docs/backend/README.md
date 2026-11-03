@@ -64,8 +64,8 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     boxes.
   - `POST /receiving-orders/:id/confirm-arrival` (no body) — pending or
     provisional_received → `in_hand` with full receipt, date-code fallback,
-    RECEIVE_TO_DOCK ledger rows, a transition log, then a best-effort
-    `allocateAll` (concepts 4-5).
+    RECEIVE_TO_DOCK ledger rows, a transition log, then a synchronous scoped
+    recompute (`allocateForReceivingOrder`, concepts 4-5).
   - `POST /receiving-orders/:id/scan` `{raw?, partNo?, qty, ...}` —
     QR-template parse (supplier profile, `koa_zeros` qty decoding,
     `koa_month_counter` date-code decoding) → match
@@ -122,12 +122,12 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     lots are deleted with their ledger rows detached).
   - `POST /shelf-boxes/:id/add-all-unboxed` (no body) → `{count}` /
     `POST /shelf-boxes/:id/close` (no body) — bulk assign / close box;
-    lot-changing mutations run `allocateAll` best-effort after commit, and
+    lot-changing mutations trigger no recompute (allocation is manual-only), and
     fully put-away `in_hand` orders auto-flip to `clear` (+ transition log).
 - Picking flow (`apps/backend/src/routes/picking.ts`):
   - `GET /picking-orders?status=` — list with per-order item counts,
     total/picked quantities, and `allocationStatus`/`allocatedQty` (order-level
-    allocation coverage recomputed by every `allocateAll`: `allocated` when
+    allocation coverage recomputed by every allocation run: `allocated` when
     Σ allocated = Σ open qty, `partial` between, `unallocated` when nothing is
     reserved). `?status=shipped` lists shipped orders.
   - `GET /picking-orders/:id` — nested detail: order (incl. issue fields +
@@ -155,8 +155,8 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     rows per portion (reserved −qty / on_hand −qty), order `pending →
     picking`; 409 `scanned_qty_exceeds_allocation` / `scan_qty_exceeds_required`.
   - `DELETE /packages/:id` (no body) — remove an unboxed, unverified
-    package, reversing source + allocation + ledger. Scan and removal run
-    `allocateAll` best-effort after commit.
+    package, reversing source + allocation + ledger. Scan and removal consume
+    the reserved rows in-tx — no recompute (allocation is manual-only).
   - `POST /packages/:id/verify` (no body) — measuring/verify-time verification
     (package must be boxed — 409 `package_not_in_box`). With the box **open**
     (measuring pass) `verified` is set — no task involved; with the box
@@ -207,8 +207,8 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     `{id, orderNo, status}` — 409 `picking_order_no_open_issue` unless the order
     is in `issue`; returns it to `pending`, clears the `issue_*` columns,
     writes the `issue`→`pending` transition log (metadata
-    `{reason, resolutionNote}`), emits `picking_order.updated`, then best-effort
-    `allocateAll`.
+    `{reason, resolutionNote}`), emits `picking_order.updated`
+    (re-allocation is manual — the admin presses Re-allocate).
   - `POST /picking-orders/:id/work-lock` (no body) → `{orderId, workingBy}` —
     acquire/refresh the page work lock (idempotent per user; 409 `lock_held`
     with `{holderId, holderName}` when another user holds a fresh lock; the
@@ -218,7 +218,8 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     finishing an order clears its lock.
   - `POST /picking-orders/reorder` `{orderIds[]}` → `{reordered}` — rewrites
     `priority_seq` 1..n in the given order (400 `invalid_order_ids` for
-    unknown/finished ids), emits `picking.reordered`, then runs `allocateAll`.
+    unknown/finished ids), emits `picking.reordered`; the new priority takes
+    effect at the next recompute (manual-only).
     The list endpoint sorts by `priority_seq` (allocation order).
 - Measuring flow (`apps/backend/src/routes/measuring.ts`; spec
   `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`)
@@ -316,7 +317,7 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     updated task — pending → `verified` (+ transition log); a `countedQty`
     mismatch corrects lot `total_qty` (409 `counted_qty_below_allocated` so
     `available_qty` never goes negative) and writes an ADJUST `on_hand`
-    ledger row, then runs `allocateAll` best-effort after commit; a task with
+    ledger row; a task with
     a box marks its `shelf_box_items` verified and transitions the box
     `closed → verified` (+ log; 409 `shelf_box_not_closed` when still open).
     Guards: 404 `goods_verify_task_not_found`, 400 `actor_not_found`, 409
@@ -382,10 +383,10 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   Mutations insert event rows inside their own transaction via
   `emitEvent` (`src/db/events.ts`); each open stream polls
   `WHERE id > since` every ~1.5 s (heartbeat comment every 25 s) and rows are
-  pruned after 3 days. Catalog: `allocation.computed` (from `allocateAll`,
-  only on net allocation change), `allocation.started` (background runner
-  begins a run, data `{trigger}`), `allocation.finished` (every `allocateAll`
-  / scoped `allocateForReceivingOrder` run, data `{...summary, changed}` —
+  pruned after 3 days. Catalog: `allocation.computed` (from any allocation
+  run, only on net allocation change), `allocation.started` (a runner task
+  begins — snapshot restores only now, data `{trigger}`), `allocation.finished` (every engine / scoped
+  run, data `{...summary, changed}` —
   lets UIs that triggered a recompute tell the user when it completes), `picking_order.created` /
   `picking_order.updated` (also on issue resolve), `picking_order.issue_reported`,
   `shipping_box.shipped` (per-box ship confirm, topics `/shipping-orders` +
@@ -464,7 +465,8 @@ arrive via upstream sync / DocPal auth.
   rejects a repeat serial of the same part with `409 label_already_scanned`;
   scans without a serial
   skip dedup. The same table can be reused for put-away scan dedup later.
-- **Allocation ids are unstable between scan and boxing:** post-scan
-  `allocateAll` rebuilds a picking item's allocation rows until its packages
-  are boxed (`allocatedQty` appears to "resurrect"). Web clients must re-fetch
+- **Allocation ids are unstable between scan and boxing:** a recompute
+  (manual Re-allocate / confirm-arrival) rebuilds a picking item's allocation
+  rows until its packages are boxed (`allocatedQty` appears to "resurrect").
+  Web clients must re-fetch
   allocations rather than cache allocation ids.

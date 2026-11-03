@@ -13,7 +13,6 @@ import { normalizePartNo } from "../decode/codecs.js";
 import { lookupAdHocPutAwayPart } from "./adhocPutaway.js";
 import { toCanonicalDateCode } from "./dateCode.js";
 import { dateCodeFormat } from "../config.js";
-import { scheduleAllocateAll } from "./allocate.js";
 
 // Shelf exchange domain logic (spec 2026-10-12-shelf-exchange-design.md):
 // move stock from one shelf to another. Scan-driven, order-free; qty comes
@@ -389,5 +388,3 @@ export async function commitShelfExchange(
   });
 }
 
-/** Re-export for route scheduling (same pattern as adhocPutaway.ts). */
-export { scheduleAllocateAll };

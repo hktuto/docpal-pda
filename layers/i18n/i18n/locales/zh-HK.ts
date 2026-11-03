@@ -1820,8 +1820,6 @@ export default {
         detailTitle: "揀貨單 {orderNo}",
         downloadPickingList: "下載揀貨清單",
         pickingListError: "揀貨清單下載失敗",
-        allocateAll: "全部分配",
-        allocateAllConfirm: "重新分配所有未完成的揀貨單？正在 PDA 上操作的訂單（工作鎖定）會被略過。",
         reallocate: "重新分配",
         reallocateConfirm: "重新分配訂單 {orderNo}？",
         allocationDoneIn: "分配完成（{ms} ms）— 資料已更新。",

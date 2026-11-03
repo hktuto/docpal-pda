@@ -5,7 +5,6 @@ import type { AppDb } from "../db.js";
 import { queryGet, queryRun } from "./query.js";
 import { transactionLogs } from "./schema/index.js";
 import { now } from "./now.js";
-import { scheduleAllocateAll } from "./allocate.js";
 
 // ---------------------------------------------------------------------------
 // Admin console edits to flow data (not master data): picking order delivery
@@ -121,7 +120,6 @@ export async function updatePickingOrderFields(
       from: { orgId: existing.orgId, subInventoryCode: existing.subInventoryCode },
       to: { orgId: input.orgId ?? null, subInventoryCode: input.subInventoryCode ?? null },
     });
-    scheduleAllocateAll(db, "admin_edit");
   }
   return { id: input.orderId };
 }

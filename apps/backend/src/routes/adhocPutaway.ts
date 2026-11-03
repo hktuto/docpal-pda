@@ -7,7 +7,6 @@ import {
   listAdHocPutAwayLocations,
   listAdHocPutAwayBrands,
   lookupAdHocPutAwayPart,
-  scheduleAllocateAll,
 } from "../db/adhocPutaway.js";
 import { actorFrom } from "../auth/middleware.js";
 
@@ -104,8 +103,6 @@ adHocPutAwayRoute.post("/ad-hoc-put-away", async (c) => {
       })),
       actorId: actorFrom(c).id,
     });
-    // New stock may affect picking — re-run allocation in the background.
-    scheduleAllocateAll(db, "ad-hoc put-away");
     return c.json(result, 201);
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";

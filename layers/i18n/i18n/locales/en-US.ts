@@ -1821,8 +1821,6 @@ export default {
         detailTitle: "Picking Order {orderNo}",
         downloadPickingList: "Download picking list",
         pickingListError: "Picking list download failed",
-        allocateAll: "Allocate all",
-        allocateAllConfirm: "Re-run allocation for ALL open picking orders? Orders currently open on a PDA (work-locked) are skipped.",
         reallocate: "Re-allocate",
         reallocateConfirm: "Re-run allocation for order {orderNo}?",
         allocationDoneIn: "Allocation finished in {ms} ms — data refreshed.",

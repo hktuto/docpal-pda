@@ -157,7 +157,7 @@ API call touching N rows produces N events).
 (Seed/reset paths (`db:seed`, `POST /dev/reset`) set
 `SET LOCAL app.sync_events_off = 1` so demo reseeding does not flood the
 table; the trigger checks the same setting. Warehouse-originated side
-effects of a synced change (the post-batch `allocateAll` recompute) run in
+effects of synced data (a manual Re-allocate recompute) run in
 their own transaction and ARE recorded.)
 
 ## Related: the SSE typed events (separate mechanism)

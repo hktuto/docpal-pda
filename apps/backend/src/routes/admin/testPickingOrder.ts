@@ -5,7 +5,7 @@ import { db } from "../../db.js";
 import { pickingOrders, pickingItems } from "../../db/schema/picking.js";
 import { subInventories } from "../../db/schema/master.js";
 import { newId } from "../../db/id.js";
-import { scheduleAllocateAll } from "../../db/allocate.js";
+import { allocateForPickingOrder } from "../../db/allocate.js";
 import { eq, and } from "drizzle-orm";
 
 // Test picking order creator — lets admin users create picking orders from
@@ -130,8 +130,13 @@ adminTestPickingOrderRoute.post("/picking-orders/test-create", async (c) => {
     }
   });
 
-  // Schedule allocation so the order enters the pipeline like a real one
-  scheduleAllocateAll(db, "test_order_create");
+  // Allocate the new order synchronously (scoped run) so the demo/test flow
+  // enters the pipeline like a real one — no background fleet recompute exists.
+  try {
+    await allocateForPickingOrder(db, orderId);
+  } catch (err) {
+    console.error("allocation after test-order create failed; order stays unallocated until Re-allocate", err);
+  }
 
   return c.json(
     {

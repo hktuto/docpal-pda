@@ -22,8 +22,9 @@
   columns.
 - Confirm arrival (flips the order toward `in_hand`, re-stamps each item's
   `sub_inventory_code` from the configured `receivingSubInventoryRules`
-  org/po-pattern rules, and triggers the backend's best-effort allocation
-  pass).
+  org/po-pattern rules, and awaits the backend's scoped allocation
+  recompute (`allocateForReceivingOrder`; failure leaves demand stale until
+  the admin re-allocates)).
 - Label scanning with **server-side parse/match**: the raw label goes to
   `POST /receiving-orders/:id/scan`; on a 409 `{message, candidates}`
   (`no_match` / `multiple_matches`) the review modal lets the operator pick
@@ -284,8 +285,8 @@
   tasks are never touched); `arrived_at`/`arrived_by` are stamped when
   entering `in_hand`, cleared when moving back below it, preserved on
   `in_hand → clear`; same-status no-op; audit transition log
-  (`metadata.override`) + `receiving_order.upserted` SSE + background
-  `allocateAll` on change. UI: "Override status" on the admin receiving
+  (`metadata.override`) + `receiving_order.upserted` SSE + a synchronous scoped
+  recompute (`allocateForReceivingOrder`) on change. UI: "Override status" on the admin receiving
   detail and a batch "Override status (n)" over the multi-selectable admin
   receiving list, both via the shared
   `apps/admin/components/receiving/StatusOverrideModal.vue` (reopen/backward
@@ -335,8 +336,9 @@
 - `apps/backend/src/db/ingest.ts` — reusable sync apply layer for upstream
   receiving orders (replaced the retired `PUT /receiving-orders/:batchNo`
   ingest route and the ElectricSQL consumer).
-- `apps/backend/src/db/allocate.ts` — `allocateAll` runs best-effort after
-  confirm-arrival and other stock-changing commits.
+- `apps/backend/src/db/allocate.ts` — manual-only allocation: confirm-arrival
+  and the admin Re-allocate buttons run the scoped recompute; `allocateAll` is
+  dev/test-only (`POST /dev/allocate`).
 - `apps/backend/src/routes/admin/receivingCn.ts` +
   `apps/backend/src/db/receivingCn.ts` + `apps/backend/src/docpalWorkflow.ts`
   + `apps/backend/src/jobs/receivingCnSync.ts` — CN customer receiving

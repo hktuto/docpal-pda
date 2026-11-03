@@ -1417,7 +1417,8 @@ test("resolve-issue: report → resolve → pending, issue fields cleared, log; 
   );
   assert.deepEqual(evt!.topics, ["/picking-orders"]);
 
-  // participates in allocation again (the route runs allocateAll post-commit)
+  // participates in allocation again on the next recompute (routes no longer
+  // run it automatically — allocation is manual-only)
   const afterResolve = await allocateAll(client.db);
   assert.equal(afterResolve.demands, 3);
   assert.ok((await itemStateOf(itemId)).allocatedQty > 0);

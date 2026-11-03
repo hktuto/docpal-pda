@@ -22,8 +22,9 @@ let client: TestDb;
 let app: (typeof import("../../index.js"))["app"];
 let token: string;
 
-// A status change schedules the background allocateAll; its row locks can
-// deadlock the next reseed's TRUNCATE, so wait for the runner to settle first.
+// Status overrides run their scoped allocation synchronously, but the
+// snapshot-restore runner can still hold row locks that would deadlock the
+// next reseed's TRUNCATE, so wait for it to settle first.
 async function waitForAllocationIdle(): Promise<void> {
   for (let i = 0; i < 250; i++) {
     const s = getAllocationRunStatus();

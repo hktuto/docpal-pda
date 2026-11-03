@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import { db } from "../../db.js";
 import { queryGet } from "../../db/query.js";
-import { allocateForPickingOrder, allocateForReceivingOrder, addManualPickingAllocation, removePickingAllocation, transferPickingAllocation, awaitAllocateAll } from "../../db/allocate.js";
+import { allocateForPickingOrder, allocateForReceivingOrder, addManualPickingAllocation, removePickingAllocation, transferPickingAllocation } from "../../db/allocate.js";
 import { actorFrom } from "../../auth/middleware.js";
 import { reallocateReceivingItemDemand } from "../../db/receivingReallocate.js";
 import { allocatePickingItemFromSources, allocatePickingGroupFromSources, type AllocateFormRow } from "../../db/pickingAllocateForm.js";
@@ -11,23 +11,13 @@ import { captureAllocationSnapshot, restoreLatestAllocationSnapshot } from "../.
 
 // Manual allocation triggers for the admin console (spec
 // docs/superpowers/specs/2026-09-14-admin-allocation-buttons-design.md).
-// Unlike mutation routes (which schedule the recompute in the background),
-// these await it in the request — an admin clicked a button and wants the
-// result now. allocateAll / allocateForPickingOrder emit the usual
-// allocation.computed / allocation.finished SSE events inside their tx, so
-// other open pages converge via their change notices.
+// These await the recompute in the request — an admin clicked a button and
+// wants the result now. The scoped runs emit the usual allocation.computed /
+// allocation.finished SSE events inside their tx, so other open pages converge
+// via their change notices. There is no fleet-wide "Allocate all" run any
+// more: allocation is manual-only, order by order.
 
 export const adminAllocationRoute = new Hono();
-
-// "Allocate all" on the picking order list: full-fleet recompute.
-// Routed through the serialized background runner (awaited until it goes
-// idle) rather than calling allocateAll directly: a direct call could
-// interleave with a run scheduled by a concurrent mutation, and two
-// concurrent wipe/rebuild passes used to leave duplicate allocation rows.
-adminAllocationRoute.post("/allocation/run", async (c) => {
-  const summary = await awaitAllocateAll(db, "admin run");
-  return c.json(summary);
-});
 
 adminAllocationRoute.post("/allocation/snapshot", async (c) => {
   const summary = await captureAllocationSnapshot(db, actorFrom(c).id);

@@ -625,8 +625,9 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
 //     immediately.
 //   - allocateForPickingOrder: the admin "Re-allocate" button — one picking
 //     order's part keys, with 404/409 guards before the tx.
-// allocateAll stays the background path for cross-part changes (order
-// create/cancel, priority reorder, picks, sync batches).
+// allocateAll is no longer scheduled by mutation routes — allocation is
+// manual-only (spec docs/superpowers/specs/2026-11-03-allocation-manual-only-design.md).
+// It remains the dev/test fleet-wide rebuild (`POST /dev/allocate`).
 // NOTE: runScopedAllocation mirrors allocateAll's wipe/rebuild mechanics on
 // purpose — keep those in sync when the allocation rules change — but
 // deliberately diverges with the perfect-match pre-pass (file-header
@@ -1938,12 +1939,11 @@ async function runScopedAllocation(
 }
 
 // ---------------------------------------------------------------------------
-// Background scheduler. allocateAll is a full-fleet recompute, so mutation
-// routes must not await it in the request path (a confirm-arrival / scan
-// would otherwise hang for the whole recompute). scheduleAllocateAll runs it
-// after the response, serialized: one run at a time, and triggers that arrive
-// during a run coalesce into a single follow-up run. UI freshness comes from
-// the allocation.computed SSE event, not the mutation response.
+// Background scheduler. The engine is manual-only now: nothing schedules a
+// fleet recompute automatically. The runner stays because snapshot restore
+// serializes through it (awaitAllocationTask) and scheduleAllocateAll /
+// awaitAllocateAll remain for tests + the dev escape hatch; triggers that
+// arrive during a run coalesce into a single follow-up run.
 // ---------------------------------------------------------------------------
 
 let allocateActive = false;

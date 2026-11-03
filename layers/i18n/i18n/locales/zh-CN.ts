@@ -1820,8 +1820,6 @@ export default {
         detailTitle: "拣货单 {orderNo}",
         downloadPickingList: "下载拣货清单",
         pickingListError: "拣货清单下载失败",
-        allocateAll: "全部分配",
-        allocateAllConfirm: "重新分配所有未完成的拣货单？正在 PDA 上操作的订单（工作锁定）会被跳过。",
         reallocate: "重新分配",
         reallocateConfirm: "重新分配订单 {orderNo}？",
         allocationDoneIn: "分配完成（{ms} ms）— 数据已更新。",

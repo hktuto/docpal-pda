@@ -8,7 +8,6 @@ import {
   listCnPutAwayTasks,
   type CompleteCnPutAwayItemInput,
 } from "../db/putawayCn.js";
-import { scheduleAllocateAll } from "../db/allocate.js";
 import { actorFrom } from "../auth/middleware.js";
 import { cnReceiving } from "../config.js";
 
@@ -51,13 +50,12 @@ putawayCnRoute.get("/put-away-cn/tasks/:id", async (c) => {
 
 // Complete CN put-away items in one tx: put_away_qty updates + on-hand lot
 // upserts + PUT_AWAY ledger rows; the task completes when every item is fully
-// put away. The allocation recompute is scheduled after commit.
+// put away.
 putawayCnRoute.post("/put-away-cn/tasks/:id/complete", async (c) => {
   assertCnEnabled();
   const body = await readJson<{ items?: CompleteCnPutAwayItemInput[] }>(c);
   const result = await db.transaction(async (tx) =>
     completeCnPutAwayTx(tx, { taskId: c.req.param("id"), items: body.items ?? [], actorId: actorFrom(c).id })
   );
-  scheduleAllocateAll(db, "cn put-away complete");
   return c.json(result, 200);
 });

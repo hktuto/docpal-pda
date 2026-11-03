@@ -7,7 +7,6 @@ import { shelves, parts, subInventories } from "./schema/master.js";
 import { inventoryLabels } from "./schema/inventory-labels.js";
 import { newId } from "./id.js";
 import { now } from "./now.js";
-import { scheduleAllocateAll } from "./allocate.js";
 import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
 import { normalizePartNo } from "../decode/codecs.js";
 import { toCanonicalDateCode } from "./dateCode.js";
@@ -101,7 +100,7 @@ export async function lookupAdHocPutAwayPart(
  * 3. For each item: find-or-create inventory_lots row, increment total_qty,
  *    write inventory_transactions ledger row.
  * 4. Insert ad_hoc_put_aways audit row.
- * 5. Schedule allocateAll (background — new stock may affect picking).
+ * New stock takes part in allocation at the admin's next Re-allocate.
  */
 export async function commitAdHocPutAway(
   db: AppDb,
@@ -331,9 +330,6 @@ export async function listAdHocPutAwayBrands(
     .orderBy(parts.brand);
   return { brands: rows.map((r) => r.brand) };
 }
-
-// Re-export for route scheduling
-export { scheduleAllocateAll };
 
 // ---------------------------------------------------------------------------
 // Admin read-only queries

@@ -207,15 +207,6 @@ export interface CountryRow {
 
 // ---- receiving ----
 
-export interface AllocateAllSummary {
-  demands: number;
-  fullyAllocated: number;
-  partiallyAllocated: number;
-  allocationsCreated: number;
-  allocationsRemoved: number;
-  skippedReceivingSources: number;
-}
-
 export interface AllocationRunSummary {
   demands: number;
   fullyAllocated: number;
@@ -1200,12 +1191,12 @@ export function useFlowApi() {
     getPickingOrder: (id: string) => api.get<PickingOrderDetail>(`/picking-orders/${id}`),
     reorderPickingOrders: (orderIds: string[]) =>
       api.post<{ reordered: number }>(`/picking-orders/reorder`, { orderIds }),
-    // Manual allocation triggers — both await the recompute in the request.
-    allocateAll: () => api.post<AllocateAllSummary>(`/admin/allocation/run`, {}),
+    // Manual allocation triggers — both await the scoped recompute in the
+    // request. There is no fleet-wide run: allocation is manual-only.
     reallocatePickingOrder: (id: string) =>
       api.post<{ allocation: AllocationRunSummary }>(`/admin/picking-orders/${id}/reallocate`, {}),
-    // allocation is null when the scoped recompute fell back to the
-    // background full recompute (same as confirm-arrival).
+    // allocation is null when the scoped recompute failed (same as
+    // confirm-arrival) — demand stays stale until the next Re-allocate.
     reallocateReceivingOrder: (id: string) =>
       api.post<{ allocation: AllocationRunSummary | null }>(`/admin/receiving-orders/${id}/reallocate`, {}),
     removePickingAllocation: (orderId: string, itemId: string, allocationId: string) =>

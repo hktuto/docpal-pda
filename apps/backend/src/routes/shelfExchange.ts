@@ -5,7 +5,6 @@ import { db } from "../db.js";
 import {
   previewShelfExchange,
   commitShelfExchange,
-  scheduleAllocateAll,
 } from "../db/shelfExchange.js";
 import { actorFrom } from "../auth/middleware.js";
 
@@ -88,7 +87,5 @@ shelfExchangeRoute.post("/shelf-exchange", async (c) => {
     qty: body.qty,
     actorId: actorFrom(c).id,
   });
-  // The stock moved location — re-run allocation in the background.
-  scheduleAllocateAll(db, "shelf exchange");
   return c.json(result, 201);
 });

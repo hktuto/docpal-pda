@@ -1,6 +1,5 @@
 // Route-level tests for the admin manual allocation triggers (spec
 // 2026-09-14-admin-allocation-buttons-design.md):
-//   POST /admin/allocation/run                  — full-fleet recompute
 //   POST /admin/picking-orders/:id/reallocate   — recompute scoped to the
 //     order's part keys (404 unknown / 409 order_not_open / 409 lock_held)
 //   POST /admin/receiving-orders/:id/reallocate — same scoped recompute for
@@ -230,9 +229,7 @@ test("allocate-all: full recompute returns the summary and rebuilds allocations"
   await seedScenario();
   await client.db.execute(sql`DELETE FROM allocations`);
 
-  const res = await req(`/admin/allocation/run`, { method: "POST" });
-  assert.equal(res.status, 200);
-  const summary = await res.json();
+  const summary = await allocateAll(client.db);
   assert.ok(summary.demands > 0);
   assert.ok(summary.allocationsCreated > 0);
 
@@ -410,8 +407,7 @@ test("manual-allocate: pins a lot allocation that survives allocate-all", async 
 
   // Full-fleet recompute must preserve the pinned row and auto-allocate only
   // the remaining demand around it (orderA 600-200=400, orderB 400 → lot).
-  const run = await req(`/admin/allocation/run`, { method: "POST" });
-  assert.equal(run.status, 200);
+  await allocateAll(client.db);
 
   const manual = await queryGet<{ id: string; qty: number }>(
     client.db,
@@ -481,8 +477,7 @@ test("manual-allocate: receiving source is pinned and netted out of dock availab
   assert.equal(res.status, 200);
   const { allocationId } = await res.json();
 
-  const run = await req(`/admin/allocation/run`, { method: "POST" });
-  assert.equal(run.status, 200);
+  await allocateAll(client.db);
 
   const manual = await queryGet<{ id: string }>(
     client.db,
@@ -894,8 +889,7 @@ test("part-demand: lists open picking items with remaining uncovered qty", async
   assert.equal(p2[0].remainingQty, 100);
 
   // Fully-allocated parts drop off the list entirely.
-  const run = await req(`/admin/allocation/run`, { method: "POST" });
-  assert.equal(run.status, 200);
+  await allocateAll(client.db);
   const res4 = await req(`/admin/part-demand?partNo=REALLOC-P1`);
   assert.deepEqual((await res4.json()).demand, []);
 
@@ -1737,8 +1731,7 @@ test("part-allocations: per-order breakdown with manual, source location and loc
     body: JSON.stringify({ qty: 200, inventoryLotId: "LOT-PA-1" }),
   });
   assert.equal(pin.status, 200);
-  const run = await req(`/admin/allocation/run`, { method: "POST" });
-  assert.equal(run.status, 200);
+  await allocateAll(client.db);
 
   const res = await req(`/admin/part-allocations?partNo=REALLOC-P1`);
   assert.equal(res.status, 200);
@@ -1897,8 +1890,7 @@ test("transfer: full qty moves a manual source pin onto the target and survives 
 
   // The pin survives a full wipe/rebuild: orderA gets 300 more auto, orderB
   // its 400 — the lot is exactly covered (300 pin + 300 auto + 400 auto).
-  const run = await req(`/admin/allocation/run`, { method: "POST" });
-  assert.equal(run.status, 200);
+  await allocateAll(client.db);
   const pinAfter = await queryGet<{ qty: number }>(
     client.db,
     sql`SELECT qty FROM allocations WHERE id = ${body.allocationId} AND manual`

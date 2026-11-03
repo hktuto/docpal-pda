@@ -1,12 +1,12 @@
 <script setup lang="ts">
-// Global "background allocation running" chip in the sidebar. Covers the
-// long-running full allocateAll runs triggered by order changes (create /
-// cancel / reorder / picks / sync). The scoped confirm-arrival recompute is
-// synchronous and handled by the receiving detail page itself.
+// Global "allocation runner busy" chip in the sidebar. Fleet-wide background
+// recomputes are gone (allocation is manual-only); the runner still executes
+// allocation-snapshot restores, so this stays as its busy indicator. The
+// scoped Re-allocate runs are synchronous and handled by their pages.
 // State comes from GET /allocation/status (catches runs already in flight
 // when the app loads) plus the allocation.started / allocation.finished SSE
 // events; a finished event re-fetches the status because a scoped run's
-// finished can arrive while a background run is still going.
+// finished can arrive while a runner task is still going.
 const api = useApi();
 const events = useAdminEvents();
 const running = ref(false);

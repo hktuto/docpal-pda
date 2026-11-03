@@ -170,35 +170,6 @@ watch(search, () => {
 
 onMounted(load);
 
-// "Allocate all": awaited full-fleet recompute. Work-locked orders (open on
-// a PDA) are skipped by the engine — the confirm text says so.
-const allocating = ref(false);
-const allocDoneMs = ref(0);
-let allocDoneTimer: ReturnType<typeof setTimeout> | undefined;
-
-async function allocateAllNow() {
-  if (allocating.value) return;
-  if (!window.confirm(t("admin.pages.pickingOrders.allocateAllConfirm"))) return;
-  allocating.value = true;
-  error.value = "";
-  const startedAt = Date.now();
-  try {
-    await flow.allocateAll();
-    await load();
-    clearTimeout(allocDoneTimer);
-    allocDoneMs.value = Date.now() - startedAt;
-    allocDoneTimer = setTimeout(() => {
-      allocDoneMs.value = 0;
-    }, 8000);
-  } catch (e: any) {
-    error.value = e.message;
-  } finally {
-    allocating.value = false;
-  }
-}
-
-onBeforeUnmount(() => clearTimeout(allocDoneTimer));
-
 // Batch "Set status": one override per selected order (the API helper
 // attempts every id and lists per-order failures on `failed`, same as the
 // shipping batch). The modal is shared with the detail page.
@@ -259,9 +230,6 @@ const {
       <h1>{{ $t("admin.pages.pickingOrders.title") }}</h1>
       <div class="head-actions">
         <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
-        <button class="btn" :disabled="allocating" @click="allocateAllNow">
-          {{ allocating ? $t("admin.common.saving") : $t("admin.pages.pickingOrders.allocateAll") }}
-        </button>
         <button
           class="btn"
           :disabled="selectedIds.length === 0 || overriding"
@@ -304,9 +272,6 @@ const {
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
-    <div v-if="allocDoneMs" class="alloc-done-banner">
-      {{ $t("admin.pages.pickingOrders.allocationDoneIn", { ms: allocDoneMs }) }}
-    </div>
     <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 

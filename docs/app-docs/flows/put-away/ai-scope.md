@@ -32,8 +32,8 @@
   row (no dock row — the CN path has no RECEIVE_TO_DOCK ledger) with no
   `inventory_lot_sources` row (the CN item id lives in the ledger metadata,
   `reference_type 'receiving_order_cn'`); a full put-away flips the order
-  `clear` and schedules `allocateAll`, so CN stock only appears in allocation
-  after put-away completes.
+  `clear`; CN stock takes part in allocation only after put-away completes and
+  the admin re-allocates (manual-only).
   The PDA side is the SAME put-away pages branching on the flag, not a
   separate page set: `useFlowSteps.ts` exposes a shared `cnReceiving` ref
   (from `GET /config`), and `pages/put-away/index.vue` / `[id].vue` switch

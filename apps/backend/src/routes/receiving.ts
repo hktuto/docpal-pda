@@ -13,7 +13,7 @@ import {
   reportReceivingItemMismatch,
   scanReceivingOrder,
 } from "../db/receiving.js";
-import { scheduleAllocateAll, allocateForReceivingOrder } from "../db/allocate.js";
+import { allocateForReceivingOrder } from "../db/allocate.js";
 import { actorFrom } from "../auth/middleware.js";
 import { allowedOrgFilter } from "../db/org-filter.js";
 import { getUserScope, receivingOrderScopeFilter, userScopeFilter } from "../db/user-scope.js";
@@ -476,8 +476,8 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
 // the order), writes RECEIVE_TO_DOCK ledger rows + a transition log, then runs
 // the allocation recompute SCOPED to this order's part keys
 // (allocateForReceivingOrder) synchronously — it only touches demands/sources
-// of those parts, so it fits in the request. On scoped failure it falls back
-// to the background full recompute (allocation: null in the response).
+// of those parts, so it fits in the request. On scoped failure the demand
+// stays stale until the next Re-allocate (allocation: null in the response).
 // Accepts pending and provisional_received orders (a provisional order is
 // completed to full receipt).
 receivingRoute.post("/receiving-orders/:id/confirm-arrival", async (c) => {
@@ -486,8 +486,7 @@ receivingRoute.post("/receiving-orders/:id/confirm-arrival", async (c) => {
     const allocation = await allocateForReceivingOrder(db, c.req.param("id"));
     return c.json({ ...result, allocation }, 200);
   } catch (err) {
-    console.error("scoped allocation after confirm-arrival failed; falling back to background allocateAll", err);
-    scheduleAllocateAll(db, "confirm-arrival");
+    console.error("scoped allocation after confirm-arrival failed; demand stays stale until the next Re-allocate", err);
     return c.json({ ...result, allocation: null }, 200);
   }
 });
@@ -559,7 +558,7 @@ interface PickingLogRow {
 // (allocations.receiving_order_id, or allocations.receiving_invoice_item_id →
 // receiving_invoices → this order) — plus orders that no longer have such
 // allocations but already have scanned PACKAGES tracing back here (a fully
-// picked item loses its allocation rows when allocateAll recomputes, and the
+// picked item loses its allocation rows when a recompute rebuilds them, and the
 // order must stay visible until boxing is done). Items embed ALL their
 // allocations (full sourcing picture), their packages, and their
 // picking_item transition logs; orders embed their shipping boxes.
@@ -769,7 +768,6 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
 // RECEIVE_TO_DOCK ledger row). A parsed/explicit `serialNo` (S-key) is
 // deduped per part per order via receiving_scan_labels — a repeat of the same
 // part's serial → 409 label_already_scanned. Zero/multiple matches → 409 {message, candidates}.
-// Then recalculates allocations — best-effort, after commit.
 receivingRoute.post("/receiving-orders/:id/scan", async (c) => {
   const body = await readJson<{
     raw?: string;
@@ -794,7 +792,6 @@ receivingRoute.post("/receiving-orders/:id/scan", async (c) => {
     ctnNo: body.ctnNo ?? null,
     serialNo: body.serialNo ?? null,
   });
-  scheduleAllocateAll(db, "scan");
   return c.json(result, 200);
 });
 

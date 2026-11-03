@@ -23,8 +23,9 @@ const POLL_LIMIT = 200;
 
 export const eventsRoute = new Hono();
 
-// In-memory status of the background allocateAll runner (scoped
-// confirm-arrival recompute is synchronous and never appears here). UIs poll
+// In-memory status of the background allocation runner (only snapshot
+// restores queue there now — scoped recompute runs are synchronous and never
+// appear here). UIs poll
 // this once on load to catch an in-flight run, then follow
 // allocation.started / allocation.finished over SSE.
 eventsRoute.get("/allocation/status", (c) => c.json(getAllocationRunStatus(), 200));

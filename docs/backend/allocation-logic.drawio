@@ -8,7 +8,7 @@
         <mxCell id="trig" value="Triggers" style="swimlane;fontSize=14;fontStyle=1;align=center;verticalAlign=top;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
           <mxGeometry x="80" y="40" width="1120" height="110" as="geometry" />
         </mxCell>
-        <mxCell id="t1" value="Mutation routes (receive, pick, order create/cancel, priority reorder, sync)&lt;br&gt;→ scheduleAllocateAll — background, serialized, triggers coalesce" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1" parent="trig">
+        <mxCell id="t1" value="Manual triggers only: Re-allocate buttons, confirm-arrival, status override&lt;br&gt;→ scoped runScopedAllocation — awaited in the request (allocateAll is dev/test-only via POST /dev/allocate)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1" parent="trig">
           <mxGeometry x="30" y="40" width="520" height="55" as="geometry" />
         </mxCell>
         <mxCell id="t2" value="POST /receiving-orders/:id/confirm-arrival&lt;br&gt;→ allocateForReceivingOrder — awaited, scoped to the confirmed order's part keys" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1" parent="trig">

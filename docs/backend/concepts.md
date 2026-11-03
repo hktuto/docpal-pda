@@ -107,7 +107,8 @@ Selection rules (confirmed with the business):
   `docs/superpowers/specs/2026-09-02-receiving-subinventory-rules-design.md`)
   inside the arrival transaction, before the recompute runs. Transfer orders
   (2026-09-03): items with `additional_data.from_subinventory` name their
-  source there (the order's pair is the destination) — `allocateAll` converts
+  source there (the order's pair is the destination) — the allocation engine
+  converts
   the demand's pair via the configurable `pickingFromSubinventoryOrgs`
   (from_subinventory → org groups; sub-inventory from the same
   `receivingSubInventoryRules` over the item's `additional_data.order_no`,
@@ -125,7 +126,7 @@ Selection rules (confirmed with the business):
   `allocations.manual = true` rows, so `priority_seq` never splits an
   exact-fit source and the pins survive every later recompute (removable via
   the admin remove-allocation action; ledger `txn_reason` = `"recompute:
-  perfect match"`). `allocateAll` (the background full recompute) does not
+  perfect match"`). `allocateAll` (the fleet-wide rebuild — dev/test only) does not
   run this pass (spec
   `docs/superpowers/specs/2026-09-22-allocation-perfect-match-design.md`).
 - **Dangling shelves** — shelf-stock sources exclude lots whose `shelf_code`
@@ -136,10 +137,12 @@ Selection rules (confirmed with the business):
   counter updates to them (the counter UPDATE carries the same shelf-exists
   guard).
 
-> Implementation: `apps/backend/src/db/allocate.ts` (`allocateAll`) — full
-> idempotent recompute (wipes and rebuilds open items' allocations with
-> RESERVE ledger rows); `POST /dev/allocate` triggers it manually and
-> confirm-arrival calls it automatically. Receiving
+> Implementation: `apps/backend/src/db/allocate.ts` (`allocateAll` + scoped
+> `runScopedAllocation`) — idempotent
+> recompute (wipes and rebuilds open items' allocations with
+> RESERVE ledger rows). Allocation is manual-only: the admin Re-allocate
+> buttons and confirm-arrival run the scoped variant; the fleet-wide
+> `allocateAll` is dev/test-only (`POST /dev/allocate`). Receiving
 > sources are `in_hand` / `provisional_received` orders only.
 >
 > Demand scope and order (2026-07-23 design,
