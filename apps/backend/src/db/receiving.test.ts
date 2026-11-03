@@ -259,6 +259,25 @@ test("parseQrRaw: TE datamatrix with yywwd encoding decodes the 5-digit DC", () 
   assert.equal(parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding, "yywwd", undefined, "yyww").dateCode, "2637");
   // without the encoding the raw 5-digit code passes through unchanged
   assert.equal(parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding, null).dateCode, "26374");
+
+  // COO variant (2026-11-03): plain-space separators, no RS/EOT at all.
+  const spaced = parseQrRaw(
+    "[)>06 LT3SILJP00C651FT PN5172070-1 RVA QT720 PO2736213161 BT0 BX1 DC26385",
+    profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding
+  );
+  assert.equal(spaced.partNo, "5172070-1");
+  assert.equal(spaced.qty, 720);
+  assert.equal(spaced.lotCode, "0");
+  assert.equal(spaced.dateCode, "3826"); // "26385" → wk38/2026, day dropped, WWYY
+  assert.equal(spaced.serialNo, "3SILJP00C651FT");
+
+  // space separator still coexists with space-containing lot codes (fixed
+  // field order → greedy groups backtrack to the correct boundary)
+  const spaceLot = parseQrRaw(
+    "[)>\x1e06\x1dLT3S088906789174\x1dPN2071369-3\x1dRVA\x1dQT1000\x1dPO\x1dBT20026 1F\x1dBX3\x1dDC20035\x1e\x04",
+    profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding
+  );
+  assert.equal(spaceLot.lotCode, "20026 1F");
 });
 
 test("parseQrRaw: apps-web KOA template variant (empty subId segment)", () => {

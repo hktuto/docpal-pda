@@ -160,14 +160,20 @@ VALUES
   -- serialNo = LT (lot trace no), dateCode = DC (YYWWD).
   -- No WHHK scans exist in BVSDB for TE — verified against 5 raws decoded
   -- from label photos (docs/Supplier Sample Documents/TE -MCI/TE-01..05).
+  -- Separators accept GS, NBSP (\xA0), or plain space (2026-11-03: a COO
+  -- variant prints the Data Matrix space-separated with no RS/EOT, e.g.
+  -- "[)>06 LT3SILJP00C651FT PN5172070-1 RVA QT720 PO2736213161 BT0 BX1
+  -- DC26385"; space is safe because the field order is fixed, so greedy
+  -- groups backtrack to the correct boundary even for space-containing lots
+  -- like "20026 1F").
   -- The parts master stores the PN wrapped as AMP(<pn>) (legacy TE-AMP(<pn>))
   -- while labels carry the bare PN — normalizePartNo unwraps the wrapper so
   -- scans match (2026-10-16).
   (
     '00000000-0000-7000-8000-000000009005', '15915', NULL,
-    $re$^\[\)>[\x1d\x1e\xA0]?06[\x1d\xA0]LT(?<serialNo>[^\x1d\xA0\x1e\x04]+)[\x1d\xA0]PN(?<itemId>[^\x1d\xA0\x1e\x04]+)[\x1d\xA0]RV[^\x1d\xA0]*[\x1d\xA0]QT(?<qty>\d+)[\x1d\xA0]PO[^\x1d\xA0]*[\x1d\xA0]BT(?<lotCode>[^\x1d\xA0\x1e\x04]*)[\x1d\xA0]BX[^\x1d\xA0]+[\x1d\xA0]DC(?<dateCode>[^\x1d\xA0\x1e\x04]+)[\x1e\x04]*$$re$,
+    $re$^\[\)>[\x1d\x1e\xA0 ]?06[\x1d\xA0 ]LT(?<serialNo>[^\x1d\xA0\x1e\x04]+)[\x1d\xA0 ]PN(?<itemId>[^\x1d\xA0\x1e\x04]+)[\x1d\xA0 ]RV[^\x1d\xA0]*[\x1d\xA0 ]QT(?<qty>\d+)[\x1d\xA0 ]PO[^\x1d\xA0]*[\x1d\xA0 ]BT(?<lotCode>[^\x1d\xA0\x1e\x04]*)[\x1d\xA0 ]BX[^\x1d\xA0]+[\x1d\xA0 ]DC(?<dateCode>[^\x1d\xA0\x1e\x04]+)[\x1e\x04]*$$re$,
     NULL, 'datamatrix', NULL, 'yywwd', ARRAY['DATA MATRIX'], ARRAY['TE'],
-    'Restored from BVSDB RegPattern Id=194 (WHHK), 2026-08-13 backup. No TE scans in BVSDB — template verified against 5 DataMatrix raws decoded from label photos TE-01..05 (MH10.8.2: LT/PN/RV/QT/PO/BT/BX/DC). Separators accept GS or NBSP (\xA0) since some decoder pipelines sanitize GS into a non-breaking space and drop the RS (2026-10-16). Parts master stores the PN wrapped as AMP(<pn>) (legacy TE-AMP(<pn>)) while labels carry the bare PN — normalizePartNo unwraps the wrapper so scans match (2026-10-16). DC is a 5-digit YYWWD date code (day digit dropped, decoded to WWYY via date_code_encoding ''yywwd'', 2026-11-03).'
+    'Restored from BVSDB RegPattern Id=194 (WHHK), 2026-08-13 backup. No TE scans in BVSDB — template verified against 5 DataMatrix raws decoded from label photos TE-01..05 (MH10.8.2: LT/PN/RV/QT/PO/BT/BX/DC). Separators accept GS, NBSP (\xA0), or plain space — decoder pipelines that sanitize GS emit NBSP and may drop the RS (2026-10-16), and a COO variant prints the label space-separated with no RS/EOT at all (2026-11-03). Parts master stores the PN wrapped as AMP(<pn>) (legacy TE-AMP(<pn>)) while labels carry the bare PN — normalizePartNo unwraps the wrapper so scans match (2026-10-16). DC is a 5-digit YYWWD date code (day digit dropped, decoded to WWYY via date_code_encoding ''yywwd'', 2026-11-03).'
   ),
 
   -- NDK (supplier 69915, NDK ELECTRONICS (HK) LTD.): MH10.8.2 QR on the

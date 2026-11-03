@@ -209,14 +209,17 @@ const TEMPLATES = {
   },
   // Restored from RegPattern Id=194 (TE). MH10.8.2 DataMatrix
   // (verified by decoding label photos TE-01..05): LT/PN/RV/QT/PO/BT/BX/DC.
-  // Separators accept GS or NBSP (\xA0) — decoder pipelines that sanitize the
-  // GS control char emit NBSP instead (and may drop the RS after "[)>").
+  // Separators accept GS, NBSP (\xA0), or plain space — decoder pipelines that
+  // sanitize GS emit NBSP and may drop the RS after "[)>", and a COO variant
+  // prints the label space-separated with no RS/EOT at all (2026-11-03).
+  // Space is safe despite space-containing lots ("20026 1F"): the fixed field
+  // order lets greedy groups backtrack to the correct " <MARKER>" boundary.
   TE: {
     qtyEncoding: null,
     dateCodeEncoding: "yywwd",
     qrType: "datamatrix",
     template:
-      "^\\[\\)>[\\x1d\\x1e\\xA0]?06[\\x1d\\xA0]LT(?<serialNo>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]PN(?<itemId>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]RV[^\\x1d\\xA0]*[\\x1d\\xA0]QT(?<qty>\\d+)[\\x1d\\xA0]PO[^\\x1d\\xA0]*[\\x1d\\xA0]BT(?<lotCode>[^\\x1d\\xA0\\x1e\\x04]*)[\\x1d\\xA0]BX[^\\x1d\\xA0]+[\\x1d\\xA0]DC(?<dateCode>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1e\\x04]*$",
+      "^\\[\\)>[\\x1d\\x1e\\xA0 ]?06[\\x1d\\xA0 ]LT(?<serialNo>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0 ]PN(?<itemId>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0 ]RV[^\\x1d\\xA0]*[\\x1d\\xA0 ]QT(?<qty>\\d+)[\\x1d\\xA0 ]PO[^\\x1d\\xA0]*[\\x1d\\xA0 ]BT(?<lotCode>[^\\x1d\\xA0\\x1e\\x04]*)[\\x1d\\xA0 ]BX[^\\x1d\\xA0]+[\\x1d\\xA0 ]DC(?<dateCode>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1e\\x04]*$",
   },
   // Restored from RegPattern Id=170 (NDK_16M) — modern MH10.8.2 QR verified by
   // decoding label photos NDK-01/02: P=cust PN, 1T=control no, Q=qty, 1P=NDK P/N.
@@ -345,6 +348,9 @@ const tePhotoRaws = [
   // Real capture where the pipeline sanitized GS → NBSP (\xA0) and dropped
   // the RS after "[)>"; lot code is the single char "0".
   { partNum: "5172070-1", qty: 720, raw: "[)>\xA006\xA0LT3SILJP00C4QSKH\xA0PN5172070-1\xA0RVA\xA0QT720\xA0PO2736213160\xA0BT0\xA0BX1\xA0DC26292" },
+  // COO variant (2026-11-03, ZXing-decoded label photo): plain-space
+  // separators, no RS after "[)>", no RS/EOT trailer.
+  { partNum: "5172070-1", qty: 720, raw: "[)>06 LT3SILJP00C651FT PN5172070-1 RVA QT720 PO2736213161 BT0 BX1 DC26385" },
 ];
 report("TE", tePhotoRaws, (row, p) => {
   if (!p.partNo) return "no match";
