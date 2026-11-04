@@ -627,6 +627,62 @@ test("scan guards: over-allocation, over-required, ownership, actor, qty, order 
   assert.equal(issued.message, "picking_order_has_open_issue");
 });
 
+// --- shared-lot scan race (audit 2026-11-03 #2) --------------------------------
+
+test("scan race: two orders draining one lot — guarded decrement, lot never negative", async () => {
+  await reseed(client);
+  const actorA = await actorIdOf("operator");
+  const actorB = await actorIdOf("admin");
+
+  // Stale-allocation world (normal under manual-only allocation): one 100-unit
+  // lot pinned by 80-unit allocations on TWO different orders. Any unallocated
+  // 100+ lot works — nothing else is scanning in this test world.
+  const lot = (await queryGet<{ id: string; partNo: string }>(
+    client.db,
+    sql`SELECT il.id, il.part_no AS "partNo" FROM inventory_lots il
+        WHERE il.total_qty >= 100 AND il.part_no IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM allocations a WHERE a.inventory_lot_id = il.id)
+        LIMIT 1`
+  ))!;
+  await client.db.execute(sql`UPDATE inventory_lots SET total_qty = 100 WHERE id = ${lot.id}`);
+
+  const orderA = await insertPickingOrder("SO-RACE-1", "pending");
+  const orderB = await insertPickingOrder("SO-RACE-2", "pending");
+  const itemA = await insertPickingItem(orderA, lot.partNo, 80);
+  const itemB = await insertPickingItem(orderB, lot.partNo, 80);
+  const allocA = randomUUID();
+  const allocB = randomUUID();
+  await client.db.execute(
+    sql`INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
+        VALUES (${allocA}, ${itemA}, ${lot.id}, 80, now(), now()), (${allocB}, ${itemB}, ${lot.id}, 80, now(), now())`
+  );
+
+  // Both scans pass every pre-check against the 100-unit lot; before the
+  // guarded UPDATE both would subtract 80 → −60. Exactly one may land.
+  const [resA, resB] = await Promise.allSettled([
+    scanPickingItem(client.db, itemA, { actorId: actorA, allocationId: allocA, qty: 80 }),
+    scanPickingItem(client.db, itemB, { actorId: actorB, allocationId: allocB, qty: 80 }),
+  ]);
+  const ok = [resA, resB].filter((r) => r.status === "fulfilled");
+  const failed = [resA, resB].filter((r) => r.status === "rejected");
+  assert.equal(ok.length, 1, "exactly one scan must succeed");
+  assert.equal(failed.length, 1);
+  const err = (failed[0] as PromiseRejectedResult).reason as HTTPException;
+  assert.equal(err.status, 409);
+  assert.equal(err.message, "insufficient_lot_qty");
+
+  const after = await queryGet<{ totalQty: number }>(
+    client.db,
+    sql`SELECT total_qty AS "totalQty" FROM inventory_lots WHERE id = ${lot.id}`
+  );
+  assert.equal(after!.totalQty, 20);
+  const pkgs = await queryAll(
+    client.db,
+    sql`SELECT id FROM picking_packages WHERE picking_item_id IN (${itemA}, ${itemB})`
+  );
+  assert.equal(pkgs.length, 1, "the losing scan must leave no phantom package");
+});
+
 // --- remove package ----------------------------------------------------------------
 
 test("remove package: reverses lot/allocation/ledger; guards", async () => {
@@ -1471,6 +1527,32 @@ test("work lock: acquire, same-user refresh, 409 other user, release, expired re
   );
   const taken = await acquireWorkLock(client.db, { orderId, actorId: operator });
   assert.equal(taken.workingBy, operator);
+});
+
+// --- concurrent acquire (audit 2026-11-03 #9) ---------------------------------
+
+test("work lock: concurrent acquires — exactly one device wins", async () => {
+  await reseed(client);
+  const orderId = await pickingOrderIdOf("SO-DEMO-0001");
+  const operator = await actorIdOf("operator");
+  const admin = await actorIdOf("admin");
+  const [resA, resB] = await Promise.allSettled([
+    acquireWorkLock(client.db, { orderId, actorId: operator }),
+    acquireWorkLock(client.db, { orderId, actorId: admin }),
+  ]);
+  const ok = [resA, resB].filter((r) => r.status === "fulfilled");
+  const failed = [resA, resB].filter((r) => r.status === "rejected");
+  assert.equal(ok.length, 1, "both devices must not think they own the order");
+  assert.equal(failed.length, 1);
+  const err = (failed[0] as PromiseRejectedResult).reason as HTTPException;
+  assert.equal(err.status, 409);
+
+  const holder = await queryGet<{ by: string }>(
+    client.db,
+    sql`SELECT working_by AS "by" FROM picking_orders WHERE id = ${orderId}`
+  );
+  const winnerId = (ok[0] as PromiseFulfilledResult<Awaited<ReturnType<typeof acquireWorkLock>>>).value.workingBy;
+  assert.equal(holder!.by, winnerId);
 });
 
 test("work lock: finished order cannot be locked", async () => {

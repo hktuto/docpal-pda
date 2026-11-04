@@ -239,7 +239,14 @@ async function loadShippingBox(tx: DbOrTx, boxId: string): Promise<ShippingBoxRo
 
 /** Shrink an allocation by qty (the row stays at 0 when fully consumed), then recompute. */
 async function reduceAllocation(tx: DbOrTx, allocationId: string, qty: number): Promise<void> {
-  await queryRun(tx, sql`UPDATE allocations SET qty = qty - ${qty}, last_update_date = ${now()} WHERE id = ${allocationId}`);
+  // Conditional decrement — audit 2026-11-03 #2: two scans of one allocation
+  // (each read the pre-decrement qty) must not drive it negative. 0 rows =
+  // the allocation no longer covers this scan.
+  const res = await queryRun(
+    tx,
+    sql`UPDATE allocations SET qty = qty - ${qty}, last_update_date = ${now()} WHERE id = ${allocationId} AND qty >= ${qty}`
+  );
+  if (res.changes === 0) throw new HTTPException(409, { message: "scanned_qty_exceeds_allocation" });
   const a = await queryGet<{ pickingItemId: string; inventoryLotId: string | null }>(
     tx,
     sql`SELECT picking_item_id AS "pickingItemId", inventory_lot_id AS "inventoryLotId" FROM allocations WHERE id = ${allocationId}`
@@ -904,7 +911,8 @@ export async function acquireWorkLock(db: AppDb, input: { orderId: string; actor
     if (order.status !== "pending" && order.status !== "picking" && order.status !== "allocated") {
       throw new HTTPException(409, { message: "picking_order_not_open" });
     }
-    const expired = !order.workingBy || !order.workingAt || order.workingAt < workLockExpiry();
+    const expiry = workLockExpiry();
+    const expired = !order.workingBy || !order.workingAt || order.workingAt < expiry;
     if (order.workingBy && order.workingBy !== input.actorId && !expired) {
       const holder = await queryGet<{ name: string }>(
         tx,
@@ -912,10 +920,26 @@ export async function acquireWorkLock(db: AppDb, input: { orderId: string; actor
       );
       throw lockHeldResponse(order.workingBy, holder?.name ?? null);
     }
-    await queryRun(
+    // Conditional claim (audit 2026-11-03 #9): two devices reading "free" at
+    // the same time must not both think they own the order. Postgres
+    // serializes the UPDATEs on the row lock; the loser's re-evaluated
+    // predicate matches 0 rows.
+    const claim = await queryRun(
       tx,
-      sql`UPDATE picking_orders SET working_by = ${input.actorId}, working_at = ${now()}, last_update_date = ${now()} WHERE id = ${order.id}`
+      sql`UPDATE picking_orders SET working_by = ${input.actorId}, working_at = ${now()}, last_update_date = ${now()}
+          WHERE id = ${order.id}
+            AND (working_by IS NULL OR working_by = ${input.actorId}
+                 OR working_at IS NULL OR working_at < ${expiry})`
     );
+    if (claim.changes === 0) {
+      const loser = await queryGet<{ by: string; name: string | null }>(
+        tx,
+        sql`SELECT po.working_by AS by, u.display_name AS name
+            FROM picking_orders po LEFT JOIN users u ON u.id = po.working_by
+            WHERE po.id = ${order.id}`
+      );
+      throw lockHeldResponse(loser?.by ?? "unknown", loser?.name ?? null);
+    }
     return { orderId: order.id, workingBy: input.actorId };
   });
 }
@@ -1626,7 +1650,14 @@ export async function scanPickingItem(
         lot = await resolveScannedShelfLot(tx, item, order, input);
       }
       if (lot.totalQty < input.qty) throw new HTTPException(409, { message: "insufficient_lot_qty" });
-      await queryRun(tx, sql`UPDATE inventory_lots SET total_qty = total_qty - ${input.qty} WHERE id = ${lot.id}`);
+      // Conditional decrement: a concurrent scan on another order can drain the
+      // same lot between the read above and this UPDATE (audit 2026-11-03 #2) —
+      // 0 rows changed means the guard lost the race, never a negative lot.
+      const lotUdp = await queryRun(
+        tx,
+        sql`UPDATE inventory_lots SET total_qty = total_qty - ${input.qty} WHERE id = ${lot.id} AND total_qty >= ${input.qty}`
+      );
+      if (lotUdp.changes === 0) throw new HTTPException(409, { message: "insufficient_lot_qty" });
       if (lot.boxId) await markShelfBoxStockChanged(tx, lot.boxId);
       portions.push({
         sourceType: "inventory_lot",
