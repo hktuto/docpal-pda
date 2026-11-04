@@ -562,6 +562,11 @@ export default {
       commitDone: "Put {count} pcs to {shelf}",
       commitEmpty: "Nothing pending to put away",
     },
+    skipScan: {
+      selectAll: "Select all of {part}",
+      confirmPrompt: "Put away {parts} part(s), {count} pcs to shelf {shelf} without scanning?",
+      staged: "Staged {count} pcs for {shelf} — confirm to post",
+    },
     shelfBoxesPanel: {
       title: "Shelf boxes ({count})",
       newBox: "New box",
@@ -2358,6 +2363,8 @@ export default {
         },
         putAwaySection: "Put-away",
         autoCreateTasks: "Auto-create a put-away task when a receiving arrival is confirmed",
+        skipScan: "Allow put-away without scanning (part checkboxes on the PDA)",
+        skipScanHint: "Operators can tick whole parts and shelve them with one shelf scan — no label check, batch values come from receiving.",
         suggestShelf: "Shelf suggestion strategy",
         suggestShelfOn: "Suggest shelf/box (same part)",
         suggestShelfOff: "Off",

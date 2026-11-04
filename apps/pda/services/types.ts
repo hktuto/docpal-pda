@@ -1272,8 +1272,10 @@ export interface FlowConfig {
   flowSteps: Record<FlowStep, boolean>;
   /** Resolved steps.put-away section: autoCreateTasks switches the PDA
    *  put-away list from derived candidates to the task queue; suggestShelf
-   *  is the backend's shelf-hint strategy ("existing-stock" | "off"). */
-  putAway: { autoCreateTasks: boolean; suggestShelf: string };
+   *  is the backend's shelf-hint strategy ("existing-stock" | "off");
+   *  skipScan shows the shelve-without-scanning checkboxes (spec
+   *  2026-11-04). Optional — backends predating the knob omit it. */
+  putAway: { autoCreateTasks: boolean; suggestShelf: string; skipScan?: boolean };
   /** Resolved steps.picking.allocation section: allowDockStock=false means
    *  only put-away stock allocates — receiving and picking are decoupled. */
   pickingAllocation: { allowDockStock: boolean };

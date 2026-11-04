@@ -562,6 +562,11 @@ export default {
       commitDone: "已將 {count} 件放到 {shelf}",
       commitEmpty: "沒有待上架的貨品",
     },
+    skipScan: {
+      selectAll: "全選 {part}",
+      confirmPrompt: "不掃碼，直接將 {parts} 個物料共 {count} 件上架到貨架 {shelf}？",
+      staged: "已暫存 {count} 件到 {shelf}，確認後提交",
+    },
     shelfBoxesPanel: {
       title: "貨架箱號({count})",
       newBox: "新增箱號",
@@ -2355,6 +2360,8 @@ export default {
         },
         putAwaySection: "上架",
         autoCreateTasks: "確認收貨到達時自動建立上架任務",
+        skipScan: "允許免掃碼上架（PDA 上按物料勾選）",
+        skipScanHint: "操作員可勾選整個物料，掃一次貨架即上架——不校驗標籤，批次資訊取自收貨數據。",
         suggestShelf: "貨架建議策略",
         suggestShelfOn: "建議貨架/箱（相同物料）",
         suggestShelfOff: "關閉",
