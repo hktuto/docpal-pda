@@ -37,7 +37,7 @@ test("seed creates the flow row with defaults ({})", async () => {
   await loadFlowConfig(client.db);
   assert.equal(isStepEnabled("put-away"), true);
   assert.equal(allowDockStock(), true);
-  assert.deepEqual(putAwayConfig(), { autoCreateTasks: false, suggestShelf: "existing-stock" });
+  assert.deepEqual(putAwayConfig(), { autoCreateTasks: false, suggestShelf: "existing-stock", skipScan: false });
 });
 
 test("DB row drives the active config", async () => {
