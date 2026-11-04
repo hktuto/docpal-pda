@@ -27,7 +27,8 @@ export default {
     labeling: "待贴标签",
     labelingDetail: "贴标签详情",
     labelPrinting: "打印标签",
-    labelPrintingDetail: "打印标签详情"
+    labelPrintingDetail: "打印标签详情",
+    printProductLabel: "打印产品标签"
   },
   actions: {
     scan: "扫描",
@@ -117,6 +118,7 @@ export default {
       picking: { title: "拣货" },
       labeling: { title: "待贴标签" },
       labelPrinting: { title: "打印标签" },
+      printProductLabel: { title: "打印产品标签" },
       putAway: { title: "上架" },
       goodsVerify: { title: "盘点" },
       measuring: { title: "测量" },
@@ -153,6 +155,17 @@ export default {
     totals: "总数",
     boxesItems: "{boxes} 箱 · {items} 项",
     noLongerMatch: "标签打印规则已不再匹配此订单 — 请直接完成打印以继续。"
+  },
+  printProductLabel: {
+    title: "打印产品标签",
+    brand: "品牌",
+    product: "产品",
+    qty: "数量",
+    dateCode: "日期码",
+    drawNo: "图纸号",
+    scanHint: "或请扫描产品",
+    scanError: "无法识别产品标签。",
+    notWired: "打印功能未接通 — 打印方法待提供。"
   },
   manualReceiving: {
     title: "手动收货",

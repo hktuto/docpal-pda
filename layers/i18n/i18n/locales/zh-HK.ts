@@ -27,7 +27,8 @@ export default {
     labeling: "待貼標籤",
     labelingDetail: "貼標籤詳情",
     labelPrinting: "打印標籤",
-    labelPrintingDetail: "打印標籤詳情"
+    labelPrintingDetail: "打印標籤詳情",
+    printProductLabel: "打印產品標籤"
   },
   actions: {
     scan: "掃描",
@@ -117,6 +118,7 @@ export default {
       picking: { title: "揀貨" },
       labeling: { title: "待貼標籤" },
       labelPrinting: { title: "打印標籤" },
+      printProductLabel: { title: "打印產品標籤" },
       putAway: { title: "上架" },
       goodsVerify: { title: "查貨" },
       measuring: { title: "測量" },
@@ -153,6 +155,17 @@ export default {
     totals: "總數",
     boxesItems: "{boxes} 箱 · {items} 項",
     noLongerMatch: "標籤打印規則已不再符合此訂單 — 請直接完成打印以繼續。"
+  },
+  printProductLabel: {
+    title: "打印產品標籤",
+    brand: "品牌",
+    product: "產品",
+    qty: "數量",
+    dateCode: "日期碼",
+    drawNo: "圖紙號",
+    scanHint: "或請掃描產品",
+    scanError: "無法識別產品標籤。",
+    notWired: "打印功能未接通 — 打印方法待提供。"
   },
   manualReceiving: {
     title: "手動收貨",

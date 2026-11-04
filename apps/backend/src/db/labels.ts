@@ -285,3 +285,38 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
     pickLabels,
   };
 }
+
+/** GET /parts row — parts master for the print-product-label part search. */
+export interface PartOptionRow {
+  partNo: string;
+  brand: string | null;
+  description: string | null;
+}
+
+/**
+ * Parts master search for the /print-product-label dropdowns — the full
+ * table is ~10 MB over the wire, so the PDA asks per keystroke instead.
+ * Search ILIKEs part_no/wcl_item_no/description (admin search convention);
+ * brand ILIKE-narrows the same way. `part_no` is not unique (wcl_item_no is
+ * the business key), so rows sharing a part_no collapse into one option.
+ */
+export async function searchLabelPrintParts(
+  db: DbOrTx,
+  q: { search?: string; brand?: string }
+): Promise<PartOptionRow[]> {
+  const term = q.search?.trim();
+  const like = term ? `%${term}%` : "";
+  // Brand narrows on a substring too — the PDA brand field is free-text
+  // search, an exact pick is the common case but a partial term works.
+  const brandLike = q.brand?.trim() ? `%${q.brand.trim()}%` : "";
+  return queryAll<PartOptionRow>(
+    db,
+    sql`SELECT part_no AS "partNo", min(brand) AS "brand", min(description) AS "description"
+        FROM parts
+        WHERE ${term ? sql`(part_no ILIKE ${like} OR wcl_item_no ILIKE ${like} OR description ILIKE ${like})` : sql`TRUE`}
+          AND ${brandLike ? sql`brand ILIKE ${brandLike}` : sql`TRUE`}
+        GROUP BY part_no
+        ORDER BY part_no
+        LIMIT 50`
+  );
+}

@@ -14,6 +14,7 @@ Page and component locations mapped to source files.
 | Picking unified detail + scan (evaluation build; what the picking list currently opens) | `/picking/unified/:id` | `pages/picking/unified/[id].vue` |
 | Label-printing list (打印標籤 queue — finished picking orders pending label printing) | `/label-printing` | `pages/label-printing/index.vue` |
 | Label-printing detail (rule print list + Finish printing) | `/label-printing/:id` | `pages/label-printing/[id].vue` (embeds `components/picking/LabelPrintRulesPanel.vue`) |
+| Print product label (打印產品標籤 — standalone part-label form, scan prefill; print method TBD) | `/print-product-label` | `pages/print-product-label.vue` |
 | Labeling list (待貼標籤 queue — finished picking orders pending labels) | `/labeling` | `pages/labeling/index.vue` |
 | Labeling detail (rule print list + Finish labeling) | `/labeling/:id` | `pages/labeling/[id].vue` (embeds `components/picking/LabelPrintRulesPanel.vue`) |
 | Receiving list | `/receiving` | `pages/receiving/index.vue` |

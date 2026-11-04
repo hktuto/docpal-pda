@@ -292,6 +292,7 @@ filtering. Read-only.
 | Endpoint | Description |
 |---|---|
 | `GET /labels-data` | → `{generatedAt, shelfBoxes, shelfCodes, receivingOrders, shelfLots, pickLabels}`. |
+| `GET /parts` | `?search=` (ILIKE on part_no/wcl_item_no/description) `&brand=` (ILIKE) → `{parts: [{partNo, brand, description}]}` — parts master search capped at 50 rows (the full table is ~100k, never shipped whole); one row per non-unique `part_no` (`min()` collapse), ordered; feeds the PDA `/print-product-label` type-to-search fields (`searchLabelPrintParts`, `src/db/labels.ts`). |
 
 ## Printing proxy
 

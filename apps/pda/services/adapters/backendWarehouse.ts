@@ -56,6 +56,7 @@ import type {
   ScanDecodeResult,
   BoxSearchResult,
   LabelsData,
+  PartOption,
   ScanPickingItemResult,
   ScanIntoShippingBoxResult,
   PutAwayScanResult,
@@ -820,6 +821,12 @@ export function createBackendWarehouseService(
     // bypassed so a just-received / just-put-away world shows up immediately.
     async getLabelsData(): Promise<LabelsData> {
       return client.get("/labels-data", { t: Date.now() });
+    },
+
+    // Parts master search for the /print-product-label part dropdown.
+    async getParts(query?: { search?: string; brand?: string }): Promise<PartOption[]> {
+      const result = await client.get<{ parts: PartOption[] }>("/parts", query);
+      return result.parts;
     },
 
     // Ad-hoc put-away (spec 2026-10-07-ad-hoc-put-away-design.md)

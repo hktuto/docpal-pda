@@ -461,6 +461,13 @@ export interface PrintPickingLabelResult {
   labelCount: number;
 }
 
+/** GET /parts row — parts master for the print-product-label dropdowns. */
+export interface PartOption {
+  partNo: string;
+  brand: string | null;
+  description: string | null;
+}
+
 // ------------------------------------------------------------------
 // Labeling (待贴标签) — the stage between picking finish and
 // measuring/verify (spec 2026-10-28-picking-labeling-step-design.md).

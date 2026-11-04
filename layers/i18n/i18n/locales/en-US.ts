@@ -27,7 +27,8 @@ export default {
     labeling: "Labeling",
     labelingDetail: "Labeling Detail",
     labelPrinting: "Label Printing",
-    labelPrintingDetail: "Label Printing Detail"
+    labelPrintingDetail: "Label Printing Detail",
+    printProductLabel: "Print Product Label"
   },
   actions: {
     scan: "Scan",
@@ -117,6 +118,7 @@ export default {
       picking: { title: "Picking" },
       labeling: { title: "Labeling" },
       labelPrinting: { title: "Label Printing" },
+      printProductLabel: { title: "Print Product Label" },
       putAway: { title: "Put-away" },
       goodsVerify: { title: "Goods Verify" },
       measuring: { title: "Measuring" },
@@ -153,6 +155,17 @@ export default {
     totals: "Total",
     boxesItems: "{boxes} box(es) · {items} item(s)",
     noLongerMatch: "Label print rules no longer match this order — mark label printing done to continue."
+  },
+  printProductLabel: {
+    title: "Print Product Label",
+    brand: "Brand",
+    product: "Product",
+    qty: "Qty",
+    dateCode: "Date Code",
+    drawNo: "Drawing No.",
+    scanHint: "Or scan the product",
+    scanError: "Could not decode a product label.",
+    notWired: "Printing is not wired up yet — the print method is coming."
   },
   manualReceiving: {
     title: "Manual Receiving",

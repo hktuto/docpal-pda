@@ -69,6 +69,7 @@ import type {
   ScanDecodeResult,
   BoxSearchResult,
   LabelsData,
+  PartOption,
   AdHocPutAwayItem,
   AdHocPutAwayResult,
   AdHocPutAwayLocation,
@@ -320,6 +321,11 @@ export interface WarehouseService {
 
   // Printable-label data for the /print-labels page (GET /labels-data).
   getLabelsData(): Promise<LabelsData>;
+
+  // Parts master search for the /print-product-label part dropdown (GET
+  // /parts?search=&brand=) — server-side ILIKE, capped at 50 rows so the PDA
+  // never ships the ~100k-row table.
+  getParts(query?: { search?: string; brand?: string }): Promise<PartOption[]>;
 
   // Ad-hoc put-away (spec 2026-10-07-ad-hoc-put-away-design.md) — items
   // with no receiving order put away directly to a shelf. The PDA holds the
