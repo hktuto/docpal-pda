@@ -1245,6 +1245,31 @@ test("confirm-arrival: receivingSubInventoryRules stamp sub_inventory_code (glob
   assert.equal(byId.get(org140NullPo), "STORE1"); // NULL po_no falls to the group default
 });
 
+test("confirm-arrival: rule output missing from org_info is skipped, not a 500", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("operator");
+  const orderId = await orderIdOf("100002");
+
+  const org2Item = await itemIdOf(orderId, "RK73H2ATTD1372F");
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET org_id = 2, po_no = 'PO-1', sub_inventory_code = NULL WHERE id = ${org2Item}`);
+
+  _setReceivingSubInventoryRulesForTests([
+    { orgIds: [2], patterns: [], default: "DEFAULT" }, // no org_info (2, DEFAULT) row
+  ]);
+  try {
+    const result = await confirmReceivingArrival(client.db, orderId, actorId);
+    assert.equal(result.status, "in_hand");
+  } finally {
+    _setReceivingSubInventoryRulesForTests([]);
+  }
+
+  const row = await queryAll<{ subInventoryCode: string | null }>(
+    client.db,
+    sql`SELECT sub_inventory_code AS "subInventoryCode" FROM receiving_invoice_items WHERE id = ${org2Item}`
+  );
+  assert.equal(row[0]!.subInventoryCode, null); // invalid stamp skipped, value untouched
+});
+
 // --- admin audit logs + item removal (2026-07-27 design) ---------------------
 
 test("receiving order logs: order + item rows with actor name, newest first; 404 unknown order", async () => {

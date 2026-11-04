@@ -147,21 +147,42 @@ export async function confirmReceivingArrival(
     // caller schedules the allocation recompute. Recomputes every item of
     // the order that a rule matches (rule output overwrites upstream values);
     // items matched by no rule keep their value. org_id is never rewritten.
+    // A rule output whose (org_id, code) pair is missing from org_info would
+    // violate the composite FK and 500 the whole confirm — skip it instead
+    // and leave the item's sub_inventory_code unchanged (bad config must not
+    // block arrivals; fix the rule or add the org_info row).
     const subInvRules = receivingSubInventoryRules();
     if (subInvRules.length > 0) {
-      const byCode = new Map<string, string[]>();
+      const stamps = new Map<string, { code: string; ids: string[] }>();
       for (const it of items) {
         const code = matchSubInventoryRule(it.orgId, it.poNo, subInvRules);
         if (code === null) continue;
-        const ids = byCode.get(code);
-        if (ids) ids.push(it.id);
-        else byCode.set(code, [it.id]);
+        const key = `${it.orgId}|${code}`;
+        const entry = stamps.get(key);
+        if (entry) entry.ids.push(it.id);
+        else stamps.set(key, { code, ids: [it.id] });
       }
-      for (const [code, ids] of byCode) {
-        await queryRun(
-          tx,
-          sql`UPDATE receiving_invoice_items SET sub_inventory_code = ${code} WHERE ${inArray(sql`id`, ids)}`
+      if (stamps.size > 0) {
+        const orgIds = [...new Set(items.map((it) => it.orgId))];
+        const validPairs = new Set(
+          (
+            await queryAll<{ orgId: number; code: string }>(
+              tx,
+              sql`SELECT org_id AS "orgId", secondary_inventory_name AS "code" FROM org_info
+                  WHERE ${inArray(sql`org_id`, orgIds)}`
+            )
+          ).map((r) => `${r.orgId}|${r.code}`)
         );
+        for (const [key, { code, ids }] of stamps) {
+          if (!validPairs.has(key)) {
+            console.error(`confirm-arrival: skipping sub-inventory stamp ${key} — no org_info row (check receivingSubInventoryRules)`);
+            continue;
+          }
+          await queryRun(
+            tx,
+            sql`UPDATE receiving_invoice_items SET sub_inventory_code = ${code} WHERE ${inArray(sql`id`, ids)}`
+          );
+        }
       }
     }
 
