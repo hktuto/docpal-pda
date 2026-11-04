@@ -211,6 +211,8 @@ export interface CrudConfig<T extends PgTableWithColumns<any>> {
   create: (body: Record<string, unknown>) => T["$inferInsert"];
   /** Build the update set from a validated body; only provided fields are updated. */
   update: (body: Record<string, unknown>) => Partial<T["$inferInsert"]>;
+  /** Called after a successful create/update/delete (e.g. invalidate caches). */
+  onWrite?: () => void;
 }
 
 /** Generic master-data CRUD router: GET /, GET /:id, POST /, PATCH /:id, DELETE /:id. */
@@ -271,6 +273,7 @@ export function createCrudRouter<T extends PgTableWithColumns<any>>(cfg: CrudCon
     const row = cfg.create(body);
     try {
       const inserted = await db.insert(table).values(row as never).returning();
+      cfg.onWrite?.();
       return c.json(inserted[0], 201);
     } catch (e) {
       mapDbError(e);
@@ -290,6 +293,7 @@ export function createCrudRouter<T extends PgTableWithColumns<any>>(cfg: CrudCon
         .where(match(c.req.param("id")))
         .returning();
       if (updated.length === 0) throw new HTTPException(404, { message: "not found" });
+      cfg.onWrite?.();
       return c.json(updated[0]);
     } catch (e) {
       mapDbError(e);
@@ -303,6 +307,7 @@ export function createCrudRouter<T extends PgTableWithColumns<any>>(cfg: CrudCon
         .where(match(c.req.param("id")))
         .returning({ id: cfg.pk });
       if (deleted.length === 0) throw new HTTPException(404, { message: "not found" });
+      cfg.onWrite?.();
       return c.json({ ok: true });
     } catch (e) {
       mapDbError(e);

@@ -1,0 +1,2 @@
+CREATE INDEX "idx_parts_norm_part_no" ON "parts" USING btree (regexp_replace(upper(regexp_replace(part_no, '\s', '', 'g')), '^(TE-)?AMP\((.+)\)$', '\2'));--> statement-breakpoint
+CREATE INDEX "idx_parts_norm_wcl_item_no" ON "parts" USING btree (regexp_replace(upper(regexp_replace(wcl_item_no, '\s', '', 'g')), '^(TE-)?AMP\((.+)\)$', '\2'));

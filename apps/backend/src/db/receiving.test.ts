@@ -686,6 +686,75 @@ test("scan: NCC raw QR without a drawno row still 409s no_match (fallback preser
 });
 
 
+// TE truncated-MPN → parts-master resolution at the scan-commit (spec
+// 2026-11-03-backend-scan-decode-design.md decision 5) — same retry shape
+// as the NCC drawno branch, via lookupPartKeyCandidates.
+async function setupTeTruncatedWorld(): Promise<void> {
+  // the scan query joins supplier_profiles via suppliers — both must exist.
+  await client.db.execute(
+    sql`INSERT INTO suppliers (id, code, name) VALUES (${randomUUID()}, '999990', 'TE Truncated Fixture') ON CONFLICT (code) DO NOTHING`
+  );
+  await client.db.execute(
+    sql`INSERT INTO supplier_profiles (id, supplier_code, qr_template, brands)
+        VALUES (${randomUUID()}, '999990', '^PN(?<itemId>[0-9\\-]{6,})$', '{TE}')
+        ON CONFLICT (supplier_code) DO NOTHING`
+  );
+  await client.db.execute(
+    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no)
+        VALUES (${randomUUID()}, 'TE', '1-9988776-5', 'TE-AMP(1-9988776-5)')
+        ON CONFLICT (wcl_item_no) DO NOTHING`
+  );
+}
+
+test("scan: TE truncated MPN resolves to the stored full part_no via the parts master", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("operator");
+  await setupTeTruncatedWorld();
+  const orderId = await insertReceivingOrder(client.db, "TE-SCAN-1", {
+    order: { supplierCode: "999990" },
+    invoices: [
+      {
+        invoiceNo: "INV-TE-1",
+        items: [{ partNo: "1-9988776-5", wclItemNo: "TE-AMP(1-9988776-5)", lineQty: 50 }],
+      },
+    ],
+  });
+
+  // Label prints the truncated MPN "9988776" — neither key of the order
+  // line contains it verbatim; the candidate retry matches it.
+  const item = await scanReceivingOrder(client.db, orderId, { actorId, raw: "PN9988776", qty: 50 });
+  assert.equal(item.partNo, "1-9988776-5");
+  assert.equal(item.wclItemNo, "TE-AMP(1-9988776-5)");
+  assert.equal(item.receivedQty, 50);
+
+  const txn = await queryGet<{ partNo: string }>(
+    client.db,
+    sql`SELECT part_no AS "partNo" FROM inventory_transactions
+        WHERE receiving_invoice_item_id = ${item.id} AND txn_type = 'RECEIVE_TO_DOCK'`
+  );
+  assert.equal(txn!.partNo, "1-9988776-5");
+});
+
+test("scan: TE truncated code with no parts candidate still 409s no_match", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("operator");
+  await setupTeTruncatedWorld();
+  const orderId = await insertReceivingOrder(client.db, "TE-SCAN-2", {
+    order: { supplierCode: "999990" },
+    invoices: [
+      {
+        invoiceNo: "INV-TE-2",
+        items: [{ partNo: "1-9988776-5", wclItemNo: "TE-AMP(1-9988776-5)", lineQty: 50 }],
+      },
+    ],
+  });
+
+  const err = await catchHttp(scanReceivingOrder(client.db, orderId, { actorId, raw: "PN9999999", qty: 10 }));
+  assert.equal(err.status, 409);
+  const body = await err.getResponse().json();
+  assert.equal(body.message, "no_match");
+});
+
 test("scan: 409 when qty exceeds the remaining qty", async () => {
   await reseed(client);
   const actorId = await actorIdOf("operator");

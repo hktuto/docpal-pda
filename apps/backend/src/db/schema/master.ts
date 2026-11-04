@@ -118,6 +118,21 @@ export const parts = pgTable("parts", {
 (t) => ({
   // part_no is not unique — plain lookup index (ingest existence checks, stock search)
   partNoIdx: index("idx_parts_part_no").on(t.partNo),
+  // Expression indexes mirroring normalizePartNo (decode/codecs.ts) — the
+  // scan-time canonical lookup (lookupAdHocPutAwayPart, decodeScan TE branch)
+  // compares on this expression; without them it seq-scans the whole parts
+  // master (~1 s at production size, reported 2026-11-04). The expression
+  // text must stay byte-identical to the queries in src/db/adhocPutaway.ts.
+  normPartNoIdx: index("idx_parts_norm_part_no").on(
+    sql`regexp_replace(upper(regexp_replace(part_no, '\\s', '', 'g')), '^(TE-)?AMP\\((.+)\\)$', '\\2')`
+  ),
+  normWclItemNoIdx: index("idx_parts_norm_wcl_item_no").on(
+    sql`regexp_replace(upper(regexp_replace(wcl_item_no, '\\s', '', 'g')), '^(TE-)?AMP\\((.+)\\)$', '\\2')`
+  ),
+  // Trigram indexes for the TE partial-MPN lookup (`LIKE '%<scanned>%'`) —
+  // decodeScan TE branch; without gin_trgm_ops the substring step seq-scans.
+  partNoTrgmIdx: index("idx_parts_part_no_trgm").using("gin", sql`part_no gin_trgm_ops`),
+  wclItemNoTrgmIdx: index("idx_parts_wcl_item_no_trgm").using("gin", sql`wcl_item_no gin_trgm_ops`),
 })
 );
 

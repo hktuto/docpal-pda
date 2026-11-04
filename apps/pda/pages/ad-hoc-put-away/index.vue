@@ -220,29 +220,15 @@ async function load() {
 
 load();
 
-// Add a parsed label to the batch, displaying the canonical master keys
-// (part_no / wcl_item_no) resolved from the parts table — the client-side
-// single-brand derivation (<brand>/<mpn>) is only a guess and is wrong for
-// e.g. TE (TE-AMP(<pn>)). Unknown parts / lookup failures keep the parsed
-// values; the commit re-validates against the master regardless.
-const masterByKey = new Map<string, { partNo: string; wclItemNo: string; brand: string } | null>();
-
+// Add a parsed label to the batch. Canonical part_no / wcl_item_no ride in
+// the decode itself — the backend resolves TE truncated MPNs against the
+// parts master and NCC drawing codes via wcl_part_drawno, so parsed.itemId /
+// parsed.wclItemNo are already the stored keys for those suppliers. Commit
+// re-validates against the master regardless.
 async function addParsedItem(result: OcrParseResult, rawScan?: string): Promise<boolean> {
-  let master: { partNo: string; wclItemNo: string } | null = null;
-  const key = result.parsed.itemId;
-  if (key) {
-    if (!masterByKey.has(key)) {
-      try {
-        masterByKey.set(key, await warehouse.lookupAdHocPutAwayPart(key));
-      } catch {
-        masterByKey.set(key, null);
-      }
-    }
-    master = masterByKey.get(key) ?? null;
-  }
   return addItem({
-    partNo: master?.partNo ?? result.parsed.itemId ?? "",
-    wclItemNo: master?.wclItemNo ?? result.parsed.wclItemNo ?? null,
+    partNo: result.parsed.itemId ?? "",
+    wclItemNo: result.parsed.wclItemNo ?? null,
     qty: result.parsed.qty ?? 1,
     dateCode: result.parsed.dateCode ?? null,
     lotCode: result.parsed.lotCode ?? null,

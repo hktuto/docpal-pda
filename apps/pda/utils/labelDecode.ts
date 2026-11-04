@@ -22,12 +22,18 @@ export async function decodeLabel(
   rawValue: string,
   options: LabelDecodeOptions = {}
 ): Promise<OcrParseResult> {
+  // [DECODE-TIME] round trip vs the backend's [DECODE-TIME] line: the
+  // difference is network + JWT overhead (visible via adb/CDP console).
+  const t0 = performance.now();
   const decoded = await warehouse.decodeScan({
     raw: rawValue,
     ...(options.targets && { targets: options.targets }),
     ...(options.supplierCode && { supplierCode: options.supplierCode }),
     ...(options.brands && { brands: options.brands }),
   });
+  console.log(
+    `[DECODE-TIME] POST /scan/decode ${decoded.matched ? "matched" : "no-match"} ${(performance.now() - t0).toFixed(1)}ms`
+  );
   if (decoded.matched) {
     return { ...decoded, raw: { text: rawValue, barcodes: [] } };
   }

@@ -119,12 +119,10 @@ export function useLabelScan() {
 
     if (isQrOnlyCapture(capture, barcodes)) {
       const qrValue = barcodes[0]?.value ?? capture.text;
-      const t1 = performance.now();
       parsedResult = await decodeLabel(warehouse, qrValue, {
         targets: contextInput.targets ?? [],
         supplierCode: contextInput.supplierCode,
       });
-      console.log('[SCAN-TIME] /scan/decode', (performance.now() - t1).toFixed(1), 'ms');
     } else {
       const t1 = performance.now();
       parsedResult = parseAndIdentify(

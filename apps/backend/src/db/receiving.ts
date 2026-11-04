@@ -8,6 +8,7 @@ import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { normalizePartNo, parseQrRaw } from "../decode/codecs.js";
 import { listDateCodePeriods } from "./dateCodePeriods.js";
+import { lookupPartKeyCandidates } from "./adhocPutaway.js";
 import { lookupPartsByDrawingNo } from "./partDrawno.js";
 import { createPutAwayTaskTx } from "./putawaytasks.js";
 import { isStepEnabled, putAwayConfig, receivingSubInventoryRules, dateCodeFormat, type SubInventoryRuleGroup } from "../config.js";
@@ -376,6 +377,20 @@ export async function scanReceivingOrder(
           .flatMap((m) => [m.wclItemNo, m.partNo])
           .filter((v): v is string => v !== null)
           .map((v) => normalizePartNo(v))
+      );
+      matches = norms.size
+        ? items.filter((it) => itemKeys(it).some((v) => v !== null && norms.has(normalizePartNo(v))))
+        : [];
+    }
+    // TE labels print a TRUNCATED MPN (e.g. "1571983-1" for a stored
+    // "1-1571983-1" or wrapped variant) — same retry shape as NCC: resolve
+    // parts-master candidates (normalized equality, then trigram substring)
+    // and re-run the union match. Order context does the disambiguation;
+    // genuinely ambiguous labels surface as multiple_matches as before.
+    if (matches.length === 0 && partNo && ro.brands?.includes("TE")) {
+      const candidates = await lookupPartKeyCandidates(tx, partNo);
+      const norms = new Set(
+        candidates.flatMap((c) => [normalizePartNo(c.partNo), normalizePartNo(c.wclItemNo)])
       );
       matches = norms.size
         ? items.filter((it) => itemKeys(it).some((v) => v !== null && norms.has(normalizePartNo(v))))

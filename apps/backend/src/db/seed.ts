@@ -31,6 +31,7 @@ import {
 } from "./schema/index.js";
 import { realParts } from "./seed-real-data.js";
 import { builtinSupplierProfiles } from "./seed-supplier-profiles.js";
+import { invalidateDecodeCache } from "../decode/cache.js";
 import { realSubInventories } from "./seed-subinventories-data.js";
 import { realNetWeights } from "./seed-net-weight-data.js";
 import { hkShelves, shelfDisplayName } from "./seed-shelves-hk.js";
@@ -681,4 +682,7 @@ export async function resetAndReseed(
     await tx.execute(sql`TRUNCATE TABLE ${sql.raw(ALL_TABLES.join(", "))} CASCADE`);
     await seedAll(tx as unknown as AppDb, opts);
   });
+  // Seeded supplier_profiles / date_code_counter_periods rows — drop the
+  // decode reference-data cache (dev reset + test reseed run in-process).
+  invalidateDecodeCache();
 }
