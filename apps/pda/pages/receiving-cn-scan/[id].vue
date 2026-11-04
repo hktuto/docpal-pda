@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { captureLabel, captureRawLabelValue } from "~/composables/useLabelScan";
+import { I18nError } from "~/composables/i18nError";
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
-import { findCnScanMatches } from "~/utils/cnReceivingScan";
+import { buildCnScanGroups, type CnScanGroup } from "~/utils/cnScanGroups";
 import { formatCompactQtyUpper } from "~/utils/formatNumber";
-import type { ParsedFields } from "~/utils/parseOcrScan";
 import type {
   CnFlagItemInput,
   CnScanReason,
@@ -11,12 +11,14 @@ import type {
   CnScanTaskItem,
 } from "~/services/types";
 
-// CN receiving scan (收貨掃描, spec 2026-11-01-cn-receiving-scan): the order
-// sits in status `scanning` after the admin OCR confirm. The operator scans
-// each physical label; it is matched CLIENT-SIDE against the order's
-// unresolved items and committed one call per scan (scanCnItem). Problem
-// items are flagged (missing/damaged/wrong_part/other); 完成 receives the
-// `ok` items and creates the CN put-away task.
+// CN receiving scan (收貨掃描, spec 2026-11-04-cn-receiving-scan-grouping):
+// the order sits in status `scanning` after the admin OCR confirm. The page
+// renders one row per (part, dateCode, COO, COW) GROUP; the operator scans
+// physical labels and each scan is matched + credited server-side
+// (scanCnTaskAggregate → POST .../scan-aggregate, FIFO across the group's
+// lines) — the response replaces the whole detail. Problem groups are flagged
+// (missing/damaged/wrong_part/other); 完成 receives the credited items and
+// creates the CN put-away task.
 
 definePageMeta({ title: "meta.receivingScan" });
 
@@ -49,8 +51,20 @@ async function load() {
 useVisibleReload(load, ["/receiving-cn-scan-tasks"]);
 
 const items = computed(() => detail.value?.items ?? []);
-const resolvedCount = computed(() => items.value.filter((i) => i.scanStatus !== null).length);
-const unresolvedCount = computed(() => items.value.length - resolvedCount.value);
+const groups = computed(() => buildCnScanGroups(items.value));
+const unresolvedCount = computed(() => items.value.filter((i) => i.scanStatus === null).length);
+const totalScanQty = computed(() => items.value.reduce((sum, i) => sum + (i.scanQty ?? 0), 0));
+const totalLineQty = computed(() => {
+  let sum = 0;
+  let known = false;
+  for (const i of items.value) {
+    if (i.lineQty != null) {
+      sum += i.lineQty;
+      known = true;
+    }
+  }
+  return known ? sum : null;
+});
 
 function replaceItem(updated: CnScanTaskItem) {
   if (!detail.value) return;
@@ -64,11 +78,10 @@ const scanning = ref(false);
 // Same raw label scanned twice in this session → rejected as a duplicate.
 const scannedRaws = new Set<string>();
 
-// Multiple unresolved items match one label → the operator picks one.
-const chooserOpen = ref(false);
-const chooserCandidates = ref<CnScanTaskItem[]>([]);
-let pendingScan: { parsed: ParsedFields; raw: string } | null = null;
-
+// Feedback note (audit 2026-11-03 #13): handleRawScan returns a boolean and
+// the hardware composable beeps on it; the camera path (onCameraScan) beeps
+// explicitly. No beeps inside handleRawScan — a hardware scan would then
+// beep twice.
 async function handleRawScan(raw: string): Promise<boolean> {
   const value = raw.trim();
   if (!value || !detail.value) return false;
@@ -84,70 +97,43 @@ async function handleRawScan(raw: string): Promise<boolean> {
       showToast(t("receivingScan.noPartNo"));
       return false;
     }
-    const matches = findCnScanMatches(items.value, parsed);
-    if (matches.length === 0) {
-      showToast(t("receivingScan.noMatch"));
-      return false;
-    }
-    if (matches.length > 1) {
-      pendingScan = { parsed, raw: value };
-      chooserCandidates.value = matches;
-      chooserOpen.value = true;
-      return true;
-    }
-    return await applyScan(matches[0], parsed, value);
-  } catch (e) {
-    showToast(e instanceof Error ? e.message : String(e));
-    return false;
-  } finally {
-    scanning.value = false;
-  }
-}
-
-// Feedback note (audit 2026-11-03 #13): these two return booleans and the
-// hardware composable beeps on them; the camera path (onCameraScan) and the
-// manual chooser (chooseItem) beep explicitly. No beeps inside applyScan /
-// handleRawScan — a hardware scan would then beep twice.
-async function applyScan(item: CnScanTaskItem, parsed: ParsedFields, raw: string): Promise<boolean> {
-  scanning.value = true;
-  try {
-    const qty = parsed.qty ?? item.lineQty;
+    const qty = parsed.qty;
     if (qty == null || qty <= 0) {
       showToast(t("receivingScan.noQty"));
       return false;
     }
-    const updated = await warehouse.scanCnItem(taskId, item.id, {
+    const updated = await warehouse.scanCnTaskAggregate(taskId, {
+      ...(parsed.itemId ? { itemId: parsed.itemId } : {}),
+      ...(parsed.wclItemNo ? { wclItemNo: parsed.wclItemNo } : {}),
       qty,
       ...(parsed.dateCode ? { dateCode: parsed.dateCode } : {}),
       ...(parsed.lotCode ? { lotCode: parsed.lotCode } : {}),
       ...(parsed.coo ? { coo: parsed.coo } : {}),
       ...(parsed.cow ? { cow: parsed.cow } : {}),
-      raw,
+      raw: value,
     });
-    scannedRaws.add(raw);
-    replaceItem(updated);
+    scannedRaws.add(value);
+    const overQty = updated.lastScan?.overQty;
+    detail.value = { order: updated.order, items: updated.items };
+    if (overQty && overQty > 0) {
+      showToast(t("receivingScan.overReceived", { qty: formatCompactQtyUpper(overQty) }));
+    }
     return true;
   } catch (e) {
-    showToast(errorMessage(e));
+    if (e instanceof I18nError && e.code === "no_matching_item") {
+      showToast(t("receivingScan.noMatch"));
+    } else {
+      showToast(e instanceof Error ? errorMessage(e) : String(e));
+    }
     return false;
   } finally {
     scanning.value = false;
   }
 }
 
-async function chooseItem(item: CnScanTaskItem) {
-  chooserOpen.value = false;
-  const scan = pendingScan;
-  pendingScan = null;
-  if (!scan) return;
-  const ok = await applyScan(item, scan.parsed, scan.raw);
-  if (ok) playScanSuccess();
-  else playScanError();
-}
-
 useHardwareScanner({
   enabled: () =>
-    !!detail.value && !scanning.value && !chooserOpen.value && !flagOpen.value && !finalizeOpen.value && !submitting.value,
+    !!detail.value && !scanning.value && !flagOpen.value && !finalizeOpen.value && !submitting.value,
   onScan: handleRawScan,
 });
 
@@ -159,17 +145,17 @@ async function onCameraScan() {
   else playScanError();
 }
 
-// ---- flag / reset ----
+// ---- flag / reset (group-level loops over the per-item endpoints) ----
 
 const flagOpen = ref(false);
-const flagItem = ref<CnScanTaskItem | null>(null);
+const flagGroup = ref<CnScanGroup | null>(null);
 const flagReason = ref<CnFlagItemInput["reason"]>("missing");
 const flagNote = ref("");
 const flagWrongPartNo = ref("");
 const submitting = ref(false);
 
-function openFlag(item: CnScanTaskItem) {
-  flagItem.value = item;
+function openFlag(group: CnScanGroup) {
+  flagGroup.value = group;
   flagReason.value = "missing";
   flagNote.value = "";
   flagWrongPartNo.value = "";
@@ -177,20 +163,22 @@ function openFlag(item: CnScanTaskItem) {
 }
 
 async function submitFlag() {
-  const item = flagItem.value;
-  if (!item || submitting.value) return;
+  const group = flagGroup.value;
+  if (!group || submitting.value) return;
   if (flagReason.value === "wrong_part" && !flagWrongPartNo.value.trim()) {
     showToast(t("receivingScan.wrongPartNoRequired"));
     return;
   }
+  const input: CnFlagItemInput = {
+    reason: flagReason.value,
+    ...(flagNote.value.trim() ? { note: flagNote.value.trim() } : {}),
+    ...(flagReason.value === "wrong_part" ? { wrongPartNo: flagWrongPartNo.value.trim() } : {}),
+  };
   submitting.value = true;
   try {
-    const updated = await warehouse.flagCnItem(taskId, item.id, {
-      reason: flagReason.value,
-      ...(flagNote.value.trim() ? { note: flagNote.value.trim() } : {}),
-      ...(flagReason.value === "wrong_part" ? { wrongPartNo: flagWrongPartNo.value.trim() } : {}),
-    });
-    replaceItem(updated);
+    for (const item of group.items.filter((i) => i.scanStatus === null)) {
+      replaceItem(await warehouse.flagCnItem(taskId, item.id, input));
+    }
     flagOpen.value = false;
   } catch (e) {
     showToast(errorMessage(e));
@@ -199,12 +187,15 @@ async function submitFlag() {
   }
 }
 
-async function resetItem(item: CnScanTaskItem) {
+async function resetGroup(group: CnScanGroup) {
   if (submitting.value) return;
+  const touched = group.items.filter((i) => i.scanStatus !== null || (i.scanQty ?? 0) > 0);
+  if (touched.length === 0) return;
   submitting.value = true;
   try {
-    const updated = await warehouse.resetCnItemScan(taskId, item.id);
-    replaceItem(updated);
+    for (const item of touched) {
+      replaceItem(await warehouse.resetCnItemScan(taskId, item.id));
+    }
   } catch (e) {
     showToast(errorMessage(e));
   } finally {
@@ -243,27 +234,45 @@ function fmtDate(s: string | null): string {
   return s ? new Date(s).toLocaleDateString() : t("common.noData");
 }
 
-function reasonLabel(reason: CnScanReason | null): string {
-  return reason ? t(`receivingScan.reasons.${reason}`) : "";
+function groupChip(group: CnScanGroup): { text: string; cls: string } {
+  switch (group.status) {
+    case "complete":
+      return {
+        text: t("receivingScan.status.ok", { qty: fmtQty(group.scanQty) }),
+        cls: "badge--finished",
+      };
+    case "over":
+      return {
+        text: t("receivingScan.status.warning", {
+          scanned: fmtQty(group.scanQty),
+          expected: fmtQty(group.lineQty),
+        }),
+        cls: "badge--pending",
+      };
+    case "partial":
+      return {
+        text: t("receivingScan.status.partial", {
+          scanned: fmtQty(group.scanQty),
+          expected: fmtQty(group.lineQty),
+        }),
+        cls: "badge--pending",
+      };
+    case "error": {
+      const reason: CnScanReason | null =
+        group.items.find((i) => i.scanStatus === "error")?.scanReason ?? null;
+      return { text: reason ? t(`receivingScan.reasons.${reason}`) : t("receivingScan.status.error"), cls: "badge--danger" };
+    }
+    default:
+      return { text: t("receivingScan.status.unresolved"), cls: "" };
+  }
 }
 
-function itemChip(item: CnScanTaskItem): { text: string; cls: string } {
-  if (item.scanStatus === "ok") {
-    return { text: t("receivingScan.status.ok", { qty: fmtQty(item.scanQty) }), cls: "badge--finished" };
-  }
-  if (item.scanStatus === "warning") {
-    return {
-      text: t("receivingScan.status.warning", {
-        scanned: fmtQty(item.scanQty),
-        expected: fmtQty(item.lineQty),
-      }),
-      cls: "badge--pending",
-    };
-  }
-  if (item.scanStatus === "error") {
-    return { text: reasonLabel(item.scanReason), cls: "badge--danger" };
-  }
-  return { text: t("receivingScan.status.unresolved"), cls: "" };
+function groupHasOpenLines(group: CnScanGroup): boolean {
+  return group.items.some((i) => i.scanStatus === null);
+}
+
+function groupHasTouchedLines(group: CnScanGroup): boolean {
+  return group.items.some((i) => i.scanStatus !== null || (i.scanQty ?? 0) > 0);
 }
 
 const flagReasons: CnFlagItemInput["reason"][] = ["missing", "damaged", "wrong_part", "other"];
@@ -283,34 +292,50 @@ const flagReasons: CnFlagItemInput["reason"][] = ["missing", "damaged", "wrong_p
         <DetailRow :label="$t('receivingScan.deliveryDate')" :value="fmtDate(detail.order.deliveryDate)" />
         <DetailRow
           :label="$t('receivingScan.progressLabel')"
-          :value="$t('receivingScan.progress', { resolved: resolvedCount, total: items.length })"
+          :value="$t('receivingScan.progressQty', { scanned: fmtQty(totalScanQty), expected: fmtQty(totalLineQty) })"
         />
       </div>
 
-      <EmptyState v-if="items.length === 0" :msg="$t('receivingScan.noItems')" />
+      <EmptyState v-if="groups.length === 0" :msg="$t('receivingScan.noItems')" />
 
       <ul v-else class="items">
-        <li v-for="item in items" :key="item.id" class="item">
+        <li v-for="group in groups" :key="group.key" class="item">
           <div class="item__main">
             <span class="item__line1">
-              <span class="item-part">{{ item.wclItemNo || item.partNo }}</span>
-              <span class="badge" :class="itemChip(item).cls">{{ itemChip(item).text }}</span>
+              <span class="item-part">{{ group.wclItemNo || group.partNo }}</span>
+              <span class="badge" :class="groupChip(group).cls">{{ groupChip(group).text }}</span>
             </span>
             <span class="item-meta">
-              {{ item.partNo }} · {{ $t("receivingScan.lineQty", { qty: fmtQty(item.lineQty) }) }}
+              {{ group.partNo }} ·
+              {{ $t("receivingScan.groupQty", { scanned: fmtQty(group.scanQty), expected: fmtQty(group.lineQty) }) }}
             </span>
-            <span v-if="item.poNo" class="item-meta">
-              {{ item.poNo }}<template v-if="item.poLine"> / {{ item.poLine }}</template>
+            <span class="item-meta item-meta--chips">
+              <span v-if="group.dateCode" class="chip">{{ group.dateCode }}</span>
+              <span v-if="group.coo" class="chip">COO {{ group.coo }}</span>
+              <span v-if="group.cow" class="chip">COW {{ group.cow }}</span>
             </span>
-            <span v-if="item.scanStatus === 'error' && item.scanNote" class="item-meta item-meta--note">
-              {{ item.scanNote }}
+            <span v-if="group.poNos.length > 0" class="item-meta">{{ group.poNos.join(" · ") }}</span>
+            <span
+              v-for="line in group.items.filter((i) => i.scanStatus === 'error' && i.scanNote)"
+              :key="line.id"
+              class="item-meta item-meta--note"
+            >
+              {{ line.scanNote }}
             </span>
           </div>
           <span class="item__actions">
-            <button v-if="item.scanStatus === null" class="btn btn--ghost btn--small" @click="openFlag(item)">
+            <button
+              v-if="groupHasOpenLines(group)"
+              class="btn btn--ghost btn--small"
+              @click="openFlag(group)"
+            >
               {{ $t("receivingScan.flag") }}
             </button>
-            <button v-else class="btn btn--ghost btn--small" @click="resetItem(item)">
+            <button
+              v-if="groupHasTouchedLines(group)"
+              class="btn btn--ghost btn--small"
+              @click="resetGroup(group)"
+            >
               {{ $t("receivingScan.reset") }}
             </button>
           </span>
@@ -326,29 +351,12 @@ const flagReasons: CnFlagItemInput["reason"][] = ["missing", "damaged", "wrong_p
       </div>
     </template>
 
-    <!-- Multiple-match chooser -->
-    <div v-if="chooserOpen" class="modal-backdrop" @click.self="chooserOpen = false">
+    <!-- Flag dialog (applies to the group's open lines) -->
+    <div v-if="flagOpen && flagGroup" class="modal-backdrop" @click.self="flagOpen = false">
       <div class="modal">
-        <h3 class="modal__title">{{ $t("receivingScan.chooseItem") }}</h3>
-        <button
-          v-for="item in chooserCandidates"
-          :key="item.id"
-          class="btn btn--ghost modal__choice"
-          @click="chooseItem(item)"
-        >
-          {{ item.wclItemNo || item.partNo }} · {{ item.partNo }} ·
-          {{ $t("receivingScan.lineQty", { qty: fmtQty(item.lineQty) }) }}
-        </button>
-        <div class="modal__actions">
-          <button class="btn btn--ghost" @click="chooserOpen = false">{{ $t("actions.cancel") }}</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Flag dialog -->
-    <div v-if="flagOpen && flagItem" class="modal-backdrop" @click.self="flagOpen = false">
-      <div class="modal">
-        <h3 class="modal__title">{{ $t("receivingScan.flagTitle", { part: flagItem.wclItemNo || flagItem.partNo }) }}</h3>
+        <h3 class="modal__title">
+          {{ $t("receivingScan.flagTitle", { part: flagGroup.wclItemNo || flagGroup.partNo }) }}
+        </h3>
         <label v-for="reason in flagReasons" :key="reason" class="modal__radio">
           <input v-model="flagReason" type="radio" :value="reason" />
           <span>{{ $t(`receivingScan.reasons.${reason}`) }}</span>
@@ -451,6 +459,17 @@ const flagReasons: CnFlagItemInput["reason"][] = ["missing", "damaged", "wrong_p
   font-size: 0.85rem;
   word-break: break-all;
 }
+.item-meta--chips {
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+.chip {
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0 0.375rem;
+  font-size: 0.8rem;
+}
 .item-meta--note {
   color: var(--danger);
 }
@@ -497,10 +516,6 @@ const flagReasons: CnFlagItemInput["reason"][] = ["missing", "damaged", "wrong_p
 .modal__title {
   margin: 0;
   font-size: 1rem;
-}
-.modal__choice {
-  text-align: left;
-  white-space: normal;
 }
 .modal__radio {
   display: flex;

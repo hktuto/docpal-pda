@@ -102,20 +102,31 @@
   task). Admin confirm of the OCR'd order
   (`POST /admin/receiving-cn/orders/:batchNo/confirm`, `confirmCnOrder`)
   does the same via `startCnReceivingScanTx`. The order then waits for the
-  PDA **receiving scan** task (收貨掃描; spec
-  `docs/superpowers/specs/2026-11-01-cn-receiving-scan-design.md`): home
+  PDA **receiving scan** task (收貨掃描; specs
+  `docs/superpowers/specs/2026-11-01-cn-receiving-scan-design.md` +
+  `docs/superpowers/specs/2026-11-04-cn-receiving-scan-grouping-design.md`): home
   tile (gated by the same `receiving-cn` flow-step flag) →
   `apps/pda/pages/receiving-cn-scan/index.vue` (task list with progress,
   `useVisibleReload` on `/receiving-cn-scan-tasks`) →
   `apps/pda/pages/receiving-cn-scan/[id].vue` (hardware scanner + camera
-  OCR, client-side template parse + match against the order's unresolved
-  items in `apps/pda/utils/cnReceivingScan.ts` — no-match → error feedback,
-  multi-match → chooser, duplicate raw label → rejected; per-item Flag
-  dialog for missing/damaged/wrong part/other + note, and Reset). Each
-  scan/flag/reset is its own small server tx (the order is a shared
-  server-side entity the admin console also sees): `GET
+  OCR, client-side template parse; the expected items render GROUPED by
+  part + dateCode/COO/COW via `apps/pda/utils/cnScanGroups.ts` —
+  `buildCnScanGroups` — one row per group with summed scanned/ordered
+  quantities, status badge and member PO numbers; header progress is the
+  total scanned vs ordered quantity; duplicate raw label → rejected
+  session-side; group-level Flag dialog for missing/damaged/wrong
+  part/other + note, and group Reset — both loop the per-item endpoints
+  over the group's open/touched lines). Scan matching is server-side
+  (spec 2026-11-04): `POST /receiving-cn/scan-tasks/:id/scan-aggregate`
+  (`{itemId?, wclItemNo?, partNo?, qty, dateCode?, lotCode?, coo?, cow?,
+  raw?}`) matches the task's open lines by normalized part key, filters
+  by the label's batch fields, credits FIFO across lines (`po_no,
+  po_line, id`; a partial credit leaves the line open with an accumulated
+  `scan_qty`), and returns the full refreshed detail plus
+  `lastScan.overQty` for the over-received toast; 404 `no_matching_item`
+  when nothing matches. Other endpoints: `GET
   /receiving-cn/scan-tasks(/:id)`, `POST
-  /receiving-cn/scan-tasks/:id/items/:itemId/scan|flag|reset`, `POST
+  /receiving-cn/scan-tasks/:id/items/:itemId/flag|reset`, `POST
   /receiving-cn/scan-tasks/:id/finalize` (`{unresolvedAs?: 'missing'}`;
   409 `unresolved_items`) in
   `apps/backend/src/routes/receivingCn.ts` over
@@ -123,16 +134,17 @@
   Scan state lives in new `receiving_invoice_items_cn` columns
   (`scan_status` NULL/ok/warning/error, `scan_qty`, `scan_reason`
   qty_mismatch/missing/damaged/wrong_part/other, `scan_note`,
-  `scanned_by`/`scanned_at`); a qty ≠ `line_qty` scan is an automatic
-  `warning`, user flags are `error` (mirrored into the pre-existing
-  mismatch columns for the admin mismatch display), and a successful scan
-  overwrites the item's date_code/lot_code/COO/COW with the physically
-  scanned values. **Finalize is the receipt moment**: one tx sets
-  `received_qty = scan_qty` on ok items only (warning/error stay 0 so they
-  can never enter put-away — CN put-away remaining derives as
-  received − picked − put_away), stamps the order `in_hand`, and creates
-  the `put_away_tasks_cn` task (`ON CONFLICT DO NOTHING`) only when ≥1 ok
-  item exists; SSE `receiving_cn.scan_started` /
+  `scanned_by`/`scanned_at`); an over-scan (or a credit on a NULL
+  `line_qty` line) is an automatic `warning`, user flags are `error`
+  (mirrored into the pre-existing mismatch columns for the admin mismatch
+  display), and credited scans fill the item's date_code/lot_code/COO/COW
+  only where still NULL. **Finalize is the receipt moment**: one tx sets
+  `received_qty = min(scan_qty, line_qty)` on any non-error line with
+  `scan_qty > 0` (NULL `line_qty` → `scan_qty`; flagged and untouched
+  lines stay 0 so they can never enter put-away — CN put-away remaining
+  derives as received − picked − put_away), stamps the order `in_hand`,
+  and creates the `put_away_tasks_cn` task (`ON CONFLICT DO NOTHING`)
+  only when ≥1 credited line exists; SSE `receiving_cn.scan_started` /
   `receiving_cn_scan.item_updated` / `receiving_cn.completed` on topics
   `/receiving-cn-scan-tasks` (+ `/admin/receiving-cn`, `/put-away-tasks`).
   The admin console shows the `scanning` status (list filter +
@@ -354,12 +366,15 @@
   through to the workflow payload).
 - `apps/pda/pages/receiving-cn-scan/index.vue` +
   `apps/pda/pages/receiving-cn-scan/[id].vue` +
-  `apps/pda/utils/cnReceivingScan.ts` — PDA 收貨掃描 receiving scan task
-  (PDF path): task list with progress, scan detail (client-side label
-  parse/match, flag/reset, finalize).
+  `apps/pda/utils/cnScanGroups.ts` (+ `utils/cnReceivingScan.ts` —
+  shared part-key normalization only) — PDA 收貨掃描 receiving scan task
+  (PDF path): task list with progress, scan detail grouped by
+  part + batch (server-side aggregate scan matching, group flag/reset,
+  finalize).
 - `apps/backend/src/db/receivingCnScan.ts` — CN receiving scan domain
-  module (`startCnReceivingScanTx`, per-item scan/flag/reset, finalize
-  tx); routes in `apps/backend/src/routes/receivingCn.ts`.
+  module (`startCnReceivingScanTx`, server-side aggregate scan matching
+  (`scanCnTaskAggregate`, FIFO credit across lines), per-item flag/reset,
+  finalize tx); routes in `apps/backend/src/routes/receivingCn.ts`.
 
 ## Known limitations
 
@@ -390,3 +405,4 @@
 - `docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`
 - `docs/superpowers/specs/2026-10-27-manual-receiving-pda-design.md`
 - `docs/superpowers/specs/2026-11-01-cn-receiving-scan-design.md`
+- `docs/superpowers/specs/2026-11-04-cn-receiving-scan-grouping-design.md`

@@ -11,8 +11,8 @@ import {
   getCnScanTaskDetail,
   listCnScanTasks,
   resetCnItemScan,
-  scanCnItem,
-  type CnScanInput,
+  scanCnTaskAggregate,
+  type CnScanAggregateInput,
 } from "../db/receivingCnScan.js";
 
 // CN manual receiving (手動收貨) — spec
@@ -69,16 +69,23 @@ receivingCnRoute.get("/receiving-cn/scan-tasks/:id", async (c) => {
   return c.json(await getCnScanTaskDetail(db, c.req.param("id"), actorFrom(c).username), 200);
 });
 
-// {qty, dateCode?, lotCode?, coo?, cow?, raw?} → updated item; qty ≠ line_qty
-// → scanStatus 'warning' + scanReason 'qty_mismatch', else 'ok'.
-receivingCnRoute.post("/receiving-cn/scan-tasks/:id/items/:itemId/scan", async (c) => {
+// Aggregate scan (spec 2026-11-04-cn-receiving-scan-grouping-design.md):
+// {itemId?, wclItemNo?, partNo?, qty, dateCode?, lotCode?, coo?, cow?, raw?}
+// → full task detail + lastScan {overQty}; the server matches + credits the
+// open lines FIFO. 404 no_matching_item when nothing matches (a conflicting
+// label batch field has no part-only fallback), 400 invalid_payload on a bad
+// qty / missing part identity.
+receivingCnRoute.post("/receiving-cn/scan-tasks/:id/scan-aggregate", async (c) => {
   if (!cnReceiving()) throw new HTTPException(404, { message: "not_found" });
   const body = (await readJson(c)) as Record<string, unknown>;
   const qty = body.qty;
   if (typeof qty !== "number" || !Number.isInteger(qty) || qty <= 0) {
     throw new HTTPException(400, { message: "invalid_payload: qty must be a positive integer" });
   }
-  const input: CnScanInput = {
+  const input: CnScanAggregateInput = {
+    itemId: optString(body, "itemId"),
+    wclItemNo: optString(body, "wclItemNo"),
+    partNo: optString(body, "partNo"),
     qty,
     dateCode: optString(body, "dateCode"),
     lotCode: optString(body, "lotCode"),
@@ -87,7 +94,7 @@ receivingCnRoute.post("/receiving-cn/scan-tasks/:id/items/:itemId/scan", async (
     raw: optString(body, "raw"),
   };
   const actor = actorFrom(c);
-  return c.json(await scanCnItem(db, c.req.param("id"), c.req.param("itemId"), input, actor), 200);
+  return c.json(await scanCnTaskAggregate(db, c.req.param("id"), input, actor), 200);
 });
 
 // {reason: missing|damaged|wrong_part|other, note?, wrongPartNo?} → updated

@@ -36,9 +36,10 @@ import type {
   CnManualReceiptOrder,
   CnManualReceiptResult,
   CnFlagItemInput,
+  CnScanAggregateInput,
+  CnScanAggregateResult,
   CnScanFinalizeInput,
   CnScanFinalizeResult,
-  CnScanItemInput,
   CnScanTaskDetail,
   CnScanTaskItem,
   CnScanTaskListRow,
@@ -245,7 +246,7 @@ export interface WarehouseService {
   // the cnReceiving flag is off.
   listCnScanTasks(): Promise<CnScanTaskListRow[]>;
   getCnScanTask(id: string): Promise<CnScanTaskDetail>;
-  scanCnItem(taskId: string, itemId: string, input: CnScanItemInput): Promise<CnScanTaskItem>;
+  scanCnTaskAggregate(taskId: string, input: CnScanAggregateInput): Promise<CnScanAggregateResult>;
   flagCnItem(taskId: string, itemId: string, input: CnFlagItemInput): Promise<CnScanTaskItem>;
   resetCnItemScan(taskId: string, itemId: string): Promise<CnScanTaskItem>;
   finalizeCnScanTask(taskId: string, input?: CnScanFinalizeInput): Promise<CnScanFinalizeResult>;

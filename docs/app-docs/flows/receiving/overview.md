@@ -33,9 +33,9 @@ CN warehouses (flow-config `cnReceiving`) run a separate world instead of the fl
 The PDF path includes a physical verification step before stock work begins:
 
 1. Admin confirms the OCR'd order → the order moves to **scanning** (no quantities received yet, no put-away task).
-2. The operator opens the **收貨掃描 (Receiving scan)** task on the PDA and scans each physical item against the expected items.
-3. A scanned quantity that differs from the expected line quantity becomes a **warning**; the operator can also flag an item as missing / damaged / wrong part / other.
-4. **Finalize** stamps the order in-hand. Only clean (ok) items receive their scanned quantity and enter put-away; warning/error items receive nothing and stay on the order for admin follow-up.
+2. The operator opens the **收貨掃描 (Receiving scan)** task on the PDA. Expected items are grouped by part + batch (date code / COO / COW) into one row per group showing **scanned / ordered** totals; the header progress is the total scanned vs ordered quantity.
+3. Each physical label scan is matched server-side and credits the matching group's running total (FIFO across its lines). Over-received quantities show as a **warning**; the operator can also flag a group as missing / damaged / wrong part / other.
+4. **Finalize** stamps the order in-hand. Lines receive their credited quantity (capped at the ordered quantity); flagged and untouched lines receive nothing and stay on the order for admin follow-up.
 
 ## Related guides
 

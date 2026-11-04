@@ -20,7 +20,7 @@ Page and component locations mapped to source files.
 | Receiving list | `/receiving` | `pages/receiving/index.vue` |
 | Receiving detail | `/receiving/:id` | `pages/receiving/[id].vue` or equivalent |
 | CN receiving scan list (收貨掃描 — CN orders at `scanning` with progress; `cnReceiving` flag on) | `/receiving-cn-scan` | `pages/receiving-cn-scan/index.vue` |
-| CN receiving scan detail (client-side label parse/match against expected items, flag/reset, finalize) | `/receiving-cn-scan/:id` | `pages/receiving-cn-scan/[id].vue` (+ `utils/cnReceivingScan.ts`) |
+| CN receiving scan detail (groups by part + batch via `utils/cnScanGroups.ts`, server-side aggregate scan matching, group flag/reset, finalize) | `/receiving-cn-scan/:id` | `pages/receiving-cn-scan/[id].vue` (+ `utils/cnScanGroups.ts`, `utils/cnReceivingScan.ts`) |
 | Put-away list (dual-source: standard tasks, or CN tasks when the `cnReceiving` flag from `useFlowSteps` is on) | `/put-away` | `pages/put-away/index.vue` |
 | Put-away detail (dual-source: standard flow, or CN local-staging flow — sticky shelf, sticky-footer batch confirm via `completeCnPutAwayTask`; flag from `useFlowSteps`) | `/put-away/:id` | `pages/put-away/[id].vue` or equivalent |
 | Measuring list | `/measuring` | `pages/measuring/index.vue` (open boxes with packages) |

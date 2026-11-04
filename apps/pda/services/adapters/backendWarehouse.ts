@@ -64,9 +64,10 @@ import type {
   CnManualReceiptOrder,
   CnManualReceiptResult,
   CnFlagItemInput,
+  CnScanAggregateInput,
+  CnScanAggregateResult,
   CnScanFinalizeInput,
   CnScanFinalizeResult,
-  CnScanItemInput,
   CnScanTaskDetail,
   CnScanTaskItem,
   CnScanTaskListRow,
@@ -635,8 +636,8 @@ export function createBackendWarehouseService(
     async getCnScanTask(id: string): Promise<CnScanTaskDetail> {
       return client.get(`/receiving-cn/scan-tasks/${id}`);
     },
-    async scanCnItem(taskId: string, itemId: string, input: CnScanItemInput): Promise<CnScanTaskItem> {
-      return client.post(`/receiving-cn/scan-tasks/${taskId}/items/${itemId}/scan`, input);
+    async scanCnTaskAggregate(taskId: string, input: CnScanAggregateInput): Promise<CnScanAggregateResult> {
+      return client.post(`/receiving-cn/scan-tasks/${taskId}/scan-aggregate`, input);
     },
     async flagCnItem(taskId: string, itemId: string, input: CnFlagItemInput): Promise<CnScanTaskItem> {
       return client.post(`/receiving-cn/scan-tasks/${taskId}/items/${itemId}/flag`, input);

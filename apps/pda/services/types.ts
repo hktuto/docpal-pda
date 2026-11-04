@@ -1040,8 +1040,13 @@ export interface CnScanTaskDetail {
   items: CnScanTaskItem[];
 }
 
-/** POST /receiving-cn/scan-tasks/:id/items/:itemId/scan body. */
-export interface CnScanItemInput {
+/** POST /receiving-cn/scan-tasks/:id/scan-aggregate body (spec
+ *  2026-11-04-cn-receiving-scan-grouping): one scanned label, matched and
+ *  credited server-side across the matching group of lines (FIFO). */
+export interface CnScanAggregateInput {
+  itemId?: string;
+  wclItemNo?: string;
+  partNo?: string;
   qty: number;
   dateCode?: string;
   lotCode?: string;
@@ -1050,6 +1055,12 @@ export interface CnScanItemInput {
   /** The scanned label text — traceability only. */
   raw?: string;
 }
+
+/** POST .../scan-aggregate response: the refreshed task detail plus the last
+ *  scan's over-received qty (credited beyond the ordered quantities). */
+export type CnScanAggregateResult = CnScanTaskDetail & {
+  lastScan?: { overQty?: number };
+};
 
 /** POST /receiving-cn/scan-tasks/:id/items/:itemId/flag body. */
 export interface CnFlagItemInput {

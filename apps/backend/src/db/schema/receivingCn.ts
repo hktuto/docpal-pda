@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, integer, timestamp, index, uniqueIndex, foreignKey, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, index, uniqueIndex, foreignKey, jsonb } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 import { users, subInventories } from "./master.js";
 
@@ -82,7 +82,7 @@ export const receivingInvoiceItemsCn = pgTable(
     scanNote: text("scan_note"),
     scannedBy: text("scanned_by").references(() => users.id),
     scannedAt: timestamp("scanned_at", { mode: "date" }),
-    reportedMismatch: integer("reported_mismatch").notNull().default(0),
+    reportedMismatch: boolean("reported_mismatch").notNull().default(false),
     mismatchReason: text("mismatch_reason"),
     mismatchQty: integer("mismatch_qty"),
     wrongPartNo: text("wrong_part_no"),

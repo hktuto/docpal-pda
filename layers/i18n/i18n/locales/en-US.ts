@@ -207,14 +207,17 @@ export default {
     noTasks: "No orders awaiting scanning.",
     noItems: "This order has no items.",
     progress: "{resolved}/{total}",
+    progressQty: "{scanned} / {expected}",
     progressLabel: "Progress",
     invoices: "Invoice nos.",
     deliveryDate: "Delivery date",
-    lineQty: "Expected {qty}",
+    groupQty: "Scanned {scanned} / {expected}",
     status: {
       unresolved: "Unresolved",
       ok: "Scanned {qty}",
-      warning: "Qty mismatch {scanned}/{expected}"
+      warning: "Qty mismatch {scanned}/{expected}",
+      partial: "Scanned {scanned}/{expected}",
+      error: "Flagged"
     },
     reasons: {
       qty_mismatch: "Qty mismatch",
@@ -229,10 +232,11 @@ export default {
     wrongPartNo: "Actual part no.",
     wrongPartNoRequired: "Enter the actual part no.",
     reset: "Reset",
-    chooseItem: "Choose the matching item",
     duplicateLabel: "This label was already scanned.",
     noPartNo: "Could not read a part no. from the label.",
-    noMatch: "The label matches no unresolved item.",
+    noQty: "The label has no quantity.",
+    noMatch: "The label matches no item on this order.",
+    overReceived: "Over-received {qty} — check the quantity.",
     finalize: "Finish",
     confirmFinalize: "Finish this receiving scan? Scanned items will be received and a put-away task created.",
     confirmFinalizeUnresolved: "{count} item(s) remain unscanned. Mark the rest as missing and finish, or cancel to keep scanning.",

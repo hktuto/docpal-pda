@@ -416,16 +416,21 @@ rows + `receiving_cn.completed` SSE on `/admin/receiving-cn` +
 
 ## CN receiving scan tasks (收貨掃描)
 
-The PDF path's physical-verification step (spec
-`docs/superpowers/specs/2026-11-01-cn-receiving-scan-design.md`): admin confirm
-moves a CN order to `scanning`; the PDA scans each item, and finalize is the
-receipt moment (only `ok` items get `received_qty` and become put-away work).
+The PDF path's physical-verification step (specs
+`docs/superpowers/specs/2026-11-01-cn-receiving-scan-design.md` and
+`docs/superpowers/specs/2026-11-04-cn-receiving-scan-grouping-design.md`):
+admin confirm moves a CN order to `scanning`; the PDA scans physical labels
+and the server credits the matching open items FIFO (aggregate matching — no
+per-line picking), and finalize is the receipt moment (non-error lines with a
+scan credit get `received_qty = min(scan_qty, line_qty)` and become put-away
+work).
 
 | Endpoint | Description |
 |---|---|
 | `GET /receiving-cn/scan-tasks` | Orders at `scanning` with `itemCount`/`resolvedCount` progress. Rows carry `assignee` (the `receiving_orders_cn` column); the list (and detail) are filtered by it — NULL visible to all, set = only that username (spec `docs/superpowers/specs/2026-11-01-task-assignee-design.md`). |
 | `GET /receiving-cn/scan-tasks/:id` | Order + items with scan state; 404 `receiving_cn_scan_task_not_found` unless scanning (also 404 when assigned to another user). |
-| `POST /receiving-cn/scan-tasks/:id/items/:itemId/scan` · `.../flag` · `.../reset` · `POST /receiving-cn/scan-tasks/:id/finalize` | Per-item scan/flag/reset + finalize (`{unresolvedAs?: 'missing'}`; 409 `unresolved_items`) — see the design spec. |
+| `POST /receiving-cn/scan-tasks/:id/scan-aggregate` | `{itemId?, wclItemNo?, partNo?, qty, dateCode?, lotCode?, coo?, cow?, raw?}` — server-side aggregate match (part-key equality + label batch-field filter) + FIFO credit across the open lines; over-scan → `warning`/`qty_mismatch` on the last credited line. → the full task detail (same shape as GET) + `lastScan: {overQty}`. 404 `no_matching_item`, 400 `invalid_payload` (bad qty / no part identity). |
+| `POST /receiving-cn/scan-tasks/:id/items/:itemId/flag` · `.../reset` · `POST /receiving-cn/scan-tasks/:id/finalize` | Per-item flag/reset (group actions loop them client-side; reset also clears a partial `scan_qty`) + finalize (`{unresolvedAs?: 'missing'}`; 409 `unresolved_items`) — see the design spec. |
 
 ## Ad-hoc put-away
 
