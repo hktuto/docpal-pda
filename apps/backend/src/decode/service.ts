@@ -23,8 +23,8 @@
 
 import { dateCodeFormat } from "../config.js";
 import type { AppDb } from "../db.js";
-import { resolveTeIdentity } from "../db/adhocPutaway.js";
 import { lookupPartsByDrawingNo } from "../db/partDrawno.js";
+import { resolveTeIdentity } from "../db/partIdentity.js";
 import { normalizePartNo } from "./codecs.js";
 import { getDecodeData } from "./cache.js";
 import { decodeWithTemplates, type DecodedScan, type ScanDecodeInput } from "./template.js";
@@ -67,16 +67,15 @@ export async function decodeScan(db: AppDb, input: ScanDecodeInput): Promise<Dec
     return result;
   }
 
-  // TE labels print truncated MPNs — resolve the real master keys. When the
-  // master holds several wcl keys for one part (TE-/TE+ dupes) and nothing
-  // disambiguates, itemId still becomes the canonical part_no but wclItemNo
-  // is DROPPED — the fake "<brand>/<mpn>" derivation must never reach the
-  // UI/matchers as if it were real.
+  // TE labels print truncated MPNs — resolve the real master keys
+  // (resolveTeIdentity): AMP-wrapped dupe preferred, order targets
+  // disambiguate; candidates that are genuinely different parts with no
+  // target match leave the parsed label values alone.
   if (result.matched && result.parsed.itemId && result.supplier?.brands?.includes("TE")) {
     const identity = await resolveTeIdentity(db, result.parsed.itemId, input.targets);
     if (identity) {
       result.parsed.itemId = identity.partNo;
-      result.parsed.wclItemNo = identity.wclItemNo ?? undefined;
+      result.parsed.wclItemNo = identity.wclItemNo;
     }
     tick("te-parts");
     log();
@@ -106,7 +105,7 @@ export async function decodeScan(db: AppDb, input: ScanDecodeInput): Promise<Dec
       const identity = await resolveTeIdentity(db, ungated.parsed.itemId, input.targets);
       if (identity) {
         ungated.parsed.itemId = identity.partNo;
-        ungated.parsed.wclItemNo = identity.wclItemNo ?? undefined;
+        ungated.parsed.wclItemNo = identity.wclItemNo;
         result = ungated;
         tick("te-rerun");
         log();

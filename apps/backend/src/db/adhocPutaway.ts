@@ -1,5 +1,4 @@
 import { and, desc, eq, inArray, isNull, sql, or, type SQL } from "drizzle-orm";
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { AppDb } from "../db.js";
 import { adHocPutAways } from "./schema/adhocPutaway.js";
 import { inventoryLots } from "./schema/inventory.js";
@@ -10,7 +9,7 @@ import { newId } from "./id.js";
 import { now } from "./now.js";
 import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
 import { normalizePartNo } from "../decode/codecs.js";
-import type { DbOrTx } from "./query.js";
+import { normPartExpr } from "./partIdentity.js";
 import { toCanonicalDateCode } from "./dateCode.js";
 import { dateCodeFormat } from "../config.js";
 
@@ -80,15 +79,6 @@ function lotKey(item: AdHocPutAwayItemInput, shelfCode: string): LotKey {
  * single-brand guess (<brand>/<mpn>), which is wrong for brands whose wcl
  * key has a different shape (TE-AMP(<pn>) / TE+<pn>).
  */
-/**
- * SQL mirror of normalizePartNo (decode/codecs.ts) shared by the canonical
- * part lookups — whitespace collapsed, uppercased, TE "AMP(<pn>)" /
- * "TE-AMP(<pn>)" unwrapped. Byte-identical to the idx_parts_norm_*
- * expressions (schema/master.ts) so the planner uses the indexes.
- */
-const normPartExpr = (col: AnyPgColumn | SQL) =>
-  sql`regexp_replace(upper(regexp_replace(${col}, '\\s', '', 'g')), '^(TE-)?AMP\\((.+)\\)$', '\\2')`;
-
 export async function lookupAdHocPutAwayPart(
   db: AppDb,
   scanned: string
@@ -106,78 +96,6 @@ export async function lookupAdHocPutAwayPart(
     ))
     .limit(1);
   return rows[0] ?? null;
-}
-
-/**
- * TE labels print a TRUNCATED MPN (e.g. "1571983-1" where the master stores
- * "1-1571983-1" or a wrapped variant) — like NCC's drawing code, the scanned
- * identity needs a parts-master translation. Candidate order mirrors
- * partDrawno's exact-then-substring rule: normalized equality first
- * (idx_parts_norm_*), then `ILIKE '%<scanned>%'` on part_no/wcl_item_no
- * (idx_parts_*_trgm). Callers disambiguate (decodeScan via order targets,
- * receiving scan-commit by retrying the item match).
- */
-export async function lookupPartKeyCandidates(
-  db: DbOrTx,
-  scanned: string
-): Promise<{ partNo: string; wclItemNo: string }[]> {
-  const needle = normalizePartNo(scanned);
-  if (!needle) return [];
-  const select = { partNo: parts.partNo, wclItemNo: parts.wclItemNo } as const;
-  const exact = await db
-    .select(select)
-    .from(parts)
-    .where(or(
-      sql`${normPartExpr(parts.partNo)} = ${needle}`,
-      sql`${normPartExpr(parts.wclItemNo)} = ${needle}`
-    ))
-    .limit(20);
-  if (exact.length > 0) return exact;
-  return db
-    .select(select)
-    .from(parts)
-    .where(or(
-      sql`${parts.partNo} ILIKE ${`%${needle}%`}`,
-      sql`${parts.wclItemNo} ILIKE ${`%${needle}%`}`
-    ))
-    .limit(20);
-}
-
-/**
- * TE identity resolution for the decode: candidates from the parts master,
- * disambiguated by order targets when possible. Returns:
- * - {partNo, wclItemNo} — unique (or target-selected) wcl;
- * - {partNo, wclItemNo: null} — candidates agree on ONE part_no but the
- *   master holds several wcl keys for it (TE-AMP/TE+AMP dupes): part_no is
- *   safe to adopt, the wcl cannot be honestly picked without order context;
- * - null — no candidate, or candidates disagree on part_no (substring
- *   collision): the parsed label values stand.
- */
-export interface TeIdentity {
-  partNo: string;
-  wclItemNo: string | null;
-}
-
-export async function resolveTeIdentity(
-  db: DbOrTx,
-  scanned: string,
-  targets?: string[]
-): Promise<TeIdentity | null> {
-  const cands = await lookupPartKeyCandidates(db, scanned);
-  if (cands.length === 0) return null;
-  let picked = cands;
-  if (cands.length > 1 && targets?.length) {
-    const norms = new Set(targets.map(normalizePartNo));
-    const onOrder = cands.filter(
-      (r) => norms.has(normalizePartNo(r.partNo)) || norms.has(normalizePartNo(r.wclItemNo))
-    );
-    if (onOrder.length === 1) return { partNo: onOrder[0].partNo, wclItemNo: onOrder[0].wclItemNo };
-    if (onOrder.length > 1) picked = onOrder;
-  }
-  const partNos = [...new Set(picked.map((r) => r.partNo))];
-  if (partNos.length !== 1) return null;
-  const wcls = [...new Set(picked.map((r) => r.wclItemNo))];
-  return { partNo: partNos[0], wclItemNo: wcls.length === 1 ? wcls[0] : null };
 }
 
 /**

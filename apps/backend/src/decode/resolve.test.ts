@@ -38,9 +38,13 @@ before(async () => {
     ["1-1571983-1", "TE-AMP(1-1571983-1)"],
     ["1-1571983-11", "TE-AMP(1-1571983-11)"],
     // real-world pattern seen on the synced db (2026-11-04): ONE part_no
-    // stored under two wcl keys ("TE-" supplier vs "TE+" variant)
+    // stored under two wcl keys ("TE-" vs "TE+")
     ["1-4444555-6", "TE-AMP(1-4444555-6)"],
     ["1-4444555-6", "TE+AMP(1-4444555-6)"],
+    // ...and the sibling pattern: one row AMP-wrapped, one bare (user's
+    // business tie: the AMP(...) row is the canonical one)
+    ["AMP(1-8880000-2)", "TE-AMP(1-8880000-2)"],
+    ["1-8880000-2", "TE+1-8880000-2"],
   ] as const) {
     await client.db.execute(
       sql`INSERT INTO parts (id, brand, part_no, wcl_item_no)
@@ -88,14 +92,24 @@ test("full (non-truncated) TE MPN resolves by normalized equality", async () => 
   assert.equal(result.parsed.wclItemNo, "TE-AMP(1-1571983-1)");
 });
 
-test("duplicate wcl keys for one part_no: itemId canonical, fake wcl DROPPED", async () => {
+test("duplicate wcl keys for one part_no: itemId canonical + a REAL wcl wins over the fake", async () => {
   // parts master holds 1-4444555-6 under TE-AMP(...) AND TE+AMP(...).
-  // Blind scan (no targets): part_no is unambiguous — adopt it; the wcl is
-  // not — the fake derived "TE/..." must not survive as if real.
+  // Blind scan (no targets): the fake derived "TE/..." must not survive —
+  // one of the two stored keys is attached (business tie, 2026-11-04).
   const result = await decodeScan(client.db, { raw: "PN4444555-6" });
   assert.equal(result.matched, true);
   assert.equal(result.parsed.itemId, "1-4444555-6");
-  assert.equal(result.parsed.wclItemNo, undefined);
+  assert.ok(
+    ["TE-AMP(1-4444555-6)", "TE+AMP(1-4444555-6)"].includes(String(result.parsed.wclItemNo)),
+    `expected a stored key, got ${result.parsed.wclItemNo}`
+  );
+});
+
+test("AMP-wrapped / bare sibling rows: the AMP row is the canonical pick", async () => {
+  const result = await decodeScan(client.db, { raw: "PN8880000-2" });
+  assert.equal(result.matched, true);
+  assert.equal(result.parsed.itemId, "AMP(1-8880000-2)");
+  assert.equal(result.parsed.wclItemNo, "TE-AMP(1-8880000-2)");
 });
 
 test("duplicate wcl keys resolve when the order target names one", async () => {
