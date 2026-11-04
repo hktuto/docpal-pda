@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { queryAll, type DbOrTx } from "./query.js";
+import { queryAll, queryGet, type DbOrTx } from "./query.js";
 
 // ---------------------------------------------------------------------------
 // Shared box identity + search.
@@ -31,6 +31,10 @@ export function boxIdPrefix(kind: BoxKind, at: Date = new Date()): string {
 export async function nextBoxId(tx: DbOrTx, kind: BoxKind): Promise<string> {
   const prefix = boxIdPrefix(kind);
   const { table, entityType } = KIND_TABLE[kind];
+  // Serialize same-prefix id generation across concurrent box creates (audit
+  // 2026-11-03 #8): without this the max-scan below races and one request
+  // dies on the PK conflict mid-flow. Released with the caller's tx.
+  await queryGet(tx, sql`SELECT pg_advisory_xact_lock(hashtext(${prefix}))`);
   const rows = await queryAll<{ id: string }>(
     tx,
     sql`SELECT id FROM ${sql.raw(table)} WHERE id LIKE ${prefix + "%"}

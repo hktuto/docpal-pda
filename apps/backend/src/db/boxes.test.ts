@@ -63,6 +63,26 @@ test("shipping box ids: BOX-S-<date>-<seq>, per-day seq, cancelled seq not reuse
   assert.match(box3.id, /^BOX-S-\d{8}-0003$/);
 });
 
+// --- concurrent box creates (audit 2026-11-03 #8) -----------------------------
+
+test("shipping box ids: concurrent creates get distinct seqs (advisory lock)", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf();
+  const orderA = await pickingOrderIdOf("SO-DEMO-0001");
+  const orderB = await pickingOrderIdOf("SO-DEMO-0002");
+  // Without the pg_advisory_xact_lock both txs compute the same max+1 and one
+  // dies on the PK conflict.
+  const [a, b] = await Promise.all([
+    createShippingBox(client.db, { pickingOrderId: orderA, actorId }),
+    createShippingBox(client.db, { pickingOrderId: orderB, actorId }),
+  ]);
+  assert.notEqual(a.id, b.id);
+  assert.deepEqual(
+    [a.id, b.id].map((id) => Number(id.slice(-4))).sort((x, y) => x - y),
+    [1, 2]
+  );
+});
+
 // --- shelf box ids ------------------------------------------------------------
 
 test("shelf box ids: BOX-H-<date>-<seq>; staging and manual boxes share the daily seq", async () => {
