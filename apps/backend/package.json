@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.0.8",
+    "bwip-js": "^4.11.4",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",

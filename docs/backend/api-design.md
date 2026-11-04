@@ -827,3 +827,5 @@ useful snapshot with an empty one. The same operations are exposed manually via
 | Endpoint | Description |
 |---|---|
 | `POST /dev/reset` | Truncate + reseed (demo only). |
+| `POST /dev/allocate` | Fleet-wide allocation rebuild (dev/test only). |
+| `GET /dev/lab` (+ `…/data`, `…/parts`, `…/label`, `…/barcode`) | Dev Lab: generate supplier-label barcodes for PDA testing — editable qty/date/lot/COO/serial per supplier template, round-trip verified against the real decoder. Spec `docs/superpowers/specs/2026-11-04-dev-lab-label-generator-design.md`. |
