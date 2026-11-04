@@ -118,7 +118,12 @@ useUrlQueryState({
   pageSize: { state: pageSize, defaultValue: 50, parse: parsePositiveInt(50) },
 });
 
+// Stale-response guard (audit 2026-11-03 #11) — a slow earlier load must not
+// overwrite the rows of a newer filter/page change.
+let loadSeq = 0;
+
 async function load() {
+  const seq = ++loadSeq;
   loading.value = true;
   error.value = "";
   try {
@@ -134,13 +139,15 @@ async function load() {
       sort: sort?.id,
       dir: sort?.desc ? "desc" : "asc",
     });
+    if (seq !== loadSeq) return;
     rows.value = res.rows;
     total.value = res.total;
     selected.value = new Set();
   } catch (e: any) {
+    if (seq !== loadSeq) return;
     error.value = e.message;
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 }
 

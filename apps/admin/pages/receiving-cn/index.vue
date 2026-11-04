@@ -64,10 +64,15 @@ useUrlQueryState({
   pageSize: { state: pageSize, defaultValue: 50, parse: parsePositiveInt(50) },
 });
 
+// Stale-response guard (audit 2026-11-03 #11) — background polls and manual
+// loads interleave; only the newest response may land.
+let loadSeq = 0;
+
 async function load(opts: { background?: boolean } = {}) {
   // Background refresh (polls, SSE, manual refresh with data on screen):
   // keep showing the current rows — no loading flash. The placeholder only
   // appears on the very first load.
+  const seq = ++loadSeq;
   const background = opts.background ?? rows.value.length > 0;
   if (!background) loading.value = true;
   loadInFlight = true;
@@ -78,6 +83,7 @@ async function load(opts: { background?: boolean } = {}) {
       page: pagination.value.pageIndex + 1,
       pageSize: pagination.value.pageSize,
     });
+    if (seq !== loadSeq) return;
     const next: CnMergedRow[] = [...res.pending, ...res.rows];
     // Skip the assignment (and the re-render) when nothing changed.
     if (res.total !== total.value || JSON.stringify(next) !== JSON.stringify(rows.value)) {
@@ -85,11 +91,14 @@ async function load(opts: { background?: boolean } = {}) {
       total.value = res.total;
     }
   } catch (e: any) {
+    if (seq !== loadSeq) return;
     error.value = e.message;
   } finally {
-    loadInFlight = false;
-    if (!background) loading.value = false;
-    syncPolling();
+    if (seq === loadSeq) {
+      loadInFlight = false;
+      if (!background) loading.value = false;
+      syncPolling();
+    }
   }
 }
 

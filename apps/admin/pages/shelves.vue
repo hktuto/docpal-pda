@@ -188,7 +188,9 @@ async function onImportFile(e: Event) {
       return;
     }
 
-    // Build the batch payload — one API call for all rows
+    // Build the batch payload — one API call for all rows. Blank cells are
+    // omitted (treated as "unchanged"): an explicit null would clear the
+    // shelf's sub-inventory scopes (audit 2026-11-03 #5).
     const payload: Record<string, any>[] = [];
     for (let i = 1; i < aoa.length; i++) {
       const row = aoa[i];
@@ -196,15 +198,18 @@ async function onImportFile(e: Event) {
       if (!code) continue;
 
       const item: Record<string, any> = { code };
-      if (nameIdx >= 0) item.displayName = String(row[nameIdx] ?? "").trim() || null;
-      if (groupIdx >= 0) item.zone = String(row[groupIdx] ?? "").trim() || null;
-      if (warnIdx >= 0) item.warning = String(row[warnIdx] ?? "").trim() || null;
-      if (subInvIdx >= 0) {
-        const raw = String(row[subInvIdx] ?? "").trim();
-        item.subInventoryScopes = raw ? parseSubInventory(raw) : null;
-      }
+      const name = nameIdx >= 0 ? String(row[nameIdx] ?? "").trim() : "";
+      const zone = groupIdx >= 0 ? String(row[groupIdx] ?? "").trim() : "";
+      const warning = warnIdx >= 0 ? String(row[warnIdx] ?? "").trim() : "";
+      const subInv = subInvIdx >= 0 ? String(row[subInvIdx] ?? "").trim() : "";
+      if (name) item.displayName = name;
+      if (zone) item.zone = zone;
+      if (warning) item.warning = warning;
+      if (subInv) item.subInventoryScopes = parseSubInventory(subInv);
       payload.push(item);
     }
+
+    if (!window.confirm(`Import ${payload.length} shelf rows? Blank cells are left unchanged; non-blank cells overwrite.`)) return;
 
     const result = await api.post<{ created: number; updated: number; skipped: number; errors: any[] }>(
       "/admin/shelves/batch-import",

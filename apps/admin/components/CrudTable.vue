@@ -132,7 +132,13 @@ function clearSelection() {
   selected.value = new Set();
 }
 
+// Sequence guard: an earlier slow response must not overwrite a newer one
+// (stale rows under a fresh filter/page label — audit 2026-11-03 #11; same
+// pattern as apps/pda/pages/stock-search loadSeq).
+let loadSeq = 0;
+
 async function load() {
+  const seq = ++loadSeq;
   loading.value = true;
   error.value = "";
   try {
@@ -152,15 +158,19 @@ async function load() {
         if (v) params.set(f.param, v);
       }
       const res = await api.get(`/admin/${props.config.path}?${params}`);
+      if (seq !== loadSeq) return;
       rows.value = res.rows;
       sTotal.value = res.total;
     } else {
-      rows.value = await api.get(`/admin/${props.config.path}`);
+      const res = await api.get(`/admin/${props.config.path}`);
+      if (seq !== loadSeq) return;
+      rows.value = res;
     }
   } catch (e: any) {
+    if (seq !== loadSeq) return;
     error.value = e.message;
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 }
 

@@ -17,14 +17,23 @@ export default defineNuxtRouteMiddleware(async (to) => {
       const res = await fetch(`${config.public.apiBaseUrl}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        clearSession();
+      } else if (res.ok) {
         const user = await res.json();
         valid = Array.isArray(user?.groupCodes) && user.groupCodes.includes("admin");
+        if (!valid) clearSession();
+      } else {
+        // Server-side blip (backend restart / 5xx): keep the session — the
+        // next API call decides (audit 2026-11-03 #10). Safe since the
+        // backend enforces the admin group on /admin/* itself.
+        valid = true;
       }
     } catch {
-      valid = false;
+      // Network error ≠ invalid token: bouncing to /login mid-edit here lost
+      // admins their work on every deploy (audit 2026-11-03 #10).
+      valid = true;
     }
-    if (!valid) clearSession();
   }
 
   if (to.path === "/login") {

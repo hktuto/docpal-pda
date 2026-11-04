@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../../db.js";
 import { shelves } from "../../db/schema/index.js";
 import { newId } from "../../db/id.js";
@@ -26,10 +26,6 @@ shelfBatchImportRoute.post("/", async (c) => {
   if (!Array.isArray(body.shelves) || body.shelves.length === 0) {
     throw new HTTPException(400, { message: "shelves array is required" });
   }
-
-  // Fetch existing codes to decide create vs update
-  const existing = await db.select({ code: shelves.code }).from(shelves);
-  const existingCodes = new Set(existing.map((r) => r.code));
 
   const valid: ShelfBatchRow[] = [];
   const errors: { code: string; message: string }[] = [];
@@ -60,40 +56,48 @@ shelfBatchImportRoute.post("/", async (c) => {
     valid.push({ code, displayName, zone, warning, subInventoryScopes });
   }
 
-  let created = 0;
-  let updated = 0;
+  // All-or-nothing: a mid-import failure must not leave half the shelves
+  // written (audit 2026-11-03 #5).
+  const { created, updated } = await db.transaction(async (tx) => {
+    // Fetch existing codes to decide create vs update
+    const existing = await tx.select({ code: shelves.code }).from(shelves);
+    const existingCodes = new Set(existing.map((r) => r.code));
 
-  // Batch insert new shelves
-  const toCreate = valid.filter((v) => !existingCodes.has(v.code));
-  if (toCreate.length > 0) {
-    await db.insert(shelves).values(
-      toCreate.map((v) => ({
-        id: newId(),
-        code: v.code,
-        displayName: v.displayName,
-        zone: v.zone,
-        subInventoryScopes: v.subInventoryScopes,
-        warning: v.warning,
-      }))
-    );
-    created = toCreate.length;
-  }
+    // Batch insert new shelves
+    const toCreate = valid.filter((v) => !existingCodes.has(v.code));
+    if (toCreate.length > 0) {
+      await tx.insert(shelves).values(
+        toCreate.map((v) => ({
+          id: newId(),
+          code: v.code,
+          displayName: v.displayName,
+          zone: v.zone,
+          subInventoryScopes: v.subInventoryScopes,
+          warning: v.warning,
+        }))
+      );
+    }
 
-  // Batch update existing shelves — one UPDATE per row (Drizzle multi-update
-  // with CASE is overkill for ≤ a few hundred rows)
-  for (const v of valid.filter((v) => existingCodes.has(v.code))) {
-    await db
-      .update(shelves)
-      .set({
-        ...(v.displayName !== null && { displayName: v.displayName }),
-        ...(v.zone !== null && { zone: v.zone }),
-        ...(v.warning !== null && { warning: v.warning }),
-        ...(v.subInventoryScopes !== undefined && { subInventoryScopes: v.subInventoryScopes }),
-        lastUpdateDate: new Date(),
-      })
-      .where(eq(shelves.code, v.code));
-    updated++;
-  }
+    // Batch update existing shelves — one UPDATE per row (Drizzle multi-update
+    // with CASE is overkill for ≤ a few hundred rows). null text fields are
+    // skipped ("unchanged"); only an explicit subInventoryScopes key clears.
+    let updated = 0;
+    for (const v of valid.filter((v) => existingCodes.has(v.code))) {
+      await tx
+        .update(shelves)
+        .set({
+          ...(v.displayName !== null && { displayName: v.displayName }),
+          ...(v.zone !== null && { zone: v.zone }),
+          ...(v.warning !== null && { warning: v.warning }),
+          ...(v.subInventoryScopes !== undefined && { subInventoryScopes: v.subInventoryScopes }),
+          lastUpdateDate: new Date(),
+        })
+        .where(eq(shelves.code, v.code));
+      updated++;
+    }
+
+    return { created: toCreate.length, updated };
+  });
 
   return c.json({ created, updated, skipped: errors.length, errors });
 });
