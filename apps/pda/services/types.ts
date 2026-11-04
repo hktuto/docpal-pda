@@ -95,6 +95,10 @@ export interface PickingOrderListQuery {
   search?: string;
   limit?: number;
   offset?: number;
+  /** Sort key — backend whitelist (e.g. "deliveryDate"); unknown keys fall
+   *  back to the default priority order. */
+  sort?: string;
+  dir?: "asc" | "desc";
 }
 
 export interface ReceivingOrderListRow {

@@ -264,6 +264,8 @@ export function createBackendWarehouseService(
         search: query?.search,
         limit: query?.limit,
         offset: query?.offset,
+        sort: query?.sort,
+        dir: query?.dir,
       });
     },
     async getPickingOrder(id: string): Promise<PickingOrderDetail> {

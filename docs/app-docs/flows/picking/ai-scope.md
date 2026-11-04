@@ -597,8 +597,9 @@
 ## Key files
 
 - `pages/picking/index.vue` — list page (compact rows grouped into
-  status sections — Picking / Allocated / Picking finished / Measuring
-  finished, each with a count; paged 50 at a time with the AppListPage
+  delivery-date sections — earliest first, orders without a date last, each
+  with a count; server-sorted via `?sort=deliveryDate&dir=asc` with the
+  priority_seq tiebreak; paged 50 at a time with the AppListPage
   load-more footer; default status
   filter allocated+picking, the finished statuses via the filter modal;
   sticky search,

@@ -32,10 +32,10 @@
         </button>
       </template>
 
-      <template v-for="group in groupedRows" :key="group.status">
-        <h2 class="status-group__title">
-          {{ statusLabel.picking(group.status) }}
-          <span class="status-group__count">{{ group.rows.length }}</span>
+      <template v-for="group in groupedRows" :key="group.key">
+        <h2 class="date-group__title">
+          {{ group.label }}
+          <span class="date-group__count">{{ group.rows.length }}</span>
         </h2>
         <AppListRow
           v-for="po in group.rows"
@@ -86,6 +86,7 @@
 
 <script setup lang="ts">
 import { useWarehouse } from "~/composables/useWarehouse";
+import { badgeClass } from "~/composables/useStatusBadge";
 import { viewListChip, viewListRow } from "~/utils/viewConfig";
 import PickingFilterModal from "~/components/picking/PickingFilterModal.vue";
 import PickingIssueReportModal from "~/components/PickingIssueReportModal.vue";
@@ -114,9 +115,12 @@ function rowMeta(po: PickingOrderListRow): string[] {
 }
 function rowChip(po: PickingOrderListRow) {
   if (!viewConfigLoaded.value) {
+    // Legacy fallback: the group header carries the delivery date, so the
+    // chip shows the status (with the work lock appended when held).
+    const status = statusLabel.picking(po.status);
     return po.workingByName
-      ? { text: t("picking.lockedBy", { name: po.workingByName }), cls: "badge--pending" }
-      : null;
+      ? { text: `${status} · ${t("picking.lockedBy", { name: po.workingByName })}`, cls: "badge--pending" }
+      : { text: status, cls: badgeClass(po.status) };
   }
   return renderChip(viewListChip("picking", po, viewConfig.value));
 }
@@ -156,37 +160,43 @@ const filterAllocation = ref<string[]>([]);
 // the finished statuses stay reachable by ticking them in the filter modal.
 const DEFAULT_STATUSES = ["allocated", "picking"];
 
-// The list renders as one section per status, paged 50 rows at a time with
-// the shared load-more footer (a section can be partial until every page is
-// loaded); this is the section display order:
-// in-progress work first, then orders ready to pick, then completed.
-const STATUS_GROUP_ORDER = ["picking", "allocated", "picking_finished", "measuring_finished"];
-
 const hasActiveFilter = computed(
   () => filterStatuses.value.length > 0 || filterAllocation.value.length > 0
 );
 
+// The list renders as one section per delivery date (earliest first, orders
+// without a date last), paged 50 rows at a time with the shared load-more
+// footer (a section can be partial until every page is loaded). The backend
+// sorts by delivery_date asc (priority_seq tiebreak), so sections stay
+// contiguous as pages stream in.
 const groupedRows = computed(() => {
-  const byStatus = new Map<string, PickingOrderListRow[]>();
+  const byDate = new Map<string, PickingOrderListRow[]>();
   for (const row of rows.value) {
-    const list = byStatus.get(row.status);
+    const key = row.deliveryDate ? row.deliveryDate.slice(0, 10) : "";
+    const list = byDate.get(key);
     if (list) list.push(row);
-    else byStatus.set(row.status, [row]);
+    else byDate.set(key, [row]);
   }
-  const rank = (status: string) => {
-    const index = STATUS_GROUP_ORDER.indexOf(status);
-    return index === -1 ? STATUS_GROUP_ORDER.length : index;
-  };
-  return [...byStatus.keys()]
-    .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
-    .map((status) => ({ status, rows: byStatus.get(status)! }));
+  return [...byDate.keys()]
+    .sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b)))
+    .map((key) => {
+      const groupRows = byDate.get(key)!;
+      const first = groupRows[0]!;
+      return {
+        key,
+        label: first.deliveryDate
+          ? new Date(first.deliveryDate).toLocaleDateString()
+          : t("common.noDate"),
+        rows: groupRows,
+      };
+    });
 });
 
-// The old aside carried the delivery date / ship-to; the single-column row
-// puts them on the second meta line. The work lock becomes the inline chip.
+// The old aside carried the delivery date / ship-to; the delivery date is now
+// the group header, so the legacy extra meta line keeps just the ship-to. The
+// work lock merges into the inline status chip.
 function rowExtra(po: PickingOrderListRow): string {
-  const date = po.deliveryDate ? new Date(po.deliveryDate).toLocaleDateString() : t("common.noDate");
-  return `${date} · ${t("picking.shipTo", { destination: po.shipTo || t("common.noData") })}`;
+  return t("picking.shipTo", { destination: po.shipTo || t("common.noData") });
 }
 
 function onFilterApply(payload: { statuses: string[]; allocation: string[] }) {
@@ -204,6 +214,8 @@ function listQuery(limit: number, offset: number): PickingOrderListQuery {
     status: (filterStatuses.value.length > 0 ? filterStatuses.value : DEFAULT_STATUSES).join(","),
     allocation: filterAllocation.value.length > 0 ? filterAllocation.value.join(",") : undefined,
     search: term || undefined,
+    sort: "deliveryDate",
+    dir: "asc",
     limit,
     offset,
   };
@@ -343,7 +355,7 @@ async function onReportSaved(payload: {
   background: var(--primary);
 }
 
-.status-group__title {
+.date-group__title {
   display: flex;
   align-items: center;
   padding: 0.35rem 0.75rem;
@@ -358,7 +370,7 @@ async function onReportSaved(payload: {
   border-bottom: 1px solid var(--border);
 }
 
-.status-group__count {
+.date-group__count {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 9999px;
