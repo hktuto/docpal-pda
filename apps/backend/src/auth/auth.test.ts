@@ -110,6 +110,37 @@ test("?token= is only accepted for GET /events, not other routes", async () => {
   assert.equal((await app.request(`/receiving-orders?token=${encodeURIComponent(token)}`)).status, 401);
 });
 
+// --- admin-group gate (audit 2026-11-03 #1) ------------------------------------
+
+test("/admin/* requires the admin group; PDA reference reads stay open", async () => {
+  await reseed(client);
+  const operator = await operatorToken();
+  const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
+  // The three read-only master-data GETs the PDA depends on (backendWarehouse).
+  for (const path of ["/admin/shelves", "/admin/suppliers", "/admin/countries"]) {
+    assert.equal((await app.request(path, { headers: auth(operator) })).status, 200, path);
+  }
+  // Everything else is admin-only for an operator token.
+  assert.equal((await app.request("/admin/users", { headers: auth(operator) })).status, 403);
+  assert.equal(
+    (await app.request("/admin/flow-config", { method: "PUT", headers: { ...auth(operator), "Content-Type": "application/json" }, body: "{}" })).status,
+    403
+  );
+  assert.equal(
+    (await app.request("/admin/shelves/batch-import", { method: "POST", headers: { ...auth(operator), "Content-Type": "application/json" }, body: '{"shelves":[]}' })).status,
+    403
+  );
+  // Writes to the exempt tables need admin too.
+  assert.equal(
+    (await app.request("/admin/shelves", { method: "POST", headers: { ...auth(operator), "Content-Type": "application/json" }, body: '{"code":"X","displayName":null,"zone":null}' })).status,
+    403
+  );
+
+  const admin = (await (await login("admin", "DocPalAdmin2026!")).json()).token as string;
+  assert.equal((await app.request("/admin/users", { headers: auth(admin) })).status, 200);
+  assert.equal((await app.request("/admin/shelves", { headers: auth(admin) })).status, 200);
+});
+
 // --- /auth/me ------------------------------------------------------------------
 
 test("GET /auth/me returns the token user; 401 without a token", async () => {

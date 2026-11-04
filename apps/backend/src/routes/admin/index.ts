@@ -17,6 +17,8 @@ import {
   inventoryLabels,
 } from "../../db/schema/index.js";
 import { createCrudRouter, reqStr, optStr, reqInt, reqNum, optInt, optStrArray, optJson, optBool, reqBool, reqLabelType, reqLabelSource, reqConditions } from "./crud.js";
+import { invalidateDecodeCache } from "../../decode/cache.js";
+import { actorFrom } from "../../auth/middleware.js";
 import { docpalBaseUrl } from "../../config.js";
 import { queryAll } from "../../db/query.js";
 import { shelfBoxesRoute } from "./shelfBoxes.js";
@@ -57,6 +59,19 @@ function optScopes(body: Record<string, unknown>): UserScopeEntry[] | null {
 }
 
 export const adminRoute = new Hono();
+
+// Admin-group gate (audit 2026-11-03 #1): the global JWT middleware proves
+// identity only; every /admin/* mutation and read below is admin-only EXCEPT
+// the three reference reads the PDA uses as its master data
+// (services/adapters/backendWarehouse.ts — GET shelves/suppliers/countries).
+const PDA_REFERENCE_READS = new Set(["/admin/shelves", "/admin/suppliers", "/admin/countries"]);
+adminRoute.use("*", async (c, next) => {
+  if (c.req.method === "GET" && PDA_REFERENCE_READS.has(c.req.path)) return next();
+  if (!actorFrom(c)?.groupCodes.includes("admin")) {
+    throw new HTTPException(403, { message: "forbidden" });
+  }
+  return next();
+});
 
 // Mounted with .route() like every other sub-router below — calling
 // `shelfBatchImportRoute.fetch(c.req, ...)` hands the sub-app the ORIGINAL
@@ -111,6 +126,7 @@ adminRoute.route(
   createCrudRouter({
     table: supplierProfiles,
     pk: supplierProfiles.id,
+    onWrite: invalidateDecodeCache, // decodeScan reads qr_template/encodings/brands
     create: (b) => ({
       id: optId(b),
       supplierCode: reqStr(b, "supplierCode"),
@@ -216,6 +232,7 @@ adminRoute.route(
   createCrudRouter({
     table: dateCodeCounterPeriods,
     pk: dateCodeCounterPeriods.id,
+    onWrite: invalidateDecodeCache, // decodeScan reads the month-counter rows
     create: (b) => {
       const direction = reqStr(b, "direction");
       if (!DIRECTIONS.has(direction)) throw new HTTPException(400, { message: "direction must be one of forward|backward" });
