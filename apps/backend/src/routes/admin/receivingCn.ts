@@ -34,7 +34,15 @@ export const adminReceivingCnRoute = new Hono();
 // (the default) every route 404s, matching the PDA /put-away-cn gating — a
 // warehouse runs either the standard or the CN flow, so the API stays
 // invisible until the admin enables the step.
-adminReceivingCnRoute.use("*", async (c, next) => {
+// NB: the guard must stay scoped to /receiving-cn — this router is mounted at
+// adminRoute's "/", and a use("*") here runs (in registration order) before
+// every sibling admin route registered later, 404-ing e.g. GET /admin/users
+// whenever the CN step is off.
+adminReceivingCnRoute.use("/receiving-cn", async (c, next) => {
+  if (!cnReceiving()) throw new HTTPException(404, { message: "not_found" });
+  await next();
+});
+adminReceivingCnRoute.use("/receiving-cn/*", async (c, next) => {
   if (!cnReceiving()) throw new HTTPException(404, { message: "not_found" });
   await next();
 });
