@@ -7,14 +7,11 @@
 // path that requires DB lookups; the OCR-text heuristics (PDA
 // parseAndIdentify) stay client-side.
 //
-// Two suppliers need identity translation after the template match, both
-// guarded on the decoded profile's brands so no other scan pays a query:
-// - NCC: itemId is the numeric DRAWING CODE — wcl_part_drawno resolves the
-//   wcl_item_no (spec 2026-11-03-ncc-drawno-part-lookup-design.md).
-// - TE: the label prints a TRUNCATED MPN — the parts master (equality then
-//   trigram substring, resolveTeIdentity) resolves the real
-//   part_no/wcl_item_no; they replace the parsed values so every flow's
-//   matchers and displays get the canonical identity without a second call.
+// After the template match, the result goes through the brand resolver for
+// the decoded profile's brands (brands/index.ts dispatch table — NCC drawing
+// code, TE truncated MPN; that is where new brand logic belongs). The same
+// resolver runs a second way when the targets gate rejected the scan: re-run
+// ungated and let the brand vouch for the translated identity on this order.
 //
 // [DECODE-TIME] logs the per-stage cost (load/loop/identity lookup) — human-
 // paced scans keep the console quiet; compare against the PDA's
@@ -23,18 +20,16 @@
 
 import { dateCodeFormat } from "../config.js";
 import type { AppDb } from "../db.js";
-import { lookupPartsByDrawingNo } from "../db/partDrawno.js";
-import { resolveTeIdentity } from "../db/partIdentity.js";
-import { normalizePartNo } from "./codecs.js";
 import { getDecodeData } from "./cache.js";
+import { resolverFor } from "./brands/index.js";
 import { decodeWithTemplates, type DecodedScan, type ScanDecodeInput } from "./template.js";
 
 export async function decodeScan(db: AppDb, input: ScanDecodeInput): Promise<DecodedScan> {
-  const parts: string[] = [];
+  const stages: string[] = [];
   let prev = performance.now();
   const tick = (stage: string) => {
     const now = performance.now();
-    parts.push(`${stage} ${(now - prev).toFixed(1)}ms`);
+    stages.push(`${stage} ${(now - prev).toFixed(1)}ms`);
     prev = now;
   };
 
@@ -47,71 +42,32 @@ export async function decodeScan(db: AppDb, input: ScanDecodeInput): Promise<Dec
 
   const log = () =>
     console.log(
-      `[DECODE-TIME] ${parts.join(" + ")} | ${templates.length} templates -> matched=${result.matched}` +
+      `[DECODE-TIME] ${stages.join(" + ")} | ${templates.length} templates -> matched=${result.matched}` +
         (result.supplier ? ` (${result.supplier.code})` : "")
     );
 
-  // NCC labels carry the numeric drawing code as itemId — resolve it to the
-  // WCL item no via wcl_part_drawno (spec 2026-11-03-ncc-drawno-part-lookup).
-  // The single-brand profile derivation (`NCC/<itemId>`) yields a bogus
-  // wclItemNo for NCC, so a unique resolution overrides it.
-  if (result.matched && result.parsed.itemId && result.supplier?.brands?.includes("NCC")) {
-    const drawnoMatches = await lookupPartsByDrawingNo(db, result.parsed.itemId);
-    const wclItemNos = [...new Set(drawnoMatches.map((m) => m.wclItemNo))];
-    if (wclItemNos.length === 1) {
-      // itemId stays the drawing code; only the wclItemNo is attached.
-      result.parsed.wclItemNo = wclItemNos[0];
-    }
-    tick("drawno");
-    log();
-    return result;
-  }
+  // Matched scan has the identity translated in place; on the ungated rerun
+  // the resolver's answer decides whether the rerun is adopted at all.
+  const applyBrand = async (scan: DecodedScan, gated: boolean): Promise<boolean> => {
+    const resolver = resolverFor(scan.supplier?.brands);
+    if (!scan.parsed.itemId || !resolver) return !gated;
+    const accepted = await resolver.resolve(db, scan.parsed, input.targets, gated);
+    tick(resolver.name + (gated ? "-rerun" : ""));
+    return accepted;
+  };
 
-  // TE labels print truncated MPNs — resolve the real master keys
-  // (resolveTeIdentity): AMP-wrapped dupe preferred, order targets
-  // disambiguate; candidates that are genuinely different parts with no
-  // target match leave the parsed label values alone.
-  if (result.matched && result.parsed.itemId && result.supplier?.brands?.includes("TE")) {
-    const identity = await resolveTeIdentity(db, result.parsed.itemId, input.targets);
-    if (identity) {
-      result.parsed.itemId = identity.partNo;
-      result.parsed.wclItemNo = identity.wclItemNo;
-    }
-    tick("te-parts");
+  if (result.matched) {
+    await applyBrand(result, false);
     log();
     return result;
   }
 
   // Targets-gate rejection: the drawing/truncated code is never among the
   // order targets, so re-run ungated and accept the identity translation
-  // only when exactly one resolution lands inside the (normalized) targets.
-  if (!result.matched && input.targets?.length) {
+  // only when the brand resolver vouches for it on this order.
+  if (input.targets?.length) {
     const ungated = decodeWithTemplates({ ...input, targets: undefined }, templates, periods, dateCodeFormat());
-    if (ungated.matched && ungated.parsed.itemId && ungated.supplier?.brands?.includes("NCC")) {
-      const drawnoMatches = await lookupPartsByDrawingNo(db, ungated.parsed.itemId);
-      const targetNorms = new Set(input.targets.map(normalizePartNo));
-      const onOrder = [...new Set(drawnoMatches.map((m) => m.wclItemNo))].filter((w) =>
-        targetNorms.has(normalizePartNo(w))
-      );
-      if (onOrder.length === 1) {
-        ungated.parsed.wclItemNo = onOrder[0];
-        result = ungated;
-        tick("ncc-rerun");
-        log();
-        return result;
-      }
-    }
-    if (ungated.matched && ungated.parsed.itemId && ungated.supplier?.brands?.includes("TE")) {
-      const identity = await resolveTeIdentity(db, ungated.parsed.itemId, input.targets);
-      if (identity) {
-        ungated.parsed.itemId = identity.partNo;
-        ungated.parsed.wclItemNo = identity.wclItemNo;
-        result = ungated;
-        tick("te-rerun");
-        log();
-        return result;
-      }
-    }
+    if (ungated.matched && (await applyBrand(ungated, true))) result = ungated;
   }
 
   log();

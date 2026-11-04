@@ -29,7 +29,12 @@ server-side costs nothing in offline behaviour.
    - `service.ts` — the only DB/config touchpoint: loads `supplier_profiles`
      templates (`listScanTemplates`), `date_code_counter_periods`
      (`listDateCodePeriods`) and flow-config `dateCodeFormat`, then calls the
-     pure loop.
+     pure loop and the brand resolver for the decoded profile's brands.
+   - `brands/` — per-brand DB-backed identity translation after the loop
+     (`index.ts` dispatch table + one file per brand: `ncc.ts` drawing code →
+     `wcl_part_drawno`, `te.ts` truncated MPN → parts master). New brand logic
+     registers there; value codecs a template can express (KOA qty/date) stay
+     in `codecs.ts` + template config.
    - `index.ts` — public API (`decodeScan`, `decodeWithTemplates`, types).
 2. **`POST /scan/decode`** (thin route `src/routes/decode.ts`, JWT-authenticated
    like every non-allowlisted route). Body:
@@ -84,7 +89,8 @@ server-side costs nothing in offline behaviour.
 
 ## Files
 
-- New: `src/decode/{index,service,template}.ts`, `src/decode/decode.test.ts`,
+- New: `src/decode/{index,service,template}.ts`, `src/decode/brands/{index,ncc,te}.ts`,
+  `src/decode/decode.test.ts`,
   `src/routes/decode.ts` (registered in `src/index.ts`).
 - Moved: `src/db/scanParse.ts` → `src/decode/codecs.ts` (git mv; import paths
   updated in `src/db/*`, sync comments in PDA files and `docs/backend/*`).
