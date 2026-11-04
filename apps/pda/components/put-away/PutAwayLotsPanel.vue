@@ -25,6 +25,19 @@
         :done="isDone(group)"
         @toggle="toggleExpand(group.key)"
       >
+        <!-- Skip-scan selection (spec 2026-11-04): checking a group means
+             "shelve the whole remaining qty of this part" — the next shelf
+             scan commits it without label scans. Sits in the leading slot,
+             outside the expand-toggle button. -->
+        <template v-if="skipScan && !isDone(group)" #leading>
+          <label class="select-box" :aria-label="$t('putAway.skipScan.selectAll', { part: groupTitle(group) })">
+            <input
+              type="checkbox"
+              :checked="selectedKeys.has(group.key)"
+              @change="emit('toggle-select', group)"
+            />
+          </label>
+        </template>
         <DetailRow
           v-for="field in detailConfig.expandedFields"
           :key="field"
@@ -146,6 +159,11 @@ interface Props {
   removingScan: Record<string, boolean>;
   expandedItems: Set<string>;
   armedItemId: string | null;
+  /** Skip-scan mode (flow config steps.put-away.skipScan, spec 2026-11-04):
+   *  not-done groups render a leading checkbox; checking one selects the
+   *  whole part for shelve-without-scanning. */
+  skipScan: boolean;
+  selectedKeys: Set<string>;
 }
 
 const props = defineProps<Props>();
@@ -168,6 +186,7 @@ const emit = defineEmits<{
   "add-to-shelf": [scanId: string];
   "remove-scan": [scanId: string];
   "remove-from-shelf": [scan: PutAwayScan];
+  "toggle-select": [group: PutAwayItemGroup];
   "update:expandedItems": [value: Set<string>];
 }>();
 
@@ -264,6 +283,20 @@ function toggleExpand(groupKey: string) {
 
 .card--done {
   opacity: 0.55;
+}
+
+.select-box {
+  display: flex;
+  align-items: center;
+  padding: 0 0.5rem 0 0.125rem;
+  cursor: pointer;
+}
+
+.select-box input {
+  width: 1.375rem;
+  height: 1.375rem;
+  accent-color: var(--primary);
+  cursor: pointer;
 }
 
 .armed-banner {

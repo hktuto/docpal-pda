@@ -736,7 +736,7 @@ export interface FlowConfigState {
   config: {
     steps: Record<string, { enabled: boolean }>;
     pickingAllocation: { allowDockStock: boolean };
-    putAway: { autoCreateTasks: boolean; suggestShelf: "existing-stock" | "off" };
+    putAway: { autoCreateTasks: boolean; suggestShelf: "existing-stock" | "off"; skipScan?: boolean };
     /** Org partitions this warehouse accepts; [] = all orgs (no filtering). */
     allowedOrgIds: number[];
     /** Stock age threshold (years) for the stock-search outdated count. */
@@ -914,6 +914,7 @@ export interface CnOrderItemRow {
   receivedQty: number;
   putAwayQty: number;
   ctnNo: string | null;
+  packingListNum: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -1302,13 +1303,13 @@ export function useFlowApi() {
     getCnOrder: (batchNo: string) =>
       api.get<CnOrderDetail>(`/admin/receiving-cn/orders/${encodeURIComponent(batchNo)}`),
     // CN receiving item edit: subset of { dateCode, lotCode, coo, cow, ctnNo,
-    // subInventory, suggestedShelf } (null/"" clears, absent = unchanged).
-    // 400 when no known keys present; 404 receiving_cn_item_not_found.
+    // packingListNum, subInventory, suggestedShelf } (null/"" clears, absent =
+    // unchanged). 400 when no known keys present; 404 receiving_cn_item_not_found.
     updateCnItem: (
       id: string,
       fields: Partial<
         Record<
-          "partNo" | "wclItemNo" | "poNo" | "dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "subInventory" | "suggestedShelf",
+          "partNo" | "wclItemNo" | "poNo" | "dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "packingListNum" | "subInventory" | "suggestedShelf",
           string | null
         >
       > & { lineQty?: number }

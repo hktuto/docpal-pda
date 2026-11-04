@@ -80,22 +80,26 @@ test("parseFlowConfig: put-away disabled + dock stock disallowed → deadlock, t
 });
 
 test("parseFlowConfig: put-away task keys merge over defaults", () => {
-  const cfg = parseFlowConfig('{"steps":{"put-away":{"autoCreateTasks":true,"suggestShelf":"off"}}}');
+  const cfg = parseFlowConfig('{"steps":{"put-away":{"autoCreateTasks":true,"suggestShelf":"off","skipScan":true}}}');
   assert.equal(cfg.putAway.autoCreateTasks, true);
   assert.equal(cfg.putAway.suggestShelf, "off");
+  assert.equal(cfg.putAway.skipScan, true);
   assert.equal(cfg.steps["put-away"].enabled, true);
   // defaults when unset
   const def = parseFlowConfig(undefined);
   assert.equal(def.putAway.autoCreateTasks, false);
   assert.equal(def.putAway.suggestShelf, "existing-stock");
+  assert.equal(def.putAway.skipScan, false);
 });
 
 test("parseFlowConfig: put-away task key validation", () => {
   assert.throws(() => parseFlowConfig('{"steps":{"put-away":{"autoCreateTasks":"yes"}}}'), /autoCreateTasks must be a boolean/);
   assert.throws(() => parseFlowConfig('{"steps":{"put-away":{"suggestShelf":"magic"}}}'), /suggestShelf must be "existing-stock" or "off"/);
+  assert.throws(() => parseFlowConfig('{"steps":{"put-away":{"skipScan":"yes"}}}'), /skipScan must be a boolean/);
   // the keys only exist on put-away
   assert.throws(() => parseFlowConfig('{"steps":{"picking":{"autoCreateTasks":true}}}'), /unknown key "autoCreateTasks"/);
   assert.throws(() => parseFlowConfig('{"steps":{"receiving":{"suggestShelf":"off"}}}'), /unknown key "suggestShelf"/);
+  assert.throws(() => parseFlowConfig('{"steps":{"picking":{"skipScan":true}}}'), /unknown key "skipScan"/);
 });
 
 test("parseFlowConfig: allowedOrgIds merges over the [] default", () => {

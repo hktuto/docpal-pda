@@ -31,11 +31,12 @@ const steps = ref<Record<FlowStep, boolean>>({
 });
 
 // Resolved steps.put-away config (GET /config putAway). Defaults = manual
-// mode (derived candidates list, no task queue) so pages behave as before
-// until the first fetch resolves.
-const putAwayConfig = ref<{ autoCreateTasks: boolean; suggestShelf: string }>({
+// mode (derived candidates list, no task queue, no skip-scan checkboxes) so
+// pages behave as before until the first fetch resolves.
+const putAwayConfig = ref<{ autoCreateTasks: boolean; suggestShelf: string; skipScan: boolean }>({
   autoCreateTasks: false,
   suggestShelf: "existing-stock",
+  skipScan: false,
 });
 
 // Resolved steps.picking.allocation config (GET /config pickingAllocation).

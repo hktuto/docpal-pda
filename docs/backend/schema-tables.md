@@ -401,6 +401,7 @@ CN invoice line items.
 | picked_qty | integer NOT NULL DEFAULT 0 | Quantity picked from this line |
 | put_away_qty | integer NOT NULL DEFAULT 0 | Quantity put away |
 | ctn_no | text | Carton number |
+| packing_list_num | varchar(255) | Packing list number (upstream-synced) |
 | date_code | text | Line date code |
 | lot_code | text | Lot number |
 | coo | text | Country of origin |

@@ -344,6 +344,13 @@
       "when": 1793703403824,
       "tag": "0049_normal_cn_reported_mismatch",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793757243050,
+      "tag": "0050_regular_mac_gargan",
+      "breakpoints": true
     }
   ]
 }

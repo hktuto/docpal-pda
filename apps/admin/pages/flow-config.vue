@@ -38,6 +38,7 @@ const stepEnabled = reactive<Record<string, boolean>>({});
 const allowDockStock = ref(true);
 const autoCreateTasks = ref(false);
 const suggestShelf = ref<"existing-stock" | "off">("existing-stock");
+const skipScan = ref(false);
 const pickingShelfScan = ref<"off" | "require-match" | "require-any">("off");
 const dateCodeFormat = ref<"wwyy" | "yyww">("wwyy");
 
@@ -82,6 +83,7 @@ async function load() {
     allowDockStock.value = state.value.config.pickingAllocation.allowDockStock;
     autoCreateTasks.value = state.value.config.putAway.autoCreateTasks;
     suggestShelf.value = state.value.config.putAway.suggestShelf;
+    skipScan.value = state.value.config.putAway.skipScan ?? false;
     pickingShelfScan.value = state.value.config.pickingShelfScan ?? "off";
     dateCodeFormat.value = state.value.config.dateCodeFormat ?? "wwyy";
     allowedOrgIdsText.value = state.value.config.allowedOrgIds.join(", ");
@@ -179,6 +181,7 @@ async function save() {
       ...steps["put-away"],
       autoCreateTasks: autoCreateTasks.value,
       suggestShelf: suggestShelf.value,
+      skipScan: skipScan.value,
     };
     state.value = await flow.saveFlowConfig({ steps, allowedOrgIds, outdatedStockYears, receivingSubInventoryRules, pickingFromSubinventoryOrgs, pickingShelfScan: pickingShelfScan.value, dateCodeFormat: dateCodeFormat.value });
     saved.value = true;
@@ -241,6 +244,11 @@ onMounted(load);
           <input v-model="autoCreateTasks" type="checkbox" />
           {{ $t("admin.pages.flowConfig.autoCreateTasks") }}
         </label>
+        <label class="check-row">
+          <input v-model="skipScan" type="checkbox" />
+          {{ $t("admin.pages.flowConfig.skipScan") }}
+        </label>
+        <p class="hint-text">{{ $t("admin.pages.flowConfig.skipScanHint") }}</p>
         <div class="form-row">
           <label for="fc-suggest">{{ $t("admin.pages.flowConfig.suggestShelf") }}</label>
           <SearchableSelect

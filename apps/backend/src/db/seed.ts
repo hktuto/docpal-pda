@@ -531,7 +531,7 @@ const HK_FLOW_CONFIG = {
   steps: {
     verify: { enabled: true },
     picking: { enabled: true, allocation: { allowDockStock: true } },
-    "put-away": { enabled: true, suggestShelf: "existing-stock", autoCreateTasks: false },
+    "put-away": { enabled: true, suggestShelf: "existing-stock", autoCreateTasks: false, skipScan: true },
     measuring: { enabled: true },
     receiving: { enabled: true },
     "goods-verify": { enabled: true },
@@ -587,7 +587,7 @@ const SZ_FLOW_CONFIG = {
   steps: {
     verify: { enabled: true },
     picking: { enabled: true, allocation: { allowDockStock: true } },
-    "put-away": { enabled: true, suggestShelf: "existing-stock", autoCreateTasks: false },
+    "put-away": { enabled: true, suggestShelf: "existing-stock", autoCreateTasks: false, skipScan: true },
     measuring: { enabled: true },
     receiving: { enabled: true },
     "goods-verify": { enabled: true },

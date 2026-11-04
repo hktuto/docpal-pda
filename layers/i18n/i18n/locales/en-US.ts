@@ -2083,6 +2083,7 @@ export default {
           receivedQty: "Received Qty",
           putAwayQty: "Put-away Qty",
           ctnNo: "Ctn No.",
+          packingListNum: "Packing List No.",
           dateCode: "Date Code",
           lotCode: "Lot Code",
           coo: "COO",

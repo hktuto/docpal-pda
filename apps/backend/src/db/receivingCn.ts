@@ -774,6 +774,7 @@ export interface CnOrderDetailItem {
   receivedQty: number;
   putAwayQty: number;
   ctnNo: string | null;
+  packingListNum: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -848,7 +849,8 @@ export async function getCnOrderDetail(db: AppDb, batchNo: string): Promise<CnOr
     sql`SELECT rii.id, rii.receiving_invoice_id AS "receivingInvoiceId", ri.invoice_no AS "invoiceNo",
                rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo", rii.po_no AS "poNo", rii.po_line AS "poLine",
                rii.line_qty AS "lineQty", rii.received_qty AS "receivedQty", rii.put_away_qty AS "putAwayQty",
-               rii.ctn_no AS "ctnNo", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
+               rii.ctn_no AS "ctnNo", rii.packing_list_num AS "packingListNum",
+               rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
                rii.coo, rii.cow, rii.org_id AS "orgId", rii.sub_inventory_code AS "subInventoryCode",
                rii.additional_data AS "additionalData", rii.order_data AS "orderData",
                rii.org_id AS "itemOrgId", rii.sub_inventory_code AS "itemSubInventoryCode"
@@ -1106,6 +1108,7 @@ const CN_ITEM_FIELDS = {
   coo: "coo",
   cow: "cow",
   ctnNo: "ctn_no",
+  packingListNum: "packing_list_num",
 } as const;
 
 export type CnItemField = keyof typeof CN_ITEM_FIELDS;
@@ -1121,6 +1124,7 @@ export interface CnItemRow {
   receivedQty: number;
   putAwayQty: number;
   ctnNo: string | null;
+  packingListNum: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -1132,7 +1136,8 @@ export interface CnItemRow {
 const CN_ITEM_SELECT = sql`SELECT rii.id, rii.receiving_invoice_id AS "receivingInvoiceId", ri.invoice_no AS "invoiceNo",
                rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo", rii.po_no AS "poNo", rii.line_qty AS "lineQty",
                rii.received_qty AS "receivedQty", rii.put_away_qty AS "putAwayQty",
-               rii.ctn_no AS "ctnNo", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
+               rii.ctn_no AS "ctnNo", rii.packing_list_num AS "packingListNum",
+               rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
                rii.coo, rii.cow, rii.org_id AS "orgId", rii.sub_inventory_code AS "subInventoryCode"
         FROM receiving_invoice_items_cn rii
         LEFT JOIN receiving_invoices_cn ri ON ri.id = rii.receiving_invoice_id`;
@@ -1180,6 +1185,7 @@ export async function updateCnReceivingItemFields(
     sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo", org_id AS "orgId",
                po_no AS "poNo", line_qty AS "lineQty", received_qty AS "receivedQty",
                date_code AS "dateCode", lot_code AS "lotCode", coo, cow, ctn_no AS "ctnNo",
+               packing_list_num AS "packingListNum",
                sub_inventory_code AS "subInventoryCode", additional_data AS "additionalData"
         FROM receiving_invoice_items_cn WHERE id = ${input.itemId}`
   );

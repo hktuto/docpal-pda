@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, index, uniqueIndex, foreignKey, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, index, uniqueIndex, foreignKey, jsonb } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 import { users, subInventories } from "./master.js";
 
@@ -64,6 +64,8 @@ export const receivingInvoiceItemsCn = pgTable(
     pickedQty: integer("picked_qty").notNull().default(0),
     putAwayQty: integer("put_away_qty").notNull().default(0),
     ctnNo: text("ctn_no"),
+    // Upstream-managed (added by the sync service 2026-11): packing list number.
+    packingListNum: varchar("packing_list_num", { length: 255 }),
     dateCode: text("date_code"),
     lotCode: text("lot_code"),
     coo: text("coo"),

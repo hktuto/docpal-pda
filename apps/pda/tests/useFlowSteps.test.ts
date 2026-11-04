@@ -29,19 +29,20 @@ describe('useFlowSteps putAway config', () => {
     expect(putAwayConfig.value).toEqual({
       autoCreateTasks: false,
       suggestShelf: 'existing-stock',
+      skipScan: false,
     });
   });
 
   it('merges the resolved putAway config (drives the put-away list-source switch)', async () => {
     getFlowConfigMock.mockResolvedValue({
       flowSteps: { 'put-away': false },
-      putAway: { autoCreateTasks: true, suggestShelf: 'off' },
+      putAway: { autoCreateTasks: true, suggestShelf: 'off', skipScan: true },
     });
     const { putAwayConfig, flowSteps, loadFlowSteps } = await freshUseFlowSteps();
 
     await loadFlowSteps();
 
-    expect(putAwayConfig.value).toEqual({ autoCreateTasks: true, suggestShelf: 'off' });
+    expect(putAwayConfig.value).toEqual({ autoCreateTasks: true, suggestShelf: 'off', skipScan: true });
     expect(flowSteps.value['put-away']).toBe(false);
   });
 
@@ -66,6 +67,7 @@ describe('useFlowSteps putAway config', () => {
     expect(putAwayConfig.value).toEqual({
       autoCreateTasks: false,
       suggestShelf: 'existing-stock',
+      skipScan: false,
     });
   });
 

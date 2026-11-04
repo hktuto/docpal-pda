@@ -223,6 +223,11 @@ export interface PutAwayConfig {
   autoCreateTasks: boolean;
   /** Per-item shelf suggestion strategy in task responses ("off" = no hint). */
   suggestShelf: PutAwaySuggestShelf;
+  /** true = the PDA put-away detail shows per-part checkboxes so the operator
+   *  can shelve whole parts without scanning labels (spec
+   *  2026-11-04-put-away-skip-scan-design.md). Batch fields come from the
+   *  receiving declaration, not the physical label. */
+  skipScan: boolean;
 }
 
 /** One po_no glob pattern → sub_inventory_code mapping inside a rule group. */
@@ -468,7 +473,7 @@ function defaultFlowConfig(): FlowConfig {
   return {
     steps,
     pickingAllocation: { allowDockStock: true },
-    putAway: { autoCreateTasks: false, suggestShelf: "existing-stock" },
+    putAway: { autoCreateTasks: false, suggestShelf: "existing-stock", skipScan: false },
     allowedOrgIds: [],
     outdatedStockYears: 2,
     receivingSubInventoryRules: [],
@@ -865,6 +870,11 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
             throw new Error('[config] flow config.steps["put-away"].suggestShelf must be "existing-stock" or "off"');
           }
           cfg.putAway.suggestShelf = stepValue;
+        } else if (stepKey === "skipScan" && step === "put-away") {
+          if (typeof stepValue !== "boolean") {
+            throw new Error('[config] flow config.steps["put-away"].skipScan must be a boolean');
+          }
+          cfg.putAway.skipScan = stepValue;
         } else {
           throw new Error(`[config] flow config.steps["${step}"]: unknown key "${stepKey}"`);
         }

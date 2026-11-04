@@ -131,7 +131,7 @@ adminReceivingCnRoute.get("/receiving-cn/orders/:batchNo/logs", async (c) => {
 // part_no; a bare partNo change re-resolves wcl_item_no (NULL when no unique
 // match). suggestedShelf persists inside additional_data (override; cleared
 // back to the computed suggestion with null/""). Returns the updated item row.
-const CN_ITEM_EDITABLE = ["partNo", "wclItemNo", "poNo", "dateCode", "lotCode", "coo", "cow", "ctnNo"] as const;
+const CN_ITEM_EDITABLE = ["partNo", "wclItemNo", "poNo", "dateCode", "lotCode", "coo", "cow", "ctnNo", "packingListNum"] as const;
 const CN_ITEM_SUB_INVENTORY = "subInventory";
 const CN_ITEM_SUGGESTED_SHELF = "suggestedShelf";
 

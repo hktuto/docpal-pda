@@ -127,6 +127,20 @@
   `GET /admin/countries`, value = ISO code, names localized client-side via
   the `countryLabels` locale map) and default to EMPTY — the operator picks
   explicitly; OCR-parsed values stay as raw extra options.
+- Skip-scan shelve-without-scanning (flow config `steps["put-away"].skipScan`,
+  default false, spec
+  `docs/superpowers/specs/2026-11-04-put-away-skip-scan-design.md`): each
+  not-done part-group card renders a checkbox (the `AppListRow` leading slot)
+  selecting the group's whole remaining qty. A shelf QR scan while any groups
+  are checked takes precedence over the sticky-shelf/pending-commit path and
+  shelves the selection after a confirm prompt — standard mode writes one
+  `recordPutAwayScan` per member line (`qty = remainingQty`, batch fields from
+  the receiving declaration, serial null, shelf attached — no new backend
+  endpoint); CN mode stages the lines locally onto that shelf for the batch
+  confirm. Selection lives in the page's `selectedKeys` set, is pruned on
+  reload (done/disappeared groups drop out), and clears after commit. The
+  line selection helper is `skipScanLines` in `utils/putAwayGroups.ts`.
+  Trade-off: no physical-label verification and no serial capture.
 - Scanner symbology whitelist: while the detail page is open, the hardware
   decoder is restricted to the supplier profile's `barcode_types` (when set),
   but the shelf/box QR symbologies always stay enabled — shelf scanning is
@@ -190,8 +204,9 @@
   and `classifyPutAwayScan` shelf/box/item scan routing (tests in
   `tests/putAwayScan.test.ts`).
 - `utils/putAwayGroups.ts` — part-group display model for the detail page:
-  `groupPutAwayItems` (summed qty per part, staged qty folded in) and
-  `putAwayGroupFieldValue` (qty fields summed, batch fields distinct-joined).
+  `groupPutAwayItems` (summed qty per part, staged qty folded in),
+  `putAwayGroupFieldValue` (qty fields summed, batch fields distinct-joined),
+  and `skipScanLines` (per-line portions of the skip-scan selection).
 - `components/ScanMultiItemModal.vue` — shared multi-item label table (also
   used by the picking scan session).
 - `components/OutdatedWarningDialog.vue` — dismissible outdated date-code
@@ -274,5 +289,6 @@
 - `docs/superpowers/specs/2026-10-05-put-away-scan-box-shelf-design.md`
 - `docs/superpowers/specs/2026-10-05-put-away-part-grouping-design.md`
 - `docs/superpowers/specs/2026-10-06-put-away-shelf-direct-design.md`
+- `docs/superpowers/specs/2026-11-04-put-away-skip-scan-design.md`
 - `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`
 - `docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`

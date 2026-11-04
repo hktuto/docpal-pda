@@ -34,6 +34,11 @@ Use the Put-away flow after receiving has created receiving-area inventory and t
    until it is disarmed or fully put away. A label's quantity may span several
    lines of the same part (e.g. one package covering a 300 + 20000 split) —
    the app distributes it across the lines automatically.
+
+   Warehouses that enable `steps.put-away.skipScan` in the flow config can
+   skip per-label scanning: a checkbox on each part card selects the part's
+   whole remaining qty, and the next shelf scan shelves the selection
+   directly (batch values from the receiving declaration, no label check).
 5. The operator scans the **shelf barcode** where the goods belong. A banner
    shows the selected shelf (tap × to clear). If pieces are pending, the app
    asks to confirm putting them all onto that shelf.

@@ -45,6 +45,15 @@ Scans made before a shelf is chosen wait in the **pending list** (grouped by
 part, with each piece's quantity and batch values). From there a mis-scan can
 be deleted with **Remove**.
 
+**Skip scanning (if enabled):** warehouses that turn on
+`steps.put-away.skipScan` in the flow config show a **checkbox on each part
+card**. Tick the parts you are holding — the whole remaining quantity of each
+ticked part is selected — then scan the shelf barcode. The app asks **"Put
+away N part(s), X pcs to shelf Y without scanning?"** and confirming shelves
+them all at once, using the batch values declared at receiving. Use this only
+when you can see the boxes match the paperwork; there is no label check and
+no serial capture.
+
 ## 5. Scan the shelf
 
 Scan the barcode of the shelf where the goods belong. If pieces are pending,

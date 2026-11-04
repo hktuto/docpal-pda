@@ -81,6 +81,25 @@ export function putAwayGroupFieldValue(field: string, group: PutAwayItemGroup): 
   return distinct.length ? distinct.join(" / ") : "—";
 }
 
+/** Lines a skip-scan shelf commit writes (spec 2026-11-04): every member
+ *  line of the selected groups with qty still to put away, one entry per
+ *  line with qty = remainingQty (server-netted in standard mode, locally
+ *  netted in CN mode). Batch fields ride on the item from the receiving
+ *  declaration. */
+export function skipScanLines(
+  groups: PutAwayItemGroup[],
+  selectedKeys: Set<string>
+): { item: PutAwayExpectedItem; qty: number }[] {
+  const out: { item: PutAwayExpectedItem; qty: number }[] = [];
+  for (const group of groups) {
+    if (!selectedKeys.has(group.key)) continue;
+    for (const item of group.items) {
+      if (item.remainingQty > 0) out.push({ item, qty: item.remainingQty });
+    }
+  }
+  return out;
+}
+
 /** The group's shelf suggestion for the collapsed meta line: distinct member
  *  shelf codes joined, with the box id appended when a single suggestion
  *  carries one (a box suggestion only makes sense unambiguously). Null when

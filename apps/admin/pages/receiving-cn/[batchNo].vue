@@ -268,6 +268,12 @@ const itemColumnDefs = computed<AdminColumnDef<CnOrderItemRow>[]>(() => [
   },
   { key: "putAwayQty", label: t("admin.pages.receivingCn.itemsTable.putAwayQty"), size: 90 },
   { key: "ctnNo", label: t("admin.pages.receivingCn.itemsTable.ctnNo"), size: 80 },
+  {
+    key: "packingListNum",
+    label: t("admin.pages.receivingCn.itemsTable.packingListNum"),
+    accessor: (it) => it.packingListNum ?? "",
+    size: 130,
+  },
   { key: "dateCode", label: t("admin.pages.receivingCn.itemsTable.dateCode"), size: 90 },
   { key: "lotCode", label: t("admin.pages.receivingCn.itemsTable.lotCode"), size: 90 },
   { key: "coo", label: t("admin.pages.receivingCn.itemsTable.coo"), size: 70 },
@@ -316,6 +322,7 @@ type InlineField =
   | "poNo"
   | "lineQty"
   | "ctnNo"
+  | "packingListNum"
   | "dateCode"
   | "lotCode"
   | "coo"
@@ -329,6 +336,7 @@ const INLINE_FIELD_BODY: Record<InlineField, (row: CnOrderItemRow) => Record<str
   poNo: (row) => ({ poNo: row.poNo }),
   lineQty: (row) => ({ lineQty: Number(row.lineQty) }),
   ctnNo: (row) => ({ ctnNo: row.ctnNo }),
+  packingListNum: (row) => ({ packingListNum: row.packingListNum }),
   dateCode: (row) => ({ dateCode: row.dateCode }),
   lotCode: (row) => ({ lotCode: row.lotCode }),
   coo: (row) => ({ coo: row.coo }),
@@ -626,6 +634,16 @@ function putAwayStatusClass(s: string): string {
               @change="saveInline(row, 'ctnNo')"
             />
             <span v-else>{{ row.ctnNo ?? "—" }}</span>
+          </template>
+          <template #cell-packingListNum="{ row }">
+            <input
+              v-if="isPending"
+              v-model="row.packingListNum"
+              class="cell-input"
+              type="text"
+              @change="saveInline(row, 'packingListNum')"
+            />
+            <span v-else>{{ row.packingListNum ?? "—" }}</span>
           </template>
           <template #cell-dateCode="{ row }">
             <input

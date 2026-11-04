@@ -18,11 +18,14 @@
         :adding-scan="addingScan"
         :removing-scan="removingScan"
         :armed-item-id="armedItemId"
+        :skip-scan="skipScanEnabled"
+        :selected-keys="selectedKeys"
         @scan="openScan"
         @arm-scan="toggleArmScan"
         @add-to-shelf="addPendingToShelf"
         @remove-scan="removeScanHandler"
         @remove-from-shelf="removeScanFromShelfHandler"
+        @toggle-select="toggleSelect"
       />
 
       <!-- CN put-away: the CN world has no per-scan staging endpoint, so the
@@ -89,6 +92,7 @@ import { decodeLabel } from "~/utils/labelDecode";
 import { compareByPoLineThenPartNo, compareNumericAware, findCnPutAwayTargets, findPutAwayTargets } from "~/utils/putAwayScan";
 import {
   groupPutAwayItems,
+  skipScanLines,
   type PutAwayItemGroup,
 } from "~/utils/putAwayGroups";
 import {
@@ -191,7 +195,7 @@ usePageHeader({
 
 const warehouse = useWarehouse();
 const { viewConfig } = useViewConfig();
-const { cnReceiving, loadFlowSteps } = useFlowSteps();
+const { cnReceiving, putAwayConfig, loadFlowSteps } = useFlowSteps();
 
 // CN customer-receiving mode: the detail reads the CN task aggregate
 // (/put-away-cn/tasks/:id, normalized onto the standard types) and scanned
@@ -223,6 +227,10 @@ const scrollTargetGroupKey = ref<string | null>(null);
 // strictly against this part group's lines instead of free-matching across
 // all visible items. Holds the group key (normalized part no).
 const armedItemId = ref<string | null>(null);
+// Skip-scan selection (spec 2026-11-04, flow config steps.put-away.skipScan):
+// checked part-group keys. The next shelf scan shelves every checked group's
+// remaining qty straight onto that shelf — no label scans.
+const selectedKeys = ref<Set<string>>(new Set());
 const addingScan = ref<Record<string, boolean>>({});
 const removingScan = ref<Record<string, boolean>>({});
 const committingAll = ref(false);
@@ -290,6 +298,17 @@ const groups = computed(() =>
   groupPutAwayItems(displayItems.value, stagedQtyByItem.value)
 );
 
+// Skip-scan (spec 2026-11-04): the shelve-without-scanning checkboxes render
+// only when the flow config opts the warehouse in.
+const skipScanEnabled = computed(() => putAwayConfig.value.skipScan);
+
+function toggleSelect(group: PutAwayItemGroup) {
+  const next = new Set(selectedKeys.value);
+  if (next.has(group.key)) next.delete(group.key);
+  else next.add(group.key);
+  selectedKeys.value = next;
+}
+
 const armedGroupItems = computed(() => {
   if (!armedItemId.value) return visibleItems.value;
   return (
@@ -347,7 +366,14 @@ useHardwareScanner({
     const value = rawValue.trim();
     const shelf = shelves.value.find((s) => s.code.toUpperCase() === value.toUpperCase());
     if (shelf) {
-      await selectShelf(shelf.code);
+      // Skip-scan: a shelf scan with checked groups shelves the selection
+      // straight onto it — the sticky-shelf / pending-commit path only runs
+      // when nothing is checked.
+      if (skipScanEnabled.value && selectedKeys.value.size > 0) {
+        await shelveSelected(shelf.code);
+      } else {
+        await selectShelf(shelf.code);
+      }
       return true;
     }
     if (/^box-/i.test(value)) {
@@ -458,6 +484,64 @@ async function selectShelf(code: string) {
   // Pass the pending ids explicitly so pieces scanned between the prompt and
   // the confirm (or shelved leftovers) are not swept onto the new shelf.
   await commitPendingToShelf(code, pendingScans.map((s) => s.id));
+}
+
+// Skip-scan shelf commit (spec 2026-11-04): shelve every checked group's
+// remaining qty onto the just-scanned shelf without label scans. Standard
+// mode writes one recordPutAwayScan per member line (batch fields from the
+// receiving declaration, serial null); CN stages the pieces locally for the
+// batch confirm.
+async function shelveSelected(code: string) {
+  const lines = skipScanLines(groups.value, selectedKeys.value);
+  if (lines.length === 0) {
+    selectedKeys.value = new Set();
+    return;
+  }
+  const totalQty = lines.reduce((sum, l) => sum + l.qty, 0);
+  const confirmed = window.confirm(
+    t("putAway.skipScan.confirmPrompt", { parts: selectedKeys.value.size, count: totalQty, shelf: code })
+  );
+  if (!confirmed) return;
+  if (cnMode.value) {
+    selectedShelf.value = code;
+    for (const line of lines) {
+      addCnPieces([{ item: line.item, qty: line.qty }], {
+        dateCode: rawCode(line.item.dateCode),
+        lotCode: rawCode(line.item.lotCode),
+        coo: rawCode(line.item.coo),
+        cow: rawCode(line.item.cow),
+        serialNo: null,
+      });
+    }
+    selectedKeys.value = new Set();
+    showToast(t("putAway.skipScan.staged", { count: totalQty, shelf: code }));
+    return;
+  }
+  if (committingAll.value) return;
+  committingAll.value = true;
+  error.value = null;
+  try {
+    for (const line of lines) {
+      await warehouse.recordPutAwayScan(
+        orderId,
+        line.item.id,
+        line.qty,
+        rawCode(line.item.dateCode),
+        rawCode(line.item.lotCode),
+        rawCode(line.item.coo),
+        rawCode(line.item.cow),
+        code,
+        null
+      );
+    }
+    selectedKeys.value = new Set();
+    showToast(t("putAway.pendingPanel.commitDone", { count: totalQty, shelf: code }));
+    await load();
+  } catch (e) {
+    showToast(errorMessage(e));
+  } finally {
+    committingAll.value = false;
+  }
 }
 
 // --- CN put-away (cnReceiving flow) -----------------------------------------
@@ -760,6 +844,17 @@ async function load() {
         (armedGroup.remainingQty <= 0 && armedGroup.stagedQty === 0))
     ) {
       armedItemId.value = null;
+    }
+    // Prune the skip-scan selection the same way: drop checked groups that
+    // disappeared or are now done.
+    if (selectedKeys.value.size > 0) {
+      const pruned = new Set(
+        [...selectedKeys.value].filter((key) => {
+          const g = groups.value.find((gr) => gr.key === key);
+          return g && !(g.remainingQty <= 0 && g.stagedQty === 0);
+        })
+      );
+      if (pruned.size !== selectedKeys.value.size) selectedKeys.value = pruned;
     }
   } catch (e) {
     error.value = errorMessage(e);

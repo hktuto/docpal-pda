@@ -2081,6 +2081,7 @@ export default {
           receivedQty: "實收數量",
           putAwayQty: "已上架",
           ctnNo: "箱號",
+          packingListNum: "裝箱單號",
           dateCode: "日期代碼",
           lotCode: "批號",
           coo: "COO",
