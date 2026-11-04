@@ -13,7 +13,7 @@ import {
   reportReceivingItemMismatch,
   scanReceivingOrder,
 } from "../db/receiving.js";
-import { allocateForReceivingOrder } from "../db/allocate.js";
+import { allocateForReceivingOrder, awaitAllocationTask } from "../db/allocate.js";
 import { actorFrom } from "../auth/middleware.js";
 import { allowedOrgFilter } from "../db/org-filter.js";
 import { getUserScope, receivingOrderScopeFilter, userScopeFilter } from "../db/user-scope.js";
@@ -483,7 +483,12 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
 receivingRoute.post("/receiving-orders/:id/confirm-arrival", async (c) => {
   const result = await confirmReceivingArrival(db, c.req.param("id"), actorFrom(c).id);
   try {
-    const allocation = await allocateForReceivingOrder(db, c.req.param("id"));
+    // Serialized through the allocation runner so a concurrent scoped run
+    // (admin Re-allocate / snapshot restore) can't wipe-and-rebuild the same
+    // part keys twice (audit 2026-11-03 #3).
+    const allocation = await awaitAllocationTask(db, "confirm-arrival", (runnerDb) =>
+      allocateForReceivingOrder(runnerDb, c.req.param("id"))
+    );
     return c.json({ ...result, allocation }, 200);
   } catch (err) {
     console.error("scoped allocation after confirm-arrival failed; demand stays stale until the next Re-allocate", err);

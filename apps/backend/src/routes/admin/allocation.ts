@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import { db } from "../../db.js";
 import { queryGet } from "../../db/query.js";
-import { allocateForPickingOrder, allocateForReceivingOrder, addManualPickingAllocation, removePickingAllocation, transferPickingAllocation } from "../../db/allocate.js";
+import { allocateForPickingOrder, allocateForReceivingOrder, addManualPickingAllocation, removePickingAllocation, transferPickingAllocation, awaitAllocationTask } from "../../db/allocate.js";
 import { actorFrom } from "../../auth/middleware.js";
 import { reallocateReceivingItemDemand } from "../../db/receivingReallocate.js";
 import { allocatePickingItemFromSources, allocatePickingGroupFromSources, type AllocateFormRow } from "../../db/pickingAllocateForm.js";
@@ -32,7 +32,9 @@ adminAllocationRoute.post("/allocation/restore", async (c) => {
 // "Re-allocate" on the picking order detail: scoped to the order's part
 // keys (404 picking_order_not_found / 409 order_not_open / 409 lock_held).
 adminAllocationRoute.post("/picking-orders/:id/reallocate", async (c) => {
-  const allocation = await allocateForPickingOrder(db, c.req.param("id"));
+  const allocation = await awaitAllocationTask(db, "admin re-allocate (picking)", (runnerDb) =>
+    allocateForPickingOrder(runnerDb, c.req.param("id"))
+  );
   return c.json({ allocation });
 });
 
@@ -49,7 +51,9 @@ adminAllocationRoute.post("/receiving-orders/:id/reallocate", async (c) => {
   );
   if (!head) throw new HTTPException(404, { message: "receiving_order_not_found" });
   if (head.status !== "in_hand") throw new HTTPException(409, { message: "order_not_in_hand" });
-  const allocation = await allocateForReceivingOrder(db, id);
+  const allocation = await awaitAllocationTask(db, "admin re-allocate (receiving)", (runnerDb) =>
+    allocateForReceivingOrder(runnerDb, id)
+  );
   return c.json({ allocation });
 });
 

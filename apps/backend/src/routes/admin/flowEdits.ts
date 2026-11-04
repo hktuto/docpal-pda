@@ -5,7 +5,7 @@ import { db } from "../../db.js";
 import { updatePickingDeliveryDate, updatePickingOrderFields, updateReceivingDeliveryDate, updateReceivingItemFields } from "../../db/adminedits.js";
 import { overridePickingOrderStatus } from "../../db/picking.js";
 import { overrideReceivingOrderStatus } from "../../db/receiving.js";
-import { allocateForReceivingOrder } from "../../db/allocate.js";
+import { allocateForReceivingOrder, awaitAllocationTask } from "../../db/allocate.js";
 import { actorFrom } from "../../auth/middleware.js";
 
 // Thin routes over db/adminedits.ts — admin console edits to flow data.
@@ -116,7 +116,9 @@ adminFlowEditsRoute.patch("/receiving-orders/:id/status", async (c) => {
   });
   if (result.changed) {
     try {
-      await allocateForReceivingOrder(db, c.req.param("id"));
+      await awaitAllocationTask(db, "receiving status override", (runnerDb) =>
+        allocateForReceivingOrder(runnerDb, c.req.param("id"))
+      );
     } catch (err) {
       console.error("scoped allocation after receiving status override failed; demand stays stale until the next Re-allocate", err);
     }
