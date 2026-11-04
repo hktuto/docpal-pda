@@ -225,16 +225,22 @@ load();
 // single-brand derivation (<brand>/<mpn>) is only a guess and is wrong for
 // e.g. TE (TE-AMP(<pn>)). Unknown parts / lookup failures keep the parsed
 // values; the commit re-validates against the master regardless.
-async function addParsedItem(result: OcrParseResult, rawScan?: string) {
+const masterByKey = new Map<string, { partNo: string; wclItemNo: string; brand: string } | null>();
+
+async function addParsedItem(result: OcrParseResult, rawScan?: string): Promise<boolean> {
   let master: { partNo: string; wclItemNo: string } | null = null;
-  if (result.parsed.itemId) {
-    try {
-      master = await warehouse.lookupAdHocPutAwayPart(result.parsed.itemId);
-    } catch {
-      master = null;
+  const key = result.parsed.itemId;
+  if (key) {
+    if (!masterByKey.has(key)) {
+      try {
+        masterByKey.set(key, await warehouse.lookupAdHocPutAwayPart(key));
+      } catch {
+        masterByKey.set(key, null);
+      }
     }
+    master = masterByKey.get(key) ?? null;
   }
-  addItem({
+  return addItem({
     partNo: master?.partNo ?? result.parsed.itemId ?? "",
     wclItemNo: master?.wclItemNo ?? result.parsed.wclItemNo ?? null,
     qty: result.parsed.qty ?? 1,
@@ -248,28 +254,28 @@ async function addParsedItem(result: OcrParseResult, rawScan?: string) {
   }, rawScan);
 }
 
-// Hardware scan handler
-async function handleHardwareScan(code: string) {
+// Hardware scan handler. useHardwareScanner owns the beep and drives it off
+// the return value (audit 2026-11-03 #13) — no beeps in here; the old void
+// return read as "success" to the composable even right after the error buzz.
+async function handleHardwareScan(code: string): Promise<boolean> {
   // Check if it's a shelf code
   const shelf = shelves.value.find((s) => s.code === code);
   if (shelf) {
     selectedShelf.value = code;
     showToast(t("adHocPutAway.shelfSelected", { shelf: code }));
-    return;
+    return true;
   }
 
   // Parse as item label via the backend decode authority (POST /scan/decode)
   const result = await decodeLabel(warehouse, code, { brands: [selectedBrand.value] });
-  if (result.matched) {
-    await addParsedItem(result, code);
-    playScanSuccess();
-  } else {
-    playScanError();
+  if (!result.matched) {
     showToast(t("adHocPutAway.scanError"));
+    return false;
   }
+  return addParsedItem(result, code);
 }
 
-// OCR capture handler
+// OCR capture handler (camera path — beeps are explicit; no composable here)
 async function openScan() {
   const capture = await captureLabel();
   if (!capture) return;
@@ -287,30 +293,33 @@ async function openScan() {
         []
       );
 
-  if (result.matched) {
-    await addParsedItem(result, single?.value);
-    playScanSuccess();
-  } else {
+  if (!result.matched) {
     playScanError();
     showToast(t("adHocPutAway.scanError"));
+    return;
   }
+  // Duplicate rejection is an error too — a success chime after the reject
+  // toast was exactly the audit #13 bug on this page.
+  const added = await addParsedItem(result, single?.value);
+  if (added) playScanSuccess();
+  else playScanError();
 }
 
-function addItem(item: AdHocPutAwayItem, rawScan?: string) {
+function addItem(item: AdHocPutAwayItem, rawScan?: string): boolean {
   // Reject duplicate labels within the current batch: same reel scanned
   // twice has an identical raw string; different reels only collide when
   // every label field (incl. serial) is identical — indistinguishable by
-  // any label content.
+  // any label content. Returns whether the item was added — the caller owns
+  // the beep.
   const trimmed = rawScan?.trim();
   const key = trimmed ? `raw:${trimmed}` : item.serialNo ? `serial:${item.serialNo}` : undefined;
   if (key && seenScanKeys.value.has(key)) {
-    playScanError();
     if (item.serialNo) {
       showToast(t("adHocPutAway.duplicateSerial", { serialNo: item.serialNo }));
     } else {
       showToast(t("adHocPutAway.duplicateScan"));
     }
-    return;
+    return false;
   }
   if (key) {
     seenScanKeys.value.add(key);
@@ -332,6 +341,7 @@ function addItem(item: AdHocPutAwayItem, rawScan?: string) {
     item.dateCode = toLabelDateCode(dateToDateCode(new Date()), dateCodeFormat.value);
   }
   items.value.push(item);
+  return true;
 }
 
 function removeItem(idx: number) {

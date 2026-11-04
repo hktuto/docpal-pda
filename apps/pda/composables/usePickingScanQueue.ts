@@ -484,7 +484,10 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
   function reresolveQueued() {
     for (const row of rows.value) {
       if (row.status !== "queued") continue;
-      const target = findTarget({ partNo: row.partNo }, row.qty, row.key);
+      // Keep the label's WCL item no in the re-point: same part_no under two
+      // brand item lines must not re-resolve to the wrong one (audit
+      // 2026-11-03 #7).
+      const target = findTarget({ partNo: row.partNo, wclItemNo: row.scannedWclItemNo ?? undefined }, row.qty, row.key);
       if (target) {
         row.itemId = target.item.id;
         row.allocationId = target.allocation.id;

@@ -69,11 +69,10 @@ const chooserOpen = ref(false);
 const chooserCandidates = ref<CnScanTaskItem[]>([]);
 let pendingScan: { parsed: ParsedFields; raw: string } | null = null;
 
-async function handleRawScan(raw: string): Promise<boolean | void> {
+async function handleRawScan(raw: string): Promise<boolean> {
   const value = raw.trim();
   if (!value || !detail.value) return false;
   if (scannedRaws.has(value)) {
-    playScanError();
     showToast(t("receivingScan.duplicateLabel"));
     return false;
   }
@@ -82,13 +81,11 @@ async function handleRawScan(raw: string): Promise<boolean | void> {
     const result = await parseRawValue(value);
     const parsed = result.parsed;
     if (!parsed.itemId && !parsed.wclItemNo) {
-      playScanError();
       showToast(t("receivingScan.noPartNo"));
       return false;
     }
     const matches = findCnScanMatches(items.value, parsed);
     if (matches.length === 0) {
-      playScanError();
       showToast(t("receivingScan.noMatch"));
       return false;
     }
@@ -100,7 +97,6 @@ async function handleRawScan(raw: string): Promise<boolean | void> {
     }
     return await applyScan(matches[0], parsed, value);
   } catch (e) {
-    playScanError();
     showToast(e instanceof Error ? e.message : String(e));
     return false;
   } finally {
@@ -108,12 +104,15 @@ async function handleRawScan(raw: string): Promise<boolean | void> {
   }
 }
 
+// Feedback note (audit 2026-11-03 #13): these two return booleans and the
+// hardware composable beeps on them; the camera path (onCameraScan) and the
+// manual chooser (chooseItem) beep explicitly. No beeps inside applyScan /
+// handleRawScan — a hardware scan would then beep twice.
 async function applyScan(item: CnScanTaskItem, parsed: ParsedFields, raw: string): Promise<boolean> {
   scanning.value = true;
   try {
     const qty = parsed.qty ?? item.lineQty;
     if (qty == null || qty <= 0) {
-      playScanError();
       showToast(t("receivingScan.noQty"));
       return false;
     }
@@ -127,10 +126,8 @@ async function applyScan(item: CnScanTaskItem, parsed: ParsedFields, raw: string
     });
     scannedRaws.add(raw);
     replaceItem(updated);
-    playScanSuccess();
     return true;
   } catch (e) {
-    playScanError();
     showToast(errorMessage(e));
     return false;
   } finally {
@@ -143,7 +140,9 @@ async function chooseItem(item: CnScanTaskItem) {
   const scan = pendingScan;
   pendingScan = null;
   if (!scan) return;
-  await applyScan(item, scan.parsed, scan.raw);
+  const ok = await applyScan(item, scan.parsed, scan.raw);
+  if (ok) playScanSuccess();
+  else playScanError();
 }
 
 useHardwareScanner({
@@ -155,7 +154,9 @@ useHardwareScanner({
 async function onCameraScan() {
   const capture = await captureLabel();
   if (!capture) return;
-  await handleRawScan(captureRawLabelValue(capture));
+  const ok = await handleRawScan(captureRawLabelValue(capture));
+  if (ok) playScanSuccess();
+  else playScanError();
 }
 
 // ---- flag / reset ----

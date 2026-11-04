@@ -131,11 +131,16 @@ export function brandWhitelistUnion(
 export function useBrandSymbologyScope(brands: Ref<string[]>, opts?: { withShelfCodes?: boolean }) {
   const warehouse = useWarehouse();
   let applied = false;
+  let disposed = false;
 
   async function applyFor(list: string[]): Promise<void> {
     let whitelist = list.length
       ? brandWhitelistUnion(await getCachedSupplierQrTemplates(warehouse), list)
       : null;
+    // Page gone and the templates fetch just landed — applying now would
+    // restrict the device-global decoder with nobody left to restore it
+    // (audit 2026-11-03 #14).
+    if (disposed) return;
     if (whitelist && opts?.withShelfCodes) whitelist = withShelfSymbologies(whitelist);
     if (whitelist) {
       await ScannerConfig.setSymbologies({ enabled: whitelist });
@@ -149,6 +154,7 @@ export function useBrandSymbologyScope(brands: Ref<string[]>, opts?: { withShelf
   watch(brands, (list) => enqueue(() => applyFor(list)), { immediate: true });
 
   onUnmounted(() => {
+    disposed = true;
     if (applied) {
       applied = false;
       enqueue(() => ScannerConfig.restoreAll());
@@ -167,9 +173,11 @@ export function useBrandSymbologyScope(brands: Ref<string[]>, opts?: { withShelf
 export function useSupplierSymbologyScope(supplierCode: Ref<string | undefined>, opts?: { withShelfCodes?: boolean }) {
   const warehouse = useWarehouse();
   let applied = false;
+  let disposed = false;
 
   async function applyFor(code: string | undefined): Promise<void> {
     const templates = await getCachedSupplierQrTemplates(warehouse);
+    if (disposed) return; // same unmount race as the brand scope (#14)
     let whitelist = code
       ? templates.find((t) => t.code === code)?.barcodeTypes
       : null;
@@ -188,6 +196,7 @@ export function useSupplierSymbologyScope(supplierCode: Ref<string | undefined>,
   watch(supplierCode, (code) => enqueue(() => applyFor(code)), { immediate: true });
 
   onUnmounted(() => {
+    disposed = true;
     if (applied) {
       applied = false;
       enqueue(() => ScannerConfig.restoreAll());

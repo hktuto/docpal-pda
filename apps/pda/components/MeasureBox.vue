@@ -489,6 +489,10 @@ useHardwareScanner({
       }
       return false;
     } catch (e: unknown) {
+      // A multi-credit scan can commit some credits before a later one 409s —
+      // re-sync the screen so the next match computes from fresh totals
+      // (audit 2026-11-03 #17).
+      await load();
       showToast(errorMessage(e));
       return false;
     } finally {

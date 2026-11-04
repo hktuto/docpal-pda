@@ -341,6 +341,51 @@ describe('usePickingScanQueue', () => {
     expect(q.rows.value[0]).toMatchObject({ status: 'failed', error: 'allocation_changed' });
   });
 
+  it('reresolveQueued keeps the scanned WCL item no so a rebuild cannot re-point to another brand', () => {
+    // Audit 2026-11-03 #7: same MPN under two WCL item numbers. After the
+    // backend rebuilds allocations (new ids), a row scanned from the ABLIC
+    // label must land on the ABLIC line — re-pointing by bare part_no alone
+    // picks the OTHER line (listed first, equally fitting).
+    const make = (allocOther: string, allocAblic: string) =>
+      [
+        {
+          id: 'item-other',
+          partNo: 'S-812C33AMC-C2NT2U',
+          wclItemNo: 'OTHER/S-812C33AMC-C2NT2U',
+          qty: 1000,
+          pickedQty: 0,
+          allocatedQty: 1000,
+          allocations: [{ id: allocOther, qty: 1000, lot: null, receivingInvoiceItemId: 'ri-o', receivingOrderId: 'ro-1', boxId: null }],
+          packages: [],
+          transitionLogs: [],
+        },
+        {
+          id: 'item-ablic',
+          partNo: 'S-812C33AMC-C2NT2U',
+          wclItemNo: 'ABLIC/S-812C33AMC-C2NT2U',
+          qty: 1000,
+          pickedQty: 0,
+          allocatedQty: 1000,
+          allocations: [{ id: allocAblic, qty: 1000, lot: null, receivingInvoiceItemId: 'ri-a', receivingOrderId: 'ro-1', boxId: null }],
+          packages: [],
+          transitionLogs: [],
+        },
+      ] as unknown as Items;
+    const items = ref(make('alloc-other', 'alloc-ablic'));
+    const q = usePickingScanQueue(items);
+    const res = q.addScan(
+      { partNo: 'S-812C33AMC-C2NT2U', wclItemNo: 'ABLIC/S-812C33AMC-C2NT2U', qty: 500, dateCode: '', lotCode: 'L', coo: '', cow: '' },
+      '1$S-812C33AMC-C2NT2U$500$L$S-812C33AMC-C2NT2U$202606$66VM1953007',
+      'qr'
+    );
+    expect(res).toEqual({ ok: true });
+    expect(q.rows.value[0].allocationId).toBe('alloc-ablic');
+    // simulate the rebuild with brand-swapped ids
+    items.value = make('alloc-other-b', 'alloc-ablic-b');
+    q.reresolveQueued();
+    expect(q.rows.value[0]).toMatchObject({ status: 'queued', allocationId: 'alloc-ablic-b', itemId: 'item-ablic' });
+  });
+
   function makeShelfItems(): Items {
     const items = makeItems() as any;
     items[0].allocations = [

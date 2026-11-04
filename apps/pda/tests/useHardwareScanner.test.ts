@@ -20,6 +20,16 @@ vi.mock('../composables/useScannerBroadcast', () => ({
   ScannerBroadcast: { addListener: addListenerMock },
 }));
 
+// Audit 2026-11-03 #13: the composable is the single beep owner for hardware
+// scans — pages must not beep inside onScan (double beep) and must return a
+// boolean (undefined reads as success).
+const playScanSuccess = vi.fn();
+const playScanError = vi.fn();
+vi.mock('../utils/scanBeep', () => ({
+  playScanSuccess,
+  playScanError,
+}));
+
 const { useHardwareScanner, simulateScan } = await import('../composables/useHardwareScanner');
 
 describe('useHardwareScanner', () => {
@@ -129,6 +139,43 @@ describe('useHardwareScanner', () => {
     broadcast('BC123');
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  describe('beep ownership (audit 2026-11-03 #13)', () => {
+    beforeEach(() => {
+      playScanSuccess.mockClear();
+      playScanError.mockClear();
+    });
+
+    it('handler returning false → exactly one error beep', async () => {
+      handler.mockResolvedValue(false);
+      useHardwareScanner({ onScan: handler });
+      broadcast('BAD');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(playScanError).toHaveBeenCalledTimes(1);
+      expect(playScanSuccess).not.toHaveBeenCalled();
+    });
+
+    it('handler returning true → exactly one success beep', async () => {
+      handler.mockResolvedValue(true);
+      useHardwareScanner({ onScan: handler });
+      broadcast('OK');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(playScanSuccess).toHaveBeenCalledTimes(1);
+      expect(playScanError).not.toHaveBeenCalled();
+    });
+
+    // Documents why handlers must return booleans: a void/undefined return
+    // is treated as success (this made ad-hoc put-away chime on a rejected
+    // label).
+    it('handler returning undefined counts as success', async () => {
+      handler.mockResolvedValue(undefined);
+      useHardwareScanner({ onScan: handler });
+      broadcast('VOID');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(playScanSuccess).toHaveBeenCalledTimes(1);
+      expect(playScanError).not.toHaveBeenCalled();
+    });
   });
 
   it('clears the wedge buffer and eats the wedge echo after a broadcast scan', async () => {

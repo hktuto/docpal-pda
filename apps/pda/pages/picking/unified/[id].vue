@@ -349,11 +349,9 @@ async function deliverScan(rawValue: string): Promise<boolean> {
       ? await session.handleBoxPickScan(rawValue)
       : await session.handleQrOrBoxScan(rawValue);
     if (!result.ok) {
-      playScanError();
       showToast(t(`picking.scanSession.${result.message}`));
       return false;
     }
-    playScanSuccess();
     if (result.kind === "queued") {
       showToast(t("common.scanSuccess"));
     } else if (result.kind === "carton") {
@@ -369,7 +367,6 @@ async function deliverScan(rawValue: string): Promise<boolean> {
     }
     return true;
   } catch (e) {
-    playScanError();
     showToast(errorMessage(e));
     return false;
   }
@@ -404,8 +401,11 @@ async function captureOcr() {
     // prompt fallback) go through the supplier-template QR parser; real
     // camera captures go through OCR text parsing.
     if (!capture.imagePath && barcodes.length === 1 && barcodes[0].format === "4") {
-      // deliverScan owns the beeps + toasts for this path.
-      await deliverScan(barcodes[0].value);
+      // The hardware path beeps via useHardwareScanner; this manual path owns
+      // its own beep from the result.
+      const ok = await deliverScan(barcodes[0].value);
+      if (ok) playScanSuccess();
+      else playScanError();
       return;
     }
     const drafts = extractPickingScanDrafts(
@@ -632,6 +632,7 @@ usePageHeader({
 });
 
 async function load() {
+  error.value = null;
   try {
     order.value = await warehouse.getPickingOrder(orderId);
     // Disarm only when the armed box is one of THIS order's boxes and left
