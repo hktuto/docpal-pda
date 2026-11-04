@@ -9,11 +9,22 @@ import {
 } from '../utils/dateCode';
 
 describe('dateToDateCode', () => {
-  it('emits canonical YYWW (year first)', () => {
-    expect(dateToDateCode(new Date(Date.UTC(2026, 0, 1)))).toBe('2601'); // Thu, ISO week 1
-    expect(dateToDateCode(new Date(Date.UTC(2026, 9, 22)))).toBe('2643');
-    expect(dateToDateCode(new Date(Date.UTC(2026, 11, 31)))).toBe('2653'); // 2026 has 53 ISO weeks
-    expect(dateToDateCode(new Date(Date.UTC(2027, 0, 1)))).toBe('2653'); // Fri, still ISO week 53 of 2026
+  it('emits canonical YYWW (year first) for the LOCAL calendar date', () => {
+    // Local Date constructions — the function reads getFullYear/getMonth/getDate,
+    // so results are timezone-independent by design (audit 2026-11-03 #6).
+    expect(dateToDateCode(new Date(2026, 0, 1))).toBe('2601'); // Thu, ISO week 1
+    expect(dateToDateCode(new Date(2026, 9, 22))).toBe('2643');
+    // Monday local-midnight: the old UTC-getter version read it as Sunday UTC
+    // and returned the week before, making the selected Monday's rows vanish.
+    expect(dateToDateCode(new Date(2026, 10, 2))).toBe('2645'); // Mon, ISO week 45
+    expect(dateToDateCode(new Date(2026, 11, 31))).toBe('2653'); // 2026 has 53 ISO weeks
+    expect(dateToDateCode(new Date(2027, 0, 1))).toBe('2653'); // Fri, still ISO week 53 of 2026
+  });
+
+  it('reads local midnight, not the UTC day before it', () => {
+    // new Date("2026-11-02T00:00:00") is local midnight (the date-picker form
+    // the stock-search callers use); in UTC+8 that is 16:00 Nov 1 UTC.
+    expect(dateToDateCode(new Date('2026-11-02T00:00:00'))).toBe('2645');
   });
 });
 

@@ -14,9 +14,13 @@
  *  always YYWW. */
 export type DateCodeFormat = "wwyy" | "yyww";
 
-/** ISO-8601 week of a calendar date as a canonical YYWW code. */
+/** ISO-8601 week of a calendar date as a canonical YYWW code. Operates on
+ *  the date's LOCAL calendar day (getFullYear/getMonth/getDate) — callers
+ *  hand us local midnights from date pickers and `new Date()`, and reading
+ *  UTC parts made HK (UTC+8) resolve a local Monday to the previous week
+ *  (audit 2026-11-03 #6). */
 export function dateToDateCode(date: Date): string {
-  const thursday = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const thursday = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const day = (thursday.getUTCDay() + 6) % 7; // Monday = 0
   thursday.setUTCDate(thursday.getUTCDate() - day + 3);
   const firstThursday = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 4));
