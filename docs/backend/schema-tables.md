@@ -409,7 +409,7 @@ CN invoice line items.
 | drawing_no | text | Drawing number |
 | org_id | integer NOT NULL DEFAULT 2 | Receiving office |
 | sub_inventory_code | text | Sub-inventory (with org_id a composite FK → org_info(secondary_inventory_name)) |
-| reported_mismatch | integer NOT NULL DEFAULT 0 | A mismatch was reported on this line |
+| reported_mismatch | boolean NOT NULL DEFAULT false | A mismatch was reported on this line |
 | mismatch_reason | text | Mismatch reason |
 | mismatch_qty | integer | Mismatched quantity |
 | wrong_part_no | text | Wrong part number actually received |
