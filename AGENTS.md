@@ -148,6 +148,20 @@ For non-trivial changes:
 1. Write a design spec in `docs/superpowers/specs/YYYY-MM-DD-<feature>-design.md`.
 2. Write an implementation plan in `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`.
 3. Implement, verify, and commit.
+4. Record the delivered feature (and any bugs found) in the UAT tracker — see "UAT issue tracking".
+
+## UAT issue tracking
+
+UAT tracker sources of truth: `docs/uat/functions.json` (62 admin/PDA functions, stable `ADM-`/`PDA-` ids), `docs/uat/bugs.json` (`BUG-` rows) and `docs/uat/features.json` (`CR-` rows). `UAT-Test-Tracking.xlsx` in the same folder is **generated** (gitignored, three sheets with per-function count formulas + dropdown vocabularies) — never edit the xlsx by hand; regenerate instead:
+
+```bash
+node scripts/gen-uat-xlsx.mjs   # after editing docs/uat/*.json
+```
+
+- **Add a bug/feature row:** append to the matching JSON with the next `BUG-`/`CR-` id; `functionId` must reference an existing function id (blank allowed for features; the script refuses bad refs). Dates are `YYYY-MM-DD`; status/priority/result vocabularies are listed in `docs/uat/README.md`.
+- **Trace an issue to code:** each backfilled row carries `Backfill — commit <hash>` in `remarks` — `git show <hash>` for the fix/feature; new rows should cite the fixing commit or spec doc the same way.
+- **Regeneration overwrites tester edits** — fold any marked-up workbook changes back into the JSON before rerunning, and hand the fresh xlsx to testers as the deliverable.
+- When you add/remove/rename a user-facing function in admin or PDA, update `functions.json` too (keep ids stable — bugs and features reference them).
 
 ## Documentation system
 
