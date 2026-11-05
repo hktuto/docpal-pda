@@ -4,11 +4,11 @@
  "raisedBy": "Sean",
  "app": "Admin",
  "functionId": "ADM-005",
- "feature": "Task assignment: cross-stage assignee view — today /task-assignments shows one assignee picker for the task's current queue tab; admins want an order/task shown with its assignee per workflow step (receiving → put-away → picking → verify → shipping) so all steps' owners are visible and editable in one place",
- "reason": "The one assignee field only reflects the stage the task is in now, so admins cannot see who was assigned at earlier steps or set the next step's owner in advance; handover between operators is invisible",
+ "feature": "Per-step assignees for picking orders: Assignee column in admin /picking-orders list; picking-order detail page shows a picker per step (Picking, Labeling, Label printing) plus per-box Measuring/Verify pickers — labeling/label-printing stored in new local picking_tasks table (picking_orders is upstream-synced, no schema change; picking step keeps po.assignee)",
+ "reason": "One shared assignee for all picking-order steps gave admins no way to see or set who owns each step directly on the order",
  "priority": "Should have",
  "status": "Delivered",
  "owner": "dev",
  "targetDate": "",
- "remarks": "Delivered — commit 3f6af0dc. GET /admin/task-lifecycle (order/batch/box across 8 flows) + Lifecycle tab in task-assignments with per-step assignee picker reusing PATCH /admin/task-assignment; no schema change. Editing stays per-task (steps sharing a picking_orders row share its assignee)"
+ "remarks": "Delivered — commit 77719804 (replaces rejected Lifecycle-tab v1 from 3f6af0dc). PATCH /admin/task-assignment flows labeling/label-printing upsert picking_tasks; PDA queues scope per step; absent row = visible to all (no backfill). Test pass + manual UAT pending"
 }
