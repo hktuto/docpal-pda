@@ -1848,6 +1848,12 @@ export default {
           unallocated: "Unallocated"
         },
         lockedBy: "Locked By",
+        assignee: "Assignee",
+        assigneePicking: "Picking assignee",
+        assigneeLabeling: "Labeling assignee",
+        assigneeLabelPrinting: "Label printing assignee",
+        measuringAssignee: "Measuring assignee",
+        verifyAssignee: "Verify assignee",
         none: "No picking orders.",
         detailTitle: "Picking Order {orderNo}",
         downloadPickingList: "Download picking list",
@@ -2669,12 +2675,7 @@ export default {
     colAssignee: "Assignee",
     unassigned: "Unassigned",
     none: "No open tasks for this flow.",
-    saveFailed: "Failed to save the assignment",
-    lifecycleTab: "Lifecycle",
-    lifecycleColStep: "Step",
-    lifecyclePlaceholder: "Order / batch / box number",
-    lifecycleHint: "Search an order, batch or box number to see its open tasks in every flow step; steps with no matching task are not listed.",
-    lifecycleNone: "No open tasks for this number."
+    saveFailed: "Failed to save the assignment"
   },
   bugReport: {
     title: "Report a bug",

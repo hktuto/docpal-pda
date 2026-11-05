@@ -47,20 +47,18 @@ export interface TaskAssignmentRow {
 }
 
 /** Open tasks of one flow for the assignment picker, sorted by label.
- *  keyMatch (lifecycle search, CR-048) restricts rows to tasks whose context
- *  columns equal the searched order/batch/box number. */
+ *  labeling / label-printing read the picking_tasks side table (CR-048) —
+ *  their assignee is independent of picking_orders.assignee. */
 export async function listTaskAssignments(
   db: AppDb,
-  flow: TaskAssignmentFlow,
-  keyMatch?: SQL
+  flow: TaskAssignmentFlow
 ): Promise<TaskAssignmentRow[]> {
-  const keyCond = keyMatch ? sql`AND ${keyMatch}` : sql``;
   switch (flow) {
     case "receiving-cn":
       return queryAll<TaskAssignmentRow>(
         db,
         sql`SELECT id, batch_no AS "label", batch_no AS "batchNo", status, assignee
-            FROM receiving_orders_cn WHERE status != 'clear' ${keyCond}
+            FROM receiving_orders_cn WHERE status != 'clear'
             ORDER BY batch_no, id`
       );
     case "picking":
@@ -68,22 +66,26 @@ export async function listTaskAssignments(
         db,
         sql`SELECT id, order_no AS "label", order_no AS "orderNo", status, assignee
             FROM picking_orders
-            WHERE status NOT IN ('picking_finished', 'measuring_finished', 'shipped', 'skip') ${keyCond}
+            WHERE status NOT IN ('picking_finished', 'measuring_finished', 'shipped', 'skip')
             ORDER BY order_no, id`
       );
     case "label-printing":
       return queryAll<TaskAssignmentRow>(
         db,
-        sql`SELECT id, order_no AS "label", order_no AS "orderNo", status, assignee
-            FROM picking_orders WHERE label_printing_pending = true ${keyCond}
-            ORDER BY order_no, id`
+        sql`SELECT po.id, po.order_no AS "label", po.order_no AS "orderNo", po.status, pt.assignee
+            FROM picking_orders po
+            LEFT JOIN picking_tasks pt ON pt.picking_order_id = po.id AND pt.step = 'label-printing'
+            WHERE po.label_printing_pending = true
+            ORDER BY po.order_no, po.id`
       );
     case "labeling":
       return queryAll<TaskAssignmentRow>(
         db,
-        sql`SELECT id, order_no AS "label", order_no AS "orderNo", status, assignee
-            FROM picking_orders WHERE labeling_pending = true ${keyCond}
-            ORDER BY order_no, id`
+        sql`SELECT po.id, po.order_no AS "label", po.order_no AS "orderNo", po.status, pt.assignee
+            FROM picking_orders po
+            LEFT JOIN picking_tasks pt ON pt.picking_order_id = po.id AND pt.step = 'labeling'
+            WHERE po.labeling_pending = true
+            ORDER BY po.order_no, po.id`
       );
     case "put-away":
       return queryAll<TaskAssignmentRow>(
@@ -93,7 +95,7 @@ export async function listTaskAssignments(
             FROM put_away_tasks t
             LEFT JOIN receiving_orders ro ON ro.id = t.receiving_order_id
             LEFT JOIN internal_transfer_orders ito ON ito.id = t.internal_transfer_order_id
-            WHERE t.status = 'pending' ${keyCond}
+            WHERE t.status = 'pending'
             ORDER BY "label", t.id`
       );
     case "put-away-cn":
@@ -102,7 +104,7 @@ export async function listTaskAssignments(
         sql`SELECT t.id, ro.batch_no AS "label", ro.batch_no AS "batchNo", t.status, t.assignee
             FROM put_away_tasks_cn t
             LEFT JOIN receiving_orders_cn ro ON ro.id = t.receiving_order_cn_id
-            WHERE t.status = 'pending' ${keyCond}
+            WHERE t.status = 'pending'
             ORDER BY ro.batch_no, t.id`
       );
     case "measuring":
@@ -127,7 +129,6 @@ export async function listTaskAssignments(
                        OR po2.labeling_pending = true
                        OR po2.label_printing_pending = true)
               )
-              ${keyCond}
             GROUP BY sb.id
             ORDER BY sb.id`
       );
@@ -138,90 +139,22 @@ export async function listTaskAssignments(
                    vt.status, vt.assignee
             FROM verify_tasks vt
             JOIN shipping_boxes sb ON sb.id = vt.shipping_box_id
-            WHERE vt.status = 'pending' ${keyCond}
+            WHERE vt.status = 'pending'
             ORDER BY vt.shipping_box_id, vt.id`
       );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Per-step assignee view (CR-048, plan 2026-11-06-uat-open-items.md): search
-// one order/batch/box number, get the open task + assignee of every flow
-// step that references it. A step with no matching open task simply doesn't
-// appear — done/closed tasks need no assignee (listTaskAssignments keeps the
-// rows to the same open sets the PDA queues show).
-// ---------------------------------------------------------------------------
-
-export interface TaskLifecycleStep {
-  flow: TaskAssignmentFlow;
-  id: string;
-  label: string;
-  status: string;
-  assignee: string | null;
-}
-
-/** Lifecycle display order: CN inbound → picking/labeling → measure/verify,
- *  put-away branches last. NOTE: picking / labeling / label-printing are the
- *  same picking_orders row (shared assignee column), so editing any of those
- *  steps updates the others. */
-const LIFECYCLE_FLOW_ORDER: readonly TaskAssignmentFlow[] = [
-  "receiving-cn",
-  "picking",
-  "labeling",
-  "label-printing",
-  "measuring",
-  "verify",
-  "put-away",
-  "put-away-cn",
-];
-
-/** One flow's "context column equals the searched key" predicate:
- *  receiving-cn/put-away-cn = batch_no; picking/labeling/label-printing =
- *  order_no; put-away = batch_no OR order_no; measuring/verify = box id OR
- *  any member order_no (boxes carry packages → items → picking orders). */
-function lifecycleKeyMatch(flow: TaskAssignmentFlow, key: string): SQL {
-  const boxHasOrder = (boxId: SQL) => sql`EXISTS (
-      SELECT 1
-      FROM picking_packages pp
-      JOIN picking_items pi ON pi.id = pp.picking_item_id
-      JOIN picking_orders po ON po.id = pi.picking_order_id
-      WHERE pp.shipping_box_id = ${boxId} AND po.order_no = ${key})`;
-  switch (flow) {
-    case "receiving-cn":
-      return sql`batch_no = ${key}`;
-    case "picking":
-    case "labeling":
-    case "label-printing":
-      return sql`order_no = ${key}`;
-    case "put-away":
-      return sql`(ro.batch_no = ${key} OR ito.order_no = ${key})`;
-    case "put-away-cn":
-      return sql`ro.batch_no = ${key}`;
-    case "measuring":
-      return sql`(sb.id = ${key} OR ${boxHasOrder(sql`sb.id`)})`;
-    case "verify":
-      return sql`(vt.shipping_box_id = ${key} OR ${boxHasOrder(sql`vt.shipping_box_id`)})`;
-  }
-}
-
-/** Steps of the searched key across all 8 flows, in lifecycle order. */
-export async function listTaskLifecycle(db: AppDb, key: string): Promise<TaskLifecycleStep[]> {
-  const steps: TaskLifecycleStep[] = [];
-  for (const flow of LIFECYCLE_FLOW_ORDER) {
-    const rows = await listTaskAssignments(db, flow, lifecycleKeyMatch(flow, key));
-    for (const row of rows) {
-      steps.push({ flow, id: row.id, label: row.label, status: row.status, assignee: row.assignee });
-    }
-  }
-  return steps;
-}
-
-/** flow → assignee-bearing table + transaction_logs entity type. */
-const FLOW_TABLES: Record<TaskAssignmentFlow, { table: SQL; entityType: string }> = {
+/** flow → assignee-bearing table + transaction_logs entity type. labeling and
+ *  label-printing store their assignee in the picking_tasks side table, keyed
+ *  by (picking_order_id, step) — `step` marks those flows and switches
+ *  setTaskAssignee to the upsert path (CR-048; picking_orders is upstream-
+ *  synced, no assignee column for these steps). */
+const FLOW_TABLES: Record<TaskAssignmentFlow, { table: SQL; entityType: string; step?: string }> = {
   "receiving-cn": { table: sql`receiving_orders_cn`, entityType: "receiving_order_cn" },
   picking: { table: sql`picking_orders`, entityType: "picking_order" },
-  "label-printing": { table: sql`picking_orders`, entityType: "picking_order" },
-  labeling: { table: sql`picking_orders`, entityType: "picking_order" },
+  "label-printing": { table: sql`picking_orders`, entityType: "picking_order", step: "label-printing" },
+  labeling: { table: sql`picking_orders`, entityType: "picking_order", step: "labeling" },
   "put-away": { table: sql`put_away_tasks`, entityType: "put_away_task" },
   "put-away-cn": { table: sql`put_away_tasks_cn`, entityType: "put_away_task_cn" },
   measuring: { table: sql`shipping_boxes`, entityType: "shipping_box" },
@@ -234,18 +167,37 @@ export async function setTaskAssignee(
   db: AppDb,
   input: { flow: TaskAssignmentFlow; id: string; assignee: string | null; actorId: string | null }
 ): Promise<{ ok: true; flow: TaskAssignmentFlow; id: string; assignee: string | null }> {
-  const { table, entityType } = FLOW_TABLES[input.flow];
+  const { table, entityType, step } = FLOW_TABLES[input.flow];
   return db.transaction(async (tx) => {
-    const existing = await queryGet<{ assignee: string | null }>(
-      tx,
-      sql`SELECT assignee FROM ${table} WHERE id = ${input.id}`
-    );
+    // Step flows: existence is the PICKING ORDER (404 like the other flows);
+    // the current assignee may be absent (no picking_tasks row = unassigned).
+    const existing = step
+      ? await queryGet<{ assignee: string | null }>(
+          tx,
+          sql`SELECT pt.assignee FROM picking_orders po
+              LEFT JOIN picking_tasks pt ON pt.picking_order_id = po.id AND pt.step = ${step}
+              WHERE po.id = ${input.id}`
+        )
+      : await queryGet<{ assignee: string | null }>(
+          tx,
+          sql`SELECT assignee FROM ${table} WHERE id = ${input.id}`
+        );
     if (!existing) throw new HTTPException(404, { message: "task_not_found" });
     const at = now();
-    await queryRun(
-      tx,
-      sql`UPDATE ${table} SET assignee = ${input.assignee}, last_update_date = ${at} WHERE id = ${input.id}`
-    );
+    if (step) {
+      await queryRun(
+        tx,
+        sql`INSERT INTO picking_tasks (id, picking_order_id, step, assignee, created_date, last_update_date)
+            VALUES (${newId()}, ${input.id}, ${step}, ${input.assignee}, ${at}, ${at})
+            ON CONFLICT (picking_order_id, step)
+            DO UPDATE SET assignee = EXCLUDED.assignee, last_update_date = ${at}`
+      );
+    } else {
+      await queryRun(
+        tx,
+        sql`UPDATE ${table} SET assignee = ${input.assignee}, last_update_date = ${at} WHERE id = ${input.id}`
+      );
+    }
     await tx.insert(transactionLogs).values({
       id: newId(),
       entityType,

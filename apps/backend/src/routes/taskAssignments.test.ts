@@ -289,39 +289,56 @@ test("admin PATCH task-assignment: validation + 404 unknown id; set persists and
   );
 });
 
-// --- admin task-lifecycle (CR-048) ------------------------------------------
+// --- CR-048 picking_tasks step assignees --------------------------------------
 
-test("admin task-lifecycle: matches by order/batch/box key; steps without an open task are absent", async () => {
+test("labeling: PATCH flow writes picking_tasks and scopes the PDA queue; picking keeps po.assignee", async () => {
   await reseed(client);
+  const operator = await login("operator", "DocPal2026!");
   const admin = await login("admin", "DocPalAdmin2026!");
-  await seedPickingOrder("po-lc-1", "SO-LC-1");
-  await client.db.execute(sql`UPDATE picking_orders SET labeling_pending = true WHERE id = 'po-lc-1'`);
-  await seedCnScanningOrder("cn-lc-1", "CN-LC-1");
-  await seedVerifyTask("vt-lc-1", "BOX-LC-1");
-
-  type Step = { flow: string; id: string; label: string; status: string; assignee: string | null };
-  const stepsOf = async (qs: string): Promise<Step[]> => {
-    const res = await call(admin, "GET", `/admin/task-lifecycle?${qs}`);
-    assert.equal(res.status, 200, qs);
-    return (await res.json()).steps as Step[];
-  };
-
-  // order_no: picking + labeling are the same picking_orders row, listed twice.
-  const byOrder = await stepsOf("orderNo=SO-LC-1");
-  assert.deepEqual(
-    byOrder.map((s) => `${s.flow}:${s.id}`),
-    ["picking:po-lc-1", "labeling:po-lc-1"]
+  await seedPickingOrder("po-step-1", "SO-STEP-1");
+  await client.db.execute(
+    sql`UPDATE picking_orders SET status = 'picking_finished', labeling_pending = true, label_printing_pending = true
+        WHERE id = 'po-step-1'`
   );
 
-  // batch_no: the CN receiving order; box id: the verify task.
-  assert.deepEqual((await stepsOf("batchNo=CN-LC-1")).map((s) => s.flow), ["receiving-cn"]);
-  assert.deepEqual((await stepsOf("orderNo=BOX-LC-1")).map((s) => s.flow), ["verify"]);
+  // PATCH flow=labeling upserts a picking_tasks row keyed (order, step).
+  const set = await call(admin, "PATCH", "/admin/task-assignment", {
+    flow: "labeling",
+    id: "po-step-1",
+    assignee: "operator",
+  });
+  assert.equal(set.status, 200);
 
-  // Edit through the existing PATCH, then re-search shows the new assignee.
-  assert.equal((await call(admin, "PATCH", "/admin/task-assignment", { flow: "picking", id: "po-lc-1", assignee: "operator" })).status, 200);
-  assert.ok((await stepsOf("orderNo=SO-LC-1")).every((s) => s.assignee === "operator"));
+  // Re-PATCH replaces in place (upsert: still one row, now admin-assigned).
+  await call(admin, "PATCH", "/admin/task-assignment", { flow: "labeling", id: "po-step-1", assignee: "admin" });
+  const stored = await queryGet<{ rows: number; assignee: string | null }>(
+    client.db,
+    sql`SELECT COUNT(*)::int AS rows, MAX(assignee) AS assignee FROM picking_tasks
+        WHERE picking_order_id = 'po-step-1' AND step = 'labeling'`
+  );
+  assert.equal(stored!.rows, 1);
+  assert.equal(stored!.assignee, "admin");
 
-  // Unknown key → no steps; missing key → 400.
-  assert.deepEqual(await stepsOf("orderNo=NO-SUCH-KEY"), []);
-  assert.equal((await call(admin, "GET", "/admin/task-lifecycle")).status, 400);
+  const idsOf = async (path: string, token: string, extra?: Record<string, string>) =>
+    ((await (await call(token, "GET", path, undefined, extra)).json()) as { rows: { id: string }[] }).rows.map((r) => r.id);
+
+  // Labeling queue is scoped by the STEP assignee (now admin): a different
+  // PDA user hides, while X-Client: admin stays unfiltered (BUG-042 pattern).
+  assert.ok(!(await idsOf("/labeling-orders", operator)).includes("po-step-1"));
+  assert.ok((await idsOf("/labeling-orders", admin, { "X-Client": "admin" })).includes("po-step-1"));
+
+  // Label-printing is an independent step: no picking_tasks row → visible to
+  // everyone; the admin sees both queues on a plain PDA call too.
+  assert.ok((await idsOf("/label-printing-orders", operator)).includes("po-step-1"));
+  assert.ok((await idsOf("/labeling-orders", admin)).includes("po-step-1"));
+
+  // The picking queue still filters on picking_orders.assignee (unset) — the
+  // labeling-side assignment changes nothing there.
+  assert.ok((await idsOf("/picking-orders", operator)).includes("po-step-1"));
+  assert.ok((await idsOf("/picking-orders", admin)).includes("po-step-1"));
+
+  // Unknown picking order → 404 like the other flows.
+  const missing = await call(admin, "PATCH", "/admin/task-assignment", { flow: "labeling", id: "nope", assignee: "operator" });
+  assert.equal(missing.status, 404);
+  assert.match(await missing.text(), /task_not_found/);
 });

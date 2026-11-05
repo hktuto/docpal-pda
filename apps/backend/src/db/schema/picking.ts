@@ -1,4 +1,5 @@
-import { pgTable, text, varchar, integer, bigint, boolean, real, timestamp, index, uniqueIndex, foreignKey, jsonb } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgTable, text, varchar, integer, bigint, boolean, real, timestamp, index, uniqueIndex, foreignKey, jsonb, check } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 import { users, subInventories } from "./master.js";
 import { shelfBoxes } from "./inventory.js";
@@ -58,6 +59,28 @@ export const pickingOrders = pgTable(
   (t) => ({
     statusIdx: index("idx_picking_orders_status").on(t.status),
     subInvFk: foreignKey({ name: "picking_orders_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.secondaryInventoryName] }),
+  })
+);
+
+// Per-step assignee side table for the labeling / label-printing queues
+// (CR-048, plan 2026-11-06-uat-open-items.md): picking_orders is upstream-
+// synced, so these two queue steps can't get a column — their assignee lives
+// here, keyed by (order, step). Absent row = unassigned = visible to everyone
+// (same convention as the queue assignees). The picking step keeps using
+// picking_orders.assignee.
+export const pickingTasks = pgTable(
+  "picking_tasks",
+  {
+    id: text("id").primaryKey(),
+    pickingOrderId: text("picking_order_id").notNull().references(() => pickingOrders.id, { onDelete: "cascade" }),
+    step: text("step").notNull(), // labeling | label-printing
+    assignee: text("assignee"), // optional assignee username, no FK — NULL = visible to everyone
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+  },
+  (t) => ({
+    orderStepUq: uniqueIndex("idx_picking_tasks_order_step").on(t.pickingOrderId, t.step),
+    stepCheck: check("chk_picking_tasks_step", sql`step IN ('labeling', 'label-printing')`),
   })
 );
 

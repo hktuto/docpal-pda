@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AdminUserRow, CountryRow, OrderLogsParams, OrderLogsPage, PickingItemRow, PickingOrderDetail, SubInventoryRow } from "~/utils/flowApi";
+import type { AdminUserRow, CountryRow, OrderLogsParams, OrderLogsPage, PickingItemRow, PickingOrderDetail, SubInventoryRow, TaskAssignmentFlow } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
@@ -41,32 +41,53 @@ const editOrgId = ref(""); // "" = none
 const editSubInventory = ref(""); // "" = none
 const locationError = ref("");
 
-// Assignee editor (spec 2026-11-01): single-select from /admin/users, saves
-// immediately on change via the generic task-assignment endpoint (optimistic,
-// rolled back on error). Separate from the deferred info-section Save.
+// Per-step assignee pickers (spec 2026-11-01 + CR-048): the order's picking /
+// labeling / label-printing steps and the per-box measuring / verify steps.
+// All save through the generic PATCH /admin/task-assignment (optimistic,
+// rolled back on error); state is keyed `${flow}:${taskId}`, value = username
+// ("" = unassigned).
 const assigneeUsers = ref<AdminUserRow[]>([]);
 const assigneeOptions = computed<SearchableSelectOption[]>(() =>
   assigneeUsers.value.map((u) => ({ value: u.username, label: `${u.displayName} (${u.username})` }))
 );
-const assigneeInput = ref(""); // username; "" = unassigned
-const assigneeSaving = ref(false);
+const assigneeInputs = ref<Record<string, string>>({});
+const assigneeSaving = ref<Record<string, boolean>>({});
 
-async function onAssigneeChange(value: string[] | string) {
+function assigneeValue(taskFlow: TaskAssignmentFlow, id: string) {
+  return assigneeInputs.value[`${taskFlow}:${id}`] ?? "";
+}
+
+async function saveStepAssignee(taskFlow: TaskAssignmentFlow, id: string, value: string[] | string) {
+  const key = `${taskFlow}:${id}`;
   const next = typeof value === "string" ? value : "";
-  const prev = assigneeInput.value;
-  if (next === prev || assigneeSaving.value) return;
-  assigneeInput.value = next;
-  assigneeSaving.value = true;
+  const prev = assigneeInputs.value[key] ?? "";
+  if (next === prev || assigneeSaving.value[key]) return;
+  assigneeInputs.value = { ...assigneeInputs.value, [key]: next };
+  assigneeSaving.value = { ...assigneeSaving.value, [key]: true };
   error.value = "";
   try {
-    await flow.setTaskAssignment("picking", orderId, next || null);
+    await flow.setTaskAssignment(taskFlow, id, next || null);
     logsKey.value++;
   } catch (e: any) {
-    assigneeInput.value = prev;
+    assigneeInputs.value = { ...assigneeInputs.value, [key]: prev };
     error.value = `${t("taskAssignments.saveFailed")}: ${e?.message ?? String(e)}`;
   } finally {
-    assigneeSaving.value = false;
+    assigneeSaving.value = { ...assigneeSaving.value, [key]: false };
   }
+}
+
+/** Seed every picker from the loaded order (re-run on each reload). */
+function initAssigneeInputs(o: PickingOrderDetail) {
+  const inputs: Record<string, string> = {
+    [`picking:${orderId}`]: o.assignee ?? "",
+    [`labeling:${orderId}`]: o.labelingAssignee ?? "",
+    [`label-printing:${orderId}`]: o.labelPrintingAssignee ?? "",
+  };
+  for (const b of o.boxes) {
+    inputs[`measuring:${b.id}`] = b.assignee ?? "";
+    if (b.verifyTaskId) inputs[`verify:${b.verifyTaskId}`] = b.verifyAssignee ?? "";
+  }
+  assigneeInputs.value = inputs;
 }
 
 const orgOptions = computed<SearchableSelectOption[]>(() => {
@@ -248,6 +269,18 @@ const boxesColumnDefs = computed<AdminColumnDef<PickingOrderDetail["boxes"][numb
   },
   { key: "destinationCountry", label: t("admin.pages.pickingOrders.destination"), size: 130 },
   { key: "packageCount", label: t("admin.pages.pickingOrders.packages"), size: 100 },
+  {
+    key: "measuringAssignee",
+    label: t("admin.pages.pickingOrders.measuringAssignee"),
+    accessor: (b) => b.assignee ?? "",
+    size: 170,
+  },
+  {
+    key: "verifyAssignee",
+    label: t("admin.pages.pickingOrders.verifyAssignee"),
+    accessor: (b) => b.verifyAssignee ?? "",
+    size: 170,
+  },
 ]);
 
 const boxesRows = computed(() => order.value?.boxes ?? []);
@@ -324,7 +357,7 @@ async function load() {
     shipToInput.value = order.value.shipTo ?? "";
     editOrgId.value = order.value.orgId != null ? String(order.value.orgId) : "";
     editSubInventory.value = order.value.subInventoryCode ?? "";
-    assigneeInput.value = order.value.assignee ?? "";
+    initAssigneeInputs(order.value);
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -686,17 +719,47 @@ const {
       <div class="detail-grid">
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.status") }}</div><div class="dd">{{ $t(`status.picking.${order.status}`) }}</div></div>
         <div>
-          <div class="dt">{{ $t("taskAssignments.colAssignee") }}</div>
+          <div class="dt">{{ $t("admin.pages.pickingOrders.assigneePicking") }}</div>
           <div class="dd date-edit">
             <SearchableSelect
-              :model-value="assigneeInput"
+              :model-value="assigneeValue('picking', orderId)"
               :options="assigneeOptions"
               :all-label="$t('taskAssignments.unassigned')"
-              :aria-label="$t('taskAssignments.colAssignee')"
+              :aria-label="$t('admin.pages.pickingOrders.assigneePicking')"
               :multiple="false"
-              :disabled="assigneeSaving"
+              :disabled="!!assigneeSaving['picking:' + orderId]"
               class="ship-to-select"
-              @update:model-value="onAssigneeChange"
+              @update:model-value="saveStepAssignee('picking', orderId, $event)"
+            />
+          </div>
+        </div>
+        <div>
+          <div class="dt">{{ $t("admin.pages.pickingOrders.assigneeLabeling") }}</div>
+          <div class="dd date-edit">
+            <SearchableSelect
+              :model-value="assigneeValue('labeling', orderId)"
+              :options="assigneeOptions"
+              :all-label="$t('taskAssignments.unassigned')"
+              :aria-label="$t('admin.pages.pickingOrders.assigneeLabeling')"
+              :multiple="false"
+              :disabled="!!assigneeSaving['labeling:' + orderId]"
+              class="ship-to-select"
+              @update:model-value="saveStepAssignee('labeling', orderId, $event)"
+            />
+          </div>
+        </div>
+        <div>
+          <div class="dt">{{ $t("admin.pages.pickingOrders.assigneeLabelPrinting") }}</div>
+          <div class="dd date-edit">
+            <SearchableSelect
+              :model-value="assigneeValue('label-printing', orderId)"
+              :options="assigneeOptions"
+              :all-label="$t('taskAssignments.unassigned')"
+              :aria-label="$t('admin.pages.pickingOrders.assigneeLabelPrinting')"
+              :multiple="false"
+              :disabled="!!assigneeSaving['label-printing:' + orderId]"
+              class="ship-to-select"
+              @update:model-value="saveStepAssignee('label-printing', orderId, $event)"
             />
           </div>
         </div>
@@ -902,6 +965,30 @@ const {
         <template #cell-boxSize="{ row }">{{ row.boxSize ?? "—" }}</template>
         <template #cell-netGross="{ row }">{{ row.netWeight ?? "—" }} / {{ row.grossWeight ?? "—" }}</template>
         <template #cell-destinationCountry="{ row }">{{ row.destinationCountry ?? "—" }}</template>
+        <template #cell-measuringAssignee="{ row }">
+          <SearchableSelect
+            :model-value="assigneeValue('measuring', row.id)"
+            :options="assigneeOptions"
+            :all-label="$t('taskAssignments.unassigned')"
+            :aria-label="$t('admin.pages.pickingOrders.measuringAssignee')"
+            :multiple="false"
+            :disabled="!!assigneeSaving['measuring:' + row.id]"
+            @update:model-value="saveStepAssignee('measuring', row.id, $event)"
+          />
+        </template>
+        <template #cell-verifyAssignee="{ row }">
+          <SearchableSelect
+            v-if="row.verifyTaskId"
+            :model-value="assigneeValue('verify', row.verifyTaskId)"
+            :options="assigneeOptions"
+            :all-label="$t('taskAssignments.unassigned')"
+            :aria-label="$t('admin.pages.pickingOrders.verifyAssignee')"
+            :multiple="false"
+            :disabled="!!assigneeSaving['verify:' + row.verifyTaskId]"
+            @update:model-value="saveStepAssignee('verify', row.verifyTaskId, $event)"
+          />
+          <span v-else class="muted">—</span>
+        </template>
       </DataTable>
 
       <AuditLogTable :fetch-logs="fetchLogs" :refresh-key="logsKey" />

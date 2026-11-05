@@ -1846,6 +1846,12 @@ export default {
           unallocated: "未分配"
         },
         lockedBy: "鎖定人",
+        assignee: "指派人",
+        assigneePicking: "揀貨指派人",
+        assigneeLabeling: "貼標籤指派人",
+        assigneeLabelPrinting: "打印標籤指派人",
+        measuringAssignee: "測量指派人",
+        verifyAssignee: "復核指派人",
         none: "暫無揀貨單。",
         detailTitle: "揀貨單 {orderNo}",
         downloadPickingList: "下載揀貨清單",
@@ -2665,12 +2671,7 @@ export default {
     colAssignee: "指派人",
     unassigned: "未指派",
     none: "此流程暫無待處理任務。",
-    saveFailed: "儲存指派失敗",
-    lifecycleTab: "全流程",
-    lifecycleColStep: "步驟",
-    lifecyclePlaceholder: "訂單 / 批次 / 箱號",
-    lifecycleHint: "搜尋訂單、批次或箱號，檢視該單在各流程步驟中的待處理任務；沒有匹配任務的步驟不會顯示。",
-    lifecycleNone: "該號碼暫無待處理任務。"
+    saveFailed: "儲存指派失敗"
   },
   bugReport: {
     title: "報告問題",

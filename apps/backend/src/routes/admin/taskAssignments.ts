@@ -5,7 +5,6 @@ import { db } from "../../db.js";
 import { actorFrom } from "../../auth/middleware.js";
 import {
   listTaskAssignments,
-  listTaskLifecycle,
   parseTaskAssignmentFlow,
   setTaskAssignee,
 } from "../../db/taskAssignments.js";
@@ -28,16 +27,6 @@ export const adminTaskAssignmentsRoute = new Hono();
 adminTaskAssignmentsRoute.get("/task-assignments", async (c) => {
   const flow = parseTaskAssignmentFlow(c.req.query("flow"));
   return c.json(await listTaskAssignments(db, flow), 200);
-});
-
-// Per-step assignee view (CR-048): {steps: [{flow, id, label, status,
-// assignee}]} for every open task of one order/batch (or box) number across
-// all 8 flows, in lifecycle order. Steps with no matching open task don't
-// appear. Editing stays on the existing PATCH /admin/task-assignment below.
-adminTaskAssignmentsRoute.get("/task-lifecycle", async (c) => {
-  const key = (c.req.query("orderNo") ?? c.req.query("batchNo") ?? "").trim();
-  if (key === "") throw new HTTPException(400, { message: "orderNo or batchNo query parameter required" });
-  return c.json({ steps: await listTaskLifecycle(db, key) }, 200);
 });
 
 // Set (or clear with null/"") one task's assignee. Body {flow, id, assignee};

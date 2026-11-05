@@ -21,6 +21,9 @@ export interface PickingOrderRow {
   prioritySeq: number;
   workingBy: string | null;
   workingByName: string | null;
+  /** Picking-step assignee username (spec 2026-11-01); null = unassigned.
+   *  Optional — backends predating the task-assignee feature omit it. */
+  assignee?: string | null;
   itemCount: number;
   totalQty: number;
   pickedQty: number;
@@ -115,8 +118,27 @@ export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | 
   /** Assigned username (spec 2026-11-01). Optional — backends predating the
    *  task-assignee feature omit it. */
   assignee?: string | null;
+  /** Labeling / label-printing step assignees from picking_tasks (CR-048,
+   *  plan 2026-11-06-uat-open-items.md); null = unassigned. Optional —
+   *  backends predating the feature omit them. */
+  labelingAssignee?: string | null;
+  labelPrintingAssignee?: string | null;
   items: PickingItemRow[];
-  boxes: { id: string; status: string; boxSize: string | null; grossWeight: number | null; netWeight: number | null; destinationCountry: string | null; packageCount: number; shippedAt: string | null }[];
+  boxes: {
+    id: string;
+    status: string;
+    boxSize: string | null;
+    grossWeight: number | null;
+    netWeight: number | null;
+    destinationCountry: string | null;
+    packageCount: number;
+    shippedAt: string | null;
+    /** Measuring-step assignee (shipping_boxes.assignee, spec 2026-11-01). */
+    assignee?: string | null;
+    /** The box's verify task (CR-048 per-step picker); null when none yet. */
+    verifyTaskId?: string | null;
+    verifyAssignee?: string | null;
+  }[];
 }
 
 /** Admin-editable picking order fields (PATCH /admin/picking-orders/:id). */
@@ -531,16 +553,6 @@ export interface TaskAssignmentRow {
   /** Username of the assignee, null = unassigned (visible to everyone). */
   assignee: string | null;
   [key: string]: unknown;
-}
-
-/** GET /admin/task-lifecycle step (CR-048): one open task of the searched
- *  order/batch/box number, in lifecycle order. */
-export interface TaskLifecycleStep {
-  flow: TaskAssignmentFlow;
-  id: string;
-  label: string;
-  status: string;
-  assignee: string | null;
 }
 
 /** GET /admin/users row (assignee dropdown source). */
@@ -1372,12 +1384,6 @@ export function useFlowApi() {
         id,
         assignee,
       }),
-    // Per-step assignee view (CR-048): open tasks of one order/batch number
-    // across all flows, lifecycle-ordered.
-    getTaskLifecycle: (orderNo: string) =>
-      api.get<{ steps: TaskLifecycleStep[] }>(
-        `/admin/task-lifecycle?orderNo=${encodeURIComponent(orderNo)}`
-      ),
 
     // Flow config (warehouse_config row "flow"; applies at runtime on save
     // unless the FLOW_CONFIG env override is active)

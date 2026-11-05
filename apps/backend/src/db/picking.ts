@@ -647,6 +647,7 @@ const PICKING_LIST_SORTS: Record<string, ReturnType<typeof sql>[]> = {
   itemCount: [sql`COUNT(pi.id)`],
   pickedRatio: [sql`CASE WHEN SUM(pi.qty) > 0 THEN SUM(pi.picked_qty)::float8 / SUM(pi.qty) ELSE 0 END`],
   allocation: [sql`CASE WHEN SUM(pi.qty) > 0 THEN SUM(pi.allocated_qty)::float8 / SUM(pi.qty) ELSE 0 END`],
+  assignee: [sql`po.assignee`],
   workingByName: [sql`w.display_name`],
   remark: [sql`po.remark`],
   prioritySeq: [sql`po.priority_seq`],
@@ -790,6 +791,9 @@ export async function listOpenShippingBoxes(db: AppDb): Promise<OpenShippingBoxR
 // finished orders whose label stage is still pending. labelMatches are
 // resolved LIVE per row (rules are few, lists are small) so the list can show
 // the label count even when the rules were edited after the finish snapshot.
+// The queue assignee comes from picking_tasks (CR-048, plan
+// 2026-11-06-uat-open-items.md), NOT picking_orders.assignee — the picking
+// step keeps that column.
 // ---------------------------------------------------------------------------
 
 export interface LabelingOrderRow {
@@ -799,7 +803,8 @@ export interface LabelingOrderRow {
   customerCode: string | null;
   shipTo: string | null;
   deliveryDate: Date | null;
-  /** Optional assignee username (spec 2026-11-01-task-assignee-design.md). */
+  /** Step assignee username from picking_tasks (spec 2026-11-01-task-assignee
+   *  design + CR-048); null = unassigned = visible to everyone. */
   assignee: string | null;
   itemCount: number;
   totalQty: number;
@@ -820,18 +825,19 @@ export async function listLabelingOrders(
         po.picking_order_type AS "pickingOrderType",
         po.customer_code AS "customerCode", po.ship_to AS "shipTo",
         po.delivery_date AS "deliveryDate",
-        po.assignee,
+        pt.assignee,
         COUNT(pi.id)::int AS "itemCount",
         COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
         po.last_update_date AS "lastUpdateDate",
         COUNT(*) OVER ()::int AS "total"
       FROM picking_orders po
       LEFT JOIN picking_items pi ON pi.picking_order_id = po.id
+      LEFT JOIN picking_tasks pt ON pt.picking_order_id = po.id AND pt.step = 'labeling'
       WHERE po.status = 'picking_finished' AND po.labeling_pending = true
       ${search ? sql`AND (po.order_no ILIKE ${"%" + search + "%"} OR po.customer_code ILIKE ${"%" + search + "%"} OR po.ship_to ILIKE ${"%" + search + "%"})` : sql``}
       ${pickingOrderOrgFilter(sql`po.org_id`, sql`po.sub_inventory_code`, sql`po.picking_order_type`, opts?.scope)}
-      ${assigneeFilter(sql`po.assignee`, opts?.username)}
-      GROUP BY po.id
+      ${assigneeFilter(sql`pt.assignee`, opts?.username)}
+      GROUP BY po.id, pt.assignee
       ORDER BY po.last_update_date DESC, po.order_no
       ${opts?.limit && opts.limit > 0 ? sql`LIMIT ${opts.limit} OFFSET ${opts.offset ?? 0}` : sql``}
     `
@@ -861,18 +867,19 @@ export async function listLabelPrintingOrders(
         po.picking_order_type AS "pickingOrderType",
         po.customer_code AS "customerCode", po.ship_to AS "shipTo",
         po.delivery_date AS "deliveryDate",
-        po.assignee,
+        pt.assignee,
         COUNT(pi.id)::int AS "itemCount",
         COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
         po.last_update_date AS "lastUpdateDate",
         COUNT(*) OVER ()::int AS "total"
       FROM picking_orders po
       LEFT JOIN picking_items pi ON pi.picking_order_id = po.id
+      LEFT JOIN picking_tasks pt ON pt.picking_order_id = po.id AND pt.step = 'label-printing'
       WHERE po.status = 'picking_finished' AND po.label_printing_pending = true
       ${search ? sql`AND (po.order_no ILIKE ${"%" + search + "%"} OR po.customer_code ILIKE ${"%" + search + "%"} OR po.ship_to ILIKE ${"%" + search + "%"})` : sql``}
       ${pickingOrderOrgFilter(sql`po.org_id`, sql`po.sub_inventory_code`, sql`po.picking_order_type`, opts?.scope)}
-      ${assigneeFilter(sql`po.assignee`, opts?.username)}
-      GROUP BY po.id
+      ${assigneeFilter(sql`pt.assignee`, opts?.username)}
+      GROUP BY po.id, pt.assignee
       ORDER BY po.last_update_date DESC, po.order_no
       ${opts?.limit && opts.limit > 0 ? sql`LIMIT ${opts.limit} OFFSET ${opts.offset ?? 0}` : sql``}
     `
@@ -1120,9 +1127,19 @@ export interface PickingBoxDetail {
   netWeight: number | null;
   destinationCountry: string | null;
   packageCount: number;
+  /** Measuring queue assignee (shipping_boxes.assignee, spec 2026-11-01). */
+  assignee: string | null;
+  /** The box's verify task (null when none exists yet — CR-048 admin picker). */
+  verifyTaskId: string | null;
+  verifyAssignee: string | null;
 }
 
 export interface PickingOrderDetail extends PickingOrderRow {
+  /** Labeling / label-printing step assignees from picking_tasks (CR-048,
+   *  plan 2026-11-06-uat-open-items.md); null = unassigned. The picking
+   *  step's assignee is `assignee` (picking_orders column). */
+  labelingAssignee: string | null;
+  labelPrintingAssignee: string | null;
   items: PickingItemDetail[];
   boxes: PickingBoxDetail[];
   /** Whole-box claim hint: a fully-claimable shelf box whose current contents
@@ -1176,7 +1193,9 @@ export async function getPickingOrderDetail(
   scope?: UserScopeEntry[] | null,
   username?: string
 ): Promise<PickingOrderDetail> {
-  const order = await queryGet<PickingOrderRow>(
+  const order = await queryGet<
+    PickingOrderRow & { labelingAssignee: string | null; labelPrintingAssignee: string | null }
+  >(
     db,
     sql`
       SELECT
@@ -1188,6 +1207,7 @@ export async function getPickingOrderDetail(
         po.picking_order_type AS "pickingOrderType", po.remark,
         po.working_by AS "workingBy", w.display_name AS "workingByName",
         po.assignee,
+        tl.assignee AS "labelingAssignee", tp.assignee AS "labelPrintingAssignee",
         po.issue_reason AS "issueReason", po.issue_qty AS "issueQty", po.issue_pack_size AS "issuePackSize",
         po.issue_note AS "issueNote", po.issue_remark AS "issueRemark",
         po.issue_reported_at AS "issueReportedAt", po.issue_reported_by AS "issueReportedBy",
@@ -1206,6 +1226,8 @@ export async function getPickingOrderDetail(
       LEFT JOIN users ru ON ru.id = po.issue_reported_by
       LEFT JOIN users lu ON lu.id = po.labeling_done_by
       LEFT JOIN users lpu ON lpu.id = po.label_printing_done_by
+      LEFT JOIN picking_tasks tl ON tl.picking_order_id = po.id AND tl.step = 'labeling'
+      LEFT JOIN picking_tasks tp ON tp.picking_order_id = po.id AND tp.step = 'label-printing'
       WHERE po.id = ${orderId}
       ${pickingOrderOrgFilter(sql`po.org_id`, sql`po.sub_inventory_code`, sql`po.picking_order_type`, scope)}
       ${assigneeFilter(sql`po.assignee`, username)}
@@ -1288,8 +1310,11 @@ export async function getPickingOrderDetail(
         sb.id, sb.status, sb.box_size AS "boxSize",
         sb.gross_weight AS "grossWeight", sb.net_weight AS "netWeight",
         sb.destination_country AS "destinationCountry",
+        sb.assignee,
+        vt.id AS "verifyTaskId", vt.assignee AS "verifyAssignee",
         (SELECT COUNT(*)::int FROM picking_packages pp WHERE pp.shipping_box_id = sb.id) AS "packageCount"
       FROM shipping_boxes sb
+      LEFT JOIN verify_tasks vt ON vt.shipping_box_id = sb.id
       WHERE sb.picking_order_id = ${orderId}
       ORDER BY sb.created_date, sb.id
     `

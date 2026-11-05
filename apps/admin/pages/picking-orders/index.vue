@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PickingOrderRow } from "~/utils/flowApi";
+import type { AdminUserRow, PickingOrderRow } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
@@ -25,6 +25,11 @@ const statusOptions = computed<SearchableSelectOption[]>(() =>
 const orderTypeOptions = computed<SearchableSelectOption[]>(() =>
   ORDER_TYPES.map((v) => ({ value: v, label: v }))
 );
+
+// Assignee column shows the display name for the assigned username (one
+// /admin/users load, like the detail page; falls back to the username).
+const users = ref<AdminUserRow[]>([]);
+const assigneeNames = computed(() => new Map(users.value.map((u) => [u.username, u.displayName])));
 
 // accessors resolve the derived display values used for rendering (sorting is
 // server-side — `sort`/`dir` query params keyed by the column key).
@@ -60,6 +65,12 @@ const columnDefs = computed<AdminColumnDef<PickingOrderRow>[]>(() => [
     size: 170,
   },
   { key: "workingByName", label: t("admin.pages.pickingOrders.lockedBy"), size: 110 },
+  {
+    key: "assignee",
+    label: t("admin.pages.pickingOrders.assignee"),
+    accessor: (r) => (r.assignee ? assigneeNames.value.get(r.assignee) ?? r.assignee : ""),
+    size: 110,
+  },
   {
     key: "remark",
     label: t("admin.pages.pickingOrders.remark"),
@@ -175,7 +186,13 @@ watch(search, () => {
   searchTimer = setTimeout(resetPageAndLoad, 300);
 });
 
-onMounted(load);
+onMounted(() => {
+  load();
+  flow
+    .listAdminUsers()
+    .then((list) => (users.value = list))
+    .catch(() => {}); // assignee column falls back to usernames; the list still loads
+});
 
 // Batch "Set status": one override per selected order (the API helper
 // attempts every id and lists per-order failures on `failed`, same as the

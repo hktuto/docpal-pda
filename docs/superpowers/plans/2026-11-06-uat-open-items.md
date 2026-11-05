@@ -55,7 +55,29 @@ Current flag is all-or-nothing (`flagCnItem` `:382-416` sets `scan_status='error
 
 Files: schema + migration, `db/receivingCnScan.ts`, `routes/receivingCn.ts`, pda page, `types.ts` (`CnFlagItemInput.qty?`), service adapter, i18n locales, update `routes/receivingCnScan.test.ts` expectations (zeroing of error lines changes).
 
-## CR-048 — Admin task assignment: per-step assignee view
+## CR-048 (REVISED 2026-11-06 — first cut rejected, Lifecycle tab to be removed)
+
+User's actual ask: (1) **assignee column in the admin `/picking-orders` list**; (2) **on the picking-order detail page, an assignee picker per task/step of the order**. Not a separate lifecycle-search tab.
+
+**Data reality driving the design:**
+- `picking_orders` is upstream-synced — **no schema changes allowed**. Steps lacking a column get a local side table.
+- Picking / labeling / label-printing queues currently all filter on the SINGLE `picking_orders.assignee` (`db/picking.ts:742,833,874`).
+- Measuring is per shipping box (`shipping_boxes.assignee`), verify per box's verify task (`verify_tasks.assignee`); shipping has no assignee step (not in TASK_ASSIGNMENT_FLOWS).
+
+Build:
+1. **Revert the Lifecycle tab**: delete the lifecycle tab from `apps/admin/pages/task-assignments.vue`, `getTaskLifecycle`/`TaskLifecycleStep` from `flowApi.ts`, `GET /admin/task-lifecycle` from `routes/admin/taskAssignments.ts`, `listTaskLifecycle`/`keyMatch` from `db/taskAssignments.ts`, its test. Flow tabs stay.
+2. **New table `picking_tasks`** (house conventions): `id` uuid v7 PK, `picking_order_id` FK→picking_orders ON DELETE CASCADE, `step` text CHECK IN ('labeling','label-printing'), `assignee` text NULL (username, no FK — same convention), UNIQUE(picking_order_id, step), created/last_update. Migration via db:generate. **No backfill** — absent row = unassigned = visible to all; the picking step keeps using `picking_orders.assignee` (already exists, admin-managed; not touched). Chosen over "all steps in the table" to keep the picking queue's behavior and code unchanged (decision A, 2026-11-06).
+3. **Backend scoping**: `listLabelingOrders` / `listLabelPrintingOrders` (+ their detail paths in `db/picking.ts` / `getPickingOrderDetail`) LEFT JOIN `picking_tasks` on (order id, step) — filter + return `pt.assignee` instead of `po.assignee`. Picking queue keeps `po.assignee`. `db/taskAssignments.ts`: labeling + label-printing flows read/write through `picking_tasks` (PATCH flow `labeling`/`label-printing` id = picking-order id → INSERT..ON CONFLICT upsert of assignee; list rows LEFT JOIN it); picking flow unchanged. Admin picking detail DTO: add `labelingAssignee`, `labelPrintingAssignee` (two joins), per-box `assignee` + `verifyTaskId` + verify `assignee` (join `verify_tasks` by shipping_box_id).
+4. **Admin list `picking-orders/index.vue`**: add "Assignee" column = picking assignee (`po.assignee`, already returned by the list query `db/picking.ts:708`; check the admin row DTO + `PickingOrderRow` include it). Username → display name via one `GET /admin/users` load like the detail page.
+5. **Admin detail `picking-orders/[id].vue`**: the existing single picker becomes 3 labeled step pickers in the detail-grid — Picking (`assignee`, PATCH flow `picking`), Labeling (PATCH flow `labeling`), Label printing (PATCH flow `label-printing`) — id = order id, optimistic, reuse existing `SearchableSelect` save pattern. In the shippingBoxes section, per-box row: Measuring assignee picker (flow `measuring`, id = box id) + Verify assignee picker (flow `verify`, id = verify task id; hidden while box has no verify task). New i18n step labels × 3 locales where existing keys don't cover.
+6. **UAT**: rewrite `CR-048.json` feature text to the revised ask (picking_tasks side table + per-step pickers on detail + list column), status → In progress until this lands (then Delivered with the new commit).
+
+Out of scope (say so): bulk assign per step, PDA UI changes, shipping-step assignee (doesn't exist), per-item task splitting.
+Verification: backend tsc + admin build only; targeted taskAssignments test only if Postgres up. Manual UAT by Sean.
+
+---
+
+## CR-048 (v1 — DELIVERED 3f6af0dc, REJECTED by Sean — superseded by revision above)
 
 Today `/task-assignments` = one tab per queue (8 flows), each row one assignee picker (`GET /admin/task-assignments?flow=` / `PATCH /admin/task-assignment` — `db/taskAssignments.ts:50-181`, page `:13-22`). Admins want a task's assignee per workflow step visible/editable in one place.
 
