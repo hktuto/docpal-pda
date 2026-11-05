@@ -3,6 +3,14 @@
 Date: 2026-11-04
 Supersedes the per-line matching half of `2026-11-01-cn-receiving-scan-design.md` (the task model, statuses, finalize→put-away pipeline are unchanged except where noted).
 
+> **Amended 2026-11-05** by `2026-11-05-cn-receiving-part-only-scan-matching-design.md`:
+> the batch-field parts of this spec are reversed — grouping/matching is
+> **part-number-only** (dateCode/COO/COW no longer join the group key nor
+> filter `scan-aggregate` candidates), and scanned batch fields **overwrite**
+> the invoice line instead of fill-if-NULL, because the OCR batch fields are
+> untrustworthy. FIFO credit, over-scan, flag/reset, finalize below are
+> unchanged.
+
 ## Problem
 
 `pages/receiving-cn-scan/[id].vue` renders one row per `receiving_invoice_items_cn` line and resolves exactly one whole line per scan. When several open lines share a part (common: same part split across PO lines / cartons), the operator is forced into the "Choose the matching item" modal for every scan, and there is no way to see "we ordered 1,000 of X, scanned 600, 400 missing" until finalize.

@@ -11,14 +11,15 @@ import type {
   CnScanTaskItem,
 } from "~/services/types";
 
-// CN receiving scan (收貨掃描, spec 2026-11-04-cn-receiving-scan-grouping):
+// CN receiving scan (收貨掃描, spec 2026-11-05-cn-receiving-part-only-scan-matching):
 // the order sits in status `scanning` after the admin OCR confirm. The page
-// renders one row per (part, dateCode, COO, COW) GROUP; the operator scans
-// physical labels and each scan is matched + credited server-side
-// (scanCnTaskAggregate → POST .../scan-aggregate, FIFO across the group's
-// lines) — the response replaces the whole detail. Problem groups are flagged
-// (missing/damaged/wrong_part/other); 完成 receives the credited items and
-// creates the CN put-away task.
+// renders one row per PART (the PDF's dateCode/lotCode/COO/COW come from OCR
+// and are untrustworthy — only part no and total qty are true); the operator
+// scans physical labels and each scan is matched + credited server-side
+// (scanCnTaskAggregate → POST .../scan-aggregate, FIFO across the part's open
+// lines; scanned batch fields overwrite the line) — the response replaces the
+// whole detail. Problem groups are flagged (missing/damaged/wrong_part/other);
+// 完成 receives the credited items and creates the CN put-away task.
 
 definePageMeta({ title: "meta.receivingScan" });
 

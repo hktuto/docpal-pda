@@ -284,15 +284,15 @@ test("aggregate scan: over-scan dumps into the last credited line → warning/qt
   assert.deepEqual([l2.scanQty, l2.scanStatus, l2.scanReason], [70, "warning", "qty_mismatch"]);
 });
 
-test("aggregate scan: batch-field filter — label values keep NULL/equal lines only; a conflicting value → 404 no_matching_item (no part-only fallback)", async () => {
+test("aggregate scan: matching is part-only — label batch fields never filter lines and overwrite the credited line's OCR values", async () => {
   await reseed(client);
   const token = await login("operator", "DocPal2026!");
   const { orderId, itemIds } = await seedScanningOrder("CN-SCAN-A4", [
     { partNo: "PART-A", lineQty: 100, dateCode: "2641", coo: "JP" },
-    { partNo: "PART-A", lineQty: 50 }, // NULL batch fields match anything
+    { partNo: "PART-A", lineQty: 50 }, // NULL batch fields
   ]);
 
-  // A label with dateCode 2641 matches both (line 2's NULL keeps it).
+  // A label with dateCode 2641 credits both FIFO (line 2's NULL fields never excluded it).
   const hit = await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/scan-aggregate`, {
     partNo: "PART-A",
     qty: 150,
@@ -303,19 +303,24 @@ test("aggregate scan: batch-field filter — label values keep NULL/equal lines 
   assert.deepEqual([hitBody.items[0].scanQty, hitBody.items[0].scanStatus], [100, "ok"]);
   assert.deepEqual([hitBody.items[1].scanQty, hitBody.items[1].scanStatus], [50, "ok"]);
 
-  // A conflicting dateCode matches nothing — no part-only fallback.
+  // A conflicting dateCode still matches — the OCR date_code is replaced by the scanned one.
   const { orderId: orderId2 } = await seedScanningOrder("CN-SCAN-A5", [{ partNo: "PART-A", lineQty: 100, dateCode: "2641" }]);
-  const miss = await call(token, "POST", `/receiving-cn/scan-tasks/${orderId2}/scan-aggregate`, {
+  const res = await call(token, "POST", `/receiving-cn/scan-tasks/${orderId2}/scan-aggregate`, {
     partNo: "PART-A",
     qty: 10,
     dateCode: "2645",
   });
-  assert.equal(miss.status, 404);
-  assert.match(await miss.text(), /no_matching_item/);
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as AggregateResponse;
+  assert.equal(body.items[0].scanQty, 10);
+  assert.equal(body.items[0].dateCode, "2645");
 
-  // A label without batch fields matches the part-only line.
+  // A label without batch fields also matches; untouched lines keep their OCR values.
   const plain = await call(token, "POST", `/receiving-cn/scan-tasks/${orderId2}/scan-aggregate`, { partNo: "PART-A", qty: 10 });
   assert.equal(plain.status, 200);
+  const plainBody = (await plain.json()) as AggregateResponse;
+  assert.equal(plainBody.items[0].scanQty, 20);
+  assert.equal(plainBody.items[0].dateCode, "2645"); // kept from the earlier overwrite, not re-blanked
   void itemIds;
 });
 
@@ -368,7 +373,7 @@ test("aggregate scan: NULL line_qty lines credit last and absorb the remainder a
   );
 });
 
-test("aggregate scan: batch fields fill only NULL line columns — an existing line value is never rewritten", async () => {
+test("aggregate scan: scanned batch fields overwrite existing OCR line values (the label is the source of truth)", async () => {
   await reseed(client);
   const token = await login("operator", "DocPal2026!");
   const { orderId } = await seedScanningOrder("CN-SCAN-A8", [
@@ -384,8 +389,16 @@ test("aggregate scan: batch fields fill only NULL line columns — an existing l
   assert.equal(res.status, 200);
   const body = (await res.json()) as AggregateResponse;
   assert.equal(body.items[0].dateCode, "2641");
-  assert.equal(body.items[0].lotCode, "OLD-LOT"); // kept
-  assert.equal(body.items[0].coo, "JP"); // filled
+  assert.equal(body.items[0].lotCode, "NEW-LOT"); // overwritten — the OCR value was untrustworthy
+  assert.equal(body.items[0].coo, "JP"); // filled (line was NULL)
+
+  // A scan without batch fields leaves the stamped values alone.
+  const { orderId: orderId2 } = await seedScanningOrder("CN-SCAN-A8B", [
+    { partNo: "PART-A", lineQty: 100, dateCode: "2641" },
+  ]);
+  await call(token, "POST", `/receiving-cn/scan-tasks/${orderId2}/scan-aggregate`, { partNo: "PART-A", qty: 50 });
+  const body2 = (await (await call(token, "GET", `/receiving-cn/scan-tasks/${orderId2}`)).json()) as AggregateResponse;
+  assert.equal(body2.items[0].dateCode, "2641");
 });
 
 test("aggregate scan: validation 400s; non-scanning order → 409; unknown order → 404", async () => {

@@ -28,18 +28,14 @@ function item(over: Partial<CnScanTaskItem>): CnScanTaskItem {
 }
 
 describe("cnScanGroupKey", () => {
-  it("keys on wclItemNo || partNo plus dateCode/coo/cow", () => {
+  it("keys on the normalized part identity only — batch fields never split a group", () => {
     const a = item({ id: "a", partNo: "P1", wclItemNo: "WCL 001", dateCode: "2440", coo: "CN" });
     const b = item({ id: "b", partNo: "P1", wclItemNo: "wcl001", dateCode: " 2440 ", coo: "cn" });
-    const c = item({ id: "c", partNo: "P1", wclItemNo: "WCL001", dateCode: "2441", coo: "CN" });
+    const c = item({ id: "c", partNo: "P1", wclItemNo: "WCL001", dateCode: "2441", coo: "JP", cow: "US" });
+    const d = item({ id: "d", partNo: "P2", wclItemNo: "WCL002", dateCode: "2440", coo: "CN" });
     expect(cnScanGroupKey(a)).toBe(cnScanGroupKey(b));
-    expect(cnScanGroupKey(a)).not.toBe(cnScanGroupKey(c));
-  });
-
-  it("nulls group together as empty segments", () => {
-    const key = cnScanGroupKey(item({ id: "a", dateCode: null, coo: null, cow: null }));
-    expect(key).toBe("ABC-123|||");
-    expect(key).toBe(cnScanGroupKey(item({ id: "b", dateCode: null })));
+    expect(cnScanGroupKey(a)).toBe(cnScanGroupKey(c)); // different batch fields, same part
+    expect(cnScanGroupKey(a)).not.toBe(cnScanGroupKey(d)); // different part
   });
 });
 
@@ -66,6 +62,25 @@ describe("buildCnScanGroups", () => {
       item({ id: "c", partNo: "B" }),
     ]);
     expect(groups.map((g) => g.partNo)).toEqual(["B", "A"]);
+  });
+
+  it("groups same-part lines regardless of batch fields; dateCode/coo/cow show distinct member values", () => {
+    const [g] = buildCnScanGroups([
+      item({ id: "a", dateCode: "2440", coo: "CN" }),
+      item({ id: "b", dateCode: "2441", coo: null }),
+      item({ id: "c", dateCode: "2440", coo: "JP", cow: "US" }),
+    ]);
+    expect(g.items.map((i) => i.id)).toEqual(["a", "b", "c"]);
+    expect(g.dateCode).toBe("2440 · 2441");
+    expect(g.coo).toBe("CN · JP");
+    expect(g.cow).toBe("US");
+  });
+
+  it("batch display fields are null when no member line carries them", () => {
+    const [g] = buildCnScanGroups([item({ id: "a" }), item({ id: "b" })]);
+    expect(g.dateCode).toBeNull();
+    expect(g.coo).toBeNull();
+    expect(g.cow).toBeNull();
   });
 
   it("derives status: open / partial / complete / over / error", () => {

@@ -220,23 +220,6 @@ async function reloadItem(db: AppDb, itemId: string): Promise<CnScanItemRow> {
   return row!;
 }
 
-// --- batch-field normalization (port of apps/pda/utils/ocrNormalize.ts) -----
-
-/** Trim, uppercase, collapse whitespace (COO/COW comparison). */
-function normalizeText(value: string): string {
-  return value.trim().toUpperCase().replace(/\s+/g, " ");
-}
-
-/** normalizeText + common OCR digit substitutions (date/lot codes). */
-function normalizeCode(value: string): string {
-  return normalizeText(value)
-    .replace(/O/g, "0")
-    .replace(/I/g, "1")
-    .replace(/L/g, "1")
-    .replace(/Z/g, "2")
-    .replace(/S/g, "5");
-}
-
 // --- aggregate scan ---------------------------------------------------------
 
 export interface CnScanAggregateInput {
@@ -257,27 +240,28 @@ export interface CnScanAggregateResult extends CnScanTaskDetail {
 
 /**
  * Aggregate scan credit (spec
- * docs/superpowers/specs/2026-11-04-cn-receiving-scan-grouping-design.md): one
- * physical label scan credits the task's OPEN items FIFO in one tx — no
+ * docs/superpowers/specs/2026-11-05-cn-receiving-part-only-scan-matching-design.md):
+ * one physical label scan credits the task's OPEN items FIFO in one tx — no
  * per-line picking by the operator.
  *
  * Matching: candidates are the open lines (scan_status IS NULL, possibly
- * partially credited); the part matches when any of the label's
- * itemId/wclItemNo/partNo normalized-equals the line's partNo/wclItemNo
- * (space/case-insensitive, TE AMP(...) unwrap — the decode/codecs
- * convention); then the verify/measuring batch-field rule: a label-carried
- * dateCode/coo/cow keeps only lines whose field is NULL or normalized-equal
- * (a conflicting value is genuinely different stock — no part-only fallback).
- * Empty after filtering → 404 no_matching_item.
+ * partially credited) whose partNo/wclItemNo normalized-equals any of the
+ * label's itemId/wclItemNo/partNo (space/case-insensitive, TE AMP(...) unwrap
+ * — the decode/codecs convention). The invoice batch fields (date_code /
+ * lot_code / coo / cow) come from DocPal OCR of the uploaded PDF and are NOT
+ * trustworthy, so they never filter the match — only the part number and the
+ * total quantity from the PDF are true. Empty after filtering → 404
+ * no_matching_item (no open line with this part).
  *
  * Credit: FIFO in po_no, po_line, id order, each line taking
  * min(remaining, lineQty − scanQty); NULL-lineQty lines (OCR gap) go last and
  * absorb the remainder. Line status after credit: == lineQty → ok; over-scan
  * (> lineQty) or a NULL-lineQty credit → warning/qty_mismatch; partial stays
  * open. Excess beyond every candidate's capacity dumps into the last credited
- * line (→ warning) and returns as lastScan.overQty. Provided batch fields
- * fill the credited lines' date_code/lot_code/coo/cow only where NULL. Audit
- * + SSE per credited line, same convention as the old per-item scan.
+ * line (→ warning) and returns as lastScan.overQty. The label is the source
+ * of truth for batch identity: provided dateCode/lotCode/coo/cow overwrite
+ * the credited lines' columns (a wrong OCR value is replaced, not kept).
+ * Audit + SSE per credited line, same convention as the old per-item scan.
  */
 export async function scanCnTaskAggregate(
   db: AppDb,
@@ -296,9 +280,6 @@ export async function scanCnTaskAggregate(
   if (labelKeys.size === 0) {
     throw new HTTPException(400, { message: "invalid_payload: a part identity (itemId, wclItemNo or partNo) is required" });
   }
-  const labelDateCode = input.dateCode ? normalizeCode(input.dateCode) : "";
-  const labelCoo = input.coo ? normalizeText(input.coo) : "";
-  const labelCow = input.cow ? normalizeText(input.cow) : "";
 
   let overQty = 0;
   await db.transaction(async (tx) => {
@@ -315,10 +296,7 @@ export async function scanCnTaskAggregate(
       (item) =>
         item.scanStatus === null &&
         ((item.partNo && labelKeys.has(normalizePartNo(item.partNo))) ||
-          (item.wclItemNo && labelKeys.has(normalizePartNo(item.wclItemNo)))) &&
-        (!labelDateCode || !item.dateCode || normalizeCode(item.dateCode) === labelDateCode) &&
-        (!labelCoo || !item.coo || normalizeText(item.coo) === labelCoo) &&
-        (!labelCow || !item.cow || normalizeText(item.cow) === labelCow)
+          (item.wclItemNo && labelKeys.has(normalizePartNo(item.wclItemNo))))
     );
     if (eligible.length === 0) {
       throw new HTTPException(404, { message: "no_matching_item" });
@@ -370,10 +348,10 @@ export async function scanCnTaskAggregate(
               mismatch_note = NULL,
               ${sql.join(
                 [
-                  ...(input.dateCode !== undefined ? [sql`date_code = COALESCE(date_code, ${input.dateCode})`] : []),
-                  ...(input.lotCode !== undefined ? [sql`lot_code = COALESCE(lot_code, ${input.lotCode})`] : []),
-                  ...(input.coo !== undefined ? [sql`coo = COALESCE(coo, ${input.coo})`] : []),
-                  ...(input.cow !== undefined ? [sql`cow = COALESCE(cow, ${input.cow})`] : []),
+                  ...(input.dateCode !== undefined ? [sql`date_code = ${input.dateCode}`] : []),
+                  ...(input.lotCode !== undefined ? [sql`lot_code = ${input.lotCode}`] : []),
+                  ...(input.coo !== undefined ? [sql`coo = ${input.coo}`] : []),
+                  ...(input.cow !== undefined ? [sql`cow = ${input.cow}`] : []),
                 ],
                 sql`, `
               )}
