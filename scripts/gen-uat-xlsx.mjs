@@ -62,7 +62,7 @@ fs1.columns = [
   { header: 'Bugs found', width: 10 },
   { header: 'Open bugs', width: 10 },
   { header: 'New features', width: 10 },
-  { header: 'Features done', width: 10 },
+  { header: 'Features pending', width: 10 },
   { header: 'Bug IDs', width: 18 },
   { header: 'Remarks', width: 24 },
 ];
@@ -76,7 +76,10 @@ for (const f of functions) {
     formula: `COUNTIFS('Bug Log'!$C:$C,$C${n},'Bug Log'!$H:$H,"Open")+COUNTIFS('Bug Log'!$C:$C,$C${n},'Bug Log'!$H:$H,"Fixing")+COUNTIFS('Bug Log'!$C:$C,$C${n},'Bug Log'!$H:$H,"Ready for retest")`,
   };
   r.getCell(10).value = { formula: `COUNTIF('Additional Features'!$E:$E,$C${n})` };
-  r.getCell(11).value = { formula: `COUNTIFS('Additional Features'!$E:$E,$C${n},'Additional Features'!$I:$I,"Delivered")` };
+  // pending = not yet delivered and not rejected
+  r.getCell(11).value = {
+    formula: `COUNTIFS('Additional Features'!$E:$E,$C${n},'Additional Features'!$I:$I,"New")+COUNTIFS('Additional Features'!$E:$E,$C${n},'Additional Features'!$I:$I,"Agreed")+COUNTIFS('Additional Features'!$E:$E,$C${n},'Additional Features'!$I:$I,"In progress")`,
+  };
 }
 const lastFn = fs1.rowCount;
 fs1.autoFilter = { from: 'A1', to: 'M1' };
