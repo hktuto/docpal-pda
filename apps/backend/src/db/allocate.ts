@@ -26,14 +26,15 @@ import { locationMatches } from "./locationMatch.js";
 // Rules (confirmed with the business):
 //   - Order: demands are allocated in picking_orders.priority_seq order
 //     (admin-reorderable via POST /picking-orders/reorder).
-//   - Perfect match (scoped runs only — spec
-//     docs/superpowers/specs/2026-09-22-allocation-perfect-match-design.md):
-//     before the priority loop, runScopedAllocation pins exact-fit
-//     (demand, source) pairs — a whole receiving order's boxes, or a single
-//     lot / box / order-level row whose available == the demand's remaining
-//     open qty — as MANUAL allocations, so priority never splits an
-//     exact-fit source and the pins survive every later wipe. allocateAll
-//     does not run this pass.
+//   - Source preference (scoped runs only — spec
+//     docs/superpowers/specs/2026-11-05-allocation-dock-match-ordering-design.md):
+//     shelf lots FIFO first; then dock stock in three ordered passes — PO
+//     match (dock rows whose po_no equals the demand's PO are pinned, date
+//     code ignored), qty perfect match (an exact-fit whole-receiving-order
+//     box group or single dock row, gated to the oldest available dock date
+//     code), then dock FIFO. Matches are pinned as MANUAL allocations so
+//     they outrank priority_seq and survive every later wipe. allocateAll
+//     runs no pre-pass — pure priority+FIFO.
 //   - Location: the picking order's (org_id, sub_inventory_code) pair must
 //     match the source's pair — lots match on their own pair, receiving
 //     sources on the receiving ITEM's pair (receiving_invoice_items.org_id +
@@ -143,8 +144,11 @@ export interface DemandRow {
    *  the receiving-rule sub-inventory lookup for transfer items. */
   orderNo: string | null;
   /** Item-level po no from picking_items.additional_data — used when orderNo
-   *  is empty. */
+   *  is empty; first PO candidate for the dock PO-match pass. */
   itemPoNo: string | null;
+  /** Order-level po no (picking_orders.po_no) — fallback PO for the dock
+   *  PO-match pass. */
+  orderPoNo: string | null;
   /** Transfer marker from upstream (picking_items.additional_data): the
    *  sub-inventory the stock physically comes FROM; the order's own pair is
    *  the destination. */
@@ -162,6 +166,9 @@ interface ReceivingRow {
   receivingOrderId: string;
   ctnNo: string | null;
   dateCode: string | null;
+  /** Line-level PO (receiving_invoice_items.po_no) — input to the dock
+   *  PO-match pass. */
+  poNo: string | null;
   orgId: number | null;
   subInventoryCode: string | null;
   available: number;
@@ -178,6 +185,9 @@ export interface AllocateSummary {
   /** Demands that received an exact-fit pinned allocation in the scoped
    *  perfect-match pre-pass (always 0 in allocateAll). */
   perfectMatched: number;
+  /** Demands that received a po_no-bound pinned allocation in the scoped
+   *  dock PO-match pass (always 0 in allocateAll). */
+  poMatched: number;
 }
 
 async function loadDemands(dbOrTx: DbOrTx, partKeys?: string[], includeOrderId?: string): Promise<DemandRow[]> {
@@ -191,6 +201,7 @@ async function loadDemands(dbOrTx: DbOrTx, partKeys?: string[], includeOrderId?:
                po.sub_inventory_code AS "subInventoryCode",
                pi.additional_data ->> 'order_no' AS "orderNo",
                pi.additional_data ->> 'po_no' AS "itemPoNo",
+               po.po_no AS "orderPoNo",
                pi.additional_data ->> 'from_subinventory' AS "fromSubinventory"
         FROM picking_items pi
         JOIN picking_orders po ON po.id = pi.picking_order_id
@@ -270,6 +281,7 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
                ro.id AS "receivingOrderId",
                rii.ctn_no AS "ctnNo",
                rii.date_code AS "dateCode",
+               rii.po_no AS "poNo",
                rii.org_id AS "orgId",
                rii.sub_inventory_code AS "subInventoryCode",
                (rii.received_qty - rii.picked_qty
@@ -355,6 +367,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       allocationsRemoved: 0,
       skippedReceivingSources: 0,
       perfectMatched: 0,
+      poMatched: 0,
     };
     const demands = await loadDemands(tx);
     summary.demands = demands.length;
@@ -630,8 +643,8 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
 // It remains the dev/test fleet-wide rebuild (`POST /dev/allocate`).
 // NOTE: runScopedAllocation mirrors allocateAll's wipe/rebuild mechanics on
 // purpose — keep those in sync when the allocation rules change — but
-// deliberately diverges with the perfect-match pre-pass (file-header
-// comment); allocateAll is the simple priority+FIFO baseline.
+// deliberately diverges with the dock pre-passes (file-header comment);
+// allocateAll is the simple priority+FIFO baseline.
 // ---------------------------------------------------------------------------
 
 export interface ScopedAllocateResult extends AllocateSummary {
@@ -1580,6 +1593,7 @@ async function runScopedAllocation(
     allocationsRemoved: 0,
     skippedReceivingSources: 0,
     perfectMatched: 0,
+    poMatched: 0,
   };
 
   if (partKeys.length === 0) {
@@ -1607,9 +1621,9 @@ async function runScopedAllocation(
   const afterKeys: string[] = [];
   const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
   const lotDelta = new Map<string, number>();
-  // Rows pinned by the perfect-match pre-pass (manual rows are excluded from
-  // the before/after keys, so they need their own change signal).
-  let perfectPinsCreated = 0;
+  // Rows pinned by the dock pre-passes (manual rows are excluded from the
+  // before/after keys, so they need their own change signal).
+  let prePassPinsCreated = 0;
 
   if (demands.length > 0) {
     const itemIds = demands.map((d) => d.pickingItemId);
@@ -1697,17 +1711,17 @@ async function runScopedAllocation(
     }
     lotDelta.clear();
 
-    // ---- Perfect-match pre-pass (spec
-    // docs/superpowers/specs/2026-09-22-allocation-perfect-match-design.md) ----
-    // Scoped runs only: when a demand's remaining open qty EXACTLY equals a
-    // source's availability, pin that source to the demand with manual
-    // allocation rows — the priority+FIFO loop below (and every later
-    // allocateAll wipe) must not split an exact-fit source across
-    // higher-priority partial demands. Pass A (a whole receiving order's
-    // boxes == remaining) runs for all demands before pass B (a single row
-    // == remaining) so a big group match is not fragmented by a smaller
-    // single-row match from an earlier-priority demand. allocateAll does
-    // not run this pass.
+    // ---- Dock pre-passes (spec
+    // docs/superpowers/specs/2026-11-05-allocation-dock-match-ordering-design.md) ----
+    // Scoped runs only. Source preference is strictly: shelf lots FIFO
+    // first, then dock stock as PO match → qty perfect match → FIFO. The
+    // passes below pin dock rows as MANUAL allocations so the pins outrank
+    // priority_seq and survive every later wipe. allocateAll runs none of
+    // this. Pass PO runs for all demands before Pass A (a whole receiving
+    // order's boxes == remainder), which runs for all demands before Pass B
+    // (a single dock row == remainder) — PO binding outranks qty exact-fit,
+    // and a big group match is not fragmented by a smaller single-row match
+    // from an earlier-priority demand.
     const perfect: { d: DemandRow; remaining: number }[] = [];
     for (const raw of demands) {
       const d = resolveDemandLocation(raw);
@@ -1715,9 +1729,28 @@ async function runScopedAllocation(
       if (remaining > 0) perfect.push({ d, remaining });
     }
 
-    const pinPerfectMatch = async (
+    // Shelf-first simulation (no writes): consume lot availability in
+    // priority order so the dock passes size themselves against the
+    // remainder shelf stock cannot cover. Pins only touch dock rows, so
+    // they cannot invalidate the simulation; the main loop below re-does
+    // the real shelf allocation.
+    const shelfSimUsed = new Map<string, number>();
+    for (const item of perfect) {
+      const lots = await loadLotSources(tx, item.d);
+      for (const lot of lots) {
+        if (item.remaining <= 0) break;
+        const usable = lot.available - (shelfSimUsed.get(lot.lotId) ?? 0);
+        if (usable <= 0) continue;
+        const take = Math.min(usable, item.remaining);
+        shelfSimUsed.set(lot.lotId, (shelfSimUsed.get(lot.lotId) ?? 0) + take);
+        item.remaining -= take;
+      }
+    }
+
+    const pinDockRows = async (
       item: DemandRow,
-      pieces: { qty: number; lotId?: string; recv?: ReceivingRow }[]
+      pieces: { qty: number; recv: ReceivingRow }[],
+      txnReason: string
     ): Promise<void> => {
       let pinned = 0;
       for (const p of pieces) {
@@ -1725,87 +1758,108 @@ async function runScopedAllocation(
         await tx.insert(allocations).values({
           id,
           pickingItemId: item.pickingItemId,
-          inventoryLotId: p.lotId ?? null,
-          receivingInvoiceItemId: p.recv?.ctnNo ? p.recv.receivingInvoiceItemId : null,
-          receivingOrderId: p.recv && !p.recv.ctnNo ? p.recv.receivingOrderId : null,
+          inventoryLotId: null,
+          receivingInvoiceItemId: p.recv.ctnNo ? p.recv.receivingInvoiceItemId : null,
+          receivingOrderId: p.recv.ctnNo ? null : p.recv.receivingOrderId,
           qty: p.qty,
           manual: true,
         });
         summary.allocationsCreated += 1;
-        perfectPinsCreated += 1;
+        prePassPinsCreated += 1;
         pinned += p.qty;
-        if (p.lotId) {
-          // Apply immediately so later demands' loadLotSources see the
-          // reservation (receiving pins are netted by loadReceivingSources'
-          // manual-aware locked_* subqueries — both visible in the same tx).
-          await tx.execute(sql`UPDATE inventory_lots il SET allocated_qty = allocated_qty + ${p.qty} WHERE il.id = ${p.lotId} AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))`);
-        }
         txnRows.push({
           id: newId(),
-          inventoryLotId: p.lotId ?? null,
+          inventoryLotId: null,
           partNo: item.partNo,
           shelfCode: null,
-          boxId: p.recv?.ctnNo ?? null,
+          boxId: p.recv.ctnNo ?? null,
           txnType: "RESERVE",
           qtyType: "reserved",
           qtyDelta: p.qty,
-          dateCode: p.recv?.dateCode ?? null,
+          dateCode: p.recv.dateCode ?? null,
           referenceType: "allocation",
           referenceId: id,
-          receivingInvoiceItemId: p.recv?.ctnNo ? p.recv.receivingInvoiceItemId : null,
-          txnReason: "recompute: perfect match",
+          receivingInvoiceItemId: p.recv.ctnNo ? p.recv.receivingInvoiceItemId : null,
+          txnReason,
           txnAt: now(),
         });
       }
-      summary.perfectMatched += 1;
       // Pre-subtract like existing manual pins: the main loop skips the
-      // item's source scans (remaining 0) and only refreshes its
-      // allocated_qty cache.
+      // pinned qty and only allocates the rest. In-run visibility for later
+      // demands comes from loadReceivingSources' manual-aware locked_*
+      // subqueries (same tx).
       manualQtyByItem.set(item.pickingItemId, (manualQtyByItem.get(item.pickingItemId) ?? 0) + pinned);
     };
 
-    // Pass A — group match: ALL box rows of one receiving order for the part
-    // sum exactly to the remaining open qty → pin every box of that order.
     if (allowDockStock()) {
+      // Allocatable dock rows (NULL-pair rows are excluded here without
+      // counting — the summary counter reflects the main loop's encounters
+      // only) and the oldest available date code among them (FIFO order →
+      // first non-null; null when every row's date code is NULL, which makes
+      // the date-code gate vacuous).
+      const allocatableRows = (rows: ReceivingRow[]) =>
+        rows.filter((r) => r.orgId !== null && r.subInventoryCode !== null);
+      const oldestDateCode = (rows: ReceivingRow[]) =>
+        rows.find((r) => r.dateCode !== null)?.dateCode ?? null;
+
+      // Pass PO — po_no binding: dock rows whose po_no equals the demand's
+      // PO (item's additional_data.po_no, fallback the order's po_no) are
+      // pinned first, in FIFO order, partial takes allowed. Date code is
+      // ignored on purpose: the PO link is explicit business intent.
       for (const item of perfect) {
-        const rows = await loadReceivingSources(tx, item.d);
-        // NULL-pair rows are excluded here without counting — the summary
-        // counter reflects the main loop's encounters only.
+        if (item.remaining <= 0) continue;
+        const demandPo = item.d.itemPoNo?.trim() || item.d.orderPoNo?.trim() || null;
+        if (!demandPo) continue;
+        const rows = allocatableRows(await loadReceivingSources(tx, item.d));
+        const pieces: { qty: number; recv: ReceivingRow }[] = [];
+        for (const r of rows) {
+          if (item.remaining <= 0) break;
+          if (r.poNo?.trim() !== demandPo) continue;
+          const take = Math.min(r.available, item.remaining);
+          pieces.push({ qty: take, recv: r });
+          item.remaining -= take;
+        }
+        if (pieces.length > 0) {
+          await pinDockRows(item.d, pieces, "recompute: po match");
+          summary.poMatched += 1;
+        }
+      }
+
+      // Pass A — group match: ALL box rows of one receiving order for the
+      // part sum exactly to the remaining dock qty AND every box carries the
+      // oldest available dock date code → pin every box of that order.
+      for (const item of perfect) {
+        if (item.remaining <= 0) continue;
+        const rows = allocatableRows(await loadReceivingSources(tx, item.d));
+        const oldest = oldestDateCode(rows);
         const groups = new Map<string, { sum: number; rows: ReceivingRow[] }>();
         for (const r of rows) {
-          if (r.orgId === null || r.subInventoryCode === null || !r.ctnNo) continue;
+          if (!r.ctnNo) continue;
           const g = groups.get(r.receivingOrderId) ?? { sum: 0, rows: [] };
           g.sum += r.available;
           g.rows.push(r);
           groups.set(r.receivingOrderId, g);
         }
         for (const g of groups.values()) {
-          if (g.sum === item.remaining) {
-            await pinPerfectMatch(item.d, g.rows.map((r) => ({ qty: r.available, recv: r })));
+          if (g.sum === item.remaining && g.rows.every((r) => r.dateCode === oldest)) {
+            await pinDockRows(item.d, g.rows.map((r) => ({ qty: r.available, recv: r })), "recompute: perfect match");
+            summary.perfectMatched += 1;
             item.remaining = 0;
             break;
           }
         }
       }
-    }
 
-    // Pass B — single-row match: one lot / one box / one order-level pool
-    // row exactly equals the remaining open qty. Lots first (the main
-    // loop's source priority), then dock stock.
-    for (const item of perfect) {
-      if (item.remaining <= 0) continue;
-      const lots = await loadLotSources(tx, item.d);
-      const lotHit = lots.find((l) => l.available === item.remaining);
-      if (lotHit) {
-        await pinPerfectMatch(item.d, [{ qty: lotHit.available, lotId: lotHit.lotId }]);
-        item.remaining = 0;
-        continue;
-      }
-      if (allowDockStock()) {
-        const rows = await loadReceivingSources(tx, item.d);
-        const hit = rows.find((r) => r.orgId !== null && r.subInventoryCode !== null && r.available === item.remaining);
+      // Pass B — single-row match: one box / one order-level pool row at the
+      // oldest dock date code exactly equals the remaining dock qty.
+      for (const item of perfect) {
+        if (item.remaining <= 0) continue;
+        const rows = allocatableRows(await loadReceivingSources(tx, item.d));
+        const oldest = oldestDateCode(rows);
+        const hit = rows.find((r) => r.available === item.remaining && r.dateCode === oldest);
         if (hit) {
-          await pinPerfectMatch(item.d, [{ qty: hit.available, recv: hit }]);
+          await pinDockRows(item.d, [{ qty: hit.available, recv: hit }], "recompute: perfect match");
+          summary.perfectMatched += 1;
           item.remaining = 0;
         }
       }
@@ -1921,7 +1975,7 @@ async function runScopedAllocation(
     }
   }
 
-  const changed = perfectPinsCreated > 0 || beforeKeys.slice().sort().join("\n") !== afterKeys.slice().sort().join("\n");
+  const changed = prePassPinsCreated > 0 || beforeKeys.slice().sort().join("\n") !== afterKeys.slice().sort().join("\n");
   if (changed) {
     await emitEvent(tx, {
       type: "allocation.computed",
@@ -2028,6 +2082,7 @@ function pumpAllocationRunner(db: AppDb): void {
           allocationsRemoved: summary?.allocationsRemoved ?? 0,
           skippedReceivingSources: summary?.skippedReceivingSources ?? 0,
           perfectMatched: summary?.perfectMatched ?? 0,
+          poMatched: summary?.poMatched ?? 0,
           finishedAt: new Date().toISOString(),
           durationMs: Date.now() - runStarted,
           trigger: task.after,

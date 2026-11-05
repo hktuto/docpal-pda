@@ -1,5 +1,6 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { allocateAll, allocateForPickingOrder, allocateForReceivingOrder, awaitAllocateAll, parseDateCodeRule, resolveDemandLocation, scheduleAllocateAll, type DemandRow } from "./allocate.js";
@@ -415,8 +416,8 @@ test("allocateForReceivingOrder: scoped recompute touches only the order's part 
   assert.equal(s2.perfectMatched, 0);
 });
 
-// --- perfect-match pre-pass (scoped runs only; spec
-// docs/superpowers/specs/2026-09-22-allocation-perfect-match-design.md) -------
+// --- dock pre-passes (scoped runs only; spec
+// docs/superpowers/specs/2026-11-05-allocation-dock-match-ordering-design.md) ---
 
 const PM_PART = "PERFECT-MATCH-PART";
 const PM_HI1_ORDER = "00000000-0000-4000-8000-000000000101";
@@ -433,14 +434,15 @@ async function insertPickingDemand(
   seq: number,
   partNo: string,
   qty: number,
-  lineId: number
+  lineId: number,
+  po?: { itemPoNo?: string; orderPoNo?: string }
 ) {
   await client.db.execute(sql`
-    INSERT INTO picking_orders (id, order_no, customer_code, org_id, sub_inventory_code, status, priority_seq, created_date, last_update_date)
-    VALUES (${orderId}, ${orderNo}, 'ACME', 2, 'STORE1', 'pending', ${seq}, now(), now())`);
+    INSERT INTO picking_orders (id, order_no, po_no, customer_code, org_id, sub_inventory_code, status, priority_seq, created_date, last_update_date)
+    VALUES (${orderId}, ${orderNo}, ${po?.orderPoNo ?? null}, 'ACME', 2, 'STORE1', 'pending', ${seq}, now(), now())`);
   await client.db.execute(sql`
-    INSERT INTO picking_items (id, picking_order_id, part_no, qty, line_id, line_number, shipment_number, created_date, last_update_date)
-    VALUES (${itemId}, ${orderId}, ${partNo}, ${qty}, ${lineId}, 1, 1, now(), now())`);
+    INSERT INTO picking_items (id, picking_order_id, part_no, qty, line_id, line_number, shipment_number, additional_data, created_date, last_update_date)
+    VALUES (${itemId}, ${orderId}, ${partNo}, ${qty}, ${lineId}, 1, 1, ${po?.itemPoNo ? JSON.stringify({ po_no: po.itemPoNo }) : null}::jsonb, now(), now())`);
 }
 
 // 4 boxes × 2500 of PM_PART in receiving order 100003 (nothing else stocks
@@ -506,26 +508,33 @@ test("perfect-match pins survive allocateAll", async () => {
   }
 });
 
-test("runScopedAllocation: single-row lot match beats a higher-priority partial demand", async () => {
+test("runScopedAllocation: exact-fit shelf lot is NOT pinned — priority+FIFO split (spec 2026-11-05)", async () => {
   await reseed(client);
   await client.db.execute(sql`DELETE FROM picking_orders`);
   const ORDER_HI = "00000000-0000-4000-8000-000000000111";
   const ITEM_HI = "00000000-0000-4000-8000-000000000112";
   const ORDER_LO = "00000000-0000-4000-8000-000000000113";
   const ITEM_LO = "00000000-0000-4000-8000-000000000114";
-  // LOT_18 holds exactly 1000 of RK73H1JTTD1002F
+  // LOT_18 holds exactly 1000 of RK73H1JTTD1002F — an exact fit for the
+  // low-priority demand, but shelf stock is pure FIFO now: no pin, the
+  // higher-priority demand nibbles it as usual.
   await insertPickingDemand(ORDER_HI, ITEM_HI, "TEST-PM-HI", 1, "RK73H1JTTD1002F", 600, 9201);
   await insertPickingDemand(ORDER_LO, ITEM_LO, "TEST-PM-LO", 2, "RK73H1JTTD1002F", 1000, 9202);
 
   const s = await allocateForPickingOrder(client.db, ORDER_LO);
-  assert.equal(s.perfectMatched, 1);
-  const lo = await client.db.execute(
-    sql`SELECT inventory_lot_id AS lot, qty, manual FROM allocations WHERE picking_item_id = ${ITEM_LO}`
+  assert.equal(s.perfectMatched, 0);
+  assert.equal(s.poMatched, 0);
+  const rows = await client.db.execute(
+    sql`SELECT picking_item_id AS item, qty, manual FROM allocations WHERE inventory_lot_id = ${LOT_18} ORDER BY qty`
   );
-  assert.deepEqual(lo.map((r: any) => [r.lot, Number(r.qty), r.manual]), [[LOT_18, 1000, true]]);
-  const hi = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations WHERE picking_item_id = ${ITEM_HI}`);
-  assert.equal(Number((hi[0] as any).c), 0);
-  // the pin is counted in the lot's allocated_qty
+  assert.deepEqual(
+    rows.map((r: any) => [r.item, Number(r.qty), r.manual]),
+    [
+      [ITEM_LO, 400, false],
+      [ITEM_HI, 600, false],
+    ]
+  );
+  // the lot's allocated_qty still reflects the full reservation
   const lot = await client.db.execute(sql`SELECT allocated_qty FROM inventory_lots WHERE id = ${LOT_18}`);
   assert.equal(Number((lot[0] as any).allocated_qty), 1000);
 });
@@ -552,6 +561,152 @@ test("runScopedAllocation: no exact match keeps the priority+FIFO split", async 
       [ITEM_LO, 600, false],
     ]
   );
+});
+
+// Insert dock rows for `partNo` into receiving order 100003's invoice and
+// confirm arrival (the confirm itself runs a scoped recompute; tests re-run
+// it after adding their demands).
+async function setupDockWorld(
+  partNo: string,
+  rows: { ctnNo: string; qty: number; dateCode: string | null; poNo?: string | null }[]
+): Promise<{ receivingOrderId: string }> {
+  await reseed(client);
+  const receivingOrderId = await idOf(sql`SELECT id FROM receiving_orders WHERE batch_no = '100003'`);
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  const invoiceId = await idOf(sql`SELECT id FROM receiving_invoices WHERE receiving_order_id = ${receivingOrderId}`);
+  for (const r of rows) {
+    await client.db.execute(sql`
+      INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_no, wcl_item_no, po_no, po_line, line_qty, ctn_no, date_code, org_id, sub_inventory_code)
+      VALUES (${randomUUID()}, ${invoiceId}, ${partNo}, ${partNo}, ${r.poNo ?? null}, '1', ${r.qty}, ${r.ctnNo}, ${r.dateCode}, 2, 'STORE1')`);
+  }
+  const operator = await client.db.execute(sql`SELECT id FROM users WHERE username = 'operator'`);
+  await confirmReceivingArrival(client.db, receivingOrderId, (operator[0] as any).id as string);
+  return { receivingOrderId };
+}
+
+async function dockAllocs(itemId: string): Promise<[string, number, boolean][]> {
+  const rows = await client.db.execute(sql`
+    SELECT rii.ctn_no AS ctn, a.qty, a.manual
+    FROM allocations a JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+    WHERE a.picking_item_id = ${itemId} ORDER BY rii.ctn_no`);
+  return rows.map((r: any) => [r.ctn, Number(r.qty), r.manual]);
+}
+
+test("runScopedAllocation: dock perfect match is gated to the oldest dock date code", async () => {
+  const PART = "PM-GATE-PART";
+  const { receivingOrderId } = await setupDockWorld(PART, [
+    { ctnNo: "G-OLD", qty: 40, dateCode: "2501" },
+    { ctnNo: "G-NEW", qty: 100, dateCode: "2502" },
+  ]);
+  const ORDER_HI = "00000000-0000-4000-8000-000000000131";
+  const ITEM_HI = "00000000-0000-4000-8000-000000000132";
+  const ORDER_LO = "00000000-0000-4000-8000-000000000133";
+  const ITEM_LO = "00000000-0000-4000-8000-000000000134";
+  await insertPickingDemand(ORDER_HI, ITEM_HI, "TEST-GATE-HI", 1, PART, 30, 9301);
+  await insertPickingDemand(ORDER_LO, ITEM_LO, "TEST-GATE-LO", 2, PART, 100, 9302);
+
+  const s = await allocateForReceivingOrder(client.db, receivingOrderId);
+  // G-NEW (100) exactly fits the low-priority demand but is NOT the oldest
+  // date code → no pin; plain priority+FIFO split instead.
+  assert.equal(s.perfectMatched, 0);
+  assert.deepEqual(await dockAllocs(ITEM_HI), [["G-OLD", 30, false]]);
+  assert.deepEqual(await dockAllocs(ITEM_LO), [
+    ["G-NEW", 90, false],
+    ["G-OLD", 10, false],
+  ]);
+});
+
+test("runScopedAllocation: dock single-row perfect match pins when it carries the oldest date code", async () => {
+  const PART = "PM-OLDEST-PART";
+  const { receivingOrderId } = await setupDockWorld(PART, [
+    { ctnNo: "O-1", qty: 100, dateCode: "2501" },
+    { ctnNo: "O-2", qty: 700, dateCode: "2502" },
+  ]);
+  const ORDER_HI = "00000000-0000-4000-8000-000000000141";
+  const ITEM_HI = "00000000-0000-4000-8000-000000000142";
+  const ORDER_LO = "00000000-0000-4000-8000-000000000143";
+  const ITEM_LO = "00000000-0000-4000-8000-000000000144";
+  await insertPickingDemand(ORDER_HI, ITEM_HI, "TEST-OLD-HI", 1, PART, 60, 9401);
+  await insertPickingDemand(ORDER_LO, ITEM_LO, "TEST-OLD-LO", 2, PART, 100, 9402);
+
+  const s = await allocateForReceivingOrder(client.db, receivingOrderId);
+  assert.equal(s.perfectMatched, 1);
+  // the exact-fit oldest box is pinned to the low-priority demand…
+  assert.deepEqual(await dockAllocs(ITEM_LO), [["O-1", 100, true]]);
+  // …and the higher-priority nibbler falls through to the next box
+  assert.deepEqual(await dockAllocs(ITEM_HI), [["O-2", 60, false]]);
+});
+
+test("runScopedAllocation: po_no match pins dock rows, beats priority and ignores date code", async () => {
+  const PART = "PM-PO-PART";
+  const { receivingOrderId } = await setupDockWorld(PART, [
+    { ctnNo: "P-A", qty: 60, dateCode: "2501", poNo: "PO-X" },
+    { ctnNo: "P-B", qty: 100, dateCode: "2502", poNo: "PO-X" },
+    { ctnNo: "P-C", qty: 500, dateCode: "2450", poNo: "PO-OTHER" },
+  ]);
+  const ORDER_HI = "00000000-0000-4000-8000-000000000151";
+  const ITEM_HI = "00000000-0000-4000-8000-000000000152";
+  const ORDER_LO = "00000000-0000-4000-8000-000000000153";
+  const ITEM_LO = "00000000-0000-4000-8000-000000000154";
+  await insertPickingDemand(ORDER_HI, ITEM_HI, "TEST-PO-HI", 1, PART, 50, 9501);
+  await insertPickingDemand(ORDER_LO, ITEM_LO, "TEST-PO-LO", 2, PART, 120, 9502, { itemPoNo: "PO-X" });
+
+  const s = await allocateForReceivingOrder(client.db, receivingOrderId);
+  assert.equal(s.poMatched, 1);
+  assert.equal(s.perfectMatched, 0);
+  // P-A + 60 of P-B pinned to the PO-bound demand (FIFO within the matched
+  // rows, partial take); P-C is older (2450) but not PO-bound → not taken.
+  assert.deepEqual(await dockAllocs(ITEM_LO), [
+    ["P-A", 60, true],
+    ["P-B", 60, true],
+  ]);
+  // the higher-priority demand falls through to dock FIFO: P-C is the
+  // oldest row still available.
+  assert.deepEqual(await dockAllocs(ITEM_HI), [["P-C", 50, false]]);
+
+  // PO pins survive the fleet-wide wipe/rebuild
+  const s2 = await allocateAll(client.db);
+  assert.equal(s2.poMatched, 0);
+  assert.deepEqual(await dockAllocs(ITEM_LO), [
+    ["P-A", 60, true],
+    ["P-B", 60, true],
+  ]);
+});
+
+test("runScopedAllocation: po_no match falls back to the order-level po_no (partial take)", async () => {
+  const PART = "PM-POFB-PART";
+  const { receivingOrderId } = await setupDockWorld(PART, [
+    { ctnNo: "F-1", qty: 80, dateCode: "2501", poNo: "PO-Y" },
+  ]);
+  const ORDER_LO = "00000000-0000-4000-8000-000000000161";
+  const ITEM_LO = "00000000-0000-4000-8000-000000000162";
+  await insertPickingDemand(ORDER_LO, ITEM_LO, "TEST-POFB", 1, PART, 50, 9601, { orderPoNo: "PO-Y" });
+
+  const s = await allocateForReceivingOrder(client.db, receivingOrderId);
+  assert.equal(s.poMatched, 1);
+  // partial take: 50 of the 80-pcs box, pinned
+  assert.deepEqual(await dockAllocs(ITEM_LO), [["F-1", 50, true]]);
+});
+
+test("runScopedAllocation: PO pins cover only the remainder after shelf FIFO", async () => {
+  // RK73H1JTTD1002F has LOT_18 on the shelf (1000 pcs, dc 2603); the dock
+  // row is OLDER (dc 2601) but shelf stock still comes first.
+  const PART = "RK73H1JTTD1002F";
+  const { receivingOrderId } = await setupDockWorld(PART, [
+    { ctnNo: "S-1", qty: 300, dateCode: "2601", poNo: "PO-SHELF" },
+  ]);
+  const ORDER_LO = "00000000-0000-4000-8000-000000000171";
+  const ITEM_LO = "00000000-0000-4000-8000-000000000172";
+  await insertPickingDemand(ORDER_LO, ITEM_LO, "TEST-SHELF", 1, PART, 1200, 9701, { itemPoNo: "PO-SHELF" });
+
+  const s = await allocateForReceivingOrder(client.db, receivingOrderId);
+  assert.equal(s.poMatched, 1);
+  // shelf FIFO covers 1000; the PO pin takes only the 200 remainder
+  const lotRows = await client.db.execute(
+    sql`SELECT inventory_lot_id AS lot, qty, manual FROM allocations WHERE picking_item_id = ${ITEM_LO} AND inventory_lot_id IS NOT NULL`
+  );
+  assert.deepEqual(lotRows.map((r: any) => [r.lot, Number(r.qty), r.manual]), [[LOT_18, 1000, false]]);
+  assert.deepEqual(await dockAllocs(ITEM_LO), [["S-1", 200, true]]);
 });
 
 // --- allocation_status (maintained by allocateAll's aggregate refresh) ----------

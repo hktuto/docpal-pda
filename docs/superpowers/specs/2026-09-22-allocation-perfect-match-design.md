@@ -1,7 +1,11 @@
 # Allocation perfect-match pinning (scoped recompute) — design
 
 Date: 2026-09-22
-Status: implemented
+Status: superseded by `2026-11-05-allocation-dock-match-ordering-design.md`
+(matching rules — shelf lots are no longer pinned, qty perfect match is
+gated to the oldest dock date code, PO match added; the pinning mechanics
+below — `manual = true` rows, ledger reasons, pre-subtraction, admin
+removability — still apply)
 
 ## Goal
 

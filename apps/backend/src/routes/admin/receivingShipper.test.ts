@@ -196,8 +196,9 @@ test("GET shipper: reflects current allocations — recompute happens on the rea
   assert.ok((await re.json()).allocation);
 
   // …and the next download reflects it. The scoped recompute also runs the
-  // perfect-match pre-pass (spec 2026-09-22): ctn 7001 (1000) exactly fits
-  // SO-PL-002's 1000 and is PINNED to it, so SO-PL-001's 1500 now comes
+  // dock perfect-match pass (spec 2026-11-05; the cartons carry no date
+  // code, so the oldest-date-code gate is vacuous): ctn 7001 (1000) exactly
+  // fits SO-PL-002's 1000 and is PINNED to it, so SO-PL-001's 1500 now comes
   // entirely from ctn 7002, and the remaining 500 of ctn 7002 goes to
   // SO-PL-003 — a third distinct order column, zero balance.
   const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
