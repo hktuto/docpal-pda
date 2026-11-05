@@ -1,0 +1,14 @@
+{
+ "id": "BUG-042",
+ "dateFound": "2026-11-06",
+ "functionId": "ADM-005",
+ "description": "Task-assignee visibility leaks into the admin console: once a task is assigned, the admin can no longer see it — admin lists should show all records regardless of assignee",
+ "reproSteps": "Assign a receiving/picking/put-away/verify task to a user (admin task-assignment), then open the same task list in the admin console as an admin → the assigned task is missing; only visible to that assignee on the PDA",
+ "severity": "Major",
+ "status": "Open",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Record only — not fixed yet. Per spec 2026-11-01-task-assignee-design.md the assignee filter is PDA-side only; assigneeFilter in src/db/user-scope.ts must stay empty for admin callers. Investigate which admin list route passes a username into the filter"
+}

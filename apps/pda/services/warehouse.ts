@@ -247,6 +247,9 @@ export interface WarehouseService {
   scanCnTaskAggregate(taskId: string, input: CnScanAggregateInput): Promise<CnScanAggregateResult>;
   flagCnItem(taskId: string, itemId: string, input: CnFlagItemInput): Promise<CnScanTaskItem>;
   resetCnItemScan(taskId: string, itemId: string): Promise<CnScanTaskItem>;
+  // CR-046: undo one recorded scan (its per-line takes are subtracted and the
+  // lines' scan state re-derived); returns the refreshed task detail.
+  removeCnScanEvent(taskId: string, eventId: string): Promise<CnScanTaskDetail>;
   finalizeCnScanTask(taskId: string, input?: CnScanFinalizeInput): Promise<CnScanFinalizeResult>;
 
   // Measuring — box-scoped (no tasks): the list is the open boxes with

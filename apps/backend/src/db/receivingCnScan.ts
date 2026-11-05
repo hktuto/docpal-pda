@@ -4,7 +4,7 @@ import type { AppDb } from "../db.js";
 import { newId } from "./id.js";
 import { now } from "./now.js";
 import { queryAll, queryGet, queryRun } from "./query.js";
-import { transactionLogs } from "./schema/index.js";
+import { transactionLogs, receivingCnScanEvents } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import { cnOrderPair } from "./receivingCn.js";
 import { assigneeFilter } from "./user-scope.js";
@@ -128,6 +128,18 @@ export interface CnScanTaskDetail {
     assignee: string | null;
   };
   items: CnScanItemRow[];
+  /** CR-046: individual scans of this order, newest first, with their per-line
+   *  FIFO takes (all takes of one event hit the same part → same PDA group). */
+  scanEvents: CnScanEventRow[];
+}
+
+export interface CnScanEventRow {
+  id: string;
+  qty: number;
+  raw: string | null;
+  scannedBy: string | null;
+  scannedAt: Date | null;
+  takes: { itemId: string; qty: number }[];
 }
 
 /** One scan task: order + all items with their scan fields. 404
@@ -150,6 +162,13 @@ export async function getCnScanTaskDetail(db: AppDb, orderId: string, username?:
     sql`${CN_SCAN_ITEM_SELECT} WHERE ri.receiving_order_id = ${order.id}
         ORDER BY rii.po_no, rii.po_line, rii.id`
   );
+  const scanEvents = await queryAll<CnScanEventRow>(
+    db,
+    sql`SELECT e.id, e.qty, e.raw, e.scanned_by AS "scannedBy", e.scanned_at AS "scannedAt", e.takes
+        FROM receiving_cn_scan_events e
+        WHERE e.order_id = ${order.id}
+        ORDER BY e.scanned_at DESC, e.id DESC`
+  );
   return {
     order: {
       id: order.id,
@@ -161,6 +180,7 @@ export async function getCnScanTaskDetail(db: AppDb, orderId: string, username?:
       assignee: order.assignee,
     },
     items,
+    scanEvents,
   };
 }
 
@@ -172,13 +192,13 @@ async function loadScanningItem(
   tx: AppDb,
   orderId: string,
   itemId: string
-): Promise<{ order: CnScanningOrder; item: { id: string; partNo: string; lineQty: number | null } }> {
+): Promise<{ order: CnScanningOrder; item: { id: string; partNo: string; lineQty: number | null; scanQty: number | null } }> {
   const order = await loadCnOrder(tx, orderId);
   if (!order) throw new HTTPException(404, { message: "receiving_cn_scan_task_not_found" });
   if (order.status !== "scanning") throw new HTTPException(409, { message: "order_not_scanning" });
-  const item = await queryGet<{ id: string; partNo: string; lineQty: number | null }>(
+  const item = await queryGet<{ id: string; partNo: string; lineQty: number | null; scanQty: number | null }>(
     tx,
-    sql`SELECT rii.id, rii.part_no AS "partNo", rii.line_qty AS "lineQty"
+    sql`SELECT rii.id, rii.part_no AS "partNo", rii.line_qty AS "lineQty", rii.scan_qty AS "scanQty"
         FROM receiving_invoice_items_cn rii
         JOIN receiving_invoices_cn ri ON ri.id = rii.receiving_invoice_id
         WHERE rii.id = ${itemId} AND ri.receiving_order_id = ${orderId}`
@@ -369,6 +389,19 @@ export async function scanCnTaskAggregate(
       );
       await emitItemUpdated(tx, orderId, item.id);
     }
+    // CR-046: one event row per scan so a single label can be removed later
+    // (takes = the FIFO credit above, over-scan included in the last take).
+    await tx.insert(receivingCnScanEvents).values({
+      id: newId(),
+      orderId,
+      qty: input.qty,
+      raw: input.raw ?? null,
+      takes: credits.map(({ item: c, take }) => ({ itemId: c.id, qty: take })),
+      scannedBy: actor.id,
+      scannedAt: at,
+      createdDate: at,
+      lastUpdateDate: at,
+    });
   });
   return { ...(await getCnScanTaskDetail(db, orderId)), lastScan: { overQty } };
 }
@@ -378,12 +411,14 @@ export type CnFlagReason = (typeof FLAG_REASONS)[number];
 
 /** Flag an item as a problem: scan_status `error` + the reason, mirrored into
  *  the dormant mismatch columns so the admin detail shows it through the
- *  existing mismatch display. */
+ *  existing mismatch display. Optional `qty` (CR-047) declares that many
+ *  units short on a partially-scanned line — finalize then keeps
+ *  min(scan_qty, line_qty) as received; whole-line flag = no qty. */
 export async function flagCnItem(
   db: AppDb,
   orderId: string,
   itemId: string,
-  input: { reason: CnFlagReason; note?: string; wrongPartNo?: string },
+  input: { reason: CnFlagReason; note?: string; wrongPartNo?: string; qty?: number },
   actor: { id: string }
 ): Promise<CnScanItemRow> {
   if (!FLAG_REASONS.includes(input.reason)) {
@@ -392,6 +427,19 @@ export async function flagCnItem(
   await db.transaction(async (tx) => {
     const at = now();
     const { item } = await loadScanningItem(tx, orderId, itemId);
+    const qty = input.qty;
+    if (qty !== undefined) {
+      // Partial flag: ≤ the line's unscanned remainder; NULL line_qty has no
+      // defined shortfall → rejected.
+      if (
+        !Number.isInteger(qty) ||
+        qty <= 0 ||
+        item.lineQty === null ||
+        qty > item.lineQty - (item.scanQty ?? 0)
+      ) {
+        throw new HTTPException(400, { message: "invalid_flag_qty" });
+      }
+    }
     const note = input.note ?? null;
     const wrongPartNo = input.reason === "wrong_part" ? (input.wrongPartNo ?? null) : null;
     await queryRun(
@@ -400,6 +448,7 @@ export async function flagCnItem(
             scan_status = 'error',
             scan_reason = ${input.reason},
             scan_note = ${note},
+            flag_qty = ${qty ?? null},
             scanned_by = ${actor.id},
             scanned_at = ${at},
             reported_mismatch = true,
@@ -409,7 +458,7 @@ export async function flagCnItem(
             last_update_date = ${at}
           WHERE id = ${item.id}`
     );
-    await itemAudit(tx, item, "scan_error", actor.id, { reason: input.reason, note, wrongPartNo }, at);
+    await itemAudit(tx, item, "scan_error", actor.id, { reason: input.reason, note, wrongPartNo, qty: qty ?? null }, at);
     await emitItemUpdated(tx, orderId, item.id);
   });
   return reloadItem(db, itemId);
@@ -433,6 +482,7 @@ export async function resetCnItemScan(
             scan_qty = NULL,
             scan_reason = NULL,
             scan_note = NULL,
+            flag_qty = NULL,
             scanned_by = NULL,
             scanned_at = NULL,
             reported_mismatch = false,
@@ -449,10 +499,88 @@ export async function resetCnItemScan(
   return reloadItem(db, itemId);
 }
 
+/** CR-046: undo one scan — subtract its per-line FIFO takes from each credited
+ *  line and re-derive that line's scan status with the credit rule (0 → open
+ *  with scan_qty back to NULL, like a reset). Whole-line flags without takes
+ *  are untouched; a flag that DID depend on this scan's credit is cleared
+ *  along with the credit (the operator re-flags on the corrected count).
+ *  shortcut: the batch fields the scan overwrote (OCR values) are not
+ *  restored — the scan event is deleted, its pre-scan values were never
+ *  recorded. Only while the order is `scanning`. */
+export async function removeCnScanEvent(
+  db: AppDb,
+  orderId: string,
+  eventId: string,
+  actor: { id: string }
+): Promise<CnScanTaskDetail> {
+  await db.transaction(async (tx) => {
+    const at = now();
+    const order = await loadCnOrder(tx, orderId);
+    if (!order) throw new HTTPException(404, { message: "receiving_cn_scan_task_not_found" });
+    if (order.status !== "scanning") throw new HTTPException(409, { message: "order_not_scanning" });
+    const event = await queryGet<{ id: string; raw: string | null; takes: { itemId: string; qty: number }[] }>(
+      tx,
+      sql`SELECT id, raw, takes FROM receiving_cn_scan_events
+          WHERE id = ${eventId} AND order_id = ${orderId}`
+    );
+    if (!event) throw new HTTPException(404, { message: "receiving_cn_scan_event_not_found" });
+    for (const take of event.takes) {
+      const item = await queryGet<{ id: string; partNo: string; lineQty: number | null; scanQty: number | null }>(
+        tx,
+        sql`SELECT rii.id, rii.part_no AS "partNo", rii.line_qty AS "lineQty", rii.scan_qty AS "scanQty"
+            FROM receiving_invoice_items_cn rii
+            JOIN receiving_invoices_cn ri ON ri.id = rii.receiving_invoice_id
+            WHERE rii.id = ${take.itemId} AND ri.receiving_order_id = ${orderId}`
+      );
+      if (!item) throw new HTTPException(404, { message: "receiving_invoice_item_cn_not_found" });
+      // Clamp: a line reset after this scan has no credit left to subtract.
+      const newQty = Math.max(0, (item.scanQty ?? 0) - take.qty);
+      let scanStatus: string | null;
+      let scanReason: string | null;
+      if (newQty === 0) {
+        scanStatus = null;
+        scanReason = null;
+      } else if (item.lineQty === null || newQty > item.lineQty) {
+        scanStatus = "warning";
+        scanReason = "qty_mismatch";
+      } else if (newQty === item.lineQty) {
+        scanStatus = "ok";
+        scanReason = null;
+      } else {
+        scanStatus = null; // back below lineQty — the line reopens
+        scanReason = null;
+      }
+      await queryRun(
+        tx,
+        sql`UPDATE receiving_invoice_items_cn SET
+              scan_status = ${scanStatus},
+              scan_qty = ${newQty === 0 ? null : newQty},
+              scan_reason = ${scanReason},
+              scan_note = NULL,
+              flag_qty = NULL,
+              ${newQty === 0 ? sql`scanned_by = NULL, scanned_at = NULL,` : sql``}
+              reported_mismatch = false,
+              mismatch_reason = NULL,
+              mismatch_qty = NULL,
+              wrong_part_no = NULL,
+              mismatch_note = NULL,
+              last_update_date = ${at}
+            WHERE id = ${item.id}`
+      );
+      await itemAudit(tx, item, "scan_event_removed", actor.id, { qty: take.qty, scanQty: newQty, raw: event.raw }, at);
+      await emitItemUpdated(tx, orderId, item.id);
+    }
+    await queryRun(tx, sql`DELETE FROM receiving_cn_scan_events WHERE id = ${event.id}`);
+  });
+  return getCnScanTaskDetail(db, orderId);
+}
+
 /** Finalize the scan task: unresolved items block with 409 unresolved_items
- *  unless unresolvedAs 'missing' flags them in the same tx. received_qty =
- *  min(scan_qty, line_qty) for any non-error line with scan_qty > 0 (NULL
- *  line_qty → scan_qty); error and untouched lines → 0 (CN put-away excludes
+ *  unless unresolvedAs 'missing' flags them in the same tx (partial lines
+ *  keep their scanned credit — only the shortfall is flagged, CR-047).
+ *  received_qty = min(scan_qty, line_qty) for any non-error line with
+ *  scan_qty > 0 (NULL line_qty → scan_qty), and for error lines carrying a
+ *  partial flag_qty; untouched/error-whole lines → 0 (CN put-away excludes
  *  them). Order → in_hand + arrived; the CN put-away task is created only
  *  when at least one item received stock (uniform item pair wins; else the
  *  order's org with NULL sub-inventory). Audit rows + SSE. */
@@ -471,9 +599,9 @@ export async function finalizeCnScanTask(
   let taskId: string | null = null;
   await db.transaction(async (tx) => {
     const at = now();
-    const unresolved = await queryAll<{ id: string; partNo: string; lineQty: number | null }>(
+    const unresolved = await queryAll<{ id: string; partNo: string; lineQty: number | null; scanQty: number | null }>(
       tx,
-      sql`SELECT rii.id, rii.part_no AS "partNo", rii.line_qty AS "lineQty"
+      sql`SELECT rii.id, rii.part_no AS "partNo", rii.line_qty AS "lineQty", rii.scan_qty AS "scanQty"
           FROM receiving_invoice_items_cn rii
           JOIN receiving_invoices_cn ri ON ri.id = rii.receiving_invoice_id
           WHERE ri.receiving_order_id = ${orderId} AND rii.scan_status IS NULL`
@@ -482,11 +610,16 @@ export async function finalizeCnScanTask(
       throw new HTTPException(409, { message: `unresolved_items: ${unresolved.length}` });
     }
     for (const item of unresolved) {
+      // CR-047: a partially-scanned line keeps its credit — flag only the
+      // shortfall missing; an untouched line is flagged whole (flag_qty NULL).
+      const scanned = item.scanQty ?? 0;
+      const flagQty = scanned > 0 ? (item.lineQty ?? scanned) - scanned : null;
       await queryRun(
         tx,
         sql`UPDATE receiving_invoice_items_cn SET
               scan_status = 'error',
               scan_reason = 'missing',
+              flag_qty = ${flagQty},
               scanned_by = ${actor.id},
               scanned_at = ${at},
               reported_mismatch = true,
@@ -494,16 +627,21 @@ export async function finalizeCnScanTask(
               last_update_date = ${at}
             WHERE id = ${item.id}`
       );
-      await itemAudit(tx, item, "scan_error", actor.id, { reason: "missing", auto: true }, at);
+      await itemAudit(tx, item, "scan_error", actor.id, { reason: "missing", auto: true, qty: flagQty }, at);
     }
     // Non-error lines with a scan credit receive min(scan_qty, line_qty)
-    // (NULL line_qty → scan_qty); error/untouched lines stay at 0.
+    // (NULL line_qty → scan_qty). Error lines receive 0 unless a partial flag
+    // (flag_qty set, CR-047) says the scanned remainder is good — then the
+    // same min(scan_qty, line_qty) applies.
     await queryRun(
       tx,
       sql`UPDATE receiving_invoice_items_cn rii
           SET received_qty = CASE
-                WHEN rii.scan_status = 'error' OR rii.scan_status IS NULL
-                  OR rii.scan_qty IS NULL OR rii.scan_qty <= 0 THEN 0
+                WHEN rii.scan_status = 'error' THEN
+                  CASE WHEN rii.flag_qty IS NOT NULL AND rii.scan_qty > 0
+                       THEN LEAST(rii.scan_qty, COALESCE(rii.line_qty, rii.scan_qty))
+                       ELSE 0 END
+                WHEN rii.scan_status IS NULL OR rii.scan_qty IS NULL OR rii.scan_qty <= 0 THEN 0
                 WHEN rii.line_qty IS NULL THEN rii.scan_qty
                 ELSE LEAST(rii.scan_qty, rii.line_qty)
               END,

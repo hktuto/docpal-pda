@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import { db } from "../db.js";
-import { actorFrom } from "../auth/middleware.js";
+import { actorFrom, visibilityUsername } from "../auth/middleware.js";
 import { cnReceiving } from "../config.js";
 import { createCnManualReceipt, validateCnManualReceipt } from "../db/receivingCn.js";
 import {
@@ -10,6 +10,7 @@ import {
   flagCnItem,
   getCnScanTaskDetail,
   listCnScanTasks,
+  removeCnScanEvent,
   resetCnItemScan,
   scanCnTaskAggregate,
   type CnScanAggregateInput,
@@ -61,12 +62,12 @@ function optString(body: Record<string, unknown>, key: string): string | undefin
 
 receivingCnRoute.get("/receiving-cn/scan-tasks", async (c) => {
   if (!cnReceiving()) throw new HTTPException(404, { message: "not_found" });
-  return c.json(await listCnScanTasks(db, actorFrom(c).username), 200);
+  return c.json(await listCnScanTasks(db, visibilityUsername(c)), 200);
 });
 
 receivingCnRoute.get("/receiving-cn/scan-tasks/:id", async (c) => {
   if (!cnReceiving()) throw new HTTPException(404, { message: "not_found" });
-  return c.json(await getCnScanTaskDetail(db, c.req.param("id"), actorFrom(c).username), 200);
+  return c.json(await getCnScanTaskDetail(db, c.req.param("id"), visibilityUsername(c)), 200);
 });
 
 // Aggregate scan (spec 2026-11-04-cn-receiving-scan-grouping-design.md):
@@ -97,8 +98,10 @@ receivingCnRoute.post("/receiving-cn/scan-tasks/:id/scan-aggregate", async (c) =
   return c.json(await scanCnTaskAggregate(db, c.req.param("id"), input, actor), 200);
 });
 
-// {reason: missing|damaged|wrong_part|other, note?, wrongPartNo?} → updated
-// item (scanStatus 'error' + mirrored mismatch columns).
+// {reason: missing|damaged|wrong_part|other, note?, wrongPartNo?, qty?} →
+// updated item (scanStatus 'error' + mirrored mismatch columns). `qty` (CR-047)
+// flags only that many units short on a partially-scanned line → 400
+// invalid_flag_qty when not a positive int ≤ line_qty − scan_qty.
 receivingCnRoute.post("/receiving-cn/scan-tasks/:id/items/:itemId/flag", async (c) => {
   if (!cnReceiving()) throw new HTTPException(404, { message: "not_found" });
   const body = (await readJson(c)) as Record<string, unknown>;
@@ -112,6 +115,7 @@ receivingCnRoute.post("/receiving-cn/scan-tasks/:id/items/:itemId/flag", async (
         reason: body.reason as never,
         note: optString(body, "note"),
         wrongPartNo: optString(body, "wrongPartNo"),
+        qty: body.qty as number | undefined,
       },
       actor
     ),
@@ -124,6 +128,16 @@ receivingCnRoute.post("/receiving-cn/scan-tasks/:id/items/:itemId/reset", async 
   if (!cnReceiving()) throw new HTTPException(404, { message: "not_found" });
   const actor = actorFrom(c);
   return c.json(await resetCnItemScan(db, c.req.param("id"), c.req.param("itemId"), actor), 200);
+});
+
+// CR-046: undo one recorded scan — subtract its per-line takes, re-derive the
+// lines' scan state → the refreshed task detail (incl. the remaining
+// scanEvents). 409 order_not_scanning after the finalize, 404
+// receiving_cn_scan_event_not_found for an unknown/foreign event id.
+receivingCnRoute.post("/receiving-cn/scan-tasks/:id/scan-events/:eventId/remove", async (c) => {
+  if (!cnReceiving()) throw new HTTPException(404, { message: "not_found" });
+  const actor = actorFrom(c);
+  return c.json(await removeCnScanEvent(db, c.req.param("id"), c.req.param("eventId"), actor), 200);
 });
 
 // {unresolvedAs?: 'missing'} → {id, batchNo, putAwayTaskId}; 409

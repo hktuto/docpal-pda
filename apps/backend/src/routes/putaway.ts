@@ -16,7 +16,7 @@ import {
   deleteStagedPutAwayScan,
 } from "../db/putaway.js";
 import { getPutAwayTaskDetail, listPutAwayTasks } from "../db/putawaytasks.js";
-import { actorFrom } from "../auth/middleware.js";
+import { actorFrom, visibilityUsername } from "../auth/middleware.js";
 
 // Empty bodies parse as {} — after the auth migration several mutations no
 // longer carry any body fields (the actor comes from the token).
@@ -38,19 +38,19 @@ export const putawayRoute = new Hono();
 // Receivable orders (in_hand / provisional_received) with per-order
 // received/unboxed item counts.
 putawayRoute.get("/put-away/candidates", async (c) => {
-  return c.json(await listPutAwayCandidates(db, actorFrom(c).username), 200);
+  return c.json(await listPutAwayCandidates(db, visibilityUsername(c)), 200);
 });
 
 // Put-away task queue (auto-created on arrival when FLOW_CONFIG
 // steps.put-away.autoCreateTasks is on), oldest first. ?status= filters.
 putawayRoute.get("/put-away-tasks", async (c) => {
-  return c.json(await listPutAwayTasks(db, c.req.query("status"), actorFrom(c).username), 200);
+  return c.json(await listPutAwayTasks(db, c.req.query("status"), visibilityUsername(c)), 200);
 });
 
 // Task detail: the per-order put-away aggregate (with per-item shelf hints)
 // plus the task row.
 putawayRoute.get("/put-away-tasks/:id", async (c) => {
-  return c.json(await getPutAwayTaskDetail(db, c.req.param("id"), actorFrom(c).username), 200);
+  return c.json(await getPutAwayTaskDetail(db, c.req.param("id"), visibilityUsername(c)), 200);
 });
 
 // One aggregate for the put-away detail screen: order + lots + staging scans

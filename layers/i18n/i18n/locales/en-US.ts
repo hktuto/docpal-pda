@@ -232,6 +232,13 @@ export default {
     wrongPartNo: "Actual part no.",
     wrongPartNoRequired: "Enter the actual part no.",
     reset: "Reset",
+    scanHistory: "Scan history",
+    eventQty: "Scanned {qty}",
+    removeScan: "Remove",
+    confirmRemoveScan: "Remove this scan of {qty}? Its credited quantities will be deducted from the lines.",
+    scanRemoved: "Scan removed.",
+    flagQty: "Quantity flagged short (optional, max {max})",
+    flagQtyInvalid: "Enter a whole number from 1 to {max}, or leave empty to flag whole lines.",
     duplicateLabel: "This label was already scanned.",
     noPartNo: "Could not read a part no. from the label.",
     noQty: "The label has no quantity.",
@@ -240,6 +247,8 @@ export default {
     finalize: "Finish",
     confirmFinalize: "Finish this receiving scan? Scanned items will be received and a put-away task created.",
     confirmFinalizeUnresolved: "{count} item(s) remain unscanned. Mark the rest as missing and finish, or cancel to keep scanning.",
+    confirmFinalizeMixed: "{unresolved} item(s) remain unscanned and {shortfall} partially scanned. Mark the remaining quantities as missing and finish (the scanned quantities are kept), or cancel to keep scanning.",
+    confirmFinalizeShortfall: "{count} item(s) are only partially scanned. Mark the remaining quantities as missing and finish (the scanned quantities are kept), or cancel to keep scanning.",
     markRemainingMissing: "Mark rest missing & finish",
     finalized: "Receiving scan finished — put-away task created."
   },
@@ -2660,7 +2669,12 @@ export default {
     colAssignee: "Assignee",
     unassigned: "Unassigned",
     none: "No open tasks for this flow.",
-    saveFailed: "Failed to save the assignment"
+    saveFailed: "Failed to save the assignment",
+    lifecycleTab: "Lifecycle",
+    lifecycleColStep: "Step",
+    lifecyclePlaceholder: "Order / batch / box number",
+    lifecycleHint: "Search an order, batch or box number to see its open tasks in every flow step; steps with no matching task are not listed.",
+    lifecycleNone: "No open tasks for this number."
   },
   bugReport: {
     title: "Report a bug",

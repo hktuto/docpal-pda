@@ -35,10 +35,16 @@ async function login(username: string, password: string): Promise<string> {
   return (await res.json()).token as string;
 }
 
-async function call(token: string, method: string, url: string, body?: unknown) {
+async function call(
+  token: string,
+  method: string,
+  url: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>
+) {
   return app.request(url, {
     method,
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...extraHeaders },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
@@ -97,6 +103,38 @@ test("picking: assignee filters the list + detail; NULL is visible to everyone",
   assert.equal(cleared.status, 200);
   assert.equal((await cleared.json()).assignee, null);
   assert.ok((await idsOf(admin)).includes("po-assignee-1"));
+});
+
+// BUG-042: admin-console requests carry `X-Client: admin` and stay unfiltered
+// (visibilityUsername returns undefined); assignee scoping is caller-based, so
+// the same token without the header (PDA) is still filtered.
+test("picking: X-Client: admin sees assignee-scoped rows; plain PDA callers stay scoped", async () => {
+  await reseed(client);
+  const operator = await login("operator", "DocPal2026!");
+  const admin = await login("admin", "DocPalAdmin2026!");
+  await seedPickingOrder("po-assignee-4", "SO-ASSIGNEE-4");
+  await client.db.execute(sql`UPDATE picking_orders SET assignee = 'operator' WHERE id = 'po-assignee-4'`);
+
+  const idsOf = async (token: string, extra?: Record<string, string>) =>
+    ((await (await call(token, "GET", "/picking-orders", undefined, extra)).json()) as {
+      rows: { id: string }[];
+    }).rows.map((r) => r.id);
+
+  // Admin console call: list + detail unfiltered for a non-assignee admin.
+  const adminConsole = { "X-Client": "admin" };
+  assert.ok((await idsOf(admin, adminConsole)).includes("po-assignee-4"));
+  assert.equal((await call(admin, "GET", "/picking-orders/po-assignee-4", undefined, adminConsole)).status, 200);
+  assert.equal(
+    (await call(admin, "GET", "/picking-orders/po-assignee-4/label-print-rules", undefined, adminConsole)).status,
+    200
+  );
+
+  // Same admin token as a plain PDA caller still hides/404s the row; the
+  // assignee (operator) sees it on both paths.
+  assert.ok(!(await idsOf(admin)).includes("po-assignee-4"));
+  assert.equal((await call(admin, "GET", "/picking-orders/po-assignee-4")).status, 404);
+  assert.ok((await idsOf(operator, adminConsole)).includes("po-assignee-4"));
+  assert.ok((await idsOf(operator)).includes("po-assignee-4"));
 });
 
 // --- verify -----------------------------------------------------------------
@@ -249,4 +287,41 @@ test("admin PATCH task-assignment: validation + 404 unknown id; set persists and
       .assignee,
     null
   );
+});
+
+// --- admin task-lifecycle (CR-048) ------------------------------------------
+
+test("admin task-lifecycle: matches by order/batch/box key; steps without an open task are absent", async () => {
+  await reseed(client);
+  const admin = await login("admin", "DocPalAdmin2026!");
+  await seedPickingOrder("po-lc-1", "SO-LC-1");
+  await client.db.execute(sql`UPDATE picking_orders SET labeling_pending = true WHERE id = 'po-lc-1'`);
+  await seedCnScanningOrder("cn-lc-1", "CN-LC-1");
+  await seedVerifyTask("vt-lc-1", "BOX-LC-1");
+
+  type Step = { flow: string; id: string; label: string; status: string; assignee: string | null };
+  const stepsOf = async (qs: string): Promise<Step[]> => {
+    const res = await call(admin, "GET", `/admin/task-lifecycle?${qs}`);
+    assert.equal(res.status, 200, qs);
+    return (await res.json()).steps as Step[];
+  };
+
+  // order_no: picking + labeling are the same picking_orders row, listed twice.
+  const byOrder = await stepsOf("orderNo=SO-LC-1");
+  assert.deepEqual(
+    byOrder.map((s) => `${s.flow}:${s.id}`),
+    ["picking:po-lc-1", "labeling:po-lc-1"]
+  );
+
+  // batch_no: the CN receiving order; box id: the verify task.
+  assert.deepEqual((await stepsOf("batchNo=CN-LC-1")).map((s) => s.flow), ["receiving-cn"]);
+  assert.deepEqual((await stepsOf("orderNo=BOX-LC-1")).map((s) => s.flow), ["verify"]);
+
+  // Edit through the existing PATCH, then re-search shows the new assignee.
+  assert.equal((await call(admin, "PATCH", "/admin/task-assignment", { flow: "picking", id: "po-lc-1", assignee: "operator" })).status, 200);
+  assert.ok((await stepsOf("orderNo=SO-LC-1")).every((s) => s.assignee === "operator"));
+
+  // Unknown key → no steps; missing key → 400.
+  assert.deepEqual(await stepsOf("orderNo=NO-SUCH-KEY"), []);
+  assert.equal((await call(admin, "GET", "/admin/task-lifecycle")).status, 400);
 });

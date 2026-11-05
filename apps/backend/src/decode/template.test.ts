@@ -102,7 +102,7 @@ test("matches a WCL-keyed target via the template group (2026-11-03 house rule)"
 test("parses COPAL new-layout reels (lowercase ohm, 3-digit K, spec token) and appends resCode to the itemId", () => {
   const copal = row({
     supplierCode: "19915",
-    qrTemplate: String.raw`^\d{12}\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:\s{2,}\d{1,2})?(?:\s{2,}\d+K\s+[Oo][Hh][Mm]\((?<resCode>\d+)\))?\s+(?<qty>\d+)\s+\d+\s+\S+\s+(?<serialNo>(?<lotCode>\d{5})?\S*).*$`,
+    qrTemplate: String.raw`^\d{12}\s+(?<itemId>[A-Z0-9][A-Z0-9 ./()-]*?)(?:\s{2,}\d{1,2})?(?:\s{2,}\d+K\s+[Oo][Hh][Mm]\((?<resCode>\d+)\))?\s+(?<qty>\d+)\s+\d+\s+\S+\s+(?<serialNo>(?<lotCode>\d{5})?\S*).*$`,
     dateCodeEncoding: "ymmdd",
     brands: ["COPAL", "NIDEC"],
   });
@@ -134,6 +134,17 @@ test("parses COPAL new-layout reels (lowercase ohm, 3-digit K, spec token) and a
   assert.equal(ft63.matched, true);
   assert.equal(ft63.parsed.itemId, "FT-63ES202");
   assert.equal(ft63.parsed.dateCode, "3726"); // 60909 = 2026-09-09 → ISO week 37
+  // BUG-040 (2026-11-06): models printed with parentheses — the itemId class
+  // must accept ( ) so "CHS-04TB(34)" matches the parts master. The two-space
+  // runs are significant (fixed-width label fields).
+  const parens = decode(
+    { raw: "236301041541  CHS-04TB(34)  1000  1284  C6J  609080257MMJ805744571C", targets: ["CHS-04TB(34)"] },
+    [copal]
+  );
+  assert.equal(parens.matched, true);
+  assert.equal(parens.parsed.itemId, "CHS-04TB(34)");
+  assert.equal(parens.parsed.qty, 1000);
+  assert.equal(parens.parsed.dateCode, "3726"); // 60908 = 2026-09-08 → ISO week 37
 });
 
 test("derives the WCL item no from a single-brand profile when the template has no wclItemNo group (ABLIC $ reel)", () => {

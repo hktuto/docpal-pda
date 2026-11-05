@@ -1026,6 +1026,23 @@ export interface CnScanTaskItem {
   scannedBy: string | null;
 }
 
+/** One per-line credit of a scan event (CR-046, FIFO take). */
+export interface CnScanEventTake {
+  itemId: string;
+  qty: number;
+}
+
+/** One physical label scan on a CN scan task (CR-046). Scans recorded before
+ *  this feature have no event rows and cannot be removed individually. */
+export interface CnScanEvent {
+  id: string;
+  qty: number;
+  raw: string | null;
+  scannedBy: string | null;
+  scannedAt: string | null;
+  takes: CnScanEventTake[];
+}
+
 /** GET /receiving-cn/scan-tasks/:id. */
 export interface CnScanTaskDetail {
   order: {
@@ -1038,6 +1055,8 @@ export interface CnScanTaskDetail {
     dateCode: string | null;
   };
   items: CnScanTaskItem[];
+  /** Individual scans of this order, newest first. */
+  scanEvents: CnScanEvent[];
 }
 
 /** POST /receiving-cn/scan-tasks/:id/scan-aggregate body (spec
@@ -1062,11 +1081,14 @@ export type CnScanAggregateResult = CnScanTaskDetail & {
   lastScan?: { overQty?: number };
 };
 
-/** POST /receiving-cn/scan-tasks/:id/items/:itemId/flag body. */
+/** POST /receiving-cn/scan-tasks/:id/items/:itemId/flag body. `qty` (CR-047)
+ *  flags only that many units short on a partially-scanned line (must be a
+ *  positive int ≤ line_qty − scan_qty); omit for a whole-line flag. */
 export interface CnFlagItemInput {
   reason: "missing" | "damaged" | "wrong_part" | "other";
   note?: string;
   wrongPartNo?: string;
+  qty?: number;
 }
 
 /** POST /receiving-cn/scan-tasks/:id/finalize body. */

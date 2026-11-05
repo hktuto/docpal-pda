@@ -533,6 +533,16 @@ export interface TaskAssignmentRow {
   [key: string]: unknown;
 }
 
+/** GET /admin/task-lifecycle step (CR-048): one open task of the searched
+ *  order/batch/box number, in lifecycle order. */
+export interface TaskLifecycleStep {
+  flow: TaskAssignmentFlow;
+  id: string;
+  label: string;
+  status: string;
+  assignee: string | null;
+}
+
 /** GET /admin/users row (assignee dropdown source). */
 export interface AdminUserRow {
   id: string;
@@ -1362,6 +1372,12 @@ export function useFlowApi() {
         id,
         assignee,
       }),
+    // Per-step assignee view (CR-048): open tasks of one order/batch number
+    // across all flows, lifecycle-ordered.
+    getTaskLifecycle: (orderNo: string) =>
+      api.get<{ steps: TaskLifecycleStep[] }>(
+        `/admin/task-lifecycle?orderNo=${encodeURIComponent(orderNo)}`
+      ),
 
     // Flow config (warehouse_config row "flow"; applies at runtime on save
     // unless the FLOW_CONFIG env override is active)

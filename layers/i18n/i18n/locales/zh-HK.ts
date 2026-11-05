@@ -231,6 +231,13 @@ export default {
     wrongPartNo: "實際料號",
     wrongPartNoRequired: "請輸入實際料號。",
     reset: "重設",
+    scanHistory: "掃描記錄",
+    eventQty: "已掃描 {qty}",
+    removeScan: "移除",
+    confirmRemoveScan: "移除此 {qty} 件的掃描？已計入的數量將從對應行扣回。",
+    scanRemoved: "已移除掃描。",
+    flagQty: "標記短缺數量（可選，最多 {max}）",
+    flagQtyInvalid: "請輸入 1 至 {max} 的整數，或留空以標記整行。",
     duplicateLabel: "此標籤已掃描過。",
     noPartNo: "無法從標籤讀取料號。",
     noQty: "標籤沒有數量。",
@@ -239,6 +246,8 @@ export default {
     finalize: "完成",
     confirmFinalize: "確定完成此收貨掃描？已掃描的項目將會收貨並建立上架任務。",
     confirmFinalizeUnresolved: "仍有 {count} 項未掃描。可將其餘項目標記為缺貨並完成，或取消繼續掃描。",
+    confirmFinalizeMixed: "仍有 {unresolved} 項未掃描、{shortfall} 項部分掃描。可將剩餘數量標記為缺貨並完成（已掃描數量將保留），或取消繼續掃描。",
+    confirmFinalizeShortfall: "有 {count} 項僅部分掃描。可將剩餘數量標記為缺貨並完成（已掃描數量將保留），或取消繼續掃描。",
     markRemainingMissing: "其餘標記為缺貨並完成",
     finalized: "收貨掃描已完成 — 已建立上架任務。"
   },
@@ -2656,7 +2665,12 @@ export default {
     colAssignee: "指派人",
     unassigned: "未指派",
     none: "此流程暫無待處理任務。",
-    saveFailed: "儲存指派失敗"
+    saveFailed: "儲存指派失敗",
+    lifecycleTab: "全流程",
+    lifecycleColStep: "步驟",
+    lifecyclePlaceholder: "訂單 / 批次 / 箱號",
+    lifecycleHint: "搜尋訂單、批次或箱號，檢視該單在各流程步驟中的待處理任務；沒有匹配任務的步驟不會顯示。",
+    lifecycleNone: "該號碼暫無待處理任務。"
   },
   bugReport: {
     title: "報告問題",

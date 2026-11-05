@@ -643,6 +643,10 @@ export function createBackendWarehouseService(
     async resetCnItemScan(taskId: string, itemId: string): Promise<CnScanTaskItem> {
       return client.post(`/receiving-cn/scan-tasks/${taskId}/items/${itemId}/reset`, {});
     },
+    // CR-046: undo one scan event; response is the refreshed task detail.
+    async removeCnScanEvent(taskId: string, eventId: string): Promise<CnScanTaskDetail> {
+      return client.post(`/receiving-cn/scan-tasks/${taskId}/scan-events/${eventId}/remove`, {});
+    },
     async finalizeCnScanTask(
       taskId: string,
       input: CnScanFinalizeInput = {}

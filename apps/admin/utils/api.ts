@@ -27,6 +27,9 @@ const REQUEST_TIMEOUT_MS = 30_000;
 export function createApiClient(baseUrl: string, opts: ApiClientOptions = {}): ApiClient {
   async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {};
+    // Backend task-queue routes drop the assignee filter for admin-console
+    // callers (BUG-042); see visibilityUsername in the backend auth middleware.
+    headers["X-Client"] = "admin";
     if (body !== undefined) headers["Content-Type"] = "application/json";
     const token = opts.getToken?.();
     if (token) headers.Authorization = `Bearer ${token}`;

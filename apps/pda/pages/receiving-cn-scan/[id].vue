@@ -6,6 +6,7 @@ import { buildCnScanGroups, type CnScanGroup } from "~/utils/cnScanGroups";
 import { formatCompactQtyUpper } from "~/utils/formatNumber";
 import type {
   CnFlagItemInput,
+  CnScanEvent,
   CnScanReason,
   CnScanTaskDetail,
   CnScanTaskItem,
@@ -53,7 +54,15 @@ useVisibleReload(load, ["/receiving-cn-scan-tasks"]);
 
 const items = computed(() => detail.value?.items ?? []);
 const groups = computed(() => buildCnScanGroups(items.value));
-const unresolvedCount = computed(() => items.value.filter((i) => i.scanStatus === null).length);
+// Finish-prompt counts (CR-047): never-scanned vs partially-scanned lines —
+// both have scan_status NULL and both are auto-flagged 'missing' by the
+// backend, which now preserves the scanned qty on partial lines.
+const unscannedCount = computed(
+  () => items.value.filter((i) => i.scanStatus === null && (i.scanQty ?? 0) === 0).length
+);
+const shortfallCount = computed(
+  () => items.value.filter((i) => i.scanStatus === null && (i.scanQty ?? 0) > 0).length
+);
 const totalScanQty = computed(() => items.value.reduce((sum, i) => sum + (i.scanQty ?? 0), 0));
 const totalLineQty = computed(() => {
   let sum = 0;
@@ -115,7 +124,7 @@ async function handleRawScan(raw: string): Promise<boolean> {
     });
     scannedRaws.add(value);
     const overQty = updated.lastScan?.overQty;
-    detail.value = { order: updated.order, items: updated.items };
+    detail.value = { order: updated.order, items: updated.items, scanEvents: updated.scanEvents ?? [] };
     if (overQty && overQty > 0) {
       showToast(t("receivingScan.overReceived", { qty: formatCompactQtyUpper(overQty) }));
     }
@@ -134,7 +143,12 @@ async function handleRawScan(raw: string): Promise<boolean> {
 
 useHardwareScanner({
   enabled: () =>
-    !!detail.value && !scanning.value && !flagOpen.value && !finalizeOpen.value && !submitting.value,
+    !!detail.value &&
+    !scanning.value &&
+    !flagOpen.value &&
+    !finalizeOpen.value &&
+    !removeEvent.value &&
+    !submitting.value,
   onScan: handleRawScan,
 });
 
@@ -153,13 +167,22 @@ const flagGroup = ref<CnScanGroup | null>(null);
 const flagReason = ref<CnFlagItemInput["reason"]>("missing");
 const flagNote = ref("");
 const flagWrongPartNo = ref("");
+const flagQty = ref("");
 const submitting = ref(false);
+
+function flagShortfall(group: CnScanGroup): number | null {
+  if (group.lineQty == null) return null;
+  return Math.max(0, group.lineQty - group.scanQty);
+}
 
 function openFlag(group: CnScanGroup) {
   flagGroup.value = group;
   flagReason.value = "missing";
   flagNote.value = "";
   flagWrongPartNo.value = "";
+  // CR-047: default to the group shortfall; unknown lineQty → whole-line.
+  const shortfall = flagShortfall(group);
+  flagQty.value = shortfall && shortfall > 0 ? String(shortfall) : "";
   flagOpen.value = true;
 }
 
@@ -170,14 +193,37 @@ async function submitFlag() {
     showToast(t("receivingScan.wrongPartNoRequired"));
     return;
   }
-  const input: CnFlagItemInput = {
+  const openLines = group.items.filter((i) => i.scanStatus === null);
+  const base: CnFlagItemInput = {
     reason: flagReason.value,
     ...(flagNote.value.trim() ? { note: flagNote.value.trim() } : {}),
     ...(flagReason.value === "wrong_part" ? { wrongPartNo: flagWrongPartNo.value.trim() } : {}),
   };
+  // Optional partial flag (CR-047): distribute the declared shortfall over
+  // the group's open lines FIFO; empty = flag every open line whole.
+  const qtyText = flagQty.value.trim();
+  let left: number | null = null;
+  if (qtyText !== "") {
+    const qty = Number(qtyText);
+    const max = flagShortfall(group) ?? 0;
+    if (!Number.isInteger(qty) || qty <= 0 || qty > max) {
+      showToast(t("receivingScan.flagQtyInvalid", { max }));
+      return;
+    }
+    left = qty;
+  }
   submitting.value = true;
   try {
-    for (const item of group.items.filter((i) => i.scanStatus === null)) {
+    for (const item of openLines) {
+      if (left != null && left <= 0) break; // shortfall fully applied
+      const input: CnFlagItemInput = { ...base };
+      if (left != null) {
+        const cap = (item.lineQty ?? 0) - (item.scanQty ?? 0);
+        if (cap <= 0) continue;
+        const share = Math.min(cap, left);
+        input.qty = share;
+        left -= share;
+      }
       replaceItem(await warehouse.flagCnItem(taskId, item.id, input));
     }
     flagOpen.value = false;
@@ -201,6 +247,56 @@ async function resetGroup(group: CnScanGroup) {
     showToast(errorMessage(e));
   } finally {
     submitting.value = false;
+  }
+}
+
+// ---- scan events (CR-046: expand a group, remove a single scan) ----
+
+const expanded = ref<Set<string>>(new Set());
+const removeEvent = ref<CnScanEvent | null>(null);
+
+function toggleExpand(key: string) {
+  const next = new Set(expanded.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  expanded.value = next;
+}
+
+/** The task's scan events whose first take belongs to this group (a single
+ *  scan credits lines of one part, so all its takes share a group; we
+ *  attribute by the member line ids). */
+function groupEvents(group: CnScanGroup): CnScanEvent[] {
+  const ids = new Set(group.items.map((i) => i.id));
+  return (detail.value?.scanEvents ?? []).filter((ev) =>
+    ev.takes.some((t) => ids.has(t.itemId))
+  );
+}
+
+/** "taken from" line label for an event's take, e.g. "PO 12345·1: 50". */
+function takeLabel(itemId: string): string {
+  const item = items.value.find((i) => i.id === itemId);
+  if (!item) return "—";
+  const po = item.poNo ? `${item.poNo}${item.poLine ? `·${item.poLine}` : ""}` : item.partNo;
+  return po;
+}
+
+function openRemove(ev: CnScanEvent) {
+  if (submitting.value) return;
+  removeEvent.value = ev;
+}
+
+async function confirmRemove() {
+  const ev = removeEvent.value;
+  if (!ev || submitting.value) return;
+  submitting.value = true;
+  try {
+    detail.value = await warehouse.removeCnScanEvent(taskId, ev.id);
+    showToast(t("receivingScan.scanRemoved"));
+  } catch (e) {
+    showToast(errorMessage(e));
+  } finally {
+    submitting.value = false;
+    removeEvent.value = null;
   }
 }
 
@@ -233,6 +329,16 @@ function fmtQty(n: number | null): string {
 /** Delivery date display matches the other pages: locale dd/mm/yyyy. */
 function fmtDate(s: string | null): string {
   return s ? new Date(s).toLocaleDateString() : t("common.noData");
+}
+
+/** Scan-event row: locale time-of-day + seconds; raw label truncated. */
+function fmtEventTime(s: string | null): string {
+  return s ? new Date(s).toLocaleTimeString() : "—";
+}
+
+function truncRaw(raw: string | null): string {
+  if (!raw) return "—";
+  return raw.length > 32 ? `${raw.slice(0, 32)}…` : raw;
 }
 
 function groupChip(group: CnScanGroup): { text: string; cls: string } {
@@ -300,46 +406,83 @@ const flagReasons: CnFlagItemInput["reason"][] = ["missing", "damaged", "wrong_p
       <EmptyState v-if="groups.length === 0" :msg="$t('receivingScan.noItems')" />
 
       <ul v-else class="items">
-        <li v-for="group in groups" :key="group.key" class="item">
-          <div class="item__main">
-            <span class="item__line1">
-              <span class="item-part">{{ group.wclItemNo || group.partNo }}</span>
-              <span class="badge" :class="groupChip(group).cls">{{ groupChip(group).text }}</span>
-            </span>
-            <span class="item-meta">
-              {{ group.partNo }} ·
-              {{ $t("receivingScan.groupQty", { scanned: fmtQty(group.scanQty), expected: fmtQty(group.lineQty) }) }}
-            </span>
-            <span class="item-meta item-meta--chips">
-              <span v-if="group.dateCode" class="chip">{{ group.dateCode }}</span>
-              <span v-if="group.coo" class="chip">COO {{ group.coo }}</span>
-              <span v-if="group.cow" class="chip">COW {{ group.cow }}</span>
-            </span>
-            <span v-if="group.poNos.length > 0" class="item-meta">{{ group.poNos.join(" · ") }}</span>
-            <span
-              v-for="line in group.items.filter((i) => i.scanStatus === 'error' && i.scanNote)"
-              :key="line.id"
-              class="item-meta item-meta--note"
-            >
-              {{ line.scanNote }}
+        <li v-for="group in groups" :key="group.key" class="group">
+          <div class="item">
+            <div class="item__main">
+              <span class="item__line1">
+                <span class="item-part">{{ group.wclItemNo || group.partNo }}</span>
+                <span class="badge" :class="groupChip(group).cls">{{ groupChip(group).text }}</span>
+              </span>
+              <span class="item-meta">
+                {{ group.partNo }} ·
+                {{ $t("receivingScan.groupQty", { scanned: fmtQty(group.scanQty), expected: fmtQty(group.lineQty) }) }}
+              </span>
+              <span class="item-meta item-meta--chips">
+                <span v-if="group.dateCode" class="chip">{{ group.dateCode }}</span>
+                <span v-if="group.coo" class="chip">COO {{ group.coo }}</span>
+                <span v-if="group.cow" class="chip">COW {{ group.cow }}</span>
+              </span>
+              <span v-if="group.poNos.length > 0" class="item-meta">{{ group.poNos.join(" · ") }}</span>
+              <span
+                v-for="line in group.items.filter((i) => i.scanStatus === 'error' && i.scanNote)"
+                :key="line.id"
+                class="item-meta item-meta--note"
+              >
+                {{ line.scanNote }}
+              </span>
+            </div>
+            <span class="item__actions">
+              <button
+                v-if="groupHasOpenLines(group)"
+                class="btn btn--ghost btn--small"
+                @click="openFlag(group)"
+              >
+                {{ $t("receivingScan.flag") }}
+              </button>
+              <button
+                v-if="groupHasTouchedLines(group)"
+                class="btn btn--ghost btn--small"
+                @click="resetGroup(group)"
+              >
+                {{ $t("receivingScan.reset") }}
+              </button>
+              <button
+                v-if="groupEvents(group).length > 0"
+                class="btn btn--ghost btn--small"
+                :aria-expanded="expanded.has(group.key)"
+                :aria-label="$t('receivingScan.scanHistory')"
+                @click="toggleExpand(group.key)"
+              >
+                {{ expanded.has(group.key) ? "▴" : "▾" }}
+              </button>
             </span>
           </div>
-          <span class="item__actions">
-            <button
-              v-if="groupHasOpenLines(group)"
-              class="btn btn--ghost btn--small"
-              @click="openFlag(group)"
-            >
-              {{ $t("receivingScan.flag") }}
-            </button>
-            <button
-              v-if="groupHasTouchedLines(group)"
-              class="btn btn--ghost btn--small"
-              @click="resetGroup(group)"
-            >
-              {{ $t("receivingScan.reset") }}
-            </button>
-          </span>
+
+          <!-- CR-046: per-scan history with individual remove (legacy
+               pre-migration scans have no event rows — use Reset then) -->
+          <div v-if="expanded.has(group.key)" class="events">
+            <div v-for="ev in groupEvents(group)" :key="ev.id" class="event">
+              <div class="event__main">
+                <span class="event__head">
+                  {{ $t("receivingScan.eventQty", { qty: fmtQty(ev.qty) }) }}
+                  · {{ fmtEventTime(ev.scannedAt) }}
+                </span>
+                <span class="item-meta">{{ truncRaw(ev.raw) }}</span>
+                <span class="item-meta item-meta--chips">
+                  <span v-for="t in ev.takes" :key="t.itemId" class="chip">
+                    {{ takeLabel(t.itemId) }}: {{ t.qty }}
+                  </span>
+                </span>
+              </div>
+              <button
+                class="btn btn--ghost btn--small"
+                :disabled="submitting"
+                @click="openRemove(ev)"
+              >
+                {{ $t("receivingScan.removeScan") }}
+              </button>
+            </div>
+          </div>
         </li>
       </ul>
 
@@ -366,6 +509,12 @@ const flagReasons: CnFlagItemInput["reason"][] = ["missing", "damaged", "wrong_p
           <span>{{ $t("receivingScan.wrongPartNo") }}</span>
           <input v-model="flagWrongPartNo" class="modal__input" type="text" />
         </label>
+        <!-- CR-047: optional partial flag — empty = flag whole lines. Only
+             meaningful when the group's expected qty is known. -->
+        <label v-if="flagGroup.lineQty != null" class="modal__field">
+          <span>{{ $t("receivingScan.flagQty", { max: flagShortfall(flagGroup) ?? 0 }) }}</span>
+          <input v-model="flagQty" class="modal__input" type="number" min="1" :max="flagShortfall(flagGroup) ?? undefined" />
+        </label>
         <label class="modal__field">
           <span>{{ $t("receivingScan.flagNote") }}</span>
           <input v-model="flagNote" class="modal__input" type="text" />
@@ -379,17 +528,24 @@ const flagReasons: CnFlagItemInput["reason"][] = ["missing", "damaged", "wrong_p
       </div>
     </div>
 
-    <!-- Finalize confirm -->
+    <!-- Finalize confirm (CR-047: unscanned + partially-scanned lines both
+         auto-flag 'missing'; the scanned qty on partials is preserved) -->
     <div v-if="finalizeOpen" class="modal-backdrop" @click.self="finalizeOpen = false">
       <div class="modal">
-        <p v-if="unresolvedCount > 0">
-          {{ $t("receivingScan.confirmFinalizeUnresolved", { count: unresolvedCount }) }}
+        <p v-if="unscannedCount > 0 && shortfallCount > 0">
+          {{ $t("receivingScan.confirmFinalizeMixed", { unresolved: unscannedCount, shortfall: shortfallCount }) }}
+        </p>
+        <p v-else-if="unscannedCount > 0">
+          {{ $t("receivingScan.confirmFinalizeUnresolved", { count: unscannedCount }) }}
+        </p>
+        <p v-else-if="shortfallCount > 0">
+          {{ $t("receivingScan.confirmFinalizeShortfall", { count: shortfallCount }) }}
         </p>
         <p v-else>{{ $t("receivingScan.confirmFinalize") }}</p>
         <div class="modal__actions">
           <button class="btn btn--ghost" @click="finalizeOpen = false">{{ $t("actions.cancel") }}</button>
           <button
-            v-if="unresolvedCount > 0"
+            v-if="unscannedCount + shortfallCount > 0"
             class="btn btn--danger"
             :disabled="submitting"
             @click="finalize('missing')"
@@ -398,6 +554,19 @@ const flagReasons: CnFlagItemInput["reason"][] = ["missing", "damaged", "wrong_p
           </button>
           <button v-else class="btn" :disabled="submitting" @click="finalize()">
             {{ submitting ? $t("actions.confirming") : $t("receivingScan.finalize") }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Remove-scan confirm (CR-046) -->
+    <div v-if="removeEvent" class="modal-backdrop" @click.self="removeEvent = null">
+      <div class="modal">
+        <p>{{ $t("receivingScan.confirmRemoveScan", { qty: fmtQty(removeEvent.qty) }) }}</p>
+        <div class="modal__actions">
+          <button class="btn btn--ghost" @click="removeEvent = null">{{ $t("actions.cancel") }}</button>
+          <button class="btn btn--danger" :disabled="submitting" @click="confirmRemove">
+            {{ submitting ? $t("actions.confirming") : $t("receivingScan.removeScan") }}
           </button>
         </div>
       </div>
@@ -429,6 +598,10 @@ const flagReasons: CnFlagItemInput["reason"][] = ["missing", "damaged", "wrong_p
   padding: 0;
   display: grid;
   gap: 0.5rem;
+}
+.group {
+  display: grid;
+  gap: 0.25rem;
 }
 .item {
   display: flex;
@@ -478,6 +651,28 @@ const flagReasons: CnFlagItemInput["reason"][] = ["missing", "damaged", "wrong_p
   display: flex;
   gap: 0.375rem;
   flex-shrink: 0;
+}
+.events {
+  display: grid;
+  gap: 0.375rem;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+}
+.event {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.event__main {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+.event__head {
+  font-size: 0.9rem;
 }
 .footer {
   position: fixed;

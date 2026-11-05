@@ -80,6 +80,10 @@ export const receivingInvoiceItemsCn = pgTable(
     scanQty: integer("scan_qty"),
     scanReason: text("scan_reason"), // qty_mismatch (auto warning) | missing | damaged | wrong_part | other (flag)
     scanNote: text("scan_note"),
+    // CR-047: units of this line declared short by a partial flag (NULL +
+    // error = whole line flagged). Finalize keeps min(scan_qty, line_qty) as
+    // received when this is set on an error line.
+    flagQty: integer("flag_qty"),
     scannedBy: text("scanned_by").references(() => users.id),
     scannedAt: timestamp("scanned_at", { mode: "date" }),
     reportedMismatch: boolean("reported_mismatch").notNull().default(false),
@@ -96,6 +100,29 @@ export const receivingInvoiceItemsCn = pgTable(
     invoiceIdx: index("idx_receiving_invoice_items_cn_invoice").on(t.receivingInvoiceId),
     partIdx: index("idx_receiving_invoice_items_cn_part").on(t.partNo),
     subInvFk: foreignKey({ name: "receiving_invoice_items_cn_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.secondaryInventoryName] }),
+  })
+);
+
+// CR-046: one row per physical label scan on a CN scan task. The aggregate
+// credit is still the invoice-line `scan_qty` (this table records HOW each
+// scan got there: FIFO per-line takes), so a single scan can be individually
+// removed. Rows only exist for scans after this migration — legacy partial
+// state cannot be attributed to events.
+export const receivingCnScanEvents = pgTable(
+  "receiving_cn_scan_events",
+  {
+    id: text("id").primaryKey(),
+    orderId: text("order_id").notNull().references(() => receivingOrdersCn.id, { onDelete: "cascade" }),
+    qty: integer("qty").notNull(), // total credited (= sum of takes)
+    raw: text("raw"),
+    takes: jsonb("takes").$type<{ itemId: string; qty: number }[]>().notNull(), // per-line FIFO credit
+    scannedBy: text("scanned_by").references(() => users.id),
+    scannedAt: timestamp("scanned_at", { mode: "date" }),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+  },
+  (t) => ({
+    orderIdx: index("idx_receiving_cn_scan_events_order").on(t.orderId),
   })
 );
 

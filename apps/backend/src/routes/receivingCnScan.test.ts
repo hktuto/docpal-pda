@@ -99,10 +99,18 @@ interface DetailItem {
   cow: string | null;
 }
 
+interface ScanEventRow {
+  id: string;
+  qty: number;
+  raw: string | null;
+  takes: { itemId: string; qty: number }[];
+}
+
 interface AggregateResponse {
   order: { id: string; batchNo: string; status: string };
   items: DetailItem[];
   lastScan: { overQty: number };
+  scanEvents: ScanEventRow[];
 }
 
 test("config gate: the scan-task surface 404s while the receiving-cn step is off", async () => {
@@ -465,6 +473,52 @@ test("flag: reason → error + mirrored mismatch columns; wrong_part carries wro
   assert.match(await bad.text(), /invalid_payload/);
 });
 
+test("flag qty: a partial flag keeps the scanned credit through finalize; bad qty → 400 invalid_flag_qty", async () => {
+  await reseed(client);
+  const token = await login("operator", "DocPal2026!");
+  const { orderId, itemIds } = await seedScanningOrder("CN-SCAN-FQ", [
+    { partNo: "PART-A", lineQty: 100 },
+    { partNo: "PART-B", lineQty: null }, // no defined shortfall
+  ]);
+  await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/scan-aggregate`, { partNo: "PART-A", qty: 60 });
+
+  for (const bad of [
+    { itemId: itemIds[0], body: { reason: "missing", qty: 41 } }, // > line_qty − scan_qty
+    { itemId: itemIds[0], body: { reason: "missing", qty: 0 } },
+    { itemId: itemIds[0], body: { reason: "missing", qty: 1.5 } },
+    { itemId: itemIds[1], body: { reason: "missing", qty: 5 } }, // NULL line_qty
+  ]) {
+    const res = await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/items/${bad.itemId}/flag`, bad.body);
+    assert.equal(res.status, 400, JSON.stringify(bad));
+    assert.match(await res.text(), /invalid_flag_qty/);
+  }
+
+  const res = await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/items/${itemIds[0]}/flag`, {
+    reason: "damaged",
+    qty: 40,
+  });
+  assert.equal(res.status, 200);
+  const flagged = await queryGet<{ scanStatus: string; flagQty: number | null; scanQty: number | null }>(
+    client.db,
+    sql`SELECT scan_status AS "scanStatus", flag_qty AS "flagQty", scan_qty AS "scanQty"
+        FROM receiving_invoice_items_cn WHERE id = ${itemIds[0]}`
+  );
+  assert.deepEqual(flagged, { scanStatus: "error", flagQty: 40, scanQty: 60 });
+
+  // PART-B (untouched, NULL line_qty) auto-flags whole (flag_qty stays NULL).
+  const fin = await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/finalize`, { unresolvedAs: "missing" });
+  assert.equal(fin.status, 200);
+  const rows = await queryAll<{ id: string; receivedQty: number; flagQty: number | null }>(
+    client.db,
+    sql`SELECT id, received_qty AS "receivedQty", flag_qty AS "flagQty" FROM receiving_invoice_items_cn
+        WHERE receiving_invoice_id = 'cn-inv-CN-SCAN-FQ' ORDER BY id`
+  );
+  assert.deepEqual(rows.map((r) => [r.id, r.receivedQty, r.flagQty]), [
+    [itemIds[0], 60, 40], // the scanned 60 survives the partial flag
+    [itemIds[1], 0, null], // untouched → flagged whole, receives 0
+  ]);
+});
+
 test("reset: clears the scan state — including a partial scan_qty — and the mirrored mismatch columns back to unresolved", async () => {
   await reseed(client);
   const token = await login("operator", "DocPal2026!");
@@ -492,6 +546,62 @@ test("reset: clears the scan state — including a partial scan_qty — and the 
   assert.equal(mirror!.reportedMismatch, false);
   assert.equal(mirror!.mismatchReason, null);
   assert.equal(mirror!.mismatchNote, null);
+});
+
+test("scan events: one row per aggregate scan with per-line takes; remove subtracts the credit across every credited line", async () => {
+  await reseed(client);
+  const token = await login("operator", "DocPal2026!");
+  const { orderId, itemIds } = await seedScanningOrder("CN-SCAN-E1", [
+    { partNo: "PART-A", lineQty: 100, poNo: "PO-1", poLine: "1" },
+    { partNo: "PART-A", lineQty: 50, poNo: "PO-1", poLine: "2" },
+  ]);
+  await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/scan-aggregate`, { partNo: "PART-A", qty: 120, raw: ":R1:" });
+  await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/scan-aggregate`, { partNo: "PART-A", qty: 30, raw: ":R2:" });
+
+  const detailRes = await call(token, "GET", `/receiving-cn/scan-tasks/${orderId}`);
+  assert.equal(detailRes.status, 200);
+  const detail = (await detailRes.json()) as AggregateResponse;
+  assert.equal(detail.scanEvents.length, 2);
+  assert.equal(detail.scanEvents[0].raw, ":R2:"); // newest first
+  assert.deepEqual(detail.scanEvents[1].takes, [
+    { itemId: itemIds[0], qty: 100 },
+    { itemId: itemIds[1], qty: 20 },
+  ]);
+
+  // Remove the FIRST scan — both credited lines give its takes back.
+  const removed = await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/scan-events/${detail.scanEvents[1].id}/remove`);
+  assert.equal(removed.status, 200);
+  const after = (await removed.json()) as AggregateResponse;
+  const [l1, l2] = after.items;
+  assert.deepEqual([l1.scanQty, l1.scanStatus], [null, null]); // 100 − 100 → back to open
+  assert.deepEqual([l2.scanQty, l2.scanStatus], [30, null]); // 50 − 20 → ok flips back to partial
+  assert.equal(after.scanEvents.length, 1);
+
+  const logs = await queryAll<{ toState: string; entityId: string }>(
+    client.db,
+    sql`SELECT to_state AS "toState", entity_id AS "entityId" FROM transaction_logs
+        WHERE to_state = 'scan_event_removed' ORDER BY created_date, id`
+  );
+  assert.deepEqual(logs.map((l) => l.entityId), [itemIds[0], itemIds[1]]);
+
+  // Unknown / foreign event id → 404.
+  const missing = await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/scan-events/nope/remove`);
+  assert.equal(missing.status, 404);
+  assert.match(await missing.text(), /receiving_cn_scan_event_not_found/);
+});
+
+test("remove scan event after finalize → 409 order_not_scanning", async () => {
+  await reseed(client);
+  const token = await login("operator", "DocPal2026!");
+  const { orderId } = await seedScanningOrder("CN-SCAN-E2", [{ partNo: "PART-A", lineQty: 100 }]);
+  const scan = (await (await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/scan-aggregate`, {
+    partNo: "PART-A",
+    qty: 100,
+  })).json()) as AggregateResponse;
+  await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/finalize`, {});
+  const res = await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/scan-events/${scan.scanEvents[0].id}/remove`);
+  assert.equal(res.status, 409);
+  assert.match(await res.text(), /order_not_scanning/);
 });
 
 test("finalize: unresolved items → 409 unresolved_items; unresolvedAs 'missing' receives min(scan_qty, line_qty) on non-error lines", async () => {

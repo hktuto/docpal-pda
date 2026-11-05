@@ -1,0 +1,14 @@
+{
+ "id": "CR-048",
+ "dateRaised": "2026-11-06",
+ "raisedBy": "Sean",
+ "app": "Admin",
+ "functionId": "ADM-005",
+ "feature": "Task assignment: cross-stage assignee view — today /task-assignments shows one assignee picker for the task's current queue tab; admins want an order/task shown with its assignee per workflow step (receiving → put-away → picking → verify → shipping) so all steps' owners are visible and editable in one place",
+ "reason": "The one assignee field only reflects the stage the task is in now, so admins cannot see who was assigned at earlier steps or set the next step's owner in advance; handover between operators is invisible",
+ "priority": "Should have",
+ "status": "New",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Record only — not implemented yet. Today each queue table (receiving_orders_cn/picking_orders/put_away_tasks*/verify_tasks/shipping_boxes) has one nullable assignee column per spec 2026-11-01-task-assignee-design.md; per-step history needs a schema decision (add step to task_assignment rows or keep an assignee-history table) plus changes to GET/PATCH /admin/task-assignment and the admin UI"
+}

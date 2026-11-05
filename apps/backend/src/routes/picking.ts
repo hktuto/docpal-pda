@@ -35,7 +35,7 @@ import {
 } from "../db/picking.js";
 import { resolveLabelPrintRulesForOrder } from "../db/labelPrint.js";
 import { labelCountForMatch, printOrderLabel } from "../db/labelPrintParams.js";
-import { actorFrom } from "../auth/middleware.js";
+import { actorFrom, visibilityUsername } from "../auth/middleware.js";
 import { getUserScope } from "../db/user-scope.js";
 
 // Empty bodies parse as {} — after the auth migration several mutations no
@@ -79,7 +79,7 @@ pickingRoute.get("/picking-orders", async (c) => {
       deliveryDateFrom: c.req.query("deliveryDateFrom"),
       deliveryDateTo: c.req.query("deliveryDateTo"),
       scope,
-      username: actor.username,
+      username: visibilityUsername(c),
     }),
     200
   );
@@ -108,7 +108,7 @@ pickingRoute.post("/picking-orders/reorder", async (c) => {
 pickingRoute.get("/picking-orders/:id", async (c) => {
   const actor = actorFrom(c);
   const scope = await getUserScope(db, actor.username);
-  return c.json(await getPickingOrderDetail(db, c.req.param("id"), scope, actor.username), 200);
+  return c.json(await getPickingOrderDetail(db, c.req.param("id"), scope, visibilityUsername(c)), 200);
 });
 
 // Label-print rules matching this order (picking-finish print prompt):
@@ -120,7 +120,7 @@ pickingRoute.get("/picking-orders/:id/label-print-rules", async (c) => {
   const { matches } = await resolveLabelPrintRulesForOrder(db, orderId);
   const actor = actorFrom(c);
   const scope = await getUserScope(db, actor.username);
-  const order = await getPickingOrderDetail(db, orderId, scope, actor.username);
+  const order = await getPickingOrderDetail(db, orderId, scope, visibilityUsername(c));
   const withCounts = await Promise.all(
     matches.map(async (match) => ({ ...match, labelCount: await labelCountForMatch(db, order, match) }))
   );
@@ -413,7 +413,7 @@ pickingRoute.get("/labeling-orders", async (c) => {
       limit: Number.isNaN(limit) ? undefined : limit,
       offset: Number.isNaN(offset) ? undefined : offset,
       scope,
-      username: actor.username,
+      username: visibilityUsername(c),
     }),
     200
   );
@@ -432,7 +432,7 @@ pickingRoute.get("/label-printing-orders", async (c) => {
       limit: Number.isNaN(limit) ? undefined : limit,
       offset: Number.isNaN(offset) ? undefined : offset,
       scope,
-      username: actor.username,
+      username: visibilityUsername(c),
     }),
     200
   );

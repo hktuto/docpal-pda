@@ -48,3 +48,15 @@ export const authMiddleware: MiddlewareHandler<{ Variables: AuthVariables }> = a
 export function actorFrom(c: Context): AuthTokenUser {
   return (c as unknown as Context<{ Variables: AuthVariables }>).get("user");
 }
+
+/**
+ * Username for task assignee-scoping only (BUG-042): the admin console
+ * stamps `X-Client: admin` so its calls stay unfiltered while the PDA keeps
+ * the per-operator queue — an admin logged into the PDA still gets filtered.
+ * Keyed on the calling client, never the token's group. The header is
+ * spoofable by design: this is work-routing visibility, not a security
+ * boundary (the JWT still gates every route).
+ */
+export function visibilityUsername(c: Context): string | undefined {
+  return c.req.header("x-client") === "admin" ? undefined : actorFrom(c).username;
+}

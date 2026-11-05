@@ -108,6 +108,7 @@ export const ALL_TABLES = [
   "receiving_invoices",
   "receiving_orders",
   "receiving_cn_workflows",
+  "receiving_cn_scan_events",
   "receiving_invoice_items_cn",
   "receiving_invoices_cn",
   "receiving_orders_cn",

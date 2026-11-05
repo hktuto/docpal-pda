@@ -66,7 +66,10 @@ const NCC_TEMPLATE = String.raw`^(?=.{28}$|.{32}$)(?<itemId>\d{6}(?=.{22}$)|\d{1
 // The serial field leads with a 5-digit YMMDD date code (61013 = 2026-10-13)
 // — captured as the lotCode group and decoded to WWYY by the 'ymmdd'
 // dateCodeEncoding (same 1-digit-year rule as the NCC lot prefix).
-const COPAL_TEMPLATE = String.raw`^\d{12}\s+(?<itemId>[A-Z0-9][A-Z0-9 ./-]*?)(?:\s{2,}\d{1,2})?(?:\s{2,}\d+K\s+[Oo][Hh][Mm]\((?<resCode>\d+)\))?\s+(?<qty>\d+)\s+\d+\s+\S+\s+(?<serialNo>(?<lotCode>\d{5})?\S*).*$`;
+// The model may print parentheses (CHS-04TB(34), DP1120Z(COLORCAP) — 22
+// COPAL/NIDEC names in the parts master; 2026-11-06 BUG-040 widened the
+// itemId class for it, re-validated vs the same 54 real raws: no field changes).
+const COPAL_TEMPLATE = String.raw`^\d{12}\s+(?<itemId>[A-Z0-9][A-Z0-9 ./()-]*?)(?:\s{2,}\d{1,2})?(?:\s{2,}\d+K\s+[Oo][Hh][Mm]\((?<resCode>\d+)\))?\s+(?<qty>\d+)\s+\d+\s+\S+\s+(?<serialNo>(?<lotCode>\d{5})?\S*).*$`;
 
 // SII/ABLIC: $-delimited reel QR, e.g.
 //   1$S-5743NBH1A-M3T4U$3000$VM3F6XA1761-0367$S-5743NBH1A-M3T4U$202607$67352039027

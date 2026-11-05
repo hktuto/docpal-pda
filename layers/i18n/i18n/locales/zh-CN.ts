@@ -231,6 +231,13 @@ export default {
     wrongPartNo: "实际料号",
     wrongPartNoRequired: "请输入实际料号。",
     reset: "重置",
+    scanHistory: "扫描记录",
+    eventQty: "已扫描 {qty}",
+    removeScan: "移除",
+    confirmRemoveScan: "移除此 {qty} 件的扫描？已计入的数量将从对应行扣回。",
+    scanRemoved: "已移除扫描。",
+    flagQty: "标记短缺数量（可选，最多 {max}）",
+    flagQtyInvalid: "请输入 1 至 {max} 的整数，或留空以标记整行。",
     duplicateLabel: "此标签已扫描过。",
     noPartNo: "无法从标签读取料号。",
     noQty: "标签没有数量。",
@@ -239,6 +246,8 @@ export default {
     finalize: "完成",
     confirmFinalize: "确定完成此收货扫描？已扫描的项目将会收货并创建上架任务。",
     confirmFinalizeUnresolved: "仍有 {count} 项未扫描。可将其余项目标记为缺货并完成，或取消继续扫描。",
+    confirmFinalizeMixed: "仍有 {unresolved} 项未扫描、{shortfall} 项部分扫描。可将剩余数量标记为缺货并完成（已扫描数量将保留），或取消继续扫描。",
+    confirmFinalizeShortfall: "有 {count} 项仅部分扫描。可将剩余数量标记为缺货并完成（已扫描数量将保留），或取消继续扫描。",
     markRemainingMissing: "其余标记为缺货并完成",
     finalized: "收货扫描已完成 — 已创建上架任务。"
   },
@@ -2656,7 +2665,12 @@ export default {
     colAssignee: "指派人",
     unassigned: "未指派",
     none: "此流程暂无待处理任务。",
-    saveFailed: "保存指派失败"
+    saveFailed: "保存指派失败",
+    lifecycleTab: "全流程",
+    lifecycleColStep: "步骤",
+    lifecyclePlaceholder: "订单 / 批次 / 箱号",
+    lifecycleHint: "搜索订单、批次或箱号，查看该单在各流程步骤中的待处理任务；没有匹配任务的步骤不会显示。",
+    lifecycleNone: "该号码暂无待处理任务。"
   },
   bugReport: {
     title: "报告问题",
