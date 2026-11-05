@@ -7,7 +7,7 @@ import {
   type CnWorkflowRow,
 } from "../db/receivingCn.js";
 import { getProcess } from "../docpalWorkflow.js";
-import { receivingCnSyncDisabled, receivingCnSyncIntervalSec } from "../config.js";
+import { cnReceiving, receivingCnSyncDisabled, receivingCnSyncIntervalSec } from "../config.js";
 
 // ---------------------------------------------------------------------------
 // CN receiving workflow-status cron (spec
@@ -17,7 +17,9 @@ import { receivingCnSyncDisabled, receivingCnSyncIntervalSec } from "../config.j
 // terminal states update the tracking row (completed → finalizeCnOrder, which
 // is idempotent via the put_away_tasks_cn unique index). RECEIVING_CN_SYNC=off
 // disables; RECEIVING_CN_SYNC_INTERVAL_SEC sets the interval (default 120).
-// Log-only failures — the cron never throws.
+// Each pass also no-ops while the flow-config `receiving-cn` step is disabled
+// (checked per pass so an admin flow-config toggle takes effect without a
+// restart). Log-only failures — the cron never throws.
 // ---------------------------------------------------------------------------
 
 /** Defensive state mapping — DocPal's exact terminal vocabulary is unconfirmed. */
@@ -43,8 +45,10 @@ function mapTerminalState(stateType: string | undefined): "completed" | "failed"
   }
 }
 
-/** One poll pass — exported for tests. */
+/** One poll pass — exported for tests. No-op while the `receiving-cn` flow
+ *  step is disabled (nothing in this warehouse uses the CN workflow). */
 export async function runReceivingCnSyncOnce(db: AppDb): Promise<void> {
+  if (!cnReceiving()) return;
   const rows = await queryAll<CnWorkflowRow>(
     db,
     sql`SELECT id, phase, invoice_no AS "invoiceNo", supplier, filename,

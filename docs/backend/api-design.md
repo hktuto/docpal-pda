@@ -170,7 +170,8 @@ failure → 502 `docpal_workflow: ...`; kick-start failure after the upload
 deletes the attachment). One tracking row per upload in
 `receiving_cn_workflows`; a status cron (`src/jobs/receivingCnSync.ts`,
 kill-switch `RECEIVING_CN_SYNC=off`, interval `RECEIVING_CN_SYNC_INTERVAL_SEC`
-default 120) polls `workflow_running` rows and, on workflow completion,
+default 120; no-ops while the `receiving-cn` step is off) polls
+`workflow_running` rows and, on workflow completion,
 `finalizeCnOrder` reads the `receiving_orders_cn` trio (written by the
 external upstream-sync service, matched by the workflow's generated
 `batch_no` — `CN-<YYYYMMDD>-<6 alnum>`, injected into the DocPal

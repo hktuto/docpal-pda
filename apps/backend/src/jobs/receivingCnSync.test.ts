@@ -14,6 +14,7 @@ import type { AddressInfo } from "node:net";
 import { setupTestDb, reseed, TEST_DATABASE_URL, FAKE_DOCPAL_URL, type TestDb } from "../db/test-helper.js";
 import { queryAll, queryGet } from "../db/query.js";
 import { runReceivingCnSyncOnce } from "../jobs/receivingCnSync.js";
+import { _setCnReceivingForTests } from "../config.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 
@@ -62,6 +63,7 @@ before(async () => {
   fakeUrl = await startFake();
   client = await setupTestDb();
   process.env.DOCPAL_WORKFLOW_TOKEN = "workflow-service-token";
+  _setCnReceivingForTests(true); // the cron no-ops while the receiving-cn step is off
 });
 
 async function withFake(fn: () => Promise<void>): Promise<void> {
@@ -216,6 +218,25 @@ test("cron: finalize is the scan start — received_qty and date_code stay untou
       { id: "cn-item-rcv-2", receivedQty: 550, dateCode: "2634" },
     ]);
   });
+});
+
+test("cron: receiving-cn step disabled → no DocPal poll, workflow stays workflow_running", async () => {
+  await reseed(client);
+  await seedWorkflow("wf-off", "TE-OFF-1", "proc-off");
+  processStates = { "proc-off": "completed" };
+
+  _setCnReceivingForTests(false);
+  try {
+    await withFake(async () => {
+      const beforeRequests = requests.length;
+      await runReceivingCnSyncOnce(client.db);
+      assert.equal(requests.length, beforeRequests); // no getProcess call
+      const wf = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_cn_workflows WHERE id = 'wf-off'`);
+      assert.equal(wf!.status, "workflow_running");
+    });
+  } finally {
+    _setCnReceivingForTests(true);
+  }
 });
 
 test("cron: legacy workflow without batch_no still finalizes via invoice_no fallback", async () => {

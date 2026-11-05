@@ -449,7 +449,7 @@ finalize insert idempotent); index on `status`; composite FK on
 CN upload tracking — one row per DocPal workflow kick (phase `excel` today,
 `pdf` in phase 2). The status cron (`src/jobs/receivingCnSync.ts`) polls
 `workflow_running` rows against DocPal and finalizes the CN order on
-completion.
+completion (no-op while the flow-config `receiving-cn` step is off).
 
 | Field | Type | Description |
 | --- | --- | --- |
