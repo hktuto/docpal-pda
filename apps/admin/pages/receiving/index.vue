@@ -8,7 +8,7 @@ const { t } = useI18n();
 const rows = ref<ReceivingOrderRow[]>([]);
 const loading = ref(false);
 const error = ref("");
-const status = ref<string[]>([]);
+const status = ref<string[]>(["pending", "in_hand"]);
 const search = ref("");
 const selected = ref<Set<string>>(new Set());
 
