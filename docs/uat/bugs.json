@@ -516,5 +516,19 @@
   "closedDate": "2026-11-05",
   "tester": "",
   "remarks": "Fixed by spec docs/superpowers/specs/2026-11-05-allocation-dock-match-ordering-design.md (qty perfect match now gated to oldest dock date code; shelf lots pure FIFO); retest in UAT"
+ },
+ {
+  "id": "BUG-038",
+  "dateFound": "2026-11-05",
+  "functionId": "ADM-026",
+  "description": "Picking Re-allocate rebuilt other orders sharing the same part numbers instead of only the selected order — their allocations were silently reshuffled",
+  "reproSteps": "Open picking order A, press Re-allocate → orders B/C with the same part numbers also get their allocation rows wiped and rebuilt (priority/FIFO re-split)",
+  "severity": "Major",
+  "status": "Closed",
+  "retestResult": "",
+  "owner": "dev",
+  "closedDate": "2026-11-05",
+  "tester": "",
+  "remarks": "Fixed in commit 5b504f4e (11-05) — Re-allocate is now strictly single-order (spec docs/superpowers/specs/2026-11-05-picking-reallocate-single-order-design.md); receiving confirm-arrival keeps the part-key scope by design; retest in UAT"
  }
 ]
