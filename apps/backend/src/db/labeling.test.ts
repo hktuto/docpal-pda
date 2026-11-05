@@ -10,6 +10,7 @@ import {
   addAllUnboxedToShippingBox,
   createShippingBox,
   finishLabeling,
+  finishLabelPrinting,
   finishPickingOrder,
   getPickingOrderDetail,
   listLabelingOrders,
@@ -97,6 +98,8 @@ async function insertRule(opts: {
 
 interface LabelingState {
   status: string;
+  labelPrintingPending: boolean;
+  labelPrintingDoneAt: Date | null;
   labelingPending: boolean;
   labelingDoneAt: Date | null;
   labelingDoneBy: string | null;
@@ -105,7 +108,10 @@ interface LabelingState {
 async function labelingStateOf(orderId: string): Promise<LabelingState> {
   const row = await queryGet<LabelingState>(
     client.db,
-    sql`SELECT status, labeling_pending AS "labelingPending",
+    sql`SELECT status,
+               label_printing_pending AS "labelPrintingPending",
+               label_printing_done_at AS "labelPrintingDoneAt",
+               labeling_pending AS "labelingPending",
                labeling_done_at AS "labelingDoneAt", labeling_done_by AS "labelingDoneBy"
         FROM picking_orders WHERE id = ${orderId}`
   );
@@ -137,28 +143,50 @@ async function packedOrder(): Promise<{ orderId: string; actorId: string; boxId:
   return { orderId, actorId, boxId: box.id };
 }
 
-test("finish with a matching rule + step on: labeling_pending set, no verify task, box held from measuring", async () => {
+test("finish with a matching internal rule: label-printing queue first, then labeling; no verify task, box held from measuring", async () => {
   const ruleId = await insertRule({ name: "carton", labelType: "carton" });
   const { orderId, actorId, boxId } = await packedOrder();
 
-  // measuring OFF + verify ON: without labeling the finish would spawn the task
+  // measuring OFF + verify ON: without the label stages the finish would spawn the task
   _setFlowStepsDisabledForTests(["measuring"]);
   const result = await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
-  assert.deepEqual(result, { id: orderId, status: "picking_finished", labelingPending: true });
+  // internal rule (default label_source) + label-printing step on (default) →
+  // the printing queue comes first (spec 2026-11-02-label-printing-step-design.md)
+  assert.deepEqual(result, { id: orderId, status: "picking_finished", labelPrintingPending: true, labelingPending: false });
 
-  const state = await labelingStateOf(orderId);
-  assert.equal(state.labelingPending, true);
+  let state = await labelingStateOf(orderId);
+  assert.equal(state.labelPrintingPending, true);
+  assert.equal(state.labelingPending, false);
   assert.equal(state.labelingDoneAt, null);
   assert.equal(state.labelingDoneBy, null);
-  assert.equal(await verifyTaskOf(boxId), undefined); // deferred to labeling finish
+  assert.equal(await verifyTaskOf(boxId), undefined); // deferred to the label stages
 
-  const log = await queryGet<{ fromState: string; toState: string; metadata: { ruleIds?: string[] } }>(
+  const printLog = await queryGet<{ fromState: string; toState: string; metadata: { ruleIds?: string[] } }>(
+    client.db,
+    sql`SELECT from_state AS "fromState", to_state AS "toState", metadata
+        FROM transaction_logs WHERE entity_type = 'picking_order' AND entity_id = ${orderId} AND to_state = 'label_printing_pending'`
+  );
+  assert.equal(printLog!.fromState, "picking_finished");
+  assert.deepEqual(printLog!.metadata.ruleIds, [ruleId]);
+
+  // printing finish hands the order to the labeling queue (the finish-time
+  // internal-match snapshot guarantees entry, live rules re-resolved for ids)
+  const printed = await finishLabelPrinting(client.db, { pickingOrderId: orderId, actorId });
+  assert.deepEqual(printed, { id: orderId, status: "picking_finished", labelPrintingPending: false, labelingPending: true });
+
+  state = await labelingStateOf(orderId);
+  assert.equal(state.labelPrintingPending, false);
+  assert.ok(state.labelPrintingDoneAt);
+  assert.equal(state.labelingPending, true);
+  assert.equal(await verifyTaskOf(boxId), undefined); // still deferred to labeling finish
+
+  const labelLog = await queryGet<{ fromState: string; toState: string; metadata: { ruleIds?: string[] } }>(
     client.db,
     sql`SELECT from_state AS "fromState", to_state AS "toState", metadata
         FROM transaction_logs WHERE entity_type = 'picking_order' AND entity_id = ${orderId} AND to_state = 'labeling_pending'`
   );
-  assert.equal(log!.fromState, "picking_finished");
-  assert.deepEqual(log!.metadata.ruleIds, [ruleId]);
+  assert.equal(labelLog!.fromState, "label_printing_done");
+  assert.deepEqual(labelLog!.metadata.ruleIds, [ruleId]);
 
   // measuring ON: the same flag keeps the box out of the measuring queue
   _setFlowStepsDisabledForTests([]);
@@ -166,28 +194,32 @@ test("finish with a matching rule + step on: labeling_pending set, no verify tas
   assert.equal(measuring.some((g) => g.boxes.some((b) => b.boxId === boxId)), false);
 
   const detail = await getPickingOrderDetail(client.db, orderId);
+  assert.equal(detail.labelPrintingPending, false);
   assert.equal(detail.labelingPending, true);
   assert.equal(detail.labelingDoneAt, null);
   assert.equal(detail.labelingDoneBy, null);
   assert.equal(detail.labelingDoneByName, null);
 });
 
-test("finish with no matching rule: old behavior (flag false, verify task spawned when measuring off)", async () => {
+test("finish with no matching rule: old behavior (flags false, verify task spawned when measuring off)", async () => {
   const { orderId, actorId, boxId } = await packedOrder();
   _setFlowStepsDisabledForTests(["measuring"]);
   const result = await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
-  assert.deepEqual(result, { id: orderId, status: "picking_finished", labelingPending: false });
+  assert.deepEqual(result, { id: orderId, status: "picking_finished", labelPrintingPending: false, labelingPending: false });
   assert.equal((await labelingStateOf(orderId)).labelingPending, false);
   assert.equal((await verifyTaskOf(boxId))!.status, "pending");
 });
 
-test("finish with the labeling step disabled: rule matches but the flag stays false", async () => {
+test("finish with the label stages disabled: rule matches but the flags stay false", async () => {
   await insertRule({ name: "carton", labelType: "carton" });
   const { orderId, actorId, boxId } = await packedOrder();
-  _setFlowStepsDisabledForTests(["measuring", "labeling"]);
+  _setFlowStepsDisabledForTests(["measuring", "label-printing", "labeling"]);
   const result = await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
+  assert.equal(result.labelPrintingPending, false);
   assert.equal(result.labelingPending, false);
-  assert.equal((await labelingStateOf(orderId)).labelingPending, false);
+  const state = await labelingStateOf(orderId);
+  assert.equal(state.labelPrintingPending, false);
+  assert.equal(state.labelingPending, false);
   assert.equal((await verifyTaskOf(boxId))!.status, "pending");
 });
 
@@ -196,6 +228,12 @@ test("finishLabeling: happy path stamps done at/by and spawns the deferred verif
   const { orderId, actorId, boxId } = await packedOrder();
   _setFlowStepsDisabledForTests(["measuring"]);
   await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
+  assert.equal((await labelingStateOf(orderId)).labelPrintingPending, true);
+  assert.equal(await verifyTaskOf(boxId), undefined);
+
+  // through the printing stage into labeling
+  const printed = await finishLabelPrinting(client.db, { pickingOrderId: orderId, actorId });
+  assert.equal(printed.labelingPending, true);
   assert.equal(await verifyTaskOf(boxId), undefined);
 
   const result = await finishLabeling(client.db, { pickingOrderId: orderId, actorId });
@@ -222,6 +260,21 @@ test("finishLabeling: happy path stamps done at/by and spawns the deferred verif
   const again = await catchHttp(finishLabeling(client.db, { pickingOrderId: orderId, actorId }));
   assert.equal(again.status, 409);
   assert.equal(again.message, "labeling_not_pending");
+});
+
+test("finishLabelPrinting: 404 unknown order, 409 when not printing-pending", async () => {
+  const actorId = await actorIdOf();
+  const notFound = await catchHttp(finishLabelPrinting(client.db, { pickingOrderId: randomUUID(), actorId }));
+  assert.equal(notFound.status, 404);
+  assert.equal(notFound.message, "picking_order_not_found");
+
+  // finished without any rule → never entered label printing
+  const { orderId } = await packedOrder();
+  _setFlowStepsDisabledForTests(["measuring"]);
+  await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
+  const notPending = await catchHttp(finishLabelPrinting(client.db, { pickingOrderId: orderId, actorId }));
+  assert.equal(notPending.status, 409);
+  assert.equal(notPending.message, "label_printing_not_pending");
 });
 
 test("finishLabeling: 404 unknown order, 409 when not labeling-pending", async () => {
@@ -284,16 +337,19 @@ test("cross-order box: verify task waits for BOTH orders' labeling", async () =>
   assert.equal(groups.some((g) => g.boxes.some((b) => b.boxId === boxId)), true);
 });
 
-test("admin status override clears labeling_pending (keeps done at/by)", async () => {
+test("admin status override clears the label-stage flags (keeps done at/by)", async () => {
   await insertRule({ name: "carton", labelType: "carton" });
   const { orderId, actorId } = await packedOrder();
   await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
-  assert.equal((await labelingStateOf(orderId)).labelingPending, true);
+  const pending = await labelingStateOf(orderId);
+  assert.equal(pending.labelPrintingPending, true);
+  assert.equal(pending.labelingPending, false);
 
   const adminId = await actorIdOf("admin");
   await overridePickingOrderStatus(client.db, { orderId, status: "shipped", actorId: adminId });
   const state = await labelingStateOf(orderId);
   assert.equal(state.status, "shipped");
+  assert.equal(state.labelPrintingPending, false);
   assert.equal(state.labelingPending, false);
   assert.equal(state.labelingDoneAt, null); // untouched
 });
@@ -303,6 +359,12 @@ test("listLabelingOrders: only pending rows, shape, live matches, search, paging
   const itemRuleId = await insertRule({ name: "item", labelType: "item" });
   const { orderId, actorId } = await packedOrder();
   await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
+
+  // the finish enters the PRINTING queue first — no labeling rows yet
+  assert.equal((await listLabelingOrders(client.db, {})).total, 0);
+
+  // printing finish moves it into the labeling queue
+  await finishLabelPrinting(client.db, { pickingOrderId: orderId, actorId });
 
   const { rows, total } = await listLabelingOrders(client.db, {});
   assert.equal(total, 1);

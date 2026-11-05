@@ -42,6 +42,18 @@ async function operatorToken(): Promise<string> {
   return (await res.json()).token as string;
 }
 
+/** /admin/* is admin-group gated (audit 2026-11-03 #1) — user-profiles
+ *  management needs an admin token, not the operator one. */
+async function adminToken(): Promise<string> {
+  const res = await app.request("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "admin", password: "DocPalAdmin2026!" }),
+  });
+  assert.equal(res.status, 200);
+  return (await res.json()).token as string;
+}
+
 function authed(token: string, path: string, init?: RequestInit) {
   return app.request(path, {
     ...init,
@@ -333,7 +345,7 @@ test("PUT /auth/me/profile: validation + unknown pairs → 400 unknown_sub_inven
 
 test("PUT /admin/user-profiles/:username: pre-provisions a profile before login", async () => {
   await reseed(client);
-  const token = await operatorToken();
+  const token = await adminToken();
 
   const res = await authed(token, "/admin/user-profiles/ghost-user", {
     method: "PUT",
