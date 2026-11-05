@@ -329,6 +329,35 @@ test("allocated order: work lock acquires and the first scan moves allocated →
   assert.equal(log!.fromState, "allocated");
 });
 
+test("scan: source with NULL lot_code/coo/cow and no scan overrides succeeds", async () => {
+  // Regression (BUG-039): `p.lotCode ?? input.lotCode` evaluated to undefined
+  // when the source row's nullable column was NULL and the scan body omitted
+  // the field (the PDA adapter drops absent keys from the JSON) — the sql
+  // template silently dropped the chunk and the picking_packages INSERT
+  // failed with malformed SQL (empty VALUES slot).
+  const orderId = await seedAllocatedOrder("nullattrs");
+  const operatorId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`)
+  )!.id;
+  const item = (await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM picking_items WHERE picking_order_id = ${orderId}`
+  ))!;
+  const alloc = (await allocationRows(orderId))[0];
+
+  await scanPickingItem(client.db, item.id, { actorId: operatorId, allocationId: alloc.id, qty: 50 });
+
+  const pkg = await queryGet<{ qty: number; lotCode: string | null; coo: string | null; cow: string | null }>(
+    client.db,
+    sql`SELECT qty, lot_code AS "lotCode", coo, cow FROM picking_packages WHERE picking_item_id = ${item.id}`
+  );
+  assert.ok(pkg, "package row created");
+  assert.equal(pkg!.qty, 50);
+  assert.equal(pkg!.lotCode, null);
+  assert.equal(pkg!.coo, null);
+  assert.equal(pkg!.cow, null);
+});
+
 test("allocateForPickingOrder rebuilds a locked (allocated) order's stale rows", async () => {
   const orderId = await seedAllocatedOrder("realloc");
   assert.equal((await patchStatus(orderId, "allocated")).status, 200);

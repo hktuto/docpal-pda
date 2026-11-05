@@ -1758,9 +1758,14 @@ export async function scanPickingItem(
     for (const p of portions) {
       const pid = newId();
       const dateCode = p.dateCode ?? scannedLabelDateCode;
-      const lotCode = p.lotCode ?? input.lotCode;
-      const coo = p.coo ?? input.coo;
-      const cow = p.cow ?? input.cow;
+      // `?? null` matters: the source attrs are nullable DB columns (null when
+      // unset) and the scan body fields are optional (undefined when omitted —
+      // the PDA adapter drops absent keys). `null ?? undefined` would pass
+      // undefined into the sql template, which silently drops the chunk and
+      // emits a malformed INSERT (empty VALUES slot → Postgres syntax error).
+      const lotCode = p.lotCode ?? input.lotCode ?? null;
+      const coo = p.coo ?? input.coo ?? null;
+      const cow = p.cow ?? input.cow ?? null;
       // Empty scanned fields normalize to NULL — the scanned_* columns mean
       // "the label carried this value" and NULL drives the verify/measuring
       // fallback to the stored source snapshot (legacy behavior). The scanned
