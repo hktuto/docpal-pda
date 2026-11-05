@@ -18,13 +18,14 @@ interface BugReportRow {
   category: string | null;
   status: string;
   reporter: string;
+  warehouseCode: string;
   uatRef: string | null;
   hasPhoto: boolean;
 }
 
 interface BugReportDetail extends BugReportRow {
   note: string;
-  context: { userAgent?: string; sessionId?: string } | null;
+  context: { userAgent?: string; sessionId?: string; apiBaseUrl?: string; server?: Record<string, unknown> } | null;
   trail: { t: number; k: string; m: string; r: string }[];
   photo: string | null;
   photoMime: string | null;
@@ -85,6 +86,9 @@ const { table, resetColumnState } = useAdminTable({
 // --- detail dialog ---------------------------------------------------------
 
 const detail = ref<BugReportDetail | null>(null);
+const contextJson = computed(() =>
+  detail.value?.context ? JSON.stringify(detail.value.context, null, 1) : "—"
+);
 const editStatus = ref("open");
 const editUatRef = ref("");
 const saving = ref(false);
@@ -193,7 +197,7 @@ async function deleteDetail() {
 
         <div class="meta">
           <span>{{ formatDateTime(detail.createdDate) }}</span>
-          <span>{{ detail.app }} → {{ detail.route }}</span>
+          <span>{{ detail.warehouseCode }} · {{ detail.app }} → {{ detail.route }}</span>
           <span v-if="detail.category">{{ $t(`bugReport.categories.${detail.category}`) }}</span>
         </div>
 
@@ -201,9 +205,7 @@ async function deleteDetail() {
         <p class="note">{{ detail.note }}</p>
 
         <h3>{{ $t("bugQueue.context") }}</h3>
-        <p class="mono small">
-          session {{ detail.context?.sessionId ?? "—" }} · {{ detail.context?.userAgent ?? "—" }}
-        </p>
+        <pre class="trail">{{ contextJson }}</pre>
 
         <h3>{{ $t("bugQueue.trail") }}</h3>
         <pre class="trail">{{
@@ -351,13 +353,6 @@ async function deleteDetail() {
 .note {
   margin: 0;
   white-space: pre-wrap;
-}
-.mono {
-  font-family: monospace;
-}
-.small {
-  font-size: 0.75rem;
-  word-break: break-all;
 }
 .trail {
   margin: 0;

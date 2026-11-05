@@ -66,6 +66,7 @@
 <script setup lang="ts">
 import { categoriesForRoute } from "~/utils/bugReportCategories";
 import { getTrail, getSessionId } from "~/utils/activityLog";
+import { getApiBaseUrl } from "~/utils/serverHost";
 import { useErrorMessage } from "~/composables/errorMessage";
 
 const props = defineProps<{ modelValue: boolean }>();
@@ -148,7 +149,12 @@ async function onSubmit() {
       route: route.fullPath,
       category: category.value,
       note: note.value.trim(),
-      context: { userAgent: navigator.userAgent, sessionId: getSessionId() },
+      context: {
+        userAgent: navigator.userAgent,
+        sessionId: getSessionId(),
+        // which backend the device was talking to (first-launch server picker)
+        apiBaseUrl: getApiBaseUrl(),
+      },
       trail: getTrail(),
       photo: photo.value,
       photoMime: photoMime.value,

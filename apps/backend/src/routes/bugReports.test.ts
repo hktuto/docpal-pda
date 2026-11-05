@@ -10,6 +10,9 @@ import { setupTestDb, TEST_DATABASE_URL, type TestDb } from "../db/test-helper.j
 import { queryGet } from "../db/query.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
+// Stamp the warehouse explicitly — the local apps/backend/.env WAREHOUSE_CODE
+// must not leak into assertions (dotenv/config never overrides set vars).
+process.env.WAREHOUSE_CODE = "TestWh";
 
 let client: TestDb;
 let app: (typeof import("../index.js"))["app"];
@@ -59,13 +62,20 @@ test("operator can file a report; reporter comes from the token, not the body", 
   const res = await call(operatorToken, "POST", "/bug-reports", { ...base, reporter: "mallory" });
   assert.equal(res.status, 201);
   const { id } = await res.json();
-  const row = await queryGet<{ reporter: string; status: string; category: string; note: string }>(
+  const row = await queryGet<{ reporter: string; status: string; category: string; note: string; warehouse_code: string; context: any }>(
     client.db,
-    sql`SELECT reporter, note, status, category FROM bug_reports WHERE id = ${id}`
+    sql`SELECT reporter, note, status, category, warehouse_code, context FROM bug_reports WHERE id = ${id}`
   );
   assert.equal(row?.reporter, "operator");
   assert.equal(row?.status, "open");
   assert.equal(row?.category, "scan_failed");
+  // Stamped server-side from WAREHOUSE_CODE, lowercased.
+  assert.equal(row?.warehouse_code, "testwh");
+  // context.server = debug snapshot: warehouse + actor groups + flow config.
+  assert.equal(row?.context.server.warehouseCode, "testwh");
+  assert.ok(Array.isArray(row?.context.server.groupCodes));
+  assert.equal(typeof row?.context.server.flow.dateCodeFormat, "string");
+  assert.equal(typeof row?.context.server.flow.flowSteps.picking, "boolean");
 });
 
 test("validation: empty note 400, bad category 400, bad app 400", async () => {

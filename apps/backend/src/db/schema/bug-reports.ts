@@ -20,6 +20,10 @@ export const bugReports = pgTable(
     category: text("category"), // snake_case vocabulary; NULL = pre-feature rows
     note: text("note").notNull(),
     reporter: text("reporter").notNull(), // username from the JWT, never the body (no FK — DocPal users)
+    // Instance stamp from WAREHOUSE_CODE env (same reading as receivingCn.ts).
+    // Server-side only — future upstream sync merges rows across warehouses
+    // (uuid ids + this column keep them distinguishable).
+    warehouseCode: text("warehouse_code").notNull().default("hk"),
     context: jsonb("context").notNull().default(sql`'{}'::jsonb`), // {userAgent, sessionId, appVersion}
     trail: jsonb("trail").notNull().default(sql`'[]'::jsonb`), // activity ring buffer snapshot
     photo: text("photo"), // base64, server-capped

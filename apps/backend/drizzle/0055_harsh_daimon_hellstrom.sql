@@ -1,0 +1,1 @@
+ALTER TABLE "bug_reports" ADD COLUMN "warehouse_code" text DEFAULT 'hk' NOT NULL;

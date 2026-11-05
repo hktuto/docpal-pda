@@ -840,8 +840,8 @@ incoming-webhook fire-and-forget on insert.
 
 | Endpoint | Description |
 |---|---|
-| `POST /bug-reports` | `{app, route, category, note, context, trail, photo?, photoMime?}` → `{id}` (201). Reporter = JWT username, never the body. 400 empty note / bad app / unknown category, 413 trail > 200 KB or photo > 5 MB (base64). Categories: `scan_failed` \| `date_code` \| `wrong_data` \| `missing_data` \| `duplicate` \| `label_print` \| `blocked` \| `slow` \| `ui_text` \| `login` \| `other` |
-| `GET /admin/bug-reports?status=&category=` | Light list newest-first (no trail/note/photo; `hasPhoto` flag), max 500 rows. |
+| `POST /bug-reports` | `{app, route, category, note, context, trail, photo?, photoMime?}` → `{id}` (201). Reporter + groups come from the JWT, never the body; `warehouse_code` column and `context.server` = `{warehouseCode, groupCodes, flow: {allowedOrgIds, dateCodeFormat, flowSteps}}` snapshot are stamped server-side at insert (debug context + future cross-warehouse upstream sync). 400 empty note / bad app / unknown category, 413 trail > 200 KB or photo > 5 MB (base64). Categories: `scan_failed` \| `date_code` \| `wrong_data` \| `missing_data` \| `duplicate` \| `label_print` \| `blocked` \| `slow` \| `ui_text` \| `login` \| `other` |
+| `GET /admin/bug-reports?status=&category=` | Light list newest-first (no trail/note/photo; `hasPhoto` flag + `warehouseCode`), max 500 rows. |
 | `GET /admin/bug-reports/:id` | Full row incl. note, context, trail, photo (base64). |
 | `PATCH /admin/bug-reports/:id` | `{status?, uatRef?, category?}` — queue status `open` → `triaged` → `closed`. |
 | `DELETE /admin/bug-reports/:id` | Remove a report. |

@@ -27,7 +27,7 @@ bugReportsRoute.post("/bug-reports", async (c) => {
       photoBase64: typeof body.photo === "string" && body.photo !== "" ? body.photo : null,
       photoMime: typeof body.photoMime === "string" ? body.photoMime : null,
     },
-    actorFrom(c).username
+    actorFrom(c)
   );
   return c.json(result, 201);
 });

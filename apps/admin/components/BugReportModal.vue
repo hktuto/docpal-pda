@@ -129,7 +129,11 @@ async function submit() {
       route: route.fullPath,
       category: category.value,
       note: note.value.trim(),
-      context: { userAgent: navigator.userAgent, sessionId: getSessionId() },
+      context: {
+        userAgent: navigator.userAgent,
+        sessionId: getSessionId(),
+        apiBaseUrl: useRuntimeConfig().public.apiBaseUrl as string,
+      },
       trail: getTrail(),
       photo: photo.value,
       photoMime: photoMime.value,

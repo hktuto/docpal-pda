@@ -1,6 +1,8 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import type { AppDb } from "../db.js";
+import { allowedOrgIds, dateCodeFormat, FLOW_STEPS, isStepEnabled } from "../config.js";
+import type { AuthTokenUser } from "../auth/jwt.js";
 import { bugReports } from "./schema/index.js";
 import { newId } from "./id.js";
 import { now } from "./now.js";
@@ -40,11 +42,16 @@ export interface BugReportInput {
   photoMime: string | null;
 }
 
-/** Validate + insert. `reporter` is the JWT username — never read from body. */
+/**
+ * Validate + insert. `actor` is the JWT user — reporter/groups are never
+ * read from the body. `context.server` is stamped here (authoritative):
+ * warehouse code, actor groups, and the resolved flow-config snapshot at
+ * report time — the cheap way to see HK-vs-SZ config drift while debugging.
+ */
 export async function createBugReport(
   db: AppDb,
   input: BugReportInput,
-  reporter: string
+  actor: AuthTokenUser
 ): Promise<{ id: string }> {
   const note = (input.note ?? "").toString().trim();
   if (note === "") throw new HTTPException(400, { message: "note is required" });
@@ -69,14 +76,29 @@ export async function createBugReport(
   }
 
   const id = newId();
+  const warehouseCode = (process.env.WAREHOUSE_CODE ?? "hk").toLowerCase();
+  const context = {
+    ...(input.context ?? {}),
+    server: {
+      warehouseCode,
+      groupCodes: actor.groupCodes,
+      flow: {
+        allowedOrgIds: allowedOrgIds(),
+        dateCodeFormat: dateCodeFormat(),
+        flowSteps: Object.fromEntries(FLOW_STEPS.map((s) => [s, isStepEnabled(s)])),
+      },
+    },
+  };
   await db.insert(bugReports).values({
     id,
     app: input.app,
     route: (input.route ?? "").toString(),
     category: input.category,
     note,
-    reporter,
-    context: (input.context ?? {}) as object,
+    reporter: actor.username,
+    // Same reading as receivingCn.ts: lowercased env selector, HK default.
+    warehouseCode,
+    context,
     trail: JSON.parse(trailJson) as object,
     photo,
     photoMime: input.photoMime,
@@ -90,7 +112,7 @@ export async function createBugReport(
     void fetch(webhook, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reporter, app: input.app, route: input.route, category: input.category, note: note.slice(0, 200) }),
+      body: JSON.stringify({ reporter: actor.username, app: input.app, route: input.route, category: input.category, warehouse: warehouseCode, note: note.slice(0, 200) }),
     }).catch(() => {});
   }
   return { id };
@@ -113,6 +135,7 @@ export async function listBugReports(
       category: bugReports.category,
       status: bugReports.status,
       reporter: bugReports.reporter,
+      warehouseCode: bugReports.warehouseCode,
       uatRef: bugReports.uatRef,
       hasPhoto: sql<boolean>`photo IS NOT NULL`,
     })

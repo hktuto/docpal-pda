@@ -374,7 +374,7 @@ export interface BugReportInput {
   route: string;
   category: string | null;
   note: string;
-  context: { userAgent: string; sessionId: string; appVersion?: string };
+  context: { userAgent: string; sessionId: string; appVersion?: string; apiBaseUrl?: string };
   trail: unknown[];
   photo?: string | null;
   photoMime?: string | null;
