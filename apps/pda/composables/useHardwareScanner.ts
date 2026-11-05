@@ -4,9 +4,7 @@ import { ScannerBroadcast } from './useScannerBroadcast';
 import { playScanError, playScanSuccess } from '~/utils/scanBeep';
 import { resolveOrderScanRoute } from '~/utils/orderScanRoute';
 import { pushLog } from '~/utils/activityLog';
-
-/** After a broadcast scan, consume wedge key echo for this long (ms). */
-const WEDGE_SUPPRESS_MS = 1500;
+import { createIdleTimer, createWedgeSuppressor, isInputElement } from '~/utils/scannerWedge';
 
 export interface UseHardwareScannerOptions {
   /**
@@ -28,16 +26,6 @@ export interface UseHardwareScannerOptions {
    * some scanner models emit as prefix/suffix characters).
    */
   ignoreKey?: (event: KeyboardEvent) => boolean;
-}
-
-function isInputElement(target: EventTarget | null): boolean {
-  if (target == null || typeof target !== 'object') return false;
-  const el = target as Record<string, unknown>;
-  const tagName = String(el.tagName ?? '').toLowerCase();
-  if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
-    return true;
-  }
-  return Boolean(el.isContentEditable);
 }
 
 interface ActiveScannerInstance {
@@ -106,24 +94,17 @@ function fillFocusedInput(value: string): boolean {
 
 export function useHardwareScanner(options: UseHardwareScannerOptions) {
   const buffer = ref('');
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let suppressWedgeUntil = 0;
   let broadcastHandle: PluginListenerHandle | null = null;
   let unmounted = false;
 
-  function resetIdleTimer() {
-    if (timeoutId) clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => {
-      buffer.value = '';
-    }, options.idleTimeoutMs ?? 300);
-  }
-
-  function clearIdleTimer() {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
-  }
+  // Wedge/idle plumbing shared with useOrderScanNav via utils/scannerWedge
+  // so the two listeners can't drift apart (audit 2026-11-06 #10).
+  const idle = createIdleTimer(options.idleTimeoutMs ?? 300, () => {
+    buffer.value = '';
+  });
+  const wedge = createWedgeSuppressor();
+  const resetIdleTimer = () => idle.reset();
+  const clearIdleTimer = () => idle.clear();
 
   async function deliver(source: string, value: string) {
     console.log(`[SCAN-TIME] ${source}:`, value);
@@ -165,7 +146,7 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
     clearIdleTimer();
     buffer.value = '';
     // Eat the wedge echo if the device outputs broadcast + keyboard combined.
-    suppressWedgeUntil = Date.now() + WEDGE_SUPPRESS_MS;
+    wedge.mark();
     if (fillFocusedInput(value)) {
       console.log('[SCAN-TIME] broadcast scan → focused input:', value);
       pushLog('scan', `broadcast → input: ${value}`);
@@ -182,7 +163,7 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
     if (isInputElement(event.target)) return;
 
     // Wedge echo suppression window after a broadcast scan (see onBroadcastScan).
-    if (Date.now() < suppressWedgeUntil) {
+    if (wedge.suppressed()) {
       if (event.key === 'Enter' || event.key.length === 1) event.preventDefault();
       return;
     }

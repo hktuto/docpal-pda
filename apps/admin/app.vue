@@ -98,6 +98,7 @@ function toggle(sectionTitle: string, links: { route: string }[]) {
 }
 
 function logout() {
+  disconnectAdminEvents();
   localStorage.removeItem("admin_token");
   localStorage.removeItem("admin_user");
   user.value = null;

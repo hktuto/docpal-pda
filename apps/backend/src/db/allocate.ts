@@ -722,33 +722,37 @@ export async function allocateForReceivingOrder(db: AppDb, receivingOrderId: str
  */
 export async function allocateForPickingOrder(db: AppDb, pickingOrderId: string): Promise<ScopedAllocateResult> {
   const startedAt = Date.now();
-  const order = await queryGet<{
-    id: string;
-    status: string;
-    workingBy: string | null;
-    workingAt: Date | null;
-    holderName: string | null;
-  }>(
-    db,
-    sql`SELECT po.id, po.status, po.working_by AS "workingBy", po.working_at AS "workingAt",
-               u.display_name AS "holderName"
-        FROM picking_orders po
-        LEFT JOIN users u ON u.id = po.working_by
-        WHERE po.id = ${pickingOrderId}`
-  );
-  if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
-  if (order.status !== "pending" && order.status !== "picking" && order.status !== "allocated") {
-    throw new HTTPException(409, { message: "order_not_open" });
-  }
-  if (order.workingBy && order.workingAt && order.workingAt >= workLockExpiry()) {
-    throw new HTTPException(409, {
-      res: new Response(
-        JSON.stringify({ error: "lock_held", holderId: order.workingBy, holderName: order.holderName }),
-        { status: 409, headers: { "content-type": "application/json" } }
-      ),
-    });
-  }
+  // The status + work-lock check lives INSIDE the transaction, locking the
+  // order row, so a PDA claim can't land between the check and the wipe
+  // (audit 2026-11-06 #12). The claim UPDATE in picking.ts locks the same row.
   return db.transaction(async (tx) => {
+    const order = await queryGet<{
+      id: string;
+      status: string;
+      workingBy: string | null;
+      workingAt: Date | null;
+      holderName: string | null;
+    }>(
+      tx,
+      sql`SELECT po.id, po.status, po.working_by AS "workingBy", po.working_at AS "workingAt",
+                 u.display_name AS "holderName"
+          FROM picking_orders po
+          LEFT JOIN users u ON u.id = po.working_by
+          WHERE po.id = ${pickingOrderId}
+          FOR UPDATE OF po`
+    );
+    if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+    if (order.status !== "pending" && order.status !== "picking" && order.status !== "allocated") {
+      throw new HTTPException(409, { message: "order_not_open" });
+    }
+    if (order.workingBy && order.workingAt && order.workingAt >= workLockExpiry()) {
+      throw new HTTPException(409, {
+        res: new Response(
+          JSON.stringify({ error: "lock_held", holderId: order.workingBy, holderName: order.holderName }),
+          { status: 409, headers: { "content-type": "application/json" } }
+        ),
+      });
+    }
     const keyRows = await queryAll<{ partKey: string }>(
       tx,
       sql`SELECT DISTINCT part_no AS "partKey" FROM picking_items WHERE picking_order_id = ${pickingOrderId}`

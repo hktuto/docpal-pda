@@ -10,6 +10,15 @@ import { docpalBaseUrl } from "./config.js";
 import { logDocpalConnectivity } from "./auth/docpal.js";
 const port = Number(process.env.PORT ?? 3002);
 
+// Fail closed in production (audit 2026-11-06 #2): the built-in dev JWT
+// secret is a repo constant, so a forgotten AUTH_SECRET would let anyone with
+// repo access forge admin tokens. Dev/test runs (DEV_ROUTES unset) keep
+// zero-config.
+if (process.env.DEV_ROUTES === "off" && !process.env.AUTH_SECRET) {
+  console.error("[auth] AUTH_SECRET is required when DEV_ROUTES=off — refusing to start with the built-in dev secret.");
+  process.exit(1);
+}
+
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`backend listening on http://localhost:${info.port}`);
   if (docpalBaseUrl()) {

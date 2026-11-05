@@ -59,19 +59,6 @@ export const ScannerConfig = registerPlugin<ScannerConfigPlugin>("ScannerConfig"
     } as ScannerConfigPlugin),
 });
 
-let deviceInfoPromise: Promise<ScannerDeviceInfo> | null = null;
-
-/** Cached native device/scanner-platform info (never changes at runtime). */
-export function getScannerDeviceInfo(): Promise<ScannerDeviceInfo> {
-  if (!deviceInfoPromise) {
-    deviceInfoPromise = ScannerConfig.getDeviceInfo().catch((e) => {
-      console.warn("[ScannerConfig] getDeviceInfo failed", e);
-      return { brand: "", manufacturer: "", model: "", platform: "none" as const };
-    });
-  }
-  return deviceInfoPromise;
-}
-
 // Serialize apply/restore so page-leave restoreAll and page-enter apply can't
 // interleave into a stale state.
 let lastOp: Promise<void> = Promise.resolve();

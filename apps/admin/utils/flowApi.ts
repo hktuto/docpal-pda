@@ -31,6 +31,13 @@ export interface PickingOrderRow {
   /** Any allocation whose source date code is older than the outdated-stock
    *  threshold (spec 2026-10-20). */
   hasOutdatedAllocations: boolean;
+  /** Issue banner columns, carried by GET /picking-orders since audit
+   *  2026-11-06 #8 (the issues page renders them without a detail fetch). */
+  issueReason?: string | null;
+  issueQty?: number | null;
+  issuePackSize?: number | null;
+  issueNote?: string | null;
+  issueReportedAt?: string | null;
   createdDate: string;
   lastUpdateDate: string;
 }
@@ -816,25 +823,6 @@ function cnApiBaseUrl(): string {
 function cnAuthHeaders(): Record<string, string> {
   const token = import.meta.client ? localStorage.getItem("admin_token") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-/** POST /admin/receiving-cn/excel — original file + the verified payload JSON
- *  (field `data`). 400 invalid_payload / file_required; 502 docpal_workflow: …;
- *  500 docpal_workflow_token_not_configured. Returns the created workflow row. */
-export async function submitCnExcelUpload(file: File, data: unknown): Promise<CnWorkflowRow> {
-  const form = new FormData();
-  form.append("file", file, file.name);
-  form.append("data", JSON.stringify(data));
-  const res = await fetch(`${cnApiBaseUrl()}/admin/receiving-cn/excel`, {
-    method: "POST",
-    headers: cnAuthHeaders(),
-    body: form,
-  });
-  if (!res.ok) {
-    const text = (await res.text()).trim();
-    throw new Error(text || `Request failed (${res.status})`);
-  }
-  return (await res.json()) as CnWorkflowRow;
 }
 
 /** POST /admin/receiving-cn/pdf — the scanned receiving confirmation PDF(s)

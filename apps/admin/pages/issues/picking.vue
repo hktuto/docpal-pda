@@ -1,44 +1,41 @@
 <script setup lang="ts">
-import type { PickingOrderDetail, PickingOrderRow } from "~/utils/flowApi";
+import type { PickingOrderRow } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const flow = useFlowApi();
 const { t } = useI18n();
 
-// List rows carry no issue_* fields, so the detail of each status=issue order
-// is fetched alongside (issue orders are rare — N+1 is fine here).
-interface IssueRow {
-  order: PickingOrderRow;
-  detail: PickingOrderDetail;
-}
+// issue_* are plain picking_orders columns carried on the list rows
+// (audit 2026-11-06 #8) — no per-order detail fetch.
+type IssueRow = PickingOrderRow;
 
 const rows = ref<IssueRow[]>([]);
 const loading = ref(false);
 const error = ref("");
 const resolving = ref<Record<string, boolean>>({});
 
-// accessors resolve the order/detail-derived values used for sorting.
+// accessors resolve the order-derived values used for sorting.
 const columnDefs = computed<AdminColumnDef<IssueRow>[]>(() => [
-  { key: "orderNo", label: t("admin.pages.issues.orderNo"), accessor: (r) => r.order.orderNo, size: 140 },
+  { key: "orderNo", label: t("admin.pages.issues.orderNo"), accessor: (r) => r.orderNo, size: 140 },
   {
     key: "customer",
     label: t("admin.pages.issues.customer"),
-    accessor: (r) => r.order.customerCode ?? "",
+    accessor: (r) => r.customerCode ?? "",
     size: 150,
   },
-  { key: "reason", label: t("admin.pages.issues.reason"), accessor: (r) => r.detail.issueReason ?? "", size: 150 },
-  { key: "qty", label: t("admin.pages.issues.qty"), accessor: (r) => r.detail.issueQty ?? 0, size: 80 },
+  { key: "reason", label: t("admin.pages.issues.reason"), accessor: (r) => r.issueReason ?? "", size: 150 },
+  { key: "qty", label: t("admin.pages.issues.qty"), accessor: (r) => r.issueQty ?? 0, size: 80 },
   {
     key: "packSize",
     label: t("admin.pages.issues.packSize"),
-    accessor: (r) => r.detail.issuePackSize ?? "",
+    accessor: (r) => r.issuePackSize ?? "",
     size: 100,
   },
-  { key: "note", label: t("admin.pages.issues.note"), accessor: (r) => r.detail.issueNote ?? "", size: 200 },
+  { key: "note", label: t("admin.pages.issues.note"), accessor: (r) => r.issueNote ?? "", size: 200 },
   {
     key: "reportedAt",
     label: t("admin.pages.issues.reportedAt"),
-    accessor: (r) => r.detail.issueReportedAt ?? "",
+    accessor: (r) => r.issueReportedAt ?? "",
     size: 170,
   },
 ]);
@@ -47,7 +44,7 @@ const { table, pagination, resetColumnState } = useAdminTable({
   tableId: "issues-picking",
   columns: columnDefs,
   rows,
-  getRowId: (r) => r.order.id,
+  getRowId: (r) => r.id,
 });
 
 // Pager uses a 1-based page; the table uses a 0-based pageIndex.
@@ -69,10 +66,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const { rows: orders } = await flow.listPickingOrders({ status: ["issue"] });
-    rows.value = await Promise.all(
-      orders.map(async (order) => ({ order, detail: await flow.getPickingOrder(order.id) }))
-    );
+    rows.value = (await flow.listPickingOrders({ status: ["issue"] })).rows;
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -85,15 +79,15 @@ async function load() {
 async function resolve(row: IssueRow) {
   const note = window.prompt(t("admin.pages.issues.resolvePrompt"));
   if (note === null) return;
-  resolving.value[row.order.id] = true;
+  resolving.value[row.id] = true;
   error.value = "";
   try {
-    await flow.resolvePickingIssue(row.order.id, note);
+    await flow.resolvePickingIssue(row.id, note);
     await load();
   } catch (e: any) {
     error.value = e.message;
   } finally {
-    delete resolving.value[row.order.id];
+    delete resolving.value[row.id];
   }
 }
 
@@ -128,23 +122,23 @@ const {
       :table="table"
       :empty-text="$t('admin.pages.issues.noPickingIssues')"
       :on-reset-columns="resetColumnState"
-      @row-click="(r: IssueRow) => navigateTo(`/picking-orders/${r.order.id}`)"
+      @row-click="(r: IssueRow) => navigateTo(`/picking-orders/${r.id}`)"
     >
-      <template #cell-customer="{ row }">{{ row.order.customerCode ?? "—" }}</template>
-      <template #cell-reason="{ row }">{{ row.detail.issueReason ?? "—" }}</template>
-      <template #cell-qty="{ row }">{{ row.detail.issueQty ?? "—" }}</template>
-      <template #cell-packSize="{ row }">{{ row.detail.issuePackSize ?? "—" }}</template>
-      <template #cell-note="{ row }">{{ row.detail.issueNote ?? "—" }}</template>
+      <template #cell-customer="{ row }">{{ row.customerCode ?? "—" }}</template>
+      <template #cell-reason="{ row }">{{ row.issueReason ?? "—" }}</template>
+      <template #cell-qty="{ row }">{{ row.issueQty ?? "—" }}</template>
+      <template #cell-packSize="{ row }">{{ row.issuePackSize ?? "—" }}</template>
+      <template #cell-note="{ row }">{{ row.issueNote ?? "—" }}</template>
       <template #cell-reportedAt="{ row }">
-        {{ row.detail.issueReportedAt ? formatDateTime(row.detail.issueReportedAt) : "—" }}
+        {{ row.issueReportedAt ? formatDateTime(row.issueReportedAt) : "—" }}
       </template>
       <template #actions="{ row }">
         <button
           class="btn btn-small btn-primary"
-          :disabled="resolving[row.order.id]"
+          :disabled="resolving[row.id]"
           @click="resolve(row)"
         >
-          {{ resolving[row.order.id] ? $t("admin.common.saving") : $t("admin.pages.issues.resolve") }}
+          {{ resolving[row.id] ? $t("admin.common.saving") : $t("admin.pages.issues.resolve") }}
         </button>
       </template>
     </DataTable>

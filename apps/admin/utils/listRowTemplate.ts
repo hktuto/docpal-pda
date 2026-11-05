@@ -27,24 +27,6 @@ export const PDA_LIST_KEYS: PdaListKey[] = [
   "measuring",
 ];
 
-export interface PdaListTemplate {
-  title: string;
-  meta: string;
-}
-
-export type PdaListTemplates = Record<PdaListKey, PdaListTemplate>;
-
-/** Built-in defaults — reproduce the PDA's hardcoded list rows. Must match
- *  the backend defaults in apps/backend/src/config.ts. */
-export const DEFAULT_PDA_LIST_TEMPLATES: PdaListTemplates = {
-  receiving: { title: "[name]", meta: "[supplier_name] · [delivery_date]" },
-  picking: { title: "[order_no]", meta: "[customer_code] · [po_no]" },
-  "put-away": { title: "[batch_no]", meta: "[supplier_name]" },
-  "goods-verify": { title: "[wcl_item_no]", meta: "[shelf_code] · [box_id]" },
-  verify: { title: "[shipping_box_id]", meta: "[order_nos] · [destination_country]" },
-  measuring: { title: "[box_id]", meta: "[order_nos]" },
-};
-
 export interface PdaListFieldSpec {
   /** camelCase field on the list-row DTO. */
   field: string;
@@ -223,18 +205,3 @@ export function primaryListRowId(listKey: PdaViewListKey, fields: PdaListRow): s
   }
 }
 
-/** Render a list row's title or meta. Title: custom template → default
- *  template → primary id. Meta: returns "" when the render is empty — the
- *  caller hides the meta line. */
-export function formatListRow(
-  listKey: PdaListKey,
-  slot: keyof PdaListTemplate,
-  fields: PdaListRow,
-  templates: PdaListTemplates = DEFAULT_PDA_LIST_TEMPLATES
-): string {
-  const rendered = formatListRowTemplate(fields, templates[listKey][slot], listKey);
-  if (slot === "meta") return hasListRowContent(rendered) ? rendered : "";
-  if (hasListRowContent(rendered)) return rendered;
-  const fallback = formatListRowTemplate(fields, DEFAULT_PDA_LIST_TEMPLATES[listKey].title, listKey);
-  return hasListRowContent(fallback) ? fallback : primaryListRowId(listKey, fields);
-}

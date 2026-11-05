@@ -9,6 +9,8 @@ export function useApi(): ApiClient {
     getToken: () => (import.meta.client ? localStorage.getItem("admin_token") : null),
     onUnauthorized: () => {
       if (!import.meta.client) return;
+      // Stop the ?token= SSE stream — its token is now dead (audit 2026-11-06 #5/#13).
+      disconnectAdminEvents();
       localStorage.removeItem("admin_token");
       localStorage.removeItem("admin_user");
       navigateTo("/login");

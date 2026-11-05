@@ -121,7 +121,7 @@ const INITIAL = {
     [""],
     ["1. Edit any sheet below (keep the header row)."],
     ["2. node scripts/gen-seed-demo-scenario.mjs"],
-    ["3. pnpm --filter @warehouse/backend db:seed   (or POST /dev/reset)"],
+    ["3. pnpm --filter @warehouse/backend db:seed"],
     [""],
     ["Story: 3 pending receiving orders. 100001/100002 are the original pair:"],
     ["PO SO-DEMO-0001: scan the 181G×300 line item-by-item first — then the"],

@@ -23,14 +23,6 @@ export interface PrintFileOptions {
   additionalArgs?: string[];
 }
 
-export interface DynamicPrintOptions {
-  templateId: string;
-  printingParams: Record<string, unknown>[];
-  printerName?: string;
-  copies?: number;
-  mode?: string;
-  orientation?: string;
-}
 
 export interface PrintJob {
   jobId: string;
@@ -493,20 +485,6 @@ export async function printFile(file: Blob, filename: string, opts: PrintFileOpt
   return job;
 }
 
-/** POST /print/dynamic — print one template; returns data incl. jobs[]. */
-export async function dynamicPrint(opts: DynamicPrintOptions): Promise<{ jobs: PrintJob[] }> {
-  const res = await fetch(`${apiBaseUrl()}/print/dynamic`, {
-    method: "POST",
-    headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({
-      copies: 1,
-      mode: "auto",
-      ...opts,
-    }),
-  });
-  await throwOnError(res);
-  return (await res.json()) as { jobs: PrintJob[] };
-}
 
 /** GET /print/jobs/{jobId} — current status of one print job. */
 export async function getPrintJob(jobId: string): Promise<PrintJob> {

@@ -15,7 +15,8 @@ function isOpenPath(path: string, method: string): boolean {
   if (path === "/health") return true;
   if (path === "/auth/login" && method === "POST") return true;
   if (path === "/auth/login-token" && method === "POST") return true;
-  if (path.startsWith("/dev/")) return true; // demo reset stays open
+  if (path.startsWith("/dev/lab")) return true; // Dev Lab stays open (browser page, read-only)
+  // /dev/allocate requires a bearer token (audit 2026-11-06 #1).
   return false;
 }
 

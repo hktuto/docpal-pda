@@ -68,8 +68,6 @@ import type {
   SupplierQrcodeTemplate,
   ScanDecodeInput,
   ScanDecodeResult,
-  BoxSearchResult,
-  LabelsData,
   PartOption,
   AdHocPutAwayItem,
   AdHocPutAwayResult,
@@ -315,13 +313,6 @@ export interface WarehouseService {
   getSuppliers(): Promise<SupplierListRow[]>;
   // Country list for the COO/COW dropdowns (admin CRUD read, code = ISO alpha-2).
   getCountries(): Promise<CountryRow[]>;
-
-  // Box lookup for the /box QR page — searches both box tables by id
-  // substring (a bare daily seq like "0007" matches).
-  searchBoxes(q: string): Promise<BoxSearchResult[]>;
-
-  // Printable-label data for the /print-labels page (GET /labels-data).
-  getLabelsData(): Promise<LabelsData>;
 
   // Parts master search for the /print-product-label part dropdown (GET
   // /parts?search=&brand=) — server-side ILIKE, capped at 50 rows so the PDA

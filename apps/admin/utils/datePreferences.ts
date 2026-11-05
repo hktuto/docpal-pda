@@ -24,10 +24,6 @@ const prefs = reactive<DateFormatPrefs>({
   dateTimeFormat: DEFAULT_DATE_TIME_FORMAT,
 });
 
-export function getDatePrefs(): DateFormatPrefs {
-  return prefs;
-}
-
 /** Overwrite the store from a /auth/me/profile payload (missing fields keep
  *  the current values). */
 export function applyDatePreferences(p: Partial<DateFormatPrefs> | null | undefined): void {

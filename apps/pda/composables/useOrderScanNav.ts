@@ -13,26 +13,22 @@ import type { PluginListenerHandle } from '@capacitor/core';
 import { ScannerBroadcast } from './useScannerBroadcast';
 import { playScanSuccess } from '~/utils/scanBeep';
 import { ORDER_SCAN_PREFIX, resolveOrderScanRoute } from '~/utils/orderScanRoute';
+import { createIdleTimer, createWedgeSuppressor, isInputElement } from '~/utils/scannerWedge';
 
-/** After a broadcast scan, consume wedge key echo for this long (ms). */
-const WEDGE_SUPPRESS_MS = 1500;
 const IDLE_FLUSH_MS = 300;
-
-function isInputElement(target: EventTarget | null): boolean {
-  if (target == null || typeof target !== 'object') return false;
-  const el = target as Record<string, unknown>;
-  const tagName = String(el.tagName ?? '').toLowerCase();
-  if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') return true;
-  return Boolean(el.isContentEditable);
-}
 
 export function useOrderScanNav() {
   const router = useRouter();
   let buffer = '';
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let suppressWedgeUntil = 0;
   let broadcastHandle: PluginListenerHandle | null = null;
   let unmounted = false;
+
+  // Wedge/idle plumbing shared with useHardwareScanner via utils/scannerWedge
+  // so the two listeners can't drift apart (audit 2026-11-06 #10).
+  const idle = createIdleTimer(IDLE_FLUSH_MS, () => {
+    buffer = '';
+  });
+  const wedge = createWedgeSuppressor();
 
   function navigate(value: string): boolean {
     const path = resolveOrderScanRoute(value);
@@ -43,18 +39,12 @@ export function useOrderScanNav() {
     return true;
   }
 
-  function resetIdleTimer() {
-    if (timeoutId) clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => {
-      buffer = '';
-    }, IDLE_FLUSH_MS);
+  function resetIdleTimer(): void {
+    idle.reset();
   }
 
-  function clearIdleTimer() {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
+  function clearIdleTimer(): void {
+    idle.clear();
   }
 
   // Broadcast scan: the whole payload arrives in one event.
@@ -64,7 +54,7 @@ export function useOrderScanNav() {
     // A scan-fill input consumes the scan as field text — no navigation.
     const active = typeof document === 'undefined' ? null : document.activeElement;
     if (isInputElement(active)) return;
-    suppressWedgeUntil = Date.now() + WEDGE_SUPPRESS_MS;
+    wedge.mark();
     navigate(value);
   }
 
@@ -75,7 +65,7 @@ export function useOrderScanNav() {
   function onKeydown(event: KeyboardEvent) {
     if (event.repeat || event.isComposing) return;
     if (isInputElement(event.target)) return;
-    if (Date.now() < suppressWedgeUntil) return;
+    if (wedge.suppressed()) return;
     if (event.key === 'Enter') {
       const value = buffer;
       buffer = '';

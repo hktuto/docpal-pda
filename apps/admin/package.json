@@ -16,7 +16,7 @@
     "nuxt": "^3.21.8",
     "qrcode": "^1.5.4",
     "vue-draggable-plus": "^0.6.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.5",

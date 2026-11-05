@@ -220,7 +220,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `GET /scan-templates`, `GET /date-code-periods` | `apps/backend/src/routes/scantemplates.ts` |
 | Print proxy: `GET /print/printers`, `POST /print/dynamic`, `POST /print/files`, `GET /print/jobs/:jobId` | `apps/backend/src/routes/print.ts`, `apps/backend/src/print.ts` |
 | Upstream sync (outbound `sync_events` table feed; the external service reads the table directly — the `GET /sync-events` endpoint was removed 2026-10 — and writes the business tables directly) | `apps/backend/src/db/schema/events.ts` |
-| `POST /dev/reset`, `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
+| `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
 | `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |
 | `/admin/sub-inventory-share-groups` (share-group membership upsert/remove) | `apps/backend/src/routes/admin/subInventoryShareGroups.ts` |
 | `GET /admin/receiving-orders/:id/shipper` (shipper xlsx download; `?mode=finished` for actuals) | `apps/backend/src/routes/admin/receivingShipper.ts` (HTTP only), data + layout in `apps/backend/src/export/shipper/` (`data.ts`, `model.ts`, `render/default.ts`) |

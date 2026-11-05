@@ -17,7 +17,7 @@ Individual flow steps (e.g. measuring, verify) can be turned on/off per warehous
 
 - **Mobile-first.** The UI is built for a handheld Android device.
 - **Thin client over HTTP.** Pages call `WarehouseService`, which talks to the `apps/backend` Hono API (default `http://localhost:3002`). All business rules and data live server-side.
-- **Persistent demo dataset.** Data is stored in PostgreSQL and survives reloads; a demo reset (`POST /dev/reset`) re-seeds it.
+- **Persistent demo dataset.** Data is stored in PostgreSQL and survives reloads; a demo reset (`db:seed` CLI) re-seeds it.
 
 ## Demo limitations
 

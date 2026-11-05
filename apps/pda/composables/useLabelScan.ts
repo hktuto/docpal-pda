@@ -25,10 +25,19 @@ export async function getCachedSupplierQrTemplates(
 ): Promise<SupplierQrcodeTemplate[]> {
   if (supplierTemplateCache) return supplierTemplateCache;
   if (!supplierTemplateCachePromise) {
-    supplierTemplateCachePromise = warehouse.getSupplierQrTemplates().then((templates) => {
-      supplierTemplateCache = templates;
-      return templates;
-    });
+    supplierTemplateCachePromise = warehouse
+      .getSupplierQrTemplates()
+      .then((templates) => {
+        supplierTemplateCache = templates;
+        return templates;
+      })
+      // A rejected promise must not stay memoized — one network blip would
+      // otherwise fail every later decode for the whole app session
+      // (audit 2026-11-06 #4).
+      .catch((err) => {
+        supplierTemplateCachePromise = null;
+        throw err;
+      });
   }
   return supplierTemplateCachePromise;
 }

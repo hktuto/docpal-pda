@@ -11,12 +11,18 @@
 
 <script setup lang="ts">
 import { pushLog, setLoggedRoute } from "~/utils/activityLog";
+import { setUnauthorizedHandler } from "~/services/apiClient";
 
 const { currentUser } = useAuth();
 const events = useWarehouseEvents();
 const { loadFlowSteps } = useFlowSteps();
 const route = useRoute();
 const router = useRouter();
+
+// A 401 (expired token) tears the session down from the api client; stop the
+// SSE ?token= reconnect loop there too — the currentUser watcher never fires
+// because the api client bypasses useAuth state (audit 2026-11-06 #5).
+setUnauthorizedHandler(() => events.disconnect());
 
 // Bug-report trail wiring (spec 2026-11-05-in-app-bug-report-design.md):
 // route changes + unhandled JS errors feed the ring buffer from one place.

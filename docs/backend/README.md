@@ -33,7 +33,8 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
 
 - Auth (spec: `docs/superpowers/specs/2026-07-21-real-login-design.md`) —
   JWT bearer auth enforced by global middleware (`src/auth/middleware.ts`) on
-  every route except `GET /health`, `POST /auth/login`, and `/dev/*`. Send
+  every route except `GET /health`, `POST /auth/login`, `/auth/login-token`,
+  and `/dev/lab*` (`/dev/allocate` requires a token). Send
   `Authorization: Bearer <token>` on all other calls; `GET /events`
   additionally accepts `?token=` because EventSource cannot set headers.
   Failures are 401 `unauthorized`. The actor for every mutation comes from
@@ -376,8 +377,8 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   allocations/shelf-box items reference it), logging `item_removed` against
   the order.
   Requires the bearer token like everything else; errors are plain text.
-- `POST /dev/reset`, `POST /dev/allocate` — demo reset / manual allocation
-  recompute.
+- `POST /dev/allocate` — manual fleet-wide allocation recompute (bearer
+  token required). Demo reset lives in the `db:seed` CLI, not HTTP.
 - `GET /events?since=<id>` — SSE stream (`src/routes/events.ts`) over the
   `app_events` transactional-outbox table (`src/db/schema/events.ts`).
   Mutations insert event rows inside their own transaction via

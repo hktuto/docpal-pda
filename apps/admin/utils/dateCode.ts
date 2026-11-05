@@ -41,7 +41,7 @@ export function dateCodeRank(code: string | null | undefined, ref: Date = new Da
 
 /** Guarded WWYY↔YYWW pair swap ("3726" ↔ "2637"). Returns the input unchanged
  *  when it is not a 4-digit string; null-safe. */
-export function swapDateCode(code: string | null | undefined): string | null {
+function swapDateCode(code: string | null | undefined): string | null {
   if (!code || !/^\d{4}$/.test(code)) return code ?? null;
   return `${code.slice(2, 4)}${code.slice(0, 2)}`;
 }

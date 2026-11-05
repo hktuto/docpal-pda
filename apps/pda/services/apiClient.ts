@@ -74,6 +74,21 @@ export function setNetworkErrorHandler(fn: () => void): void {
   networkErrorHandler = fn;
 }
 
+// 401 wiring: the layout registers the SSE disconnect here so a session
+// teardown stops the ?token= reconnect loop too (audit 2026-11-06 #5).
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setUnauthorizedHandler(fn: () => void): void {
+  unauthorizedHandler = fn;
+}
+
+// No request may hang forever: on warehouse Wi-Fi a half-open TCP connection
+// never resolves AND never rejects, so without a deadline the page spinner
+// waits out the shift (audit 2026-11-06 #3). 30 s is far above every normal
+// call (label printing is job-based: the POST only kicks the job, the client
+// polls); the health watchdog keeps its own tighter 4 s timeout.
+const REQUEST_TIMEOUT_MS = 30_000;
+
 /** localStorage keys holding the session (written by the auth adapter). */
 const TOKEN_STORAGE_KEY = "warehouse-token";
 const USER_ID_STORAGE_KEY = "warehouse-user-id";
@@ -87,6 +102,9 @@ const USER_STORAGE_KEY = "warehouse-user";
  */
 function handleUnauthorized(path: string): void {
   if (path === "/auth/login") return;
+  // Stop the SSE reconnect loop before navigating — the stored token the
+  // stream is polling with is now invalid (audit 2026-11-06 #5).
+  unauthorizedHandler?.();
   try {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(USER_ID_STORAGE_KEY);
@@ -150,7 +168,10 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     let res: Response;
     const startedAt = Date.now();
     try {
-      res = await fetch(buildUrl(path, opts.params), init);
+      res = await fetch(buildUrl(path, opts.params), {
+        ...init,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
     } catch {
       pushLog("api", `${method} ${path} → network error`);
       networkErrorHandler?.();

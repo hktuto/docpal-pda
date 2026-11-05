@@ -66,7 +66,8 @@ app.route("/", scanDecodeRoute);
 app.route("/", eventsRoute);
 app.route("/", printRoute);
 app.route("/", bugReportsRoute);
-// Demo-only routes (/dev/reset, /dev/allocate, /dev/lab); disable with DEV_ROUTES=off.
+// Dev-only routes (/dev/allocate needs a token; /dev/lab* stays tokenless for
+// the browser page); disable the whole mount with DEV_ROUTES=off.
 if (process.env.DEV_ROUTES !== "off") {
   app.route("/", devRoute);
   app.route("/", devLabRoute);

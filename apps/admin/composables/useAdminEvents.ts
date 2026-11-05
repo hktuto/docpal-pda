@@ -23,6 +23,7 @@ const SKEW_MS = 15_000;
 
 let source: EventSource | null = null;
 let baseUrl = "";
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Map<string, Map<Listener, number>>();
 const boundTypes = new Set<string>();
 
@@ -57,10 +58,28 @@ function connect() {
     if (source?.readyState === EventSource.CLOSED) {
       source = null;
       boundTypes.clear();
-      if (listeners.size > 0) setTimeout(connect, 5000);
+      if (listeners.size > 0 && reconnectTimer === null) {
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connect();
+        }, 5000);
+      }
     }
   };
   for (const type of listeners.keys()) bind(type);
+}
+
+/** Close the stream + drop the reconnect timer. Call on logout — otherwise
+ *  the old token's stream survives re-login as another user on this shared
+ *  console (audit 2026-11-06 #13). */
+export function disconnectAdminEvents(): void {
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  source?.close();
+  source = null;
+  boundTypes.clear();
 }
 
 export function useAdminEvents() {

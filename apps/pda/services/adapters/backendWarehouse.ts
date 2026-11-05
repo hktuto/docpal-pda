@@ -54,8 +54,6 @@ import type {
   SupplierQrcodeTemplate,
   ScanDecodeInput,
   ScanDecodeResult,
-  BoxSearchResult,
-  LabelsData,
   PartOption,
   ScanPickingItemResult,
   ScanIntoShippingBoxResult,
@@ -811,17 +809,6 @@ export function createBackendWarehouseService(
     // The admin countries CRUD read doubles as the PDA COO/COW dropdown.
     async getCountries(): Promise<CountryRow[]> {
       return client.get("/admin/countries");
-    },
-
-    // Box lookup for the /box QR page (shipping + shelf boxes, id substring).
-    async searchBoxes(q: string): Promise<BoxSearchResult[]> {
-      return client.get("/boxes", { q });
-    },
-
-    // Printable labels for the /print-labels page. The 60 s GET cache is
-    // bypassed so a just-received / just-put-away world shows up immediately.
-    async getLabelsData(): Promise<LabelsData> {
-      return client.get("/labels-data", { t: Date.now() });
     },
 
     // Parts master search for the /print-product-label part dropdown.

@@ -598,6 +598,13 @@ export interface PickingOrderListRow {
   workingByName: string | null;
   /** Optional assignee username (spec 2026-11-01-task-assignee-design.md). */
   assignee: string | null;
+  /** Issue banner fields (picking_orders columns) — the issues page renders
+   *  these without a per-order detail fetch (audit 2026-11-06 #8). */
+  issueReason: string | null;
+  issueQty: number | null;
+  issuePackSize: number | null;
+  issueNote: string | null;
+  issueReportedAt: Date | null;
   itemCount: number;
   totalQty: number;
   pickedQty: number;
@@ -699,6 +706,9 @@ export async function listPickingOrders(
         po.priority_seq AS "prioritySeq",
         po.working_by AS "workingBy", w.display_name AS "workingByName",
         po.assignee,
+        po.issue_reason AS "issueReason", po.issue_qty AS "issueQty",
+        po.issue_pack_size AS "issuePackSize", po.issue_note AS "issueNote",
+        po.issue_reported_at AS "issueReportedAt",
         COUNT(pi.id)::int AS "itemCount",
         COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
         COALESCE(SUM(pi.picked_qty), 0)::int AS "pickedQty",

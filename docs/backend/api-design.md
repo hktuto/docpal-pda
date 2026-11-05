@@ -197,7 +197,7 @@ put-away task (idempotent via the unique index on
 
 JWT bearer (HS256, `hono/jwt`, secret from `AUTH_SECRET`, 12 h TTL) required on
 all routes except `/health`, `POST /auth/login`, `POST /auth/login-token`, and
-`/dev/*`; `GET /events`
+`/dev/lab*`; `GET /events`
 also accepts `?token=` (EventSource can't set headers). Users belong to groups
 via `user_group_members` (many-to-many); `users.role` is gone. Login is always
 delegated to the DocPal API (`DOCPAL_URL` required) and local users are
@@ -851,6 +851,5 @@ incoming-webhook fire-and-forget on insert.
 
 | Endpoint | Description |
 |---|---|
-| `POST /dev/reset` | Truncate + reseed (demo only). |
-| `POST /dev/allocate` | Fleet-wide allocation rebuild (dev/test only). |
+| `POST /dev/allocate` | Fleet-wide allocation rebuild (dev/test only; bearer token required). |
 | `GET /dev/lab` (+ `…/data`, `…/parts`, `…/label`, `…/barcode`) | Dev Lab: generate supplier-label barcodes for PDA testing — editable qty/date/lot/COO/serial per supplier template, round-trip verified against the real decoder. Spec `docs/superpowers/specs/2026-11-04-dev-lab-label-generator-design.md`. |
