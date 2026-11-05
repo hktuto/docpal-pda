@@ -17,7 +17,8 @@ import type { PickingListDocument } from "../../export/picking-list/model.js";
 // Reallocate action.
 // Data assembly and layout live in src/export/picking-list/ (spec
 // 2026-09-21-admin-excel-export-renderer-separation-design.md); this route
-// is HTTP plumbing only.
+// is HTTP plumbing only. A second endpoint returns the same document as JSON
+// for client-side print rendering.
 
 export const adminPickingListRoute = new Hono();
 
@@ -34,4 +35,9 @@ adminPickingListRoute.get("/picking-orders/:id/picking-list", async (c) => {
       "Content-Length": String(buffer.length),
     },
   });
+});
+
+adminPickingListRoute.get("/picking-orders/:id/picking-list-document", async (c) => {
+  const doc = await loadPickingListDocument(db, c.req.param("id"));
+  return c.json(doc);
 });

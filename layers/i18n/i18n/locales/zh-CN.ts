@@ -1414,6 +1414,15 @@ export default {
       selectedCount: "已选 {count} 项",
       success: "已发送 {count} 张标签到打印机。"
     },
+    printDoc: {
+      title: "打印文件",
+      preparing: "正在准备预览…",
+      refreshPreview: "刷新预览",
+      page: "第 {n}/{total} 页",
+      print: "打印",
+      printing: "打印中… {progress}",
+      success: "已发送 {count} 页到打印机。"
+    },
     common: {
       refresh: "刷新",
       new: "新增",
@@ -1855,6 +1864,7 @@ export default {
         none: "暂无拣货单。",
         detailTitle: "拣货单 {orderNo}",
         downloadPickingList: "下载拣货清单",
+        printPng: "打印",
         pickingListError: "拣货清单下载失败",
         reallocate: "重新分配",
         reallocateConfirm: "重新分配订单 {orderNo}？",
@@ -2095,6 +2105,7 @@ export default {
         totalsMismatch: "合计不符：目前明细 Σ 箱数/数量 = {carton}/{qty}，工作表合计 = {sheet}。请核对后再送出。",
         detailTitle: "客户收货单 {batchNo}",
         downloadExcel: "下载 Excel",
+        printPng: "打印",
         confirmOrder: "确认收货",
         confirmOrderConfirm: "确认订单 {batchNo}？订单会进入收货扫描 — PDA 扫描实货后才会创建上架任务。",
         orderConfirmed: "订单已确认 — 等待 PDA 收货扫描。",

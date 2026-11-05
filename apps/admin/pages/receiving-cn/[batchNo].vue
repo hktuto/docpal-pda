@@ -78,6 +78,14 @@ async function onAssigneeChange(value: string[] | string) {
 // embed images: when the order has a put-away task, a QR code linking straight
 // into it on the PDA is anchored in the title block, left of the 編號 label.
 const downloading = ref(false);
+// PNG print of the same document (CR-049) — the dialog renders + prints it;
+// the builder is lazy-imported like the Excel builder above.
+const printOpen = ref(false);
+const buildPrintDoc = () =>
+  import("~/utils/documentPrintCn").then(({ buildCnReceivingPrintDoc }) => {
+    if (!detail.value) throw new Error("Order not loaded");
+    return buildCnReceivingPrintDoc(detail.value);
+  });
 async function downloadExcel() {
   if (!detail.value || downloading.value) return;
   downloading.value = true;
@@ -468,6 +476,9 @@ function putAwayStatusClass(s: string): string {
         <button class="btn" :disabled="downloading || loading" @click="downloadExcel">
           {{ downloading ? $t("admin.common.loading") : $t("admin.pages.receivingCn.downloadExcel") }}
         </button>
+        <button class="btn" :disabled="!detail || loading" @click="printOpen = true">
+          {{ $t("admin.pages.receivingCn.printPng") }}
+        </button>
         <button class="btn" @click="navigateTo('/receiving-cn')">{{ $t("admin.common.back") }}</button>
       </div>
     </div>
@@ -738,6 +749,13 @@ function putAwayStatusClass(s: string): string {
       :shelf-options="shelfOptions"
       @close="editItems = null"
       @save="saveEdit"
+    />
+
+    <PrintDocumentDialog
+      v-if="printOpen && detail"
+      :build="buildPrintDoc"
+      :filename-base="detail.order.batchNo"
+      @close="printOpen = false"
     />
   </div>
 </template>

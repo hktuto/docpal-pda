@@ -192,7 +192,8 @@ export interface LabelLayout {
   border?: boolean;
 }
 
-function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
+/** Exported for the document PNG renderer (utils/documentPrint.ts). */
+export function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) =>
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("canvas.toBlob returned null"))),
@@ -207,7 +208,8 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
 // machine). Cached after the first call; an unavailable webfont degrades to
 // the system monospace stack instead of failing the render.
 let labelTextFontReady: Promise<void> | null = null;
-function ensureLabelTextFont(): Promise<void> {
+/** Exported for the document PNG renderer (utils/documentPrint.ts). */
+export function ensureLabelTextFont(): Promise<void> {
   if (!import.meta.client || typeof document === "undefined" || !document.fonts) return Promise.resolve();
   labelTextFontReady ??= document.fonts
     .load('900 100px "Roboto Mono"') // Roboto Mono tops out at 700 — this is its heaviest face

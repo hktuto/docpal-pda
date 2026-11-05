@@ -1415,6 +1415,15 @@ export default {
       selectedCount: "{count} selected",
       success: "Sent {count} label(s) to the printer."
     },
+    printDoc: {
+      title: "Print document",
+      preparing: "Preparing preview…",
+      refreshPreview: "Refresh preview",
+      page: "Page {n}/{total}",
+      print: "Print",
+      printing: "Printing… {progress}",
+      success: "Sent {count} page(s) to the printer."
+    },
     common: {
       refresh: "Refresh",
       new: "New",
@@ -1857,6 +1866,7 @@ export default {
         none: "No picking orders.",
         detailTitle: "Picking Order {orderNo}",
         downloadPickingList: "Download picking list",
+        printPng: "Print",
         pickingListError: "Picking list download failed",
         reallocate: "Re-allocate",
         reallocateConfirm: "Re-run allocation for order {orderNo}?",
@@ -2098,6 +2108,7 @@ export default {
         totalsMismatch: "Totals mismatch: current items Σ cartons/qty = {carton}/{qty}, sheet totals = {sheet}. Please verify before submitting.",
         detailTitle: "CN Receiving Order {batchNo}",
         downloadExcel: "Download Excel",
+        printPng: "Print",
         confirmOrder: "Confirm Receipt",
         confirmOrderConfirm: "Confirm order {batchNo}? It moves to receiving scan — a PDA operator scans the physical items before put-away.",
         orderConfirmed: "Order confirmed — awaiting PDA receiving scan.",

@@ -1414,6 +1414,15 @@ export default {
       selectedCount: "已選 {count} 項",
       success: "已傳送 {count} 張標籤到打印機。"
     },
+    printDoc: {
+      title: "列印文件",
+      preparing: "正在準備預覽…",
+      refreshPreview: "重新整理預覽",
+      page: "第 {n}/{total} 頁",
+      print: "列印",
+      printing: "列印中… {progress}",
+      success: "已傳送 {count} 頁到打印機。"
+    },
     common: {
       refresh: "重新整理",
       new: "新增",
@@ -1855,6 +1864,7 @@ export default {
         none: "暫無揀貨單。",
         detailTitle: "揀貨單 {orderNo}",
         downloadPickingList: "下載揀貨清單",
+        printPng: "列印",
         pickingListError: "揀貨清單下載失敗",
         reallocate: "重新分配",
         reallocateConfirm: "重新分配訂單 {orderNo}？",
@@ -2095,6 +2105,7 @@ export default {
         totalsMismatch: "合計不符：目前明細 Σ 箱數/數量 = {carton}/{qty}，工作表合計 = {sheet}。請核對後再送出。",
         detailTitle: "客戶收貨單 {batchNo}",
         downloadExcel: "下載 Excel",
+        printPng: "列印",
         confirmOrder: "確認收貨",
         confirmOrderConfirm: "確認訂單 {batchNo}？訂單會進入收貨掃描 — PDA 掃描實貨後才會建立上架任務。",
         orderConfirmed: "訂單已確認 — 等待 PDA 收貨掃描。",

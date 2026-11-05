@@ -3,6 +3,7 @@
  * reads the console needs: picking / receiving / shipping) plus the admin
  * flow-edit PATCHes. DTOs mirror the backend rows (camelCase JSON).
  */
+import type { PickingListDocument } from "~/utils/documentPrintPicking";
 
 // ---- picking ----
 
@@ -845,6 +846,24 @@ function cnApiBaseUrl(): string {
 function cnAuthHeaders(): Record<string, string> {
   const token = import.meta.client ? localStorage.getItem("admin_token") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** GET /admin/picking-orders/:id/picking-list-document — the picking-list
+ *  document model as JSON for the client-side PNG print renderer
+ *  (utils/documentPrintPicking.ts). Read-only, no in-request recompute —
+ *  same contract as the picking-list xlsx route. Plain fetch (not the
+ *  useApi client) so the print dialog can call it like the other document
+ *  helpers. */
+export async function getPickingListDocument(orderId: string): Promise<PickingListDocument> {
+  const res = await fetch(
+    `${cnApiBaseUrl()}/admin/picking-orders/${encodeURIComponent(orderId)}/picking-list-document`,
+    { headers: cnAuthHeaders() }
+  );
+  if (!res.ok) {
+    const text = (await res.text()).trim();
+    throw new Error(text || `Request failed (${res.status})`);
+  }
+  return (await res.json()) as PickingListDocument;
 }
 
 /** POST /admin/receiving-cn/pdf — the scanned receiving confirmation PDF(s)

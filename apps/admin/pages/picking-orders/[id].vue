@@ -530,6 +530,14 @@ function openAvailability(item: ItemsViewRow) {
 // allocations, no in-request recompute, so no reload afterwards).
 const apiBaseUrl = useRuntimeConfig().public.apiBaseUrl as string;
 const downloadingPickingList = ref(false);
+// PNG print of the same picking list (CR-049) — the dialog fetches the
+// picking-list document + renders/prints it; build errors surface there.
+const printOpen = ref(false);
+async function buildPrintDoc() {
+  const { getPickingListDocument } = await import("~/utils/flowApi");
+  const { pickingListDocToPrintDoc } = await import("~/utils/documentPrintPicking");
+  return pickingListDocToPrintDoc(await getPickingListDocument(orderId));
+}
 
 async function downloadPickingList() {
   if (!order.value || downloadingPickingList.value) return;
@@ -677,6 +685,9 @@ const {
       <div class="head-actions">
         <button class="btn" :disabled="downloadingPickingList" @click="downloadPickingList">
           {{ $t("admin.pages.pickingOrders.downloadPickingList") }}
+        </button>
+        <button class="btn" :disabled="!order" @click="printOpen = true">
+          {{ $t("admin.pages.pickingOrders.printPng") }}
         </button>
         <button
           v-if="order && (order.status === 'pending' || order.status === 'picking' || order.status === 'allocated')"
@@ -1062,6 +1073,12 @@ const {
       :current-statuses="order ? [order.status] : []"
       @close="overrideOpen = false"
       @apply="onOverrideStatus"
+    />
+    <PrintDocumentDialog
+      v-if="printOpen && order"
+      :build="buildPrintDoc"
+      :filename-base="`picking-list-${order.orderNo}`"
+      @close="printOpen = false"
     />
   </div>
 </template>

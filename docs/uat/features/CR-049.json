@@ -1,0 +1,14 @@
+{
+ "id": "CR-049",
+ "dateRaised": "2026-11-06",
+ "raisedBy": "Sean",
+ "app": "Admin",
+ "functionId": "ADM-026",
+ "feature": "Direct PNG printing from admin detail pages — beside the existing Excel download on the CN receiving order detail (收貨確認及付款通知書) and picking order detail (picking list) pages, add a Print button that renders the same document as PNG page(s) sized for A4 landscape, splits to multiple pages when the content is too long (table header repeated per page), shows a print dialog to pick a printer (from the existing print service) and prints directly",
+ "reason": "Users currently download the Excel and print it manually; the warehouse printers only accept PNG, so a direct print path removes the Excel step and guarantees a consistent layout. A4 landscape is preferred for these wide tables and long item lists must split across pages cleanly",
+ "priority": "Should have",
+ "status": "In progress",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Implemented 2026-11-06 per spec docs/superpowers/specs/2026-11-06-admin-document-png-print-design.md — pending UAT. Print PNG button beside the Excel download on both detail pages; client-side canvas renderer (apps/admin/utils/documentPrint.ts) paginates to A4 landscape 300-dpi PNG pages (row-boundary splits, table header repeated per page); picking content via new GET /admin/picking-orders/:id/picking-list-document (keeps grouping logic server-side); CN content mirrors the xlsx export columns; PrintDocumentDialog.vue reuses the /print/files pipeline with printer picker (remembered as doc_printer) + page previews. Also affects ADM-024 (CN receiving detail)."
+}

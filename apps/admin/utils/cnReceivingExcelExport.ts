@@ -26,8 +26,9 @@ function jsonbString(obj: Record<string, unknown> | null | undefined, key: strin
 }
 
 /** First non-empty value across the items' jsonb passthroughs (order-level
- *  extras arrive duplicated on each item). */
-function firstJsonb(items: CnOrderItemRow[], key: string): string {
+ *  extras arrive duplicated on each item). Exported for the print-document
+ *  builder (utils/documentPrintCn.ts), which mirrors this layout. */
+export function firstJsonb(items: CnOrderItemRow[], key: string): string {
   for (const it of items) {
     const v = jsonbString(it.orderData, key) || jsonbString(it.additionalData, key);
     if (v) return v;
@@ -40,8 +41,9 @@ function numeric(value: string | null): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Digit-run-aware compare ("9" < "10"); empty sorts first. */
-function compareNumericAware(a: string, b: string): number {
+/** Digit-run-aware compare ("9" < "10"); empty sorts first. Exported for the
+ *  print-document builder (utils/documentPrintCn.ts). */
+export function compareNumericAware(a: string, b: string): number {
   const ra = a.match(/(\d+|\D+)/g) ?? [];
   const rb = b.match(/(\d+|\D+)/g) ?? [];
   const n = Math.max(ra.length, rb.length);
@@ -75,10 +77,11 @@ export const CN_EXPORT_ITEM_COLUMNS: { header: string; value: (it: CnOrderItemRo
   { header: "建議貨架", value: (it) => it.suggestedShelf ?? "" },
 ];
 
-/** Build the sheet AOA for a CN order detail, mirroring the original form.
- * Item rows are emitted sorted by po_line (the sheet's row index; blanks
- * trail) so a re-imported file preserves the intended order. */
-export function buildCnReceivingExportAoa(detail: CnOrderDetail): CnExportAoa {  const items = [...detail.items].sort((a, b) => {
+/** Item order shared by the Excel export and the print document: sorted by
+ *  po_line (the sheet's row index; blanks trail, digit-run-aware) so a
+ *  re-imported file preserves the intended order. Non-mutating. */
+export function sortCnItemsByPoLine(items: CnOrderItemRow[]): CnOrderItemRow[] {
+  return [...items].sort((a, b) => {
     const al = a.poLine?.trim() ?? "";
     const bl = b.poLine?.trim() ?? "";
     if (!al && !bl) return 0;
@@ -86,6 +89,12 @@ export function buildCnReceivingExportAoa(detail: CnOrderDetail): CnExportAoa { 
     if (!bl) return -1;
     return compareNumericAware(al, bl);
   });
+}
+
+/** Build the sheet AOA for a CN order detail, mirroring the original form.
+ * Item rows are emitted sorted by po_line (the sheet's row index; blanks
+ * trail) so a re-imported file preserves the intended order. */
+export function buildCnReceivingExportAoa(detail: CnOrderDetail): CnExportAoa {  const items = sortCnItemsByPoLine(detail.items);
   const aoa: (string | number)[][] = [];
 
   // Title (merged A-E) and the 編號 row, exactly where the parser looks.

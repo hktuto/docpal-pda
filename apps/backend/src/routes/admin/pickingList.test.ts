@@ -196,6 +196,67 @@ test("GET picking-list: items sharing a part number merge into one block", async
   }
 });
 
+test("GET picking-list-document: 401 without a bearer token", async () => {
+  const res = await app.request(`/admin/picking-orders/${randomUUID()}/picking-list-document`);
+  assert.equal(res.status, 401);
+});
+
+test("GET picking-list-document: 404 for an unknown picking order", async () => {
+  await reseed(client);
+  const res = await req(`/admin/picking-orders/${randomUUID()}/picking-list-document`);
+  assert.equal(res.status, 404);
+});
+
+test("GET picking-list-document: returns the PickingListDocument as JSON", async () => {
+  await reseed(client);
+  const orderId = await seedScenario();
+
+  const res = await req(`/admin/picking-orders/${orderId}/picking-list-document`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("Content-Type") ?? "", /application\/json/);
+
+  const doc = await res.json();
+  assert.equal(doc.head.orderNo, "SO-PLIST-001");
+  assert.equal(doc.head.orderId, orderId);
+  assert.equal(typeof doc.generatedAt, "string");
+  assert.ok(Array.isArray(doc.groups));
+
+  // Three part blocks, merged by part number (same rule as the xlsx).
+  assert.equal(doc.groups.length, 3);
+  const groupOf = (partNo: string) => {
+    const g = doc.groups.find((x: { partNo: string }) => x.partNo === partNo);
+    assert.ok(g, `group for ${partNo}`);
+    return g;
+  };
+
+  // Item 1: two shelf-lot allocation rows.
+  const g1 = groupOf("RK73H2ATTD1372F");
+  assert.equal(g1.qty, 300);
+  assert.equal(g1.allocatedQty, 300);
+  assert.deepEqual(
+    g1.allocs.map((a: Record<string, unknown>) => [a.kind, a.shelfCode, a.qty]),
+    [
+      ["lot", "A0405", 200],
+      ["lot", "W-01-01", 100],
+    ]
+  );
+
+  // Item 2: one receiving (dock) allocation; the shortfall is NOT pre-baked
+  // into the document (the renderer derives it).
+  const g2 = groupOf("RK73H1JTTD3302F");
+  assert.equal(g2.qty, 700);
+  assert.deepEqual(
+    g2.allocs.map((a: Record<string, unknown>) => [a.kind, a.receivingBatchNo, a.qty]),
+    [["receiving", "PLIST-01", 500]]
+  );
+
+  // Item 3: no allocations at all.
+  const g3 = groupOf("RK73H2BTTD1004F");
+  assert.equal(g3.qty, 100);
+  assert.equal(g3.allocatedQty, 0);
+  assert.deepEqual(g3.allocs, []);
+});
+
 test("GET picking-list: order-info block and flat allocation rows", async () => {
   await reseed(client);
   const orderId = await seedScenario();
