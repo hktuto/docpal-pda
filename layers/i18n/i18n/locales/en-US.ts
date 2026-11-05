@@ -1877,7 +1877,7 @@ export default {
         netGross: "Net / Gross (kg)",
         destination: "Destination",
         noBoxes: "No boxes yet.",
-        allocLot: "Lot {shelf}{box} (dc {dc})",
+        allocLot: "Lot {shelf}{box}-{dc}",
         allocReceivingBox: "Receiving box {box}",
         allocReceivingOrder: "Receiving order",
         boxed: "boxed",

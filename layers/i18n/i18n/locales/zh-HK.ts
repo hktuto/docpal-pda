@@ -1875,7 +1875,7 @@ export default {
         netGross: "淨重 / 毛重 (kg)",
         destination: "目的地",
         noBoxes: "暫無箱。",
-        allocLot: "批次 {shelf}{box}（dc {dc}）",
+        allocLot: "批次 {shelf}{box}-{dc}",
         allocReceivingBox: "收貨箱 {box}",
         allocReceivingOrder: "收貨單",
         boxed: "已裝箱",
