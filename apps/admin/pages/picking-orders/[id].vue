@@ -360,9 +360,10 @@ async function saveInfo() {
   }
 }
 
-// "Re-allocate": awaited recompute scoped to this order's part keys (the
-// engine preserves global priority/FIFO; other orders sharing a part are
-// rebuilt too, work-locked ones are protected).
+// "Re-allocate": awaited recompute scoped to THIS order only — only this
+// order's allocation rows are wiped/rebuilt; other orders sharing a part
+// number keep their rows untouched (spec
+// docs/superpowers/specs/2026-11-05-picking-reallocate-single-order-design.md).
 const reallocating = ref(false);
 const reallocDoneMs = ref(0);
 let reallocTimer: ReturnType<typeof setTimeout> | undefined;

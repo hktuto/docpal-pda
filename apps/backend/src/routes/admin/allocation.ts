@@ -29,8 +29,10 @@ adminAllocationRoute.post("/allocation/restore", async (c) => {
   return c.json(summary);
 });
 
-// "Re-allocate" on the picking order detail: scoped to the order's part
-// keys (404 picking_order_not_found / 409 order_not_open / 409 lock_held).
+// "Re-allocate" on the picking order detail: strictly single-order scope —
+// only this order's items are wiped/rebuilt; other orders sharing part
+// numbers keep their rows (404 picking_order_not_found / 409 order_not_open /
+// 409 lock_held). Spec 2026-11-05-picking-reallocate-single-order-design.md.
 adminAllocationRoute.post("/picking-orders/:id/reallocate", async (c) => {
   const allocation = await awaitAllocationTask(db, "admin re-allocate (picking)", (runnerDb) =>
     allocateForPickingOrder(runnerDb, c.req.param("id"))

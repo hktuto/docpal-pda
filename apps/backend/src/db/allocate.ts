@@ -32,8 +32,11 @@ import { locationMatches } from "./locationMatch.js";
 //     match (dock rows whose po_no equals the demand's PO are pinned, date
 //     code ignored), qty perfect match (an exact-fit whole-receiving-order
 //     box group or single dock row, gated to the oldest available dock date
-//     code), then dock FIFO. Matches are pinned as MANUAL allocations so
-//     they outrank priority_seq and survive every later wipe. allocateAll
+//     code), then dock FIFO. Part-key scoped runs pin matches as MANUAL
+//     allocations so they outrank priority_seq and survive every later
+//     wipe; order-only scoped runs (admin picking Re-allocate, spec
+//     docs/superpowers/specs/2026-11-05-picking-reallocate-single-order-design.md)
+//     pin as NON-manual rows of the selected order only. allocateAll
 //     runs no pre-pass — pure priority+FIFO.
 //   - Location: the picking order's (org_id, sub_inventory_code) pair must
 //     match the source's pair — lots match on their own pair, receiving
@@ -190,7 +193,15 @@ export interface AllocateSummary {
   poMatched: number;
 }
 
-async function loadDemands(dbOrTx: DbOrTx, partKeys?: string[], includeOrderId?: string): Promise<DemandRow[]> {
+/**
+ * Load open demands. Without `onlyOrderId`: every unlocked
+ * pending/picking order (allocateAll and the part-key scope). With
+ * `onlyOrderId`: ONLY that order's items — no status/work-lock clause, the
+ * callers' guards already ran, and an `allocated`-status order's items must
+ * be rebuildable (stale-lock repair path). Open qty = qty − Σ
+ * picking_packages either way.
+ */
+async function loadDemands(dbOrTx: DbOrTx, partKeys?: string[], onlyOrderId?: string): Promise<DemandRow[]> {
   return queryAll<DemandRow>(
     dbOrTx,
     sql`SELECT pi.id AS "pickingItemId",
@@ -209,11 +220,10 @@ async function loadDemands(dbOrTx: DbOrTx, partKeys?: string[], includeOrderId?:
           SELECT picking_item_id, SUM(qty)::int AS qty
           FROM picking_packages GROUP BY picking_item_id
         ) pkg ON pkg.picking_item_id = pi.id
-        WHERE (
-            po.status IN ('pending', 'picking')
-            AND (po.working_by IS NULL OR po.working_at IS NULL OR po.working_at < ${workLockExpiry()})
-            ${includeOrderId ? sql`OR po.id = ${includeOrderId}` : sql``}
-          )
+        WHERE ${onlyOrderId
+            ? sql`po.id = ${onlyOrderId}`
+            : sql`(po.status IN ('pending', 'picking')
+                   AND (po.working_by IS NULL OR po.working_at IS NULL OR po.working_at < ${workLockExpiry()}))`}
           AND pi.qty > COALESCE(pkg.qty, 0)
           ${partKeys && partKeys.length > 0 ? sql`AND ${inArray(sql`pi.part_no`, partKeys)}` : sql``}
         ORDER BY po.priority_seq, po.delivery_date NULLS LAST, po.order_no, pi.id`
@@ -270,10 +280,19 @@ async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
   );
 }
 
-async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<ReceivingRow[]> {
-  // Availability must net out allocations that survive the wipe: rows held by
-  // work-locked orders and pinned manual rows. Lot sources get this for free
-  // via inventory_lots.allocated_qty; receiving sources have no such counter.
+/**
+ * Load in-hand / provisional receiving sources for one demand. Availability
+ * must net out allocations that survive the wipe. What survives depends on
+ * the scope:
+ *   - part-key scope (`netAllRemaining` false): the wipe only touches the
+ *     participating (unlocked open) items, so only manual pins and
+ *     work-locked orders' rows survive — those are subtracted.
+ *   - order-only scope (`netAllRemaining` true, admin picking Re-allocate):
+ *     every OTHER order's row survives, so ALL remaining allocation rows
+ *     are subtracted — without this the single-order run would double-book
+ *     dock stock other orders hold.
+ */
+async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow, netAllRemaining = false): Promise<ReceivingRow[]> {
   const expiry = workLockExpiry();
   return queryAll<ReceivingRow>(
     dbOrTx,
@@ -295,7 +314,9 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
           JOIN picking_items pi ON pi.id = a.picking_item_id
           JOIN picking_orders po ON po.id = pi.picking_order_id
           WHERE a.receiving_invoice_item_id IS NOT NULL
-            AND (a.manual OR (po.working_by IS NOT NULL AND po.working_at >= ${expiry}))
+            ${netAllRemaining
+              ? sql``
+              : sql`AND (a.manual OR (po.working_by IS NOT NULL AND po.working_at >= ${expiry}))`}
           GROUP BY a.receiving_invoice_item_id
         ) locked_ii ON locked_ii.rii_id = rii.id
         LEFT JOIN (
@@ -304,7 +325,9 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
           JOIN picking_items pi ON pi.id = a.picking_item_id
           JOIN picking_orders po ON po.id = pi.picking_order_id
           WHERE a.receiving_order_id IS NOT NULL AND pi.part_no = ${d.partNo}
-            AND (a.manual OR (po.working_by IS NOT NULL AND po.working_at >= ${expiry}))
+            ${netAllRemaining
+              ? sql``
+              : sql`AND (a.manual OR (po.working_by IS NOT NULL AND po.working_at >= ${expiry}))`}
           GROUP BY a.receiving_order_id
         ) locked_ro ON locked_ro.ro_id = ro.id
         WHERE (rii.part_no = ${d.partNo} OR rii.wcl_item_no = ${d.partNo})
@@ -628,16 +651,19 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
 }
 
 // ---------------------------------------------------------------------------
-// Scoped recompute (part-key scoped). Sources/demands are per-part (a lot /
-// receiving item / picking item each carries one part number, parts never
-// compete), so a recompute scoped to a set of part keys changes provably
-// nothing outside it. Two entry points share runScopedAllocation below:
-//   - allocateForReceivingOrder: after confirm-arrival makes ONE receiving
-//     order's stock allocatable — fast enough to await in the request path,
-//     so the caller (admin/PDA confirm screen) gets the final state
-//     immediately.
-//   - allocateForPickingOrder: the admin "Re-allocate" button — one picking
-//     order's part keys, with 404/409 guards before the tx.
+// Scoped recompute. Two scopes share runScopedAllocation below:
+//   - Part-key scope (allocateForReceivingOrder: after confirm-arrival makes
+//     ONE receiving order's stock allocatable — fast enough to await in the
+//     request path, so the caller gets the final state immediately).
+//     Sources/demands are per-part (a lot / receiving item / picking item
+//     each carries one part number, parts never compete), so a recompute
+//     scoped to a set of part keys changes provably nothing outside it.
+//   - Order-only scope (allocateForPickingOrder: the admin picking "Re-
+//     allocate" button — spec
+//     docs/superpowers/specs/2026-11-05-picking-reallocate-single-order-design.md).
+//     Wipes/rebuilds ONLY the selected order's open items; other orders keep
+//     their rows untouched and are netted out of dock availability instead
+//     of being rebuilt.
 // allocateAll is no longer scheduled by mutation routes — allocation is
 // manual-only (spec docs/superpowers/specs/2026-11-03-allocation-manual-only-design.md).
 // It remains the dev/test fleet-wide rebuild (`POST /dev/allocate`).
@@ -678,13 +704,21 @@ export async function allocateForReceivingOrder(db: AppDb, receivingOrderId: str
 }
 
 /**
- * Scoped recompute for one picking order (admin Re-allocate): wipe/rebuild
- * every open demand sharing the order's part keys (parts never compete), in
- * global priority_seq order. 404 picking_order_not_found; 409 order_not_open
- * unless pending/picking/allocated; 409 lock_held when a PDA holds the order's
- * work lock (the recompute would skip it — the button must not pretend it ran).
- * An `allocated` order is force-included as a demand: this is the explicit
- * repair path for a locked order whose rows went stale.
+ * Scoped recompute for ONE picking order (admin picking "Re-allocate",
+ * spec docs/superpowers/specs/2026-11-05-picking-reallocate-single-order-design.md):
+ * wipe/rebuild ONLY the selected order's open items. Other orders — even
+ * ones sharing part numbers — keep their allocation rows untouched; they
+ * are netted out of dock availability instead of being rebuilt. 404
+ * picking_order_not_found; 409 order_not_open unless pending/picking/
+ * allocated; 409 lock_held when a PDA holds the order's work lock (the
+ * recompute would run while the operator scans against the rows — the
+ * button must not pretend it ran). An `allocated` order is still rebuilt:
+ * this is the explicit repair path for a locked order whose rows went
+ * stale (demand loading in order-only scope does not filter by status).
+ *
+ * Accepted trade-off: the run does NOT rebalance other orders' demand.
+ * Priority/FIFO convergence across orders requires re-allocating each
+ * affected order (fleet-wide: POST /dev/allocate).
  */
 export async function allocateForPickingOrder(db: AppDb, pickingOrderId: string): Promise<ScopedAllocateResult> {
   const startedAt = Date.now();
@@ -720,7 +754,7 @@ export async function allocateForPickingOrder(db: AppDb, pickingOrderId: string)
       sql`SELECT DISTINCT part_no AS "partKey" FROM picking_items WHERE picking_order_id = ${pickingOrderId}`
     );
     return runScopedAllocation(tx, keyRows.map((r) => r.partKey), { scope: "picking-order", pickingOrderId }, startedAt, {
-      includeOrderId: pickingOrderId,
+      onlyOrderId: pickingOrderId,
     });
   });
 }
@@ -1577,13 +1611,16 @@ export async function transferPickingAllocation(
 // Shared wipe/rebuild core for the two scoped recomputes above (mirrors
 // allocateAll on purpose — keep them in sync). `scope` rides on the
 // allocation.computed / allocation.finished event payloads so UIs can tell
-// what triggered the run.
+// what triggered the run. `onlyOrderId` switches to the order-only scope
+// (admin picking Re-allocate): demands are just that order's items and dock
+// availability nets EVERY remaining allocation row (all other orders'
+// rows survive the wipe).
 async function runScopedAllocation(
   tx: DbOrTx,
   partKeys: string[],
   scope: Record<string, unknown>,
   startedAt: number,
-  opts?: { includeOrderId?: string }
+  opts?: { onlyOrderId?: string }
 ): Promise<ScopedAllocateResult> {
   const summary: AllocateSummary = {
     demands: 0,
@@ -1606,7 +1643,8 @@ async function runScopedAllocation(
     return { ...summary, partKeys, changed: false, durationMs: Date.now() - startedAt };
   }
 
-  const demands = await loadDemands(tx, partKeys, opts?.includeOrderId);
+  const orderOnly = !!opts?.onlyOrderId;
+  const demands = await loadDemands(tx, partKeys, opts?.onlyOrderId);
   summary.demands = demands.length;
 
   const allocationKey = (
@@ -1715,13 +1753,18 @@ async function runScopedAllocation(
     // docs/superpowers/specs/2026-11-05-allocation-dock-match-ordering-design.md) ----
     // Scoped runs only. Source preference is strictly: shelf lots FIFO
     // first, then dock stock as PO match → qty perfect match → FIFO. The
-    // passes below pin dock rows as MANUAL allocations so the pins outrank
-    // priority_seq and survive every later wipe. allocateAll runs none of
-    // this. Pass PO runs for all demands before Pass A (a whole receiving
-    // order's boxes == remainder), which runs for all demands before Pass B
-    // (a single dock row == remainder) — PO binding outranks qty exact-fit,
-    // and a big group match is not fragmented by a smaller single-row match
-    // from an earlier-priority demand.
+    // passes below pin dock rows so they outrank plain FIFO within the run.
+    // Part-key scope pins as MANUAL allocations: the pins outrank
+    // priority_seq and survive every later wipe. Order-only scope pins as
+    // NON-manual rows: inside one order there is no cross-order competition
+    // to outrank, a manual pin would leak outside the selected order (never
+    // wiped by anyone else), and non-manual pins keep identical rebuilds
+    // idempotent through the net-change keys below. allocateAll runs none
+    // of this. Pass PO runs for all demands before Pass A (a whole
+    // receiving order's boxes == remainder), which runs for all demands
+    // before Pass B (a single dock row == remainder) — PO binding outranks
+    // qty exact-fit, and a big group match is not fragmented by a smaller
+    // single-row match from an earlier-priority demand.
     const perfect: { d: DemandRow; remaining: number }[] = [];
     for (const raw of demands) {
       const d = resolveDemandLocation(raw);
@@ -1762,10 +1805,26 @@ async function runScopedAllocation(
           receivingInvoiceItemId: p.recv.ctnNo ? p.recv.receivingInvoiceItemId : null,
           receivingOrderId: p.recv.ctnNo ? null : p.recv.receivingOrderId,
           qty: p.qty,
-          manual: true,
+          manual: !orderOnly,
         });
         summary.allocationsCreated += 1;
-        prePassPinsCreated += 1;
+        if (orderOnly) {
+          // Non-manual pin: part of the rebuilt set, so it belongs in the
+          // net-change keys (an identical rebuild reads changed = false).
+          afterKeys.push(
+            allocationKey(
+              item.pickingItemId,
+              null,
+              p.recv.ctnNo ? p.recv.receivingInvoiceItemId : null,
+              p.recv.ctnNo ? null : p.recv.receivingOrderId,
+              p.qty
+            )
+          );
+        } else {
+          // Manual pins are excluded from the keys — count them for the
+          // change signal instead.
+          prePassPinsCreated += 1;
+        }
         pinned += p.qty;
         txnRows.push({
           id: newId(),
@@ -1786,8 +1845,9 @@ async function runScopedAllocation(
       }
       // Pre-subtract like existing manual pins: the main loop skips the
       // pinned qty and only allocates the rest. In-run visibility for later
-      // demands comes from loadReceivingSources' manual-aware locked_*
-      // subqueries (same tx).
+      // demands comes from loadReceivingSources' surviving-rows netting
+      // (manual/locked for part-key scope, every remaining row for
+      // order-only scope — same tx).
       manualQtyByItem.set(item.pickingItemId, (manualQtyByItem.get(item.pickingItemId) ?? 0) + pinned);
     };
 
@@ -1810,7 +1870,7 @@ async function runScopedAllocation(
         if (item.remaining <= 0) continue;
         const demandPo = item.d.itemPoNo?.trim() || item.d.orderPoNo?.trim() || null;
         if (!demandPo) continue;
-        const rows = allocatableRows(await loadReceivingSources(tx, item.d));
+        const rows = allocatableRows(await loadReceivingSources(tx, item.d, orderOnly));
         const pieces: { qty: number; recv: ReceivingRow }[] = [];
         for (const r of rows) {
           if (item.remaining <= 0) break;
@@ -1830,7 +1890,7 @@ async function runScopedAllocation(
       // oldest available dock date code → pin every box of that order.
       for (const item of perfect) {
         if (item.remaining <= 0) continue;
-        const rows = allocatableRows(await loadReceivingSources(tx, item.d));
+        const rows = allocatableRows(await loadReceivingSources(tx, item.d, orderOnly));
         const oldest = oldestDateCode(rows);
         const groups = new Map<string, { sum: number; rows: ReceivingRow[] }>();
         for (const r of rows) {
@@ -1854,7 +1914,7 @@ async function runScopedAllocation(
       // oldest dock date code exactly equals the remaining dock qty.
       for (const item of perfect) {
         if (item.remaining <= 0) continue;
-        const rows = allocatableRows(await loadReceivingSources(tx, item.d));
+        const rows = allocatableRows(await loadReceivingSources(tx, item.d, orderOnly));
         const oldest = oldestDateCode(rows);
         const hit = rows.find((r) => r.available === item.remaining && r.dateCode === oldest);
         if (hit) {
@@ -1886,7 +1946,7 @@ async function runScopedAllocation(
       }
 
       if (remaining > 0 && allowDockStock()) {
-        const rows = await loadReceivingSources(tx, d);
+        const rows = await loadReceivingSources(tx, d, orderOnly);
         for (const r of rows) {
           if (remaining <= 0) break;
           if (r.orgId === null || r.subInventoryCode === null) {

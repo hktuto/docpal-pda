@@ -508,59 +508,77 @@ test("perfect-match pins survive allocateAll", async () => {
   }
 });
 
-test("runScopedAllocation: exact-fit shelf lot is NOT pinned — priority+FIFO split (spec 2026-11-05)", async () => {
+test("allocateForPickingOrder: re-allocate rebuilds ONLY the selected order", async () => {
   await reseed(client);
   await client.db.execute(sql`DELETE FROM picking_orders`);
   const ORDER_HI = "00000000-0000-4000-8000-000000000111";
   const ITEM_HI = "00000000-0000-4000-8000-000000000112";
   const ORDER_LO = "00000000-0000-4000-8000-000000000113";
   const ITEM_LO = "00000000-0000-4000-8000-000000000114";
-  // LOT_18 holds exactly 1000 of RK73H1JTTD1002F — an exact fit for the
-  // low-priority demand, but shelf stock is pure FIFO now: no pin, the
-  // higher-priority demand nibbles it as usual.
+  // LOT_18 holds exactly 1000 of RK73H1JTTD1002F; HI outranks LO.
   await insertPickingDemand(ORDER_HI, ITEM_HI, "TEST-PM-HI", 1, "RK73H1JTTD1002F", 600, 9201);
   await insertPickingDemand(ORDER_LO, ITEM_LO, "TEST-PM-LO", 2, "RK73H1JTTD1002F", 1000, 9202);
 
+  // fleet split: HI 600 / LO 400
+  await allocateAll(client.db);
+  const hiBefore = await client.db.execute(
+    sql`SELECT id, qty FROM allocations WHERE picking_item_id = ${ITEM_HI} ORDER BY id`
+  );
+
+  // re-allocating LO rebuilds LO against stock NET of HI's surviving rows
+  // and must not touch HI's rows at all (spec
+  // docs/superpowers/specs/2026-11-05-picking-reallocate-single-order-design.md)
   const s = await allocateForPickingOrder(client.db, ORDER_LO);
+  assert.equal(s.demands, 1);
   assert.equal(s.perfectMatched, 0);
   assert.equal(s.poMatched, 0);
-  const rows = await client.db.execute(
-    sql`SELECT picking_item_id AS item, qty, manual FROM allocations WHERE inventory_lot_id = ${LOT_18} ORDER BY qty`
+  const hiAfter = await client.db.execute(
+    sql`SELECT id, qty FROM allocations WHERE picking_item_id = ${ITEM_HI} ORDER BY id`
   );
-  assert.deepEqual(
-    rows.map((r: any) => [r.item, Number(r.qty), r.manual]),
-    [
-      [ITEM_LO, 400, false],
-      [ITEM_HI, 600, false],
-    ]
+  assert.deepEqual(hiAfter, hiBefore);
+  const lo = await client.db.execute(sql`SELECT qty FROM allocations WHERE picking_item_id = ${ITEM_LO}`);
+  assert.equal(lo.reduce((n, r: any) => n + Number(r.qty), 0), 400);
+
+  // restock → only LO's share grows to its full open qty; HI still untouched
+  await client.db.execute(sql`UPDATE inventory_lots SET total_qty = 12000 WHERE id = ${LOT_18}`);
+  await allocateForPickingOrder(client.db, ORDER_LO);
+  const hiFinal = await client.db.execute(
+    sql`SELECT id, qty FROM allocations WHERE picking_item_id = ${ITEM_HI} ORDER BY id`
   );
-  // the lot's allocated_qty still reflects the full reservation
-  const lot = await client.db.execute(sql`SELECT allocated_qty FROM inventory_lots WHERE id = ${LOT_18}`);
-  assert.equal(Number((lot[0] as any).allocated_qty), 1000);
+  assert.deepEqual(hiFinal, hiBefore);
+  const loFinal = await client.db.execute(sql`SELECT qty FROM allocations WHERE picking_item_id = ${ITEM_LO}`);
+  assert.equal(loFinal.reduce((n, r: any) => n + Number(r.qty), 0), 1000);
 });
 
-test("runScopedAllocation: no exact match keeps the priority+FIFO split", async () => {
+test("allocateForPickingOrder: fresh re-allocate takes what is available — other orders' demand is not rebalanced", async () => {
   await reseed(client);
   await client.db.execute(sql`DELETE FROM picking_orders`);
   const ORDER_HI = "00000000-0000-4000-8000-000000000121";
   const ITEM_HI = "00000000-0000-4000-8000-000000000122";
   const ORDER_LO = "00000000-0000-4000-8000-000000000123";
   const ITEM_LO = "00000000-0000-4000-8000-000000000124";
-  await insertPickingDemand(ORDER_HI, ITEM_HI, "TEST-PM-HI", 1, "RK73H1JTTD1002F", 400, 9301);
-  await insertPickingDemand(ORDER_LO, ITEM_LO, "TEST-PM-LO", 2, "RK73H1JTTD1002F", 600, 9302);
+  await insertPickingDemand(ORDER_HI, ITEM_HI, "TEST-FRESH-HI", 1, "RK73H1JTTD1002F", 400, 9301);
+  await insertPickingDemand(ORDER_LO, ITEM_LO, "TEST-FRESH-LO", 2, "RK73H1JTTD1002F", 1000, 9302);
 
+  // no fleet run ever happened: LO's single-order re-allocate sees the whole
+  // lot and takes all of it — HI's higher priority is NOT honored outside a
+  // fleet/part-key recompute (accepted trade-off, spec
+  // docs/superpowers/specs/2026-11-05-picking-reallocate-single-order-design.md)
   const s = await allocateForPickingOrder(client.db, ORDER_LO);
+  assert.equal(s.demands, 1);
   assert.equal(s.perfectMatched, 0);
   const rows = await client.db.execute(
     sql`SELECT picking_item_id AS item, qty, manual FROM allocations WHERE inventory_lot_id = ${LOT_18} ORDER BY qty`
   );
   assert.deepEqual(
     rows.map((r: any) => [r.item, Number(r.qty), r.manual]),
-    [
-      [ITEM_HI, 400, false],
-      [ITEM_LO, 600, false],
-    ]
+    [[ITEM_LO, 1000, false]]
   );
+  const hi = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations WHERE picking_item_id = ${ITEM_HI}`);
+  assert.equal(Number((hi[0] as any).c), 0);
+  // the lot's allocated_qty reflects the full reservation
+  const lot = await client.db.execute(sql`SELECT allocated_qty FROM inventory_lots WHERE id = ${LOT_18}`);
+  assert.equal(Number((lot[0] as any).allocated_qty), 1000);
 });
 
 // Insert dock rows for `partNo` into receiving order 100003's invoice and
@@ -707,6 +725,65 @@ test("runScopedAllocation: PO pins cover only the remainder after shelf FIFO", a
   );
   assert.deepEqual(lotRows.map((r: any) => [r.lot, Number(r.qty), r.manual]), [[LOT_18, 1000, false]]);
   assert.deepEqual(await dockAllocs(ITEM_LO), [["S-1", 200, true]]);
+});
+
+// --- order-only scope (admin picking Re-allocate; spec
+// docs/superpowers/specs/2026-11-05-picking-reallocate-single-order-design.md) ---
+
+test("allocateForPickingOrder: dock availability nets other orders' surviving rows (no double-book)", async () => {
+  const PART = "OO-NET-PART";
+  const { receivingOrderId } = await setupDockWorld(PART, [
+    { ctnNo: "N-1", qty: 40, dateCode: "2501" },
+    { ctnNo: "N-2", qty: 40, dateCode: "2502" },
+  ]);
+  const ORDER_HI = "00000000-0000-4000-8000-0000000001a1";
+  const ITEM_HI = "00000000-0000-4000-8000-0000000001a2";
+  const ORDER_LO = "00000000-0000-4000-8000-0000000001a3";
+  const ITEM_LO = "00000000-0000-4000-8000-0000000001a4";
+  await insertPickingDemand(ORDER_HI, ITEM_HI, "TEST-NET-HI", 1, PART, 30, 9801);
+  await insertPickingDemand(ORDER_LO, ITEM_LO, "TEST-NET-LO", 2, PART, 50, 9802);
+
+  // part-key run (confirm-arrival scope) splits the boxes across orders
+  await allocateForReceivingOrder(client.db, receivingOrderId);
+  assert.deepEqual(await dockAllocs(ITEM_HI), [["N-1", 30, false]]);
+
+  // LO's single-order re-allocate must NOT see the full 80 pcs — HI's 30
+  // survive the wipe and net out of dock availability
+  const s = await allocateForPickingOrder(client.db, ORDER_LO);
+  assert.equal(s.demands, 1);
+  // box totals stay exact: N-1 30(HI)+10(LO)=40, N-2 40(LO)
+  assert.deepEqual(await dockAllocs(ITEM_HI), [["N-1", 30, false]]);
+  assert.deepEqual(await dockAllocs(ITEM_LO), [
+    ["N-1", 10, false],
+    ["N-2", 40, false],
+  ]);
+});
+
+test("allocateForPickingOrder: dock perfect-match pin is non-manual and idempotent", async () => {
+  const PART = "OO-PIN-PART";
+  const { receivingOrderId } = await setupDockWorld(PART, [{ ctnNo: "X-1", qty: 100, dateCode: "2501" }]);
+  const ORDER_HI = "00000000-0000-4000-8000-0000000001b1";
+  const ITEM_HI = "00000000-0000-4000-8000-0000000001b2";
+  const ORDER_LO = "00000000-0000-4000-8000-0000000001b3";
+  const ITEM_LO = "00000000-0000-4000-8000-0000000001b4";
+  await insertPickingDemand(ORDER_HI, ITEM_HI, "TEST-PIN-HI", 1, PART, 30, 9901);
+  await insertPickingDemand(ORDER_LO, ITEM_LO, "TEST-PIN-LO", 2, PART, 100, 9902);
+
+  const s = await allocateForPickingOrder(client.db, ORDER_LO);
+  assert.equal(s.perfectMatched, 1);
+  // the whole box fits LO exactly → pinned within this order's scope only,
+  // as a NON-manual row of LO (never wipes/leaks into other orders' runs)
+  assert.deepEqual(await dockAllocs(ITEM_LO), [["X-1", 100, false]]);
+  // HI is untouched: a single-order re-allocate never rebuilds other orders
+  const hi = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations WHERE picking_item_id = ${ITEM_HI}`);
+  assert.equal(Number((hi[0] as any).c), 0);
+
+  // idempotent re-run: the non-manual pin rides LO's own wipe/rebuild and
+  // the identical result reads changed = false
+  const s2 = await allocateForPickingOrder(client.db, ORDER_LO);
+  assert.equal(s2.changed, false);
+  assert.equal(s2.perfectMatched, 1);
+  assert.deepEqual(await dockAllocs(ITEM_LO), [["X-1", 100, false]]);
 });
 
 // --- allocation_status (maintained by allocateAll's aggregate refresh) ----------
