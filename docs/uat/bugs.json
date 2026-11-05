@@ -530,5 +530,19 @@
   "closedDate": "2026-11-05",
   "tester": "",
   "remarks": "Fixed in commit 5b504f4e (11-05) — Re-allocate is now strictly single-order (spec docs/superpowers/specs/2026-11-05-picking-reallocate-single-order-design.md); receiving confirm-arrival keeps the part-key scope by design; retest in UAT"
+ },
+ {
+  "id": "BUG-039",
+  "dateFound": "2026-11-05",
+  "functionId": "PDA-014",
+  "description": "Pick scan crashed with a database error when the stock source had no lot code / COO / COW and the scanned label didn't carry that field — operator could not scan-pick the line",
+  "reproSteps": "Allocate stock whose lot (or receiving item) has NULL lot_code/coo/cow, then scan-pick without that field on the label → 500 with a malformed INSERT (empty VALUES slots)",
+  "severity": "Critical",
+  "status": "Closed",
+  "retestResult": "",
+  "owner": "dev",
+  "closedDate": "2026-11-05",
+  "tester": "",
+  "remarks": "Fixed in commit f73b3a0e (11-05) — nullable source attrs now fall back to NULL instead of undefined in the package insert (regression test added); latent since 2026-10-08; retest in UAT"
  }
 ]
