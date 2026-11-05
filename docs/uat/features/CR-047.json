@@ -7,8 +7,8 @@
  "feature": "CN receiving scan: flag must support partial quantities on grouped items (e.g. expected 100, scanned 60 → flag only the missing 40), and pressing Finish with unscanned items left should prompt the operator to confirm and auto-flag all remaining quantity as missing",
  "reason": "Scans aggregate per part, but current flagging works on whole groups only — there is no way to flag a shortfall qty, and Finish silently accepts orders where items were never scanned",
  "priority": "Should have",
- "status": "New",
+ "status": "Delivered",
  "owner": "dev",
  "targetDate": "",
- "remarks": "Record only — not implemented yet. Related: CR-046 (expand grouped scans). CnFlagItemInput has no qty field (flag is whole-row); backend finalize already takes unresolvedAs:'missing' — the missing piece is the Finish-time prompt + per-qty flagging"
+ "remarks": "Delivered — commit 3f6af0dc. flagCnItem now takes optional qty (flag_qty column); finalize + unresolvedAs:missing preserve partially-scanned qty; PDA flag sheet qty input + Finish shortfall prompt. Reuse of dormant mismatch_qty avoided. Admin order-detail flag_qty display deferred (see plan)"
 }

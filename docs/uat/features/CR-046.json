@@ -7,8 +7,8 @@
  "feature": "CN receiving scan: expand mode per grouped item — tap a grouped part row to list every scanned label under it, with the ability to remove an individual scan from the group",
  "reason": "Scans aggregate into per-part rows, so operators cannot review which physical labels went into a group or undo a single mis-scan without re-scanning the whole order",
  "priority": "Should have",
- "status": "New",
+ "status": "Delivered",
  "owner": "dev",
  "targetDate": "",
- "remarks": "Record only — not implemented yet"
+ "remarks": "Delivered — commit 3f6af0dc. Scan history (receiving_cn_scan_events) + remove endpoint; PDA group rows expand to list per-scan takes with a Remove button. Legacy pre-migration scans have no events (reset stays as fallback)"
 }
