@@ -1,0 +1,14 @@
+{
+ "id": "CR-045",
+ "dateRaised": "2026-11-05",
+ "raisedBy": "Sean",
+ "app": "PDA",
+ "functionId": "PDA-027",
+ "feature": "In-app bug report: PDA header 🐞 (also ADM-037 admin queue) — per-page category chips + note + optional photo, submitted with auto-captured route/user/activity trail; admin /bug-reports triage queue open→triaged→closed with uat_ref",
+ "reason": "Floor-discovered bugs reached the developer verbally with no context (screen, user, scans, failed requests), making them unreproducible; testers need a one-button report from the exact screen",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Spec docs/superpowers/specs/2026-11-05-in-app-bug-report-design.md — commit 13541d0f"
+}
