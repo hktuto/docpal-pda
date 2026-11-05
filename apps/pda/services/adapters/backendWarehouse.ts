@@ -77,7 +77,7 @@ import type {
   ShelfExchangePreview,
   ShelfExchangeResult,
 } from "../types";
-import type { WarehouseService } from "../warehouse";
+import type { WarehouseService, BugReportInput } from "../warehouse";
 import { createApiClient, ApiError } from "../apiClient";
 import { I18nError } from "~/composables/i18nError";
 import { emitOutdatedWarning } from "../scanWarningBus";
@@ -889,6 +889,9 @@ export function createBackendWarehouseService(
       qty: number;
     }): Promise<ShelfExchangeResult> {
       return client.post("/shelf-exchange", input);
+    },
+    async reportBug(input: BugReportInput): Promise<{ id: string }> {
+      return client.post("/bug-reports", input);
     },
   };
 }

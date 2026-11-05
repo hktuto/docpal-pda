@@ -15,3 +15,4 @@ export * from "./outdated.js";
 export * from "./adhocPutaway.js";
 export * from "./inventory-labels.js";
 export * from "./shelfExchange.js";
+export * from "./bug-reports.js";

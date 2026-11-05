@@ -10,6 +10,7 @@ import { useErrorMessage } from '~/composables/errorMessage';
 import { useWarehouse } from '~/composables/useWarehouse';
 import { parseAndIdentify, type CandidateOptions, type OcrParseResult, type RawOcrCapture, type OcrBarcode, type ParsedFields } from '~/utils/parseOcrScan';
 import { decodeLabel } from '~/utils/labelDecode';
+import { pushLog } from '~/utils/activityLog';
 import { playScanError, playScanSuccess } from '~/utils/scanBeep';
 import type { OcrInput } from '~/utils/ocrNormalize';
 import type { SupplierQrcodeTemplate } from '~/services/types';
@@ -81,7 +82,9 @@ export function buildRawCapture(value: string): LabelScanCapture {
  */
 export async function captureLabel(): Promise<LabelScanCapture | null> {
   try {
-    return await RectangleDetection.scanLabel();
+    const capture = await RectangleDetection.scanLabel();
+    pushLog('scan', `camera: ${captureRawLabelValue(capture).slice(0, 120)}`);
+    return capture;
   } catch (e: unknown) {
     if (isCancellationError(e)) {
       return null;

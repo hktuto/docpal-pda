@@ -1,4 +1,5 @@
 import { I18nError } from "~/composables/i18nError";
+import { pushLog } from "~/utils/activityLog";
 
 /** Plain Error with the HTTP status attached, for errors without an i18n key. */
 export class ApiError extends Error {
@@ -147,12 +148,15 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     }
 
     let res: Response;
+    const startedAt = Date.now();
     try {
       res = await fetch(buildUrl(path, opts.params), init);
     } catch {
+      pushLog("api", `${method} ${path} → network error`);
       networkErrorHandler?.();
       throw new I18nError("network_error");
     }
+    pushLog("api", `${method} ${path} → ${res.status} in ${Date.now() - startedAt}ms`);
 
     if (res.status === 401) {
       handleUnauthorized(path);
@@ -165,6 +169,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
 
     if (!res.ok) {
       const text = (await res.text()).trim();
+      pushLog("api", `${method} ${path} error: ${text.slice(0, 160)}`);
       // Structured JSON error bodies (e.g. scan 409 {message, candidates})
       // surface as an ApiError carrying the parsed body; plain-text
       // snake_case bodies pass through as i18n keys below.

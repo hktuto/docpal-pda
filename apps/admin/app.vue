@@ -1,8 +1,22 @@
 <script setup lang="ts">
 import { navSections } from "~/utils/entities";
+import { pushLog, setLoggedRoute } from "~/utils/activityLog";
 
 const route = useRoute();
+const router = useRouter();
 const user = ref<{ displayName?: string } | null>(null);
+
+// Bug-report trail wiring (spec docs/superpowers/specs/2026-11-05-in-app-bug-report-design.md).
+const bugOpen = ref(false);
+setLoggedRoute(route.fullPath);
+router.afterEach((to) => {
+  setLoggedRoute(to.fullPath);
+  pushLog("route", to.fullPath);
+});
+onMounted(() => {
+  window.addEventListener("error", (e) => pushLog("error", `${e.message} at ${e.filename}:${e.lineno}`));
+  window.addEventListener("unhandledrejection", (e) => pushLog("error", String(e.reason).slice(0, 200)));
+});
 
 // DocPal console link in the user popover; hidden when the backend has no
 // DOCPAL_URL configured (or the fetch fails).
@@ -140,11 +154,17 @@ onBeforeUnmount(() => {
             >
               {{ $t(l.title) }}
               <OutdatedWarningsBadge v-if="l.route === '/outdated-warnings'" />
+              <BugReportsBadge v-if="l.route === '/bug-reports'" />
             </NuxtLink>
           </div>
         </div>
       </nav>
       <AllocationIndicator />
+      <div class="bugbox">
+        <button class="btn btn-small bug-btn" @click="bugOpen = true">
+          🐞 {{ $t("bugReport.title") }}
+        </button>
+      </div>
       <div ref="userboxEl" class="userbox">
         <button class="username" @click="showUserMenu = !showUserMenu">
           {{ user?.displayName }}
@@ -173,6 +193,7 @@ onBeforeUnmount(() => {
     </main>
   </div>
   <AppUpdate />
+  <BugReportModal v-model="bugOpen" />
 </template>
 
 <style scoped>
@@ -298,6 +319,13 @@ onBeforeUnmount(() => {
 }
 .username:hover {
   color: var(--brand-teal-dark);
+}
+.bugbox {
+  padding: 0.5rem 1.125rem 0;
+}
+.bug-btn {
+  width: 100%;
+  text-align: left;
 }
 .user-popover {
   position: absolute;

@@ -42,6 +42,7 @@ import { adHocPutAwayRoute } from "./adHocPutAway.js";
 import { adminTestPickingOrderRoute } from "./testPickingOrder.js";
 import { adminReceivingCnRoute } from "./receivingCn.js";
 import { adminTaskAssignmentsRoute } from "./taskAssignments.js";
+import { adminBugReportsRoute } from "./bugReports.js";
 import { parseScopeEntries, type UserScopeEntry } from "../../db/user-scope.js";
 
 // Optional id on create: use the client's when given, else generate one.
@@ -477,6 +478,10 @@ adminRoute.route("/", adminReceivingCnRoute);
 // Task assignee management for the PDA queues (spec
 // 2026-11-01-task-assignee-design.md).
 adminRoute.route("/", adminTaskAssignmentsRoute);
+
+// Bug report triage queue (spec 2026-11-05-in-app-bug-report-design.md) —
+// sub-router uses relative paths, mounted at the resource path.
+adminRoute.route("/bug-reports", adminBugReportsRoute);
 
 // DocPal console link for the admin user popover — null when DOCPAL_URL is
 // not configured (login itself requires it, so real deployments always have it).

@@ -2657,5 +2657,60 @@ export default {
     unassigned: "未指派",
     none: "此流程暫無待處理任務。",
     saveFailed: "儲存指派失敗"
+  },
+  bugReport: {
+    title: "報告問題",
+    category: "發生了甚麼問題?",
+    note: "問題描述",
+    notePlaceholder: "請說明發生了甚麼、期望的結果",
+    photo: "照片(可選)",
+    send: "提交報告",
+    sending: "提交中…",
+    cancel: "取消",
+    close: "關閉",
+    success: "報告已提交",
+    categories: {
+      scan_failed: "掃碼失敗",
+      date_code: "日期碼錯誤",
+      wrong_data: "資料有誤",
+      missing_data: "內容缺失",
+      duplicate: "重複行",
+      label_print: "標籤打印問題",
+      blocked: "無法繼續",
+      slow: "卡頓/緩慢",
+      ui_text: "介面/文字",
+      login: "登入問題",
+      other: "其他"
+    }
+  },
+  bugQueue: {
+    navLink: "問題回報",
+    title: "問題回報",
+    empty: "暫無問題報告。",
+    filterStatus: "狀態",
+    allStatuses: "全部狀態",
+    allCategories: "全部類別",
+    colWhen: "報告時間",
+    colWho: "報告人",
+    colScreen: "介面",
+    colCategory: "類別",
+    colStatus: "狀態",
+    note: "描述",
+    trail: "操作紀錄",
+    context: "環境資料",
+    photo: "照片",
+    uatRef: "UAT 編號",
+    uatRefPlaceholder: "例如 BUG-040",
+    save: "儲存",
+    saved: "已儲存",
+    saveFailed: "更新報告失敗",
+    delete: "刪除",
+    deleted: "已刪除",
+    details: "詳情",
+    statuses: {
+      open: "待處理",
+      triaged: "已分類",
+      closed: "已關閉"
+    }
   }
 } as const;

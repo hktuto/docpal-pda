@@ -77,6 +77,7 @@
 - Issues
   - receiving issues, picking issues
   - Outdated warnings — supplier date-code scan warnings from picking / put-away scans, whole-order resolution with note; pending-count badge in nav; warning chip links from the picking / receiving order detail pages
+  - Bug reports — in-app "Report a bug" inbox (PDA header + admin sidebar): category chips + note + optional photo, auto-captured route/user/activity trail; open → triaged → closed queue with unread badge, uat_ref cross-references the docs/uat ledger row
 - Ad-hoc Put-Aways
   - read-only list of ad-hoc put-away batches (supplier, shelf, date range filters) with detail view showing full item list
 - Settings

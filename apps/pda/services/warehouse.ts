@@ -363,6 +363,21 @@ export interface WarehouseService {
     lotId: string;
     qty: number;
   }): Promise<ShelfExchangeResult>;
+
+  // Bug reporting (spec docs/superpowers/specs/2026-11-05-in-app-bug-report-design.md)
+  reportBug(input: BugReportInput): Promise<{ id: string }>;
+}
+
+/** POST /bug-reports payload; reporter comes from the JWT server-side. */
+export interface BugReportInput {
+  app: "pda" | "admin";
+  route: string;
+  category: string | null;
+  note: string;
+  context: { userAgent: string; sessionId: string; appVersion?: string };
+  trail: unknown[];
+  photo?: string | null;
+  photoMime?: string | null;
 }
 
 export interface CreateWarehouseServiceOptions {

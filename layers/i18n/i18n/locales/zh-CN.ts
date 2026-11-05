@@ -2657,5 +2657,60 @@ export default {
     unassigned: "未指派",
     none: "此流程暂无待处理任务。",
     saveFailed: "保存指派失败"
+  },
+  bugReport: {
+    title: "报告问题",
+    category: "出了什么问题?",
+    note: "问题描述",
+    notePlaceholder: "请说明发生了什么、期望的结果",
+    photo: "照片(可选)",
+    send: "提交报告",
+    sending: "提交中…",
+    cancel: "取消",
+    close: "关闭",
+    success: "报告已提交",
+    categories: {
+      scan_failed: "扫码失败",
+      date_code: "日期码错误",
+      wrong_data: "数据有误",
+      missing_data: "内容缺失",
+      duplicate: "重复行",
+      label_print: "标签打印问题",
+      blocked: "无法继续",
+      slow: "卡顿/缓慢",
+      ui_text: "界面/文字",
+      login: "登录问题",
+      other: "其他"
+    }
+  },
+  bugQueue: {
+    navLink: "问题反馈",
+    title: "问题反馈",
+    empty: "暂无问题报告。",
+    filterStatus: "状态",
+    allStatuses: "全部状态",
+    allCategories: "全部类别",
+    colWhen: "报告时间",
+    colWho: "报告人",
+    colScreen: "界面",
+    colCategory: "类别",
+    colStatus: "状态",
+    note: "描述",
+    trail: "操作记录",
+    context: "环境信息",
+    photo: "照片",
+    uatRef: "UAT 编号",
+    uatRefPlaceholder: "例如 BUG-040",
+    save: "保存",
+    saved: "已保存",
+    saveFailed: "更新报告失败",
+    delete: "删除",
+    deleted: "已删除",
+    details: "详情",
+    statuses: {
+      open: "待处理",
+      triaged: "已分类",
+      closed: "已关闭"
+    }
   }
 } as const;

@@ -3,6 +3,7 @@ import type { PluginListenerHandle } from '@capacitor/core';
 import { ScannerBroadcast } from './useScannerBroadcast';
 import { playScanError, playScanSuccess } from '~/utils/scanBeep';
 import { resolveOrderScanRoute } from '~/utils/orderScanRoute';
+import { pushLog } from '~/utils/activityLog';
 
 /** After a broadcast scan, consume wedge key echo for this long (ms). */
 const WEDGE_SUPPRESS_MS = 1500;
@@ -126,6 +127,7 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
 
   async function deliver(source: string, value: string) {
     console.log(`[SCAN-TIME] ${source}:`, value);
+    pushLog('scan', `${source}: ${value}`);
     const start = performance.now();
     let ok = true;
     // Order-link QR (admin shipper / picking-list Excel): the global
@@ -166,6 +168,7 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
     suppressWedgeUntil = Date.now() + WEDGE_SUPPRESS_MS;
     if (fillFocusedInput(value)) {
       console.log('[SCAN-TIME] broadcast scan → focused input:', value);
+      pushLog('scan', `broadcast → input: ${value}`);
       playScanSuccess();
       return;
     }

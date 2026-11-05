@@ -2661,5 +2661,60 @@ export default {
     unassigned: "Unassigned",
     none: "No open tasks for this flow.",
     saveFailed: "Failed to save the assignment"
+  },
+  bugReport: {
+    title: "Report a bug",
+    category: "What happened?",
+    note: "Describe the issue",
+    notePlaceholder: "What happened, and what you expected instead",
+    photo: "Photo (optional)",
+    send: "Send report",
+    sending: "Sending…",
+    cancel: "Cancel",
+    close: "Close",
+    success: "Bug report sent",
+    categories: {
+      scan_failed: "Scan failed",
+      date_code: "Date code error",
+      wrong_data: "Wrong data shown",
+      missing_data: "Missing items/rows",
+      duplicate: "Duplicated rows",
+      label_print: "Label printing problem",
+      blocked: "Cannot proceed",
+      slow: "Slow / laggy",
+      ui_text: "Layout / text",
+      login: "Login problem",
+      other: "Other"
+    }
+  },
+  bugQueue: {
+    navLink: "Bug Reports",
+    title: "Bug Reports",
+    empty: "No bug reports.",
+    filterStatus: "Status",
+    allStatuses: "All statuses",
+    allCategories: "All categories",
+    colWhen: "Reported",
+    colWho: "Reporter",
+    colScreen: "Screen",
+    colCategory: "Category",
+    colStatus: "Status",
+    note: "Description",
+    trail: "Activity trail",
+    context: "Context",
+    photo: "Photo",
+    uatRef: "UAT ref",
+    uatRefPlaceholder: "e.g. BUG-040",
+    save: "Save",
+    saved: "Saved",
+    saveFailed: "Failed to update the report",
+    delete: "Delete",
+    deleted: "Deleted",
+    details: "Details",
+    statuses: {
+      open: "Open",
+      triaged: "Triaged",
+      closed: "Closed"
+    }
   }
 } as const;

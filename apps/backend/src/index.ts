@@ -25,6 +25,7 @@ import { eventsRoute } from "./routes/events.js";
 import { printRoute } from "./routes/print.js";
 import { devRoute } from "./routes/dev.js";
 import { devLabRoute } from "./routes/devLab.js";
+import { bugReportsRoute } from "./routes/bugReports.js";
 
 export const app = new Hono<{ Variables: AuthVariables }>();
 
@@ -64,6 +65,7 @@ app.route("/", scanTemplatesRoute);
 app.route("/", scanDecodeRoute);
 app.route("/", eventsRoute);
 app.route("/", printRoute);
+app.route("/", bugReportsRoute);
 // Demo-only routes (/dev/reset, /dev/allocate, /dev/lab); disable with DEV_ROUTES=off.
 if (process.env.DEV_ROUTES !== "off") {
   app.route("/", devRoute);

@@ -42,6 +42,15 @@
       >{{ pageWarningText }}</span>
     </div>
 
+    <button
+      v-if="showBugButton"
+      type="button"
+      class="app-header__bug"
+      :aria-label="t('bugReport.title')"
+      :title="t('bugReport.title')"
+      @click="bugOpen = true"
+    >🐞</button>
+
     <div v-if="hasPageMenu" ref="pageMenuRef" class="app-header__menu">
       <button
         type="button"
@@ -130,6 +139,8 @@
         </button>
       </div>
     </div>
+
+    <BugReportModal v-model="bugOpen" />
   </header>
 </template>
 
@@ -145,6 +156,13 @@ const menuOpen = ref(false);
 const menuRef = ref<HTMLElement | null>(null);
 const pageMenuOpen = ref(false);
 const pageMenuRef = ref<HTMLElement | null>(null);
+
+// Report-a-bug button (spec docs/superpowers/specs/2026-11-05-in-app-bug-report-design.md):
+// hidden where there is no session to attribute a report to.
+const bugOpen = ref(false);
+const showBugButton = computed(
+  () => route.path !== "/login" && route.path !== "/server"
+);
 
 function closeMenuOnOutsideClick(event: MouseEvent) {
   const target = event.target as Node;
@@ -291,6 +309,24 @@ function openSettings() {
 }
 
 .app-header__menu-toggle:hover {
+  background: var(--bg);
+}
+
+.app-header__bug {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: transparent;
+  font-size: 1.125rem;
+  flex-shrink: 0;
+}
+
+.app-header__bug:hover {
   background: var(--bg);
 }
 

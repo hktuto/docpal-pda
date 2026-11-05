@@ -828,6 +828,25 @@ useful snapshot with an empty one. The same operations are exposed manually via
 `POST /admin/allocation/snapshot` / `POST /admin/allocation/restore`. Spec
 `docs/superpowers/specs/2026-10-26-uat-allocation-snapshot-restore-design.md`.
 
+## Bug reports
+
+In-app "Report a bug" inbox (spec
+`docs/superpowers/specs/2026-11-05-in-app-bug-report-design.md`): any
+authenticated user submits the report from the current screen; the admin
+triage queue folds rows into the UAT tracker via `uat_ref` (one-way sync —
+the table is the inbox, `docs/uat` stays the ledger). No SSE topic; the admin
+page refetches on mount. `BUG_REPORT_WEBHOOK` (optional) pings a chat
+incoming-webhook fire-and-forget on insert.
+
+| Endpoint | Description |
+|---|---|
+| `POST /bug-reports` | `{app, route, category, note, context, trail, photo?, photoMime?}` → `{id}` (201). Reporter = JWT username, never the body. 400 empty note / bad app / unknown category, 413 trail > 200 KB or photo > 5 MB (base64). Categories: `scan_failed` \| `date_code` \| `wrong_data` \| `missing_data` \| `duplicate` \| `label_print` \| `blocked` \| `slow` \| `ui_text` \| `login` \| `other` |
+| `GET /admin/bug-reports?status=&category=` | Light list newest-first (no trail/note/photo; `hasPhoto` flag), max 500 rows. |
+| `GET /admin/bug-reports/:id` | Full row incl. note, context, trail, photo (base64). |
+| `PATCH /admin/bug-reports/:id` | `{status?, uatRef?, category?}` — queue status `open` → `triaged` → `closed`. |
+| `DELETE /admin/bug-reports/:id` | Remove a report. |
+| `GET /admin/bug-reports/count` | Unread count (open + triaged) for the sidebar badge. |
+
 ## Dev
 
 | Endpoint | Description |

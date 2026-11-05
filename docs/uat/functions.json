@@ -680,5 +680,27 @@
   "result": "",
   "bugIds": "",
   "remarks": ""
+ },
+ {
+  "id": "ADM-037",
+  "app": "Admin",
+  "module": "Issues",
+  "name": "Bug reports — triage queue for in-app bug reports (status/uat_ref, activity trail, photo)",
+  "tester": "",
+  "testDate": "",
+  "result": "",
+  "bugIds": "",
+  "remarks": "Spec docs/superpowers/specs/2026-11-05-in-app-bug-report-design.md"
+ },
+ {
+  "id": "PDA-027",
+  "app": "PDA",
+  "module": "Stock & device",
+  "name": "Report a bug — header button filing category + note + photo with auto-captured activity trail",
+  "tester": "",
+  "testDate": "",
+  "result": "",
+  "bugIds": "",
+  "remarks": "Spec docs/superpowers/specs/2026-11-05-in-app-bug-report-design.md"
  }
 ]

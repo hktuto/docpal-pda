@@ -1,3 +1,5 @@
+import { pushLog } from "./activityLog";
+
 export interface ApiClient {
   get: <T = any>(path: string) => Promise<T>;
   post: <T = any>(path: string, body?: unknown) => Promise<T>;
@@ -24,16 +26,25 @@ export function createApiClient(baseUrl: string, opts: ApiClientOptions = {}): A
     if (body !== undefined) headers["Content-Type"] = "application/json";
     const token = opts.getToken?.();
     if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(`${baseUrl}${path}`, {
-      method,
-      headers: Object.keys(headers).length > 0 ? headers : undefined,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    const startedAt = Date.now();
+    let res: Response;
+    try {
+      res = await fetch(`${baseUrl}${path}`, {
+        method,
+        headers: Object.keys(headers).length > 0 ? headers : undefined,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+    } catch (e) {
+      pushLog("api", `${method} ${path} → network error (${String(e).slice(0, 80)})`);
+      throw e;
+    }
+    pushLog("api", `${method} ${path} → ${res.status} in ${Date.now() - startedAt}ms`);
     if (res.status === 401 && !path.startsWith("/auth/")) {
       opts.onUnauthorized?.();
     }
     if (!res.ok) {
       const text = (await res.text()).trim();
+      pushLog("api", `${method} ${path} error: ${text.slice(0, 160)}`);
       throw new Error(text || `Request failed (${res.status})`);
     }
     return (await res.json()) as T;
