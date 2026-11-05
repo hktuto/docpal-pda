@@ -1,0 +1,14 @@
+{
+ "id": "CR-029",
+ "dateRaised": "2026-10-28",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-007",
+ "feature": "PDA manual receiving — scan-based manual receipt with staged orders + pdf pending-verify/confirm",
+ "reason": "goods without upstream paperwork",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit f9eab952"
+}

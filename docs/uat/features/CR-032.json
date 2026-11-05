@@ -1,0 +1,14 @@
+{
+ "id": "CR-032",
+ "dateRaised": "2026-11-01",
+ "raisedBy": "",
+ "app": "Admin",
+ "functionId": "ADM-005",
+ "feature": "Task assignment — optional per-task assignee on all PDA queues (receiving/picking/put-away/verify), server-side filtering",
+ "reason": "split work per operator",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 6ac52281"
+}

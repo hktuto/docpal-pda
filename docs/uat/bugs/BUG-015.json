@@ -1,0 +1,14 @@
+{
+ "id": "BUG-015",
+ "dateFound": "2026-10-28",
+ "functionId": "PDA-014",
+ "description": "Failed pending scans could not be removed on the picking page",
+ "reproSteps": "",
+ "severity": "Minor",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-10-28",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 6bc7f680 (10-28); retest in UAT"
+}

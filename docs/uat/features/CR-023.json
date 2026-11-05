@@ -1,0 +1,14 @@
+{
+ "id": "CR-023",
+ "dateRaised": "2026-10-22",
+ "raisedBy": "",
+ "app": "Admin",
+ "functionId": "ADM-023",
+ "feature": "CN upload wizard rework — in-browser Excel decode/verify/edit, workflow submit; CN detail item status + suggested shelf + scan-to-open",
+ "reason": "",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit acc7ae89"
+}

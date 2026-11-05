@@ -1,0 +1,14 @@
+{
+ "id": "BUG-040",
+ "dateFound": "2026-11-05",
+ "functionId": "PDA-006",
+ "description": "Receiving scan of a NIDEC QR label failed to match/resolve item CHS-04TB(34), although the part exists in the parts table",
+ "reproSteps": "Receiving detail → scan NIDEC QR: `236301041541  CHS-04TB(34)  1000  1284  C6J  609080257MMJ805744571C` → item is not matched (expected: resolves to CHS-04TB(34), which exists in the parts table)",
+ "severity": "Major",
+ "status": "Open",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Record only — not fixed yet. Suspect NIDEC decode template / item-id extraction for this label format; item CHS-04TB(34) confirmed present in parts table"
+}

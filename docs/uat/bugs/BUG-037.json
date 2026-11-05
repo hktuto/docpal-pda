@@ -1,0 +1,14 @@
+{
+ "id": "BUG-037",
+ "dateFound": "2026-11-05",
+ "functionId": "ADM-026",
+ "description": "Re-allocate perfect-match pre-pass pinned newer date-code stock regardless of FIFO — older lots/boxes stranded (outdated-stock risk)",
+ "reproSteps": "Demand qty exactly equals a newer date-code lot/box while older stock exists → Re-allocate pins the newer source instead of FIFO-consuming the oldest",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-05",
+ "tester": "",
+ "remarks": "Fixed by spec docs/superpowers/specs/2026-11-05-allocation-dock-match-ordering-design.md (qty perfect match now gated to oldest dock date code; shelf lots pure FIFO); retest in UAT"
+}

@@ -1,0 +1,14 @@
+{
+ "id": "CR-036",
+ "dateRaised": "2026-11-02",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-016",
+ "feature": "Label-printing stage (打印標籤) split from labeling — dedicated queue page between finish and labeling",
+ "reason": "",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 826019de"
+}

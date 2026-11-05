@@ -6,7 +6,7 @@
 // Formulas (bug/feature counts per function) and dropdown validations are recreated on every run.
 
 import ExcelJS from "exceljs";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,8 +14,21 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dir = path.join(root, "docs", "uat");
 const load = (name) => JSON.parse(readFileSync(path.join(dir, name), "utf8"));
 const functions = load("functions.json");
-const bugs = load("bugs.json");
-const features = load("features.json");
+// bugs/features: one file per record (docs/uat/bugs/BUG-*.json, docs/uat/features/CR-*.json)
+const loadRows = (kind) => {
+  const folder = path.join(dir, kind);
+  if (!existsSync(folder)) return [];
+  const rows = readdirSync(folder).filter((f) => f.endsWith(".json")).sort()
+    .map((f) => JSON.parse(readFileSync(path.join(folder, f), "utf8")));
+  const seen = new Set();
+  for (const r of rows) {
+    if (seen.has(r.id)) throw new Error(`${kind}: duplicate id ${r.id} — two records grabbed the same number; renumber the newer file`);
+    seen.add(r.id);
+  }
+  return rows.sort((a, b) => (a.dateFound || a.dateRaised || '').localeCompare(b.dateFound || b.dateRaised || '') || String(a.id).localeCompare(String(b.id)));
+};
+const bugs = loadRows("bugs");
+const features = loadRows("features");
 
 // sanity: every bug/feature must reference a real function id (blank allowed)
 const fnIds = new Set(functions.map((f) => f.id));

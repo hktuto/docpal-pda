@@ -1,0 +1,14 @@
+{
+ "id": "CR-030",
+ "dateRaised": "2026-10-29",
+ "raisedBy": "",
+ "app": "Backend",
+ "functionId": "ADM-020",
+ "feature": "Backend label-print param conversion — per-template converters, pick-time scanned values preferred",
+ "reason": "correct data on printed labels",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit ffc36561"
+}

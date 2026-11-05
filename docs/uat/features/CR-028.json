@@ -1,0 +1,14 @@
+{
+ "id": "CR-028",
+ "dateRaised": "2026-10-28",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-017",
+ "feature": "Labeling stage (待貼標籤) between picking finish and measuring/verify",
+ "reason": "separate label step requested",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit b7dfc662"
+}

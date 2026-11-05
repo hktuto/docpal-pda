@@ -1,0 +1,14 @@
+{
+ "id": "CR-038",
+ "dateRaised": "2026-11-03",
+ "raisedBy": "",
+ "app": "Backend",
+ "functionId": "PDA-006",
+ "feature": "Backend label-decode authority — POST /scan/decode (templates + month-counter periods + dateCodeFormat + NCC drawno + TE MPN), PDA scans cut over to it",
+ "reason": "single decode truth",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 8d19ba4c"
+}

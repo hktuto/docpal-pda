@@ -1,0 +1,14 @@
+{
+ "id": "CR-015",
+ "dateRaised": "2026-10-14",
+ "raisedBy": "",
+ "app": "Admin",
+ "functionId": "ADM-035",
+ "feature": "Item ledger — per-part current lots + full in/out movement history, deep-linkable",
+ "reason": "audit per item",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit eed7252b"
+}

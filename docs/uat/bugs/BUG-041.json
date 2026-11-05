@@ -1,0 +1,14 @@
+{
+ "id": "BUG-041",
+ "dateFound": "2026-11-05",
+ "functionId": "PDA-006",
+ "description": "NCC items with 10-digit drawing numbers cannot be resolved on scan because those drawing records are not in Oracle — data needs to be synced from BVS",
+ "reproSteps": "Receiving scan an NCC label whose drawing no is 10 digits → lookupPartsByDrawingNo finds no row in wcl_part_drawno → scan does not resolve the part",
+ "severity": "Major",
+ "status": "Open",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Record only — not fixed yet. Root cause is upstream data: 10-digit drawing-no records missing from Oracle; need BVS to sync the data into wcl_part_drawno (external sync, not a code fix in the backend)"
+}

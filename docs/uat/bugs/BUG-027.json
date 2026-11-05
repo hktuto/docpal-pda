@@ -1,0 +1,14 @@
+{
+ "id": "BUG-027",
+ "dateFound": "2026-11-04",
+ "functionId": "ADM-001",
+ "description": "Admin session dropped on transient API blips; shelves list sometimes failed to load; unsafe shelf import",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-04",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 3b8f0a7d (11-04); retest in UAT"
+}

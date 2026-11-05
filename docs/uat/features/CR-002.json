@@ -1,0 +1,14 @@
+{
+ "id": "CR-002",
+ "dateRaised": "2026-10-02",
+ "raisedBy": "",
+ "app": "Both",
+ "functionId": "PDA-015",
+ "feature": "Order-link QR printed on admin shipper/picking-list exports — scanning it on the PDA jumps straight to the order",
+ "reason": "one-step entry from paper docs",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 536c55b7"
+}

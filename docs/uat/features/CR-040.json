@@ -1,0 +1,14 @@
+{
+ "id": "CR-040",
+ "dateRaised": "2026-11-04",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-010",
+ "feature": "Put-away skip-scan — shelve all checked parts with one shelf scan",
+ "reason": "fewer scans per trip",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 72cf1886"
+}

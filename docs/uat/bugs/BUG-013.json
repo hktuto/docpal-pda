@@ -1,0 +1,14 @@
+{
+ "id": "BUG-013",
+ "dateFound": "2026-10-28",
+ "functionId": "PDA-014",
+ "description": "Shelf-lot match failed when lot_code was whitespace-only",
+ "reproSteps": "",
+ "severity": "Minor",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-10-28",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit d48c8597 (10-28); retest in UAT"
+}

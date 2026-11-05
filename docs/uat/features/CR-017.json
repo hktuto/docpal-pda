@@ -1,0 +1,14 @@
+{
+ "id": "CR-017",
+ "dateRaised": "2026-10-15",
+ "raisedBy": "",
+ "app": "Admin",
+ "functionId": "ADM-019",
+ "feature": "Label print suite — size picker (small/medium/big/XL), print-scale factor, A4 batch sheets, embedded font, searchable printer dropdown",
+ "reason": "labels physically right on every printer",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit b482a20c"
+}

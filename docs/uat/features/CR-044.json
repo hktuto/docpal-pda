@@ -1,0 +1,14 @@
+{
+ "id": "CR-044",
+ "dateRaised": "2026-11-05",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-008",
+ "feature": "CN receiving scan: part-only matching — scans group/credit by part number only; PDF date code/lot code/COO/COW (DocPal OCR) no longer filter the match; scanned label batch fields overwrite the invoice line",
+ "reason": "OCR batch fields on the uploaded invoice are unreliable and blocked correct physical scans (404 no_matching_item); only part no and total qty from the PDF are true",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Spec docs/superpowers/specs/2026-11-05-cn-receiving-part-only-scan-matching-design.md"
+}

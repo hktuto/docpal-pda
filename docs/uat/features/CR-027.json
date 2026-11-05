@@ -1,0 +1,14 @@
+{
+ "id": "CR-027",
+ "dateRaised": "2026-10-27",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-014",
+ "feature": "Picking finish prompts label printing when label-print rules match the order (per-rule print / print all / skip, reprint from header)",
+ "reason": "",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 52c703ea"
+}

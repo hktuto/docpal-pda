@@ -1,0 +1,14 @@
+{
+ "id": "CR-008",
+ "dateRaised": "2026-10-08",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-014",
+ "feature": "COO/COW match enforced on picking and put-away scans",
+ "reason": "wrong-origin pick prevention",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit aadbce1b"
+}

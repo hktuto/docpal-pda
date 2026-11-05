@@ -1,0 +1,14 @@
+{
+ "id": "BUG-025",
+ "dateFound": "2026-11-03",
+ "functionId": "PDA-025",
+ "description": "TE template rejected space-separated Data Matrix (COO variant)",
+ "reproSteps": "",
+ "severity": "Minor",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-03",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit aafce58a (11-03); retest in UAT"
+}

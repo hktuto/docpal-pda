@@ -1,0 +1,14 @@
+{
+ "id": "BUG-007",
+ "dateFound": "2026-10-20",
+ "functionId": "PDA-020",
+ "description": "Measuring box: OCR misread and form validation bugs",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-10-20",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit f609184e (10-20); retest in UAT"
+}

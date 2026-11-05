@@ -1,0 +1,14 @@
+{
+ "id": "CR-007",
+ "dateRaised": "2026-10-08",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-011",
+ "feature": "Ad-hoc put-away flow (PDA screens + admin list/detail view)",
+ "reason": "shelving stock outside receiving orders",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 11604654"
+}

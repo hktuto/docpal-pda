@@ -1,0 +1,14 @@
+{
+ "id": "CR-033",
+ "dateRaised": "2026-11-01",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-025",
+ "feature": "Honeywell CT32 scanner support (DCS claim path, no device setup)",
+ "reason": "new device model",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 6cacb3b9"
+}

@@ -1,0 +1,14 @@
+{
+ "id": "BUG-023",
+ "dateFound": "2026-11-03",
+ "functionId": "PDA-011",
+ "description": "Ad-hoc put-away: wcl_item_no not canonical from parts master (screen + commit)",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-03",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 151cb2c8 (11-03); retest in UAT"
+}

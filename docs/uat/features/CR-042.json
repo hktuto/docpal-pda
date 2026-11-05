@@ -1,0 +1,14 @@
+{
+ "id": "CR-042",
+ "dateRaised": "2026-11-04",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-013",
+ "feature": "Picking list grouped + sorted by delivery date",
+ "reason": "",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit f9646041"
+}

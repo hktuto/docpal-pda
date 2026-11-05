@@ -1,0 +1,14 @@
+{
+ "id": "CR-011",
+ "dateRaised": "2026-10-12",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-012",
+ "feature": "Shelf exchange — scan-driven shelf→shelf stock move (batch rules added 11-03)",
+ "reason": "relocation without paperwork",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 354ecd6c"
+}

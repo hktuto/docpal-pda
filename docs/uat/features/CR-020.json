@@ -1,0 +1,14 @@
+{
+ "id": "CR-020",
+ "dateRaised": "2026-10-16",
+ "raisedBy": "",
+ "app": "Admin",
+ "functionId": "ADM-023",
+ "feature": "CN receiving (收貨確認) admin upload + KOA date-code counter periods (rolling 10→99 month counters)",
+ "reason": "customer CN flow",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 5edab77b"
+}

@@ -1,0 +1,14 @@
+{
+ "id": "BUG-022",
+ "dateFound": "2026-11-03",
+ "functionId": "PDA-012",
+ "description": "Shelf exchange could not resolve wrapped part keys; OR match un-parenthesized",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-03",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 6f50054f (11-03); retest in UAT"
+}

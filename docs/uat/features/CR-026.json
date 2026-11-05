@@ -1,0 +1,14 @@
+{
+ "id": "CR-026",
+ "dateRaised": "2026-10-26",
+ "raisedBy": "",
+ "app": "Backend",
+ "functionId": "ADM-026",
+ "feature": "Allocation snapshot/restore across the nightly upstream inventory wipe (UAT safety net, 17:45 capture / 08:00 restore)",
+ "reason": "allocations survived nightly refresh",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 55475ea6"
+}

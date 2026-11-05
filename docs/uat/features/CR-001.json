@@ -1,0 +1,14 @@
+{
+ "id": "CR-001",
+ "dateRaised": "2026-10-02",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-014",
+ "feature": "Picking shelf-scan mode configurable: off / require-match / require-any",
+ "reason": "",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit b1894d3f"
+}

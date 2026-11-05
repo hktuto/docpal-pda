@@ -1,0 +1,14 @@
+{
+ "id": "BUG-006",
+ "dateFound": "2026-10-20",
+ "functionId": "PDA-014",
+ "description": "Picking scan failed inside the TN order flow",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-10-20",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 0cce5f50 (10-20); retest in UAT"
+}

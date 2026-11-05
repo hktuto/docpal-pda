@@ -1,0 +1,14 @@
+{
+ "id": "CR-018",
+ "dateRaised": "2026-10-15",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "ADM-006",
+ "feature": "Multi-region release APK builds + per-region download routes (HK/SZ…)",
+ "reason": "one store per APK",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 385d4f54"
+}

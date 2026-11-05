@@ -1,0 +1,14 @@
+{
+ "id": "BUG-036",
+ "dateFound": "2026-11-05",
+ "functionId": "ADM-023",
+ "description": "CN workflow-status cron polled DocPal even when the receiving-cn flow step was disabled",
+ "reproSteps": "",
+ "severity": "Minor",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-05",
+ "tester": "",
+ "remarks": "Fixed in commit 47c3de22 (11-05); retest in UAT"
+}

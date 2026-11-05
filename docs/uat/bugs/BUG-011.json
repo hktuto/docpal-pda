@@ -1,0 +1,14 @@
+{
+ "id": "BUG-011",
+ "dateFound": "2026-10-27",
+ "functionId": "PDA-010",
+ "description": "Put-away returned 500 on shelves with malformed sub_inventory_scopes",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-10-27",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 05a2f21d (10-27); retest in UAT"
+}

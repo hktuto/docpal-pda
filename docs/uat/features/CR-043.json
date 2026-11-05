@@ -1,0 +1,14 @@
+{
+ "id": "CR-043",
+ "dateRaised": "2026-11-05",
+ "raisedBy": "",
+ "app": "Admin",
+ "functionId": "ADM-026",
+ "feature": "Allocation source ordering: shelf FIFO first, then dock stock as PO-no match → date-code-gated qty perfect match → FIFO (scoped Re-allocate/confirm-arrival)",
+ "reason": "Stock received against a PO should go to the picking order carrying that PO; perfect match must not break date-code FIFO",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Spec docs/superpowers/specs/2026-11-05-allocation-dock-match-ordering-design.md"
+}

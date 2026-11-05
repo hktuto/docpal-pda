@@ -1,0 +1,14 @@
+{
+ "id": "CR-004",
+ "dateRaised": "2026-10-04",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-001",
+ "feature": "PDA app rewritten as Nuxt3 + Capacitor (apps/pda) — login, home, receiving, picking, put-away, verify, measuring, goods-verify, stock-search flows",
+ "reason": "replace retired apps/web on the device",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit b086de64"
+}

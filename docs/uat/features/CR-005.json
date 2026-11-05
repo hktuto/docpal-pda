@@ -1,0 +1,14 @@
+{
+ "id": "CR-005",
+ "dateRaised": "2026-10-06",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-010",
+ "feature": "Put-away without box: new no-box flow, items grouped by part, scanned items shown after shelving",
+ "reason": "",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit b37dcd5c"
+}

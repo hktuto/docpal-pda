@@ -1,0 +1,14 @@
+{
+ "id": "CR-035",
+ "dateRaised": "2026-11-01",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-014",
+ "feature": "Box-each-unboxed + choose-box dialog + close box from picking page (scan-box-label removed)",
+ "reason": "faster boxing",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 8baf9b21"
+}

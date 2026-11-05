@@ -1,0 +1,14 @@
+{
+ "id": "CR-013",
+ "dateRaised": "2026-10-14",
+ "raisedBy": "",
+ "app": "Admin",
+ "functionId": "ADM-026",
+ "feature": "Cross-order allocation control — per-part allocation breakdown across all orders + qty transfer",
+ "reason": "resolve allocation conflicts manually",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit ae4ec86d"
+}

@@ -1,0 +1,14 @@
+{
+ "id": "BUG-028",
+ "dateFound": "2026-11-04",
+ "functionId": "ADM-025",
+ "description": "Admin picking list default status filter wrong after allocated/skip statuses added",
+ "reproSteps": "",
+ "severity": "Minor",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-04",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 5ed9c70e (11-04); retest in UAT"
+}

@@ -1,0 +1,14 @@
+{
+ "id": "BUG-004",
+ "dateFound": "2026-10-12",
+ "functionId": "ADM-016",
+ "description": "Inventory labels: location dropdown showed not-allowed orgs; subInventory sent in wrong format",
+ "reproSteps": "",
+ "severity": "Minor",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-10-12",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 6f39b6e5 (10-12); retest in UAT"
+}

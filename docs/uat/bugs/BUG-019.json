@@ -1,0 +1,14 @@
+{
+ "id": "BUG-019",
+ "dateFound": "2026-11-03",
+ "functionId": "PDA-014",
+ "description": "Picking: receiving order-level scan lines did not match by wcl_item_no",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-03",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 1f28c493 (11-03); retest in UAT"
+}

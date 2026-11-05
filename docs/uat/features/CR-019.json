@@ -1,0 +1,14 @@
+{
+ "id": "CR-019",
+ "dateRaised": "2026-10-16",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-014",
+ "feature": "Picking boxing: manual finish (no auto-finish), one COO per box, box contents list with per-line move-out",
+ "reason": "mixed-origin protection",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit ae455c58"
+}

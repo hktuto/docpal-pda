@@ -1,0 +1,14 @@
+{
+ "id": "CR-025",
+ "dateRaised": "2026-10-22",
+ "raisedBy": "",
+ "app": "Backend",
+ "functionId": "",
+ "feature": "Date-code canonical format YYWW downstream of receiving with dateCodeFormat config (label stays WWYY); one-time migration",
+ "reason": "fix sorting/filtering by date code",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit a1769402"
+}

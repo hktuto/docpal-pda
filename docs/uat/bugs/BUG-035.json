@@ -1,0 +1,14 @@
+{
+ "id": "BUG-035",
+ "dateFound": "2026-11-04",
+ "functionId": "ADM-009",
+ "description": "TE truncated MPN resolved to the wrong part (audit fix — part_no-only equality, AMP tie)",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-04",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 5bf55dec (11-04); retest in UAT"
+}

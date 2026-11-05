@@ -1,0 +1,14 @@
+{
+ "id": "BUG-020",
+ "dateFound": "2026-11-03",
+ "functionId": "PDA-007",
+ "description": "Manual receiving committed non-canonical part keys",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-03",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 9fcf7583 (11-03); retest in UAT"
+}

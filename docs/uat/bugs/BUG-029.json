@@ -1,0 +1,14 @@
+{
+ "id": "BUG-029",
+ "dateFound": "2026-11-04",
+ "functionId": "ADM-018",
+ "description": "Same-day box sequence race could mint duplicate box ids",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-04",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 17a96491 (11-04); retest in UAT"
+}

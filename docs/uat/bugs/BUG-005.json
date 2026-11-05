@@ -1,0 +1,14 @@
+{
+ "id": "BUG-005",
+ "dateFound": "2026-10-16",
+ "functionId": "PDA-014",
+ "description": "TE label template did not match — picking blocked on TE reels",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-10-16",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit c6213d73 (10-16); retest in UAT"
+}

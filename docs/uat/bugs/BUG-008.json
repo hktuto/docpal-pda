@@ -1,0 +1,14 @@
+{
+ "id": "BUG-008",
+ "dateFound": "2026-10-21",
+ "functionId": "PDA-014",
+ "description": "Serial-scan dedupe was global — same serial on a second order was silently ignored",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-10-21",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit e4cfcdb5 (10-21); retest in UAT"
+}

@@ -1,0 +1,14 @@
+{
+ "id": "CR-034",
+ "dateRaised": "2026-11-01",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-008",
+ "feature": "PDA CN receiving scan step for the pdf/OCR path",
+ "reason": "",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 830d7fd9"
+}

@@ -1,0 +1,14 @@
+{
+ "id": "BUG-017",
+ "dateFound": "2026-10-30",
+ "functionId": "ADM-022",
+ "description": "Receiving detail broke when invoiceNo was empty",
+ "reproSteps": "",
+ "severity": "Minor",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-10-30",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 95e5ef5c (10-30); retest in UAT"
+}

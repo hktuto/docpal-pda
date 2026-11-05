@@ -1,0 +1,14 @@
+{
+ "id": "BUG-012",
+ "dateFound": "2026-10-28",
+ "functionId": "PDA-010",
+ "description": "Put-away: switching shelves committed ALL scans instead of only pending ones",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-10-28",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit b974bc6f (10-28); retest in UAT"
+}

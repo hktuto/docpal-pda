@@ -1,0 +1,14 @@
+{
+ "id": "BUG-010",
+ "dateFound": "2026-10-26",
+ "functionId": "PDA-011",
+ "description": "Ad-hoc put-away: WCL item number hidden; removed item could not be re-scanned",
+ "reproSteps": "",
+ "severity": "Minor",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-10-26",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit dd3634eb (10-26); retest in UAT"
+}

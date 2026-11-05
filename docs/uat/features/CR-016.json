@@ -1,0 +1,14 @@
+{
+ "id": "CR-016",
+ "dateRaised": "2026-10-15",
+ "raisedBy": "",
+ "app": "Admin",
+ "functionId": "ADM-017",
+ "feature": "Shelves Excel export + batch import",
+ "reason": "bulk layout setup",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 8daef818"
+}

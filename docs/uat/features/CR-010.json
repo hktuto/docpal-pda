@@ -1,0 +1,14 @@
+{
+ "id": "CR-010",
+ "dateRaised": "2026-10-12",
+ "raisedBy": "",
+ "app": "Admin",
+ "functionId": "ADM-026",
+ "feature": "Allocation dialogs: applicable-source filtering + final-state batch forms (all-or-nothing confirm)",
+ "reason": "safe one-shot re-allocation",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit ab57753a"
+}

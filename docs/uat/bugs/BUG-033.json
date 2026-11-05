@@ -1,0 +1,14 @@
+{
+ "id": "BUG-033",
+ "dateFound": "2026-11-04",
+ "functionId": "PDA-006",
+ "description": "dateToDateCode read the UTC calendar date — label date codes off by one near midnight",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-04",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit c32eae11 (11-04); retest in UAT"
+}

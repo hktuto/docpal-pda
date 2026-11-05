@@ -1,0 +1,14 @@
+{
+ "id": "CR-009",
+ "dateRaised": "2026-10-10",
+ "raisedBy": "",
+ "app": "Admin",
+ "functionId": "ADM-016",
+ "feature": "Inventory labels — location display labels CRUD + custom form",
+ "reason": "",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit bf22e2cc"
+}

@@ -1,0 +1,14 @@
+{
+ "id": "CR-014",
+ "dateRaised": "2026-10-14",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-015",
+ "feature": "Picking unified page — detail + scan in one screen, scan batch validation, auto-apply, CJK display names",
+ "reason": "fewer taps per pick",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit bf6afe2e"
+}

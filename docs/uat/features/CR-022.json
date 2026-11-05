@@ -1,0 +1,14 @@
+{
+ "id": "CR-022",
+ "dateRaised": "2026-10-20",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-019",
+ "feature": "Measuring post-picking queue (box-scoped) + CN receiving refinements",
+ "reason": "",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit eaedbf23"
+}

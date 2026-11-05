@@ -1,0 +1,14 @@
+{
+ "id": "CR-021",
+ "dateRaised": "2026-10-17",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-023",
+ "feature": "Goods verify redesigned — per-shelf daily summary tasks",
+ "reason": "less counting work",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit f62a1de6"
+}

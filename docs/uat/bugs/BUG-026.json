@@ -1,0 +1,14 @@
+{
+ "id": "BUG-026",
+ "dateFound": "2026-11-04",
+ "functionId": "ADM-001",
+ "description": "SECURITY: /admin/* did not require the admin group",
+ "reproSteps": "",
+ "severity": "Critical",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-04",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 077d091d (11-04); retest in UAT"
+}

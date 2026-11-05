@@ -1,0 +1,14 @@
+{
+ "id": "CR-003",
+ "dateRaised": "2026-10-02",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-025",
+ "feature": "Hardware scanner symbology whitelist per supplier profile (shelf/box QR always decodable)",
+ "reason": "block mis-reads of foreign labels",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 4c3a19bd"
+}

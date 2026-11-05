@@ -1,0 +1,14 @@
+{
+ "id": "CR-006",
+ "dateRaised": "2026-10-07",
+ "raisedBy": "",
+ "app": "Admin",
+ "functionId": "ADM-033",
+ "feature": "Outdated date-code warnings — supplier date-code warnings from picking/put-away scans, resolve per order with note",
+ "reason": "supplier lead-time control",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 65c27028"
+}

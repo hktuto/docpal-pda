@@ -1,0 +1,14 @@
+{
+ "id": "CR-031",
+ "dateRaised": "2026-10-30",
+ "raisedBy": "",
+ "app": "Both",
+ "functionId": "ADM-020",
+ "feature": "Label source internal/external + label-aware verify — carton-label lookup, re-scan printed labels, hard part/COO/date-code compare",
+ "reason": "",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit ede07aa9"
+}

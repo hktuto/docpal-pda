@@ -1,0 +1,14 @@
+{
+ "id": "CR-039",
+ "dateRaised": "2026-11-03",
+ "raisedBy": "",
+ "app": "Admin",
+ "functionId": "ADM-026",
+ "feature": "Allocation manual-only — mutation routes never recompute; per-order Re-allocate button + confirm-arrival scoped run; allocateAll dev-only",
+ "reason": "stop surprise re-shuffles",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 32e42504"
+}

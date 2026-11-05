@@ -1,0 +1,14 @@
+{
+ "id": "BUG-030",
+ "dateFound": "2026-11-04",
+ "functionId": "ADM-022",
+ "description": "Confirm-arrival 500 when a sub-inventory stamp was missing from org_info",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-04",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 1d578841 (11-04); retest in UAT"
+}

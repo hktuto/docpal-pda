@@ -1,0 +1,14 @@
+{
+ "id": "BUG-021",
+ "dateFound": "2026-11-03",
+ "functionId": "PDA-008",
+ "description": "Wrapped TE part keys failed to match in shipping-box scan / verify / CN flows",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-03",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit a09d43da (11-03); retest in UAT"
+}

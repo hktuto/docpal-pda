@@ -1,0 +1,14 @@
+{
+ "id": "BUG-018",
+ "dateFound": "2026-11-03",
+ "functionId": "PDA-006",
+ "description": "NCC drawing-code lookup produced a bogus single-brand wcl_item_no",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-03",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 5439df68 (11-03); retest in UAT"
+}

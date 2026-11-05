@@ -1,0 +1,14 @@
+{
+ "id": "CR-041",
+ "dateRaised": "2026-11-04",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-018",
+ "feature": "Print product label page — searchable brand/part, scan prefill (print call prototype)",
+ "reason": "",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 35af2c9f"
+}

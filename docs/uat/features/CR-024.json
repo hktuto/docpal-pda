@@ -1,0 +1,14 @@
+{
+ "id": "CR-024",
+ "dateRaised": "2026-10-22",
+ "raisedBy": "",
+ "app": "PDA",
+ "functionId": "PDA-009",
+ "feature": "CN put-away on the standard put-away pages behind the receiving-cn step",
+ "reason": "",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit 95b8931c"
+}

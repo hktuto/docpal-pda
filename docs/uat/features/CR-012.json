@@ -1,0 +1,14 @@
+{
+ "id": "CR-012",
+ "dateRaised": "2026-10-13",
+ "raisedBy": "",
+ "app": "Admin",
+ "functionId": "ADM-025",
+ "feature": "Picking list delivery-date range filter",
+ "reason": "",
+ "priority": "",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Backfill — commit c2ae2db5"
+}

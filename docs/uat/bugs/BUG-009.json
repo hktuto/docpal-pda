@@ -1,0 +1,14 @@
+{
+ "id": "BUG-009",
+ "dateFound": "2026-10-23",
+ "functionId": "ADM-026",
+ "description": "Status override scheduled a fleet-wide allocateAll (slow, churned unrelated orders)",
+ "reproSteps": "",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-10-23",
+ "tester": "",
+ "remarks": "Backfill — fixed in commit 7cc2435e (10-23); retest in UAT"
+}

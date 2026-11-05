@@ -152,13 +152,14 @@ For non-trivial changes:
 
 ## UAT issue tracking
 
-UAT tracker sources of truth: `docs/uat/functions.json` (62 admin/PDA functions, stable `ADM-`/`PDA-` ids), `docs/uat/bugs.json` (`BUG-` rows) and `docs/uat/features.json` (`CR-` rows). `UAT-Test-Tracking.xlsx` in the same folder is **generated** (gitignored, three sheets with per-function count formulas + dropdown vocabularies) — never edit the xlsx by hand; regenerate instead:
+UAT tracker sources of truth: `docs/uat/functions.json` (62 admin/PDA functions, stable `ADM-`/`PDA-` ids) plus **one file per record** — `docs/uat/bugs/BUG-*.json` and `docs/uat/features/CR-*.json` (keeps appends conflict-free and lets an agent read/update a single issue without the whole list). `UAT-Test-Tracking.xlsx` in the same folder is **generated** (gitignored, three sheets with per-function count formulas + dropdown vocabularies) — never edit the xlsx by hand; regenerate instead:
 
 ```bash
 node scripts/gen-uat-xlsx.mjs   # after editing docs/uat/*.json
 ```
 
-- **Add a bug/feature row:** append to the matching JSON with the next `BUG-`/`CR-` id; `functionId` must reference an existing function id (blank allowed for features; the script refuses bad refs). Dates are `YYYY-MM-DD`; status/priority/result vocabularies are listed in `docs/uat/README.md`.
+- **Add a bug/feature:** create `docs/uat/bugs/BUG-<next>.json` / `features/CR-<next>.json` (next id = highest existing + 1) copying the shape of a neighbour; `functionId` must reference an existing function id (blank allowed for features; the script refuses bad refs and duplicate ids). Dates are `YYYY-MM-DD`; vocabularies in `docs/uat/README.md`.
+- **Update an issue:** edit that one small file (`status`, `retestResult`, `closedDate`).
 - **Trace an issue to code:** each backfilled row carries `Backfill — commit <hash>` in `remarks` — `git show <hash>` for the fix/feature; new rows should cite the fixing commit or spec doc the same way.
 - **Regeneration overwrites tester edits** — fold any marked-up workbook changes back into the JSON before rerunning, and hand the fresh xlsx to testers as the deliverable.
 - When you add/remove/rename a user-facing function in admin or PDA, update `functions.json` too (keep ids stable — bugs and features reference them).
