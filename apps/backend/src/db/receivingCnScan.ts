@@ -578,6 +578,10 @@ export async function removeCnScanEvent(
 /** Finalize the scan task: unresolved items block with 409 unresolved_items
  *  unless unresolvedAs 'missing' flags them in the same tx (partial lines
  *  keep their scanned credit — only the shortfall is flagged, CR-047).
+ *  Under-accounted partial flags are topped up to the full shortfall
+ *  (BUG-044: scanned + flagged = line_qty, audit 'flag_topped_up') — an
+ *  untouched line flagged with a smaller qty has nothing scan-backed, so the
+ *  whole line is short and it receives 0.
  *  received_qty = min(scan_qty, line_qty) for any non-error line with
  *  scan_qty > 0 (NULL line_qty → scan_qty), and for error lines carrying a
  *  partial flag_qty; untouched/error-whole lines → 0 (CN put-away excludes
@@ -628,6 +632,32 @@ export async function finalizeCnScanTask(
             WHERE id = ${item.id}`
       );
       await itemAudit(tx, item, "scan_error", actor.id, { reason: "missing", auto: true, qty: flagQty }, at);
+    }
+    // BUG-044: a partial flag must account for the WHOLE line — scanned
+    // (received) + flagged short = line_qty. Top up any error line whose
+    // credit + flag_qty under-covers the expected qty to the full shortfall,
+    // with an audit trail: an untouched line flagged below its qty has no
+    // scan-backed units, so the whole line is short and it receives 0; a
+    // flag qty below the true shortfall (e.g. scan 60 of 100, flag 20) has
+    // the remainder topped up (flag_qty → 40). Whole-line flags (flag_qty
+    // NULL) already declare the entire line and are untouched. NULL
+    // line_qty has no defined shortfall and is skipped.
+    const underFlagged = await queryAll<{ id: string; partNo: string; lineQty: number; scanQty: number | null }>(
+      tx,
+      sql`SELECT rii.id, rii.part_no AS "partNo", rii.line_qty AS "lineQty", rii.scan_qty AS "scanQty"
+          FROM receiving_invoice_items_cn rii
+          JOIN receiving_invoices_cn ri ON ri.id = rii.receiving_invoice_id
+          WHERE ri.receiving_order_id = ${orderId} AND rii.scan_status = 'error'
+            AND rii.line_qty IS NOT NULL AND rii.flag_qty IS NOT NULL
+            AND COALESCE(rii.scan_qty, 0) + rii.flag_qty < rii.line_qty`
+    );
+    for (const row of underFlagged) {
+      const fullShortfall = row.lineQty - (row.scanQty ?? 0);
+      await queryRun(
+        tx,
+        sql`UPDATE receiving_invoice_items_cn SET flag_qty = ${fullShortfall}, last_update_date = ${at} WHERE id = ${row.id}`
+      );
+      await itemAudit(tx, row, "flag_topped_up", actor.id, { qty: fullShortfall }, at);
     }
     // Non-error lines with a scan credit receive min(scan_qty, line_qty)
     // (NULL line_qty → scan_qty). Error lines receive 0 unless a partial flag

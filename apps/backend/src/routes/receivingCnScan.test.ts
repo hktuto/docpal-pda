@@ -519,6 +519,57 @@ test("flag qty: a partial flag keeps the scanned credit through finalize; bad qt
   ]);
 });
 
+test("finalize tops up an under-accounted partial flag to the full shortfall (BUG-044)", async () => {
+  await reseed(client);
+  const token = await login("operator", "DocPal2026!");
+  const { orderId, itemIds } = await seedScanningOrder("CN-SCAN-FQ2", [
+    { partNo: "PART-A", lineQty: 100 }, // untouched, partial flag below the line qty
+    { partNo: "PART-B", lineQty: 100 }, // scanned 60, flag 20 (< the 40 shortfall)
+    { partNo: "PART-C", lineQty: 100 }, // scanned 60, flag 40 (exact shortfall)
+  ]);
+  await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/scan-aggregate`, { partNo: "PART-B", qty: 60 });
+  await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/scan-aggregate`, { partNo: "PART-C", qty: 60 });
+  for (const [itemId, qty] of [
+    [itemIds[0], 40],
+    [itemIds[1], 20],
+    [itemIds[2], 40],
+  ] as const) {
+    const res = await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/items/${itemId}/flag`, {
+      reason: "missing",
+      qty,
+    });
+    assert.equal(res.status, 200);
+  }
+
+  const fin = await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/finalize`, {});
+  assert.equal(fin.status, 200);
+  const rows = await queryAll<{ id: string; receivedQty: number; flagQty: number | null }>(
+    client.db,
+    sql`SELECT id, received_qty AS "receivedQty", flag_qty AS "flagQty" FROM receiving_invoice_items_cn
+        WHERE receiving_invoice_id = 'cn-inv-CN-SCAN-FQ2' ORDER BY id`
+  );
+  assert.deepEqual(rows.map((r) => [r.id, r.receivedQty, r.flagQty]), [
+    [itemIds[0], 0, 100], // untouched + partial flag → whole line short, nothing scan-backed to receive
+    [itemIds[1], 60, 40], // 20 declared + 20 topped up; the scanned 60 survive
+    [itemIds[2], 60, 40], // exact shortfall — untouched by the top-up
+  ]);
+  // The top-up leaves an audit trail per adjusted line.
+  const audits = await queryAll<{ entityId: string; qty: string | null }>(
+    client.db,
+    sql`SELECT entity_id AS "entityId", metadata->>'qty' AS qty
+        FROM transaction_logs
+        WHERE entity_type = 'receiving_invoice_item_cn' AND to_state = 'flag_topped_up'
+        ORDER BY entity_id`
+  );
+  assert.deepEqual(
+    audits.map((a) => [a.entityId, a.qty]),
+    [
+      [itemIds[0], "100"],
+      [itemIds[1], "40"],
+    ]
+  );
+});
+
 test("reset: clears the scan state — including a partial scan_qty — and the mirrored mismatch columns back to unresolved", async () => {
   await reseed(client);
   const token = await login("operator", "DocPal2026!");
