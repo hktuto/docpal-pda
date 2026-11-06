@@ -28,7 +28,8 @@ export default {
     labelingDetail: "Labeling Detail",
     labelPrinting: "Label Printing",
     labelPrintingDetail: "Label Printing Detail",
-    printProductLabel: "Print Product Label"
+    printProductLabel: "Print Product Label",
+    latencyTest: "Latency Test"
   },
   actions: {
     scan: "Scan",
@@ -127,7 +128,8 @@ export default {
       adHocPutAway: { title: "Ad-hoc Put-away" },
       shelfExchange: { title: "Shelf Exchange" },
       manualReceiving: { title: "Manual Receiving" },
-      receivingScan: { title: "Receiving Scan" }
+      receivingScan: { title: "Receiving Scan" },
+      latencyTest: { title: "Latency Test" }
     }
   },
   labeling: {
@@ -166,6 +168,18 @@ export default {
     scanHint: "Or scan the product",
     scanError: "Could not decode a product label.",
     notWired: "Printing is not wired up yet — the print method is coming."
+  },
+  latencyTest: {
+    title: "Latency Test",
+    description: "Fires one request per second to the backend for {count} seconds ({count} calls total) and averages the round trip.",
+    start: "Start Test",
+    stop: "Stop",
+    running: "Running… {done}/{total}",
+    successful: "Successful calls",
+    failed: "Failed calls",
+    avg: "Average round trip",
+    min: "Min",
+    max: "Max"
   },
   manualReceiving: {
     title: "Manual Receiving",
@@ -1320,6 +1334,7 @@ export default {
       stockSearch: "Stock Search",
       itemLedger: "Item Ledger",
       appDownload: "App Download",
+      latencyTest: "Latency Test",
       flowConfig: "Flow Config",
       displayConfig: "Display",
       pdaViewConfig: "PDA View",
@@ -2376,6 +2391,18 @@ export default {
         downloading: "Downloading…",
         emptyTitle: "No APK published yet",
         emptyMessage: "Build the app with pnpm build:apk to publish a downloadable APK here."
+      },
+      latencyTest: {
+        title: "Latency Test",
+        description: "Fires one request per second to the backend for {count} seconds ({count} calls total) and averages the round trip.",
+        start: "Start Test",
+        stop: "Stop",
+        running: "Running… {done}/{total}",
+        successful: "Successful calls",
+        failed: "Failed calls",
+        avg: "Average round trip",
+        min: "Min",
+        max: "Max"
       },
       flowConfig: {
         title: "Flow Config",

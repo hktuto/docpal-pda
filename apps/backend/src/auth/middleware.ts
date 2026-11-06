@@ -13,6 +13,7 @@ export interface AuthVariables {
 
 function isOpenPath(path: string, method: string): boolean {
   if (path === "/health") return true;
+  if (path === "/latency-ping") return true; // latency probe, leaks nothing
   if (path === "/auth/login" && method === "POST") return true;
   if (path === "/auth/login-token" && method === "POST") return true;
   if (path.startsWith("/dev/lab")) return true; // Dev Lab stays open (browser page, read-only)

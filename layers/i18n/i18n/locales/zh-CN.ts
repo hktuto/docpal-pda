@@ -28,7 +28,8 @@ export default {
     labelingDetail: "贴标签详情",
     labelPrinting: "打印标签",
     labelPrintingDetail: "打印标签详情",
-    printProductLabel: "打印产品标签"
+    printProductLabel: "打印产品标签",
+    latencyTest: "延迟测试"
   },
   actions: {
     scan: "扫描",
@@ -127,7 +128,8 @@ export default {
       adHocPutAway: { title: "临时上架" },
       shelfExchange: { title: "货架调拨" },
       manualReceiving: { title: "手动收货" },
-      receivingScan: { title: "收货扫描" }
+      receivingScan: { title: "收货扫描" },
+      latencyTest: { title: "延迟测试" }
     }
   },
   labeling: {
@@ -166,6 +168,18 @@ export default {
     scanHint: "或请扫描产品",
     scanError: "无法识别产品标签。",
     notWired: "打印功能未接通 — 打印方法待提供。"
+  },
+  latencyTest: {
+    title: "延迟测试",
+    description: "每秒向后端发送一次请求，持续 {count} 秒（共 {count} 次），并计算平均往返时间。",
+    start: "开始测试",
+    stop: "停止",
+    running: "正在运行… {done}/{total}",
+    successful: "成功次数",
+    failed: "失败次数",
+    avg: "平均往返时间",
+    min: "最小值",
+    max: "最大值"
   },
   manualReceiving: {
     title: "手动收货",
@@ -1319,6 +1333,7 @@ export default {
       stockSearch: "库存查询",
       itemLedger: "物料流水",
       appDownload: "应用下载",
+      latencyTest: "延迟测试",
       flowConfig: "流程设置",
       displayConfig: "显示设置",
       pdaViewConfig: "PDA 视图",
@@ -2372,6 +2387,18 @@ export default {
         downloading: "下载中…",
         emptyTitle: "尚未发布 APK",
         emptyMessage: "请使用 pnpm build:apk 构建应用，发布后即可在此下载 APK。"
+      },
+      latencyTest: {
+        title: "延迟测试",
+        description: "每秒向后端发送一次请求，持续 {count} 秒（共 {count} 次），并计算平均往返时间。",
+        start: "開始測試",
+        stop: "停止",
+        running: "正在運行… {done}/{total}",
+        successful: "成功次數",
+        failed: "失敗次數",
+        avg: "平均往返時間",
+        min: "最小值",
+        max: "最大值"
       },
       flowConfig: {
         title: "流程设置",

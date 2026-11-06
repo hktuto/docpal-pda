@@ -164,6 +164,17 @@
         <p class="menu-card__title">{{ $t('home.menu.shelfExchange.title') }}</p>
       </NuxtLink>
 
+      <NuxtLink to="/latency-test" class="menu-card">
+        <div class="menu-card__icon menu-card__icon--latency">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="13" r="8"/>
+            <path d="M12 9v4l2.5 2.5"/>
+            <path d="M9 2h6"/>
+          </svg>
+        </div>
+        <p class="menu-card__title">{{ $t('home.menu.latencyTest.title') }}</p>
+      </NuxtLink>
+
     </div>
   </div>
 </template>
@@ -257,6 +268,7 @@ const { flowSteps, cnReceiving } = useFlowSteps();
 .menu-card__icon--shelf-exchange { background: linear-gradient(135deg, #0d9488, #0f766e); }
 .menu-card__icon--manual-receiving { background: linear-gradient(135deg, #14b8a6, #0d9488); }
 .menu-card__icon--receiving-scan { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+.menu-card__icon--latency { background: linear-gradient(135deg, #64748b, #475569); }
 
 .menu-card__title {
   margin: 0;

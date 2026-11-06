@@ -383,6 +383,7 @@ export const navSections: { title: string; links: { route: string; title: string
       { route: "/display-config", title: "admin.navLinks.displayConfig" },
       { route: "/pda-view-config", title: "admin.navLinks.pdaViewConfig" },
       { route: "/app-download", title: "admin.navLinks.appDownload" },
+      { route: "/latency-test", title: "admin.navLinks.latencyTest" },
       { route: "/user-badges", title: "admin.navLinks.userBadges" },
       { route: "/user-profiles", title: "admin.navLinks.userProfiles" },
       { route: "/task-assignments", title: "taskAssignments.navLink" },
