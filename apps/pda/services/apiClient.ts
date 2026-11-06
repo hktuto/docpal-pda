@@ -167,15 +167,21 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
 
     let res: Response;
     const startedAt = Date.now();
+    // AbortController + manual timer instead of AbortSignal.timeout, which is
+    // only available from Chrome 103 — the T23X fleet WebView is Chrome 101.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
       res = await fetch(buildUrl(path, opts.params), {
         ...init,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        signal: controller.signal,
       });
     } catch {
       pushLog("api", `${method} ${path} → network error`);
       networkErrorHandler?.();
       throw new I18nError("network_error");
+    } finally {
+      clearTimeout(timer);
     }
     pushLog("api", `${method} ${path} → ${res.status} in ${Date.now() - startedAt}ms`);
 
