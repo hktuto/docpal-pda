@@ -1,0 +1,14 @@
+{
+ "id": "BUG-043",
+ "dateFound": "2026-11-06",
+ "functionId": "PDA-001",
+ "description": "PDA login impossible on T23X devices: every API call fails instantly with 「網絡錯誤，請檢查連接後重試」 and the server-down overlay re-appears right after a successful retry — caused by AbortSignal.timeout (Chrome 103+) used for the apiClient request deadline, which is undefined on the fleet WebView (Chrome 101)",
+ "reproSteps": "On a T23X with Chrome 101 WebView (e.g. MFM5PRE526070167, SZ production): open the app (page loads fine), press 登入 with valid credentials → network error; overlay Retry clears it (health OK), pressing 登入 brings the overlay back immediately",
+ "severity": "Critical",
+ "status": "Ready for retest",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Fixed — commit 995a72a4. apiClient now uses AbortController + setTimeout(30s) like useServerHealth already did; verified on device via CDP that AbortSignal.timeout was undefined and every POST /auth/login threw before the fix; pda test suite (456 tests) + production build green. Needs SZ prod web redeploy before on-device retest — no APK change required (web content is hosted)"
+}
