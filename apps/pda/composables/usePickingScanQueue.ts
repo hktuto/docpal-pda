@@ -51,11 +51,13 @@ function checkDateCode(
   return null;
 }
 
-/** Lot code is a HARD match whenever the source carries one (spec 2026-10-14):
- *  the scanned label must carry the same lot code (OCR-substitution tolerant).
- *  A missing or different scanned lot code is rejected — including upstream
- *  vocabulary mismatches (label segment vs lot record), which the warehouse
- *  wants surfaced at pick time. Sources without a lot code are not checked. */
+/** Lot code is a HARD match whenever the source carries one (spec 2026-10-14,
+ *  amended 2026-11-06): the scanned label must carry the same lot code
+ *  (OCR-substitution tolerant). A scanned lot code that DIFFERS is rejected —
+ *  including upstream vocabulary mismatches (label segment vs lot record),
+ *  which the warehouse wants surfaced at pick time. A label WITHOUT a lot
+ *  code cannot contradict the source, so it passes (same tolerance as the
+ *  date-code check). Sources without a lot code are not checked. */
 function checkLotCode(
   targetValue: string | null | undefined,
   scannedValue: string | null | undefined
@@ -64,8 +66,8 @@ function checkLotCode(
   if (!target) return null;
   const scannedRaw = (scannedValue ?? "").trim();
   const scanned = normalizeCode(scannedRaw);
-  if (!scanned || scanned !== target) {
-    return { message: "lot_code_mismatch", params: { scanned: scannedRaw || "—", expected: target } };
+  if (scanned && scanned !== target) {
+    return { message: "lot_code_mismatch", params: { scanned: scannedRaw, expected: target } };
   }
   return null;
 }

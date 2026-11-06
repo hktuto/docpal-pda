@@ -517,13 +517,22 @@ describe('usePickingScanQueue', () => {
     // source lot carries L2607 — a different label lot code is rejected
     expect(q.addAllocationScan('item-1', 'alloc-1', qrFull('RK73H1JTTD1002F', 100, { lotCode: 'L9999' }), ':A::102:X:L:S1:F', 'qr'))
       .toEqual({ ok: false, message: 'lot_code_mismatch', params: { scanned: 'L9999', expected: '12607' } });
-    // a label without a lot code cannot confirm the reel either
-    const missing = q.addAllocationScan('item-1', 'alloc-1', qrFull('RK73H1JTTD1002F', 100, {}), ':A::102:X:L:S2:F', 'qr');
-    expect(missing).toMatchObject({ ok: false, message: 'lot_code_mismatch' });
-    expect(missing.params?.scanned).toBe('—');
     // OCR-substitution tolerant: "I" reads as "1" on both sides
     expect(q.addAllocationScan('item-1', 'alloc-1', qrFull('RK73H1JTTD1002F', 100, { lotCode: 'I2607' }), ':A::102:X:L:S3:F', 'qr')).toEqual({ ok: true });
     expect(q.rows.value).toHaveLength(1);
+  });
+
+  it('allows a label without a lot code against a sourced lot (amendment 2026-11-06)', () => {
+    const q = usePickingScanQueue(ref(makeShelfItems()));
+    // the label carries no date code or lot code at all — nothing to contradict
+    // the source lot's 2603/L2607, so the scan queues (same tolerance as the
+    // date-code check's missing-value rule)
+    expect(q.addAllocationScan('item-1', 'alloc-1', qrFull('RK73H1JTTD1002F', 100, {}), ':A::102:X:L:S1:F', 'qr'))
+      .toEqual({ ok: true });
+    expect(q.rows.value[0]).toMatchObject({ scannedDateCode: null, scannedLotCode: null });
+    // a different lot code is still rejected
+    expect(q.addAllocationScan('item-1', 'alloc-1', qrFull('RK73H1JTTD1002F', 100, { lotCode: 'L9999' }), ':A::102:X:L:S2:F', 'qr'))
+      .toMatchObject({ ok: false, message: 'lot_code_mismatch' });
   });
 
   it('accepts the date code when equal or earlier than the source, rejects newer', () => {

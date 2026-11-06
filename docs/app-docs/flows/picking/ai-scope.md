@@ -163,7 +163,8 @@
   `dateCodeFormat` config first — codes in another on-label convention are
   skipped, never mis-rejected), and the lot code is a hard match whenever the source
   has one (rejects with `lot_code_mismatch`, including the label-vs-upstream
-  vocabulary mismatch). The scanned values ride the Confirm POST as
+  vocabulary mismatch; amendment 2026-11-06: a label WITHOUT a lot code passes —
+  only a differing scanned lot code rejects). The scanned values ride the Confirm POST as
   `scannedDateCode/scannedLotCode/scannedCoo/scannedCow` and land on
   `picking_packages.scanned_*`, which the verify/measuring re-scan match
   anchors to (spec

@@ -47,6 +47,11 @@ After the existing part + COO/COW checks, per matched allocation portion:
   that is missing or different is rejected with `lot_code_mismatch` — even when
   the mismatch is upstream-data vocabulary (label segment 5 vs lot record),
   because that is a data problem the warehouse wants surfaced at pick time.
+  - **Amendment 2026-11-06** (operator request): a scanned lot code that is
+    **missing** no longer rejects — a label without a lot code cannot
+    contradict the source, so it passes, matching the date-code check's
+    missing-value tolerance. Only a scanned lot code that **differs** from the
+    source is rejected.
 - Scanned values are recorded on the queue row (`scannedDateCode`,
   `scannedLotCode`, `scannedCoo`, `scannedCow`) and sent with the
   `POST /picking-items/:id/scan` body. Whole-carton scans (`addCartonScan`)
