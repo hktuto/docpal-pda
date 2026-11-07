@@ -725,10 +725,11 @@
   `POST /admin/allocation/snapshot` / `POST /admin/allocation/restore` in
   `apps/backend/src/routes/admin/allocation.ts`; restore persists the
   structured per-row report on the batch.
-- `apps/backend/src/db/ingest.ts` — reusable sync apply layer for upstream
-  picking orders (replaced the retired `PUT /picking-orders/:id` ingest route
-  and the ElectricSQL consumer); a synced order change should trigger
-  re-allocation.
+- Upstream picking-order sync is performed by an **external service** writing
+  `picking_orders`/`picking_items` directly (the retired `PUT
+  /picking-orders/:id` ingest route and ElectricSQL consumer are gone — see
+  AGENTS.md "Upstream sync"); a synced change never auto-recomputes
+  allocation — admins Re-allocate.
 
 ## Known limitations
 

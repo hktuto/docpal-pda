@@ -654,8 +654,8 @@ The top-level `allowedOrgIds: number[]` key (spec
 `2026-09-01-flow-config-allowed-org-ids-design.md`; [] = all orgs) scopes
 PDA-facing queries to the listed org partitions: the picking/receiving order
 lists + details (detail 404s out of scope), stock search, put-away tasks +
-candidates, and the goods-verify queue hide rows with another (or NULL)
-`org_id`; the verify/measuring/shipping box queues and `allocateAll` are
+candidates hide rows with another (or NULL)
+`org_id`; the verify/measuring/shipping box queues, the goods-verify queue, and `allocateAll` are
 unaffected.
 The top-level `dateCodeDisplayTemplate: string` key (spec
 `2026-09-17-date-code-display-template-design.md`, default `"[date_code][coo]"`)
@@ -745,32 +745,34 @@ Shipped boxes drop out of the feed; shipped orders stay visible via
 
 Implemented: `POST /goods-verify-tasks/generate`, `GET /goods-verify-tasks`,
 `GET /goods-verify-tasks/:id`, `POST /goods-verify-tasks/:id/verify` (see
-`apps/backend/src/routes/goodsverify.ts` + `src/db/goodsverify.ts`; generation
-is one set-based `INSERT … SELECT … ON CONFLICT DO NOTHING` off the day's
-distinct moved lots — `date` defaults to the DB server's `CURRENT_DATE`
-(`txn_at` holds UTC wall-clock), `actorId` optional (system job); the queue
-joins parts for `partNo`/`wclItemNo` and orders by shelf/box/part; detail
-embeds the lot (batch + three-level location) and the `shelf_boxes` row with
-its items (`box` null when `box_id` is unset or a legacy non-shelf-box id);
-verify guards pending → count mismatch corrects lot `total_qty` (409
-`counted_qty_below_allocated` so generated `available_qty` never goes
-negative) + ADJUST `on_hand` ledger row (`reference_type 'goods_verify_task'`,
-reason `cycle count adjustment`), then marks the box's items verified and transitions the box `closed →
-verified` (+ transition log; 409 `shelf_box_not_closed` for an open box —
-put-away may still be in progress and a later stock change would reset the
-flags anyway; an already-`verified` box is left alone).
+`apps/backend/src/routes/goodsverify.ts` + `src/db/goodsverify.ts`). **Per-shelf
+daily movement summary** (redesigned 2026-10-17, spec
+`docs/superpowers/specs/2026-10-17-goods-verify-shelf-summary-redesign.md`):
+generation is one set-based `INSERT … SELECT … ON CONFLICT DO NOTHING` off the
+day's shelves with net non-zero `on_hand` movement (`qty_type='on_hand'`,
+`shelf_code IS NOT NULL`, `HAVING SUM(qty_delta) != 0`); `date` defaults to the
+DB server's `CURRENT_DATE` (`txn_at` holds UTC wall-clock), `actorId` optional
+(system job). The task carries a `movements` jsonb snapshot —
+`[{partNo, wclItemNo, description, qtyChange, currentTotal}]` — aggregated by
+shelf+part, `currentTotal` = the shelf's total across all its lots for that
+part. Generation emits SSE `goods_verify.tasks_created` (topic
+`/goods-verify-tasks`); the whole step is a no-op when `goods-verify` is
+disabled in the flow config. Verify is **pure confirmation** (no counted-qty,
+no ADJUST, no box `closed→verified` — those were removed).
 
 | Endpoint | Description |
 |---|---|
-| `POST /goods-verify-tasks/generate` | `{date?, actorId?}` → `{created, date}`. Day-end generation: distinct lots moved in `inventory_transactions` that day → one task per `(task_date, inventory_lot_id)` (unique constraint = idempotent). `date` defaults to the DB server's `CURRENT_DATE`. |
-| `GET /goods-verify-tasks?date=&status=&shelfCode=` | The work queue: `{id, taskDate, shelfCode, boxId, partId, partNo, wclItemNo, expectedQty, status, verifiedBy, verifiedAt}[]`, ordered by shelf/box/part. |
-| `GET /goods-verify-tasks/:id` | `{task (all fields + partNo/wclItemNo/description), lot (batch + three-level location + qtys), box {id, status, items[]} \| null}`. 404 `goods_verify_task_not_found`. |
-| `POST /goods-verify-tasks/:id/verify` | `{actorId, countedQty?}` → the updated task. `countedQty ≠ expectedQty` updates lot `total_qty` and writes an `inventory_transactions` ADJUST (`on_hand`) row (409 `counted_qty_below_allocated`); box items verified + box `closed → verified` (409 `shelf_box_not_closed`); 409 `goods_verify_task_not_pending`. |
+| `POST /goods-verify-tasks/generate` | `{date?, actorId?}` → `{created, date}`. Day-end generation: shelves with net non-zero `on_hand` movement in `inventory_transactions` that day → one task per `(task_date, shelf_code)` (unique index `goods_verify_tasks_shelf_day_unique` = idempotent). `date` (`YYYY-MM-DD`, else 400 `invalid_date`) defaults to the DB server's `CURRENT_DATE`. |
+| `GET /goods-verify-tasks?date=&status=&shelfCode=` | The work queue: `{id, taskDate, shelfCode, status, movementsCount, verifiedBy, verifiedAt}[]`, ordered by shelf code. No org filter (see below). |
+| `GET /goods-verify-tasks/:id` | `{task}` only — all fields + `movements` jsonb + `verifiedBy/At`/`createdDate`. 404 `goods_verify_task_not_found`. |
+| `POST /goods-verify-tasks/:id/verify` | `{}` (actor from JWT) → the updated queue row. Pure `pending → verified` confirmation + `verified_by/at` + a `transaction_logs` transition row; **no stock/lot movement**. 400 `actor_not_found`, 404 `goods_verify_task_not_found`, 409 `goods_verify_task_not_pending`. |
 
 Changes vs old: the old browse endpoints (`/shelves/with-box-counts`,
 `/shelves/:code/boxes`, box detail) are superseded by the task queue; the
-missing mark-verified endpoint exists by design (no `/verification-tasks`
-hack); day-end generation is explicit and idempotent.
+2026-10 redesign also dropped the per-lot `countedQty`/ADJUST verify and the
+box `closed→verified` transition. `allowedOrgIds` does **not** scope this queue
+(`goodsverify.ts` uses no org filter); the status vocabulary declares `skipped`
+but nothing writes it.
 
 ## Stock search
 

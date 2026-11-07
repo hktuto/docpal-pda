@@ -641,7 +641,7 @@
     "id": "PDA-023",
     "app": "PDA",
     "module": "Measure & verify",
-    "name": "Goods verify — shelf/box task queue, count with ADJUST correction",
+    "name": "Goods verify — daily shelf movement summary, one-tap confirm",
     "tester": "",
     "testDate": "",
     "result": "",

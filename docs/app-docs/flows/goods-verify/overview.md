@@ -1,29 +1,25 @@
 # Goods Verify Overview
 
-Goods Verify is the daily count check: at the end of the day, every inventory
-lot that moved (was received, put away, picked, or adjusted) gets a verify
-task, and an operator confirms the physical count for each one.
+Goods Verify is the daily shelf check: at the end of each day, every **shelf** that had a net on-hand movement (received, put away, picked, or adjusted) gets one summary task listing what changed on that shelf, and an operator walks the shelf and confirms it with one tap.
 
 ## When to use it
 
-Use the Goods Verify flow once per day (or after a busy period) to confirm
-that the lots which actually moved still hold the quantities the system
-expects.
+Use the Goods Verify flow once per day to confirm the system's recorded movements actually happened on the floor. It is a **confirmation** step only — if the shelf disagrees with the system, the correction happens outside this flow (stock adjust / re-scan), not here.
 
 ## Concept
 
 1. The backend generates the tasks automatically — a nightly day-end job
    (local 00:00, with a catch-up at server start) creates one pending task
-   per lot that moved that day, idempotently.
+   per shelf with a non-zero net movement that day, idempotently.
    ![Goods verify list](./assets/goods-verify-list.png)
-2. The queue lists the tasks — part number, shelf/box, and expected
-   quantity — filterable by date and status.
-3. The operator opens a task, reviews the lot's batch and location details,
-   and physically counts the stock.
+2. The queue lists the tasks — shelf code, number of movement lines, and
+   status — filterable by date and status.
+3. The operator opens a task: a movement summary card per part (part number,
+   description, the day's ±quantity, and the shelf's current total for that
+   part) under the shelf's header.
    ![Goods verify shelf detail](./assets/goods-verify-shelf.png)
-4. If the count matches, the operator simply verifies the task. If it
-   differs, the operator enters the counted quantity — the app warns that
-   the lot will be corrected with an ADJUST ledger entry.
+4. The operator checks the shelf against the list. When it looks right, they
+   tap **Confirm** once — there is nothing to enter.
 5. The task flips to `verified`; the queue shows who verified it and when.
 
 ## Related guides

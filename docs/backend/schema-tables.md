@@ -581,6 +581,9 @@ Shipping cartons used at picking and measuring.
 | shipped_at | timestamp | Per-box shipping: when the box was marked shipped (admin) |
 | shipped_by | text FK → users(id) | User who marked the box shipped |
 | source_shelf_box_id | text FK → shelf_boxes(id) | Whole-box claim: the reused shelf carton this box was created from (migration 0008) |
+| carton_label_verified | boolean NOT NULL DEFAULT false | Printed carton label has been scanned (2026-10-30 label-aware verify; box entry via `GET /verify-tasks/lookup-by-label` or `POST /verify-tasks/:id/scan-label`) |
+| carton_label_verified_at | timestamp | When the carton label was verified |
+| carton_label_verified_by | text | Who verified the carton label (username, no FK) |
 | assignee | text | Optional PDA task assignee (username, no FK; spec `docs/superpowers/specs/2026-11-01-task-assignee-design.md`) — NULL = visible to every user; set = only that user sees the box in the PDA measuring list/detail |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
@@ -607,10 +610,19 @@ Picked units per source — the packing truth for what went into which box.
 | lot_code | text | Lot number of the picked stock |
 | coo | text | Country of origin |
 | cow | text | Country of wafer |
+| label_barcode | text | Raw scan string of the source label (traceability/display only since 2026-10-03; NULL for legacy/OCR rows) |
+| scanned_part_no | text | The label's part no **as scanned** (2026-10-05 scan-truth; NULL legacy/OCR — consumers fall back to the picking item's part) |
+| scanned_wcl_item_no | text | The label's WCL item no as scanned (same fallback rule) |
+| scanned_date_code | text | Pick-time scanned date code, canonicalized to YYWW at write (2026-10-14; spec 2026-10-22 format config) |
+| scanned_lot_code | text | Pick-time scanned lot code, verbatim |
+| scanned_coo | text | Pick-time scanned COO, verbatim |
+| scanned_cow | text | Pick-time scanned COW, verbatim — together these are the batch anchor verify/measuring re-scans compare against (legacy NULL rows fall back to the source snapshot) |
 | verified | boolean NOT NULL DEFAULT false | Package verified (measuring pass; set on first re-scan credit) |
 | verify_verified | boolean NOT NULL DEFAULT false | Package re-scanned during the verify pass (migration 0004; set with `verified` by `POST /packages/:id/verify` under a pending verify task, reset by box reopen) |
 | rescanned_qty | integer NOT NULL DEFAULT 0 | Mode-agnostic re-scan credit (migration 0021) — completion is `rescanned_qty >= qty` (verify task completion + box close); reset to 0 when the close spawns the verify task and on box reopen; backfilled to `qty` where either verified flag was set |
-| label_barcode | text | Raw scan string of the source label (traceability/display only since 2026-10-03; NULL for legacy/OCR rows) |
+| label_verified | boolean NOT NULL DEFAULT false | This package's printed item/item-box label has been scanned (2026-10-30 label-aware verify; gate on `POST /verify-tasks/:id/complete`) |
+| label_verified_at | timestamp | When the printed label was verified |
+| label_verified_by | text | Who verified it (username, no FK) |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
@@ -821,28 +833,31 @@ operator's scanned fallback shelf). Completion credits the stock via the shared
 
 ## goods_verify_tasks
 
-Daily goods-verify tasks (concept 7): generated at day end from
-`inventory_transactions` — one task per inventory lot with movement that day.
-Put-away/verify is box-based (printed box label), so the task carries box_id.
+Daily goods-verify tasks (concept 7, redesigned 2026-10-17 — spec
+`docs/superpowers/specs/2026-10-17-goods-verify-shelf-summary-redesign.md`):
+generated at day end from `inventory_transactions` — one task per **shelf**
+with net on-hand movement that day. Verify is a pure confirmation (no
+countedQty, no ADJUST).
 
 | Field | Type | Description |
 | --- | --- | --- |
 | id | text PK | Task id (UUID) |
 | task_date | date NOT NULL | The day being counted |
-| inventory_lot_id | text NOT NULL FK → inventory_lots(id) | Lot to verify |
-| shelf_code | text FK → shelves(code) | Shelf (task queue grouping) |
-| box_id | text | Box to verify (box-based verify) |
-| part_no | text NOT NULL | Part (plain text — no FK, parts.part_no is not unique) |
-| expected_qty | integer NOT NULL | Stock snapshot at generation time |
-| status | text NOT NULL DEFAULT 'pending' | Task status |
+| shelf_code | text NOT NULL FK → shelves(code) | The shelf the task covers |
+| movements | jsonb | Per-part summary `[{partNo, wclItemNo, description, qtyChange, currentTotal}]` (non-zero net delta only; snapshot at generation) |
+| status | text NOT NULL DEFAULT 'pending' | `pending` \| `verified` \| `skipped` (declared; no code path writes `skipped`) |
 | verified_by | text FK → users(id) | Verifying user |
 | verified_at | timestamp | Verification time |
+| inventory_lot_id | text | **legacy** — nullable after the redesign, unused |
+| box_id | text | **legacy** — nullable, unused |
+| part_no | text | **legacy** — nullable, unused |
+| expected_qty | integer | **legacy** — nullable, unused |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
-Note: status values `pending` | `verified` | `skipped`; unique index on
-`(task_date, inventory_lot_id)` (one task per lot per day); indexes on
-`(shelf_code, task_date)` and `status`.
+Note: unique index `goods_verify_tasks_shelf_day_unique` on
+`(task_date, shelf_code)` (one task per shelf per day, idempotent generation);
+index on `status`.
 
 # Internal transfer (`schema/internal-transfer.ts`)
 

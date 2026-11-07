@@ -9,8 +9,8 @@ import { generateGoodsVerifyTasks } from "../db/goodsverify.js";
 // Runs generateGoodsVerifyTasks for DB CURRENT_DATE-1 and CURRENT_DATE at
 // local 00:00 — movements are bucketed by the DB server's date while the fire
 // time is local midnight, so the just-ended business day can span two DB
-// dates; both generations are idempotent via the (task_date,
-// inventory_lot_id) unique index. Disable with GOODS_VERIFY_CRON=off.
+// dates; both generations are idempotent via the (task_date, shelf_code)
+// unique index goods_verify_tasks_shelf_day_unique. Disable with GOODS_VERIFY_CRON=off.
 // ---------------------------------------------------------------------------
 
 /** Generate day-end tasks for the day that just ended (idempotent). */

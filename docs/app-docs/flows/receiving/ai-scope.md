@@ -345,9 +345,11 @@
   `POST .../confirm-arrival`, `POST .../scan` (with serial dedup), and the
   item-keyed mismatch CRUD: `GET|POST|PATCH
   /receiving-invoice-items/:id/mismatch`, `POST .../mismatch/confirm|cancel`.
-- `apps/backend/src/db/ingest.ts` — reusable sync apply layer for upstream
-  receiving orders (replaced the retired `PUT /receiving-orders/:batchNo`
-  ingest route and the ElectricSQL consumer).
+- Upstream receiving-order sync is performed by an **external service** that
+  writes `receiving_orders`/`receiving_invoices`/`receiving_invoice_items`
+  directly (there is no in-repo ingest module; the retired `PUT
+  /receiving-orders/:batchNo` route and ElectricSQL consumer are gone — see
+  AGENTS.md "Upstream sync").
 - `apps/backend/src/db/allocate.ts` — manual-only allocation: confirm-arrival
   and the admin Re-allocate buttons run the scoped recompute; `allocateAll` is
   dev/test-only (`POST /dev/allocate`).

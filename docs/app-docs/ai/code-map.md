@@ -34,7 +34,7 @@ Page and component locations mapped to source files.
 | Stock Search | `/stock-search` | `pages/stock-search/index.vue` (filters via `components/FilterChipGroup.vue` chip multi-selects) |
 | Ad-hoc Put-away | `/ad-hoc-put-away` | `pages/ad-hoc-put-away/index.vue` (supplier selection, scan, review list, location/shelf selection, confirm) |
 | Shelf Exchange | `/shelf-exchange` | `pages/shelf-exchange/index.vue` (step state machine — source shelf → item label → target shelf, confirm via `components/ShelfExchangeConfirmModal.vue`) |
-| Print labels (boxes / shelves / cartons / parts) | `/print-labels` | `pages/print-labels.vue` (codes `components/labels/ScanCode.vue`, data `GET /labels-data`) |
+| Print product label (single-label print test) | `/print-product-label` | `pages/print-product-label.vue` (data `GET /labels-data` in `apps/backend/src/routes/labels.ts`) |
 | Settings (global text size) | `/settings` | `pages/settings.vue` (sizing state `composables/useFontSize.ts`, applied at startup by `plugins/font-size.client.ts`, persisted per-device in `localStorage` key `warehouse-font-size`; all app CSS sizes in `rem` off the `html` base, default 24px — see `assets/css/main.scss`) |
 
 ## Layouts and global UI
@@ -58,7 +58,7 @@ Page and component locations mapped to source files.
 | ScanFab | `components/ScanFab.vue` |
 | FilterChipGroup (tap-to-toggle chip multi-select for filter panels; search box when > 8 options, grouped option headings, scrollable list) | `components/FilterChipGroup.vue` |
 | List rows (`.list-panel` / `.list-row` / `.list-toolbar` CSS, incl. expandable rows + group headers) | `assets/css/main.scss` |
-| AppListRow (shared list-row component; `mineText` prop renders the `badge--assigned` assigned-to-me badge — driven by `composables/useAssignedToMe.ts` comparing the row's `assignee` to the logged-in username on the six queue list pages) | `components/AppListRow.vue` (`badge--assigned` style in `assets/css/main.scss`) |
+| AppListRow (shared list-row component; `mineText` prop renders the `badge--assigned` assigned-to-me badge — driven by `composables/useAssignedToMe.ts` comparing the row's `assignee` to the logged-in username on the eight queue list pages) | `components/AppListRow.vue` (`badge--assigned` style in `assets/css/main.scss`) |
 
 ## Modals
 
@@ -74,7 +74,7 @@ Page and component locations mapped to source files.
 | ReportIssueModal | `components/ReportIssueModal.vue` |
 | PickingIssueReportModal | `components/PickingIssueReportModal.vue` |
 | SelectShelfDialog | `components/SelectShelfDialog.vue` |
-| OutdatedWarningDialog (outdated date-code scan alert; picking scan page + put-away detail) | `components/OutdatedWarningDialog.vue` |
+| OutdatedWarningDialog (outdated date-code scan alert; globally mounted in `layouts/default.vue`, fed by the scan responses' `outdatedWarning`) | `components/OutdatedWarningDialog.vue` |
 
 ## Put-away
 
@@ -117,7 +117,7 @@ Page and component locations mapped to source files.
 
 Pages go through `WarehouseService` / `AuthService`, never the network
 directly. There is exactly one adapter: HTTP to `apps/backend` (default
-`http://localhost:3002`), env-overridable via `NUXT_PUBLIC_API_BASE_URL`.
+`http://127.0.0.1:3002` (127.0.0.1 not localhost — some device ROM WebViews can't resolve `localhost`), env-overridable via `NUXT_PUBLIC_API_BASE_URL`.
 The old `warehouseAdapter` config switch, the PGlite adapter, the `apps/api`
 adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 
@@ -182,7 +182,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Document PNG printing (CR-049 — Print PNG button beside the Excel download on the CN receiving order detail 收貨確認及付款通知書 and picking order detail; the document renders client-side with pure canvas — no html-to-image dep — via the generic `PrintDocument` model in `utils/documentPrint.ts`: A4 **landscape** 3508 × 2480 px @ 300 dpi, ~5 mm margins, slim page header with title + ref + Page x/y on every page, label/value head block + order-link QR top-right on page 1 only, weighted-column table with shaded header row + grid lines, `totals` + `foot` lines on the last page only; `paginate()` is pure with an injected text measurer — greedy row-boundary page fill, header row repeated per page, over-tall rows truncated with "…", fully vitest-covered; `renderDocumentPngs()` draws each page to a canvas at the bundled Roboto Mono webfont (lazy-imports `canvasToPng`/`ensureLabelTextFont` from `utils/print.ts` — static import would pull `vue` into node tests); CN builder `utils/documentPrintCn.ts` mirrors `buildCnReceivingExportAoa` (shares `CN_EXPORT_ITEM_COLUMNS`, `sortCnItemsByPoLine`, `firstJsonb` — a test asserts the print headers equal the Excel export columns); picking builder `utils/documentPrintPicking.ts` adapts the backend `PickingListDocument` JSON from the new `GET /admin/picking-orders/:id/picking-list-document` (keeps the grouping/merge logic single-source server-side; 12-column layout + UNALLOCATED/(no allocation) semantics mirror the xlsx renderer, column weights from its column widths); `components/PrintDocumentDialog.vue` — preview thumbnails (the actual print PNGs, downscaled by the browser), printer picker persisted in localStorage `doc_printer` (separate from `label_printer`), copies, sequential one print job per page via `printFile` + `waitForPrintJob` (the print service's `/print/files` takes exactly one file per job) | `/receiving-cn/:batchNo`, `/picking-orders/:id` | `apps/admin/components/PrintDocumentDialog.vue`, `apps/admin/utils/documentPrint.ts`, `apps/admin/utils/documentPrintCn.ts`, `apps/admin/utils/documentPrintPicking.ts`, print buttons in `apps/admin/pages/receiving-cn/[batchNo].vue` + `apps/admin/pages/picking-orders/[id].vue`, i18n `admin.printDoc.*` |
 | Sidebar layout + userbox popover | — | `apps/admin/app.vue` |
 | User profiles (per-user sub-inventory scope) | `/user-profiles` | `apps/admin/pages/user-profiles.vue` + `apps/admin/components/SubInventoryScopePicker.vue` (shared org-grouped checkbox picker) + `apps/admin/utils/userScope.ts` |
-| Task assignments (per-flow tabs — receiving-cn / picking / label-printing / labeling / put-away / put-away-cn / measuring / verify — with a SearchableSelect user picker over `GET /admin/users`; reads `GET /admin/task-assignments`, saves via `PATCH /admin/task-assignment`; inline assignee editors also on the picking-order and CN-receiving-order details) | `/task-assignments` | `apps/admin/pages/task-assignments.vue`, assignee editors in `apps/admin/pages/picking-orders/[id].vue` + `apps/admin/pages/receiving-cn/[batchNo].vue`, nav entry in `apps/admin/utils/entities.ts` (Settings) |
+| Task assignments (per-flow tabs — receiving-cn / picking / label-printing / labeling / put-away / put-away-cn / measuring / verify / put-back — with a SearchableSelect user picker over `GET /admin/users`; reads `GET /admin/task-assignments`, saves via `PATCH /admin/task-assignment`; inline assignee editors also on the picking-order and CN-receiving-order details) | `/task-assignments` | `apps/admin/pages/task-assignments.vue`, assignee editors in `apps/admin/pages/picking-orders/[id].vue` + `apps/admin/pages/receiving-cn/[batchNo].vue`, nav entry in `apps/admin/utils/entities.ts` (Settings) |
 | Personal settings (own sub-inventory scope + date format preferences, from the user popover) | `/settings` | `apps/admin/pages/settings.vue`; formatting via `apps/admin/utils/dateFormat.ts` (token formatter) + `apps/admin/utils/datePreferences.ts` (reactive per-user store driving `formatDate`/`formatDateTime`, wired into `utils/format.ts` `formatCell`) |
 | Flow API typed wrappers | — | `apps/admin/utils/flowApi.ts` |
 | Label print rules (template-selection rules CRUD + Activate/Deactivate; structured AND/OR conditions editor; detail-page edit with draft-condition match preview) | `/label-print-rules`, `/label-print-rules/:id` | `apps/admin/pages/label-print-rules/index.vue`, `apps/admin/pages/label-print-rules/[id].vue` (2fr/1fr edit form + match-preview panel over `POST /admin/label-print-rules/test-match`), `apps/admin/utils/entities.ts` (`entities.labelPrintRules`, `noEdit: true`), `apps/admin/components/RuleConditionsEditor.vue`; reusable CrudForm field types boolean/select/conditions in `apps/admin/components/CrudForm.vue` |
@@ -254,7 +254,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Helper | Source file |
 |--------|-------------|
 | Receiving reads/writes, scan matching, mismatch lifecycle | `apps/backend/src/db/receiving.ts` |
-| Label parsing for receiving scans (QR templates, serial extraction) | `apps/backend/src/db/scanParse.ts` |
+| Label decoding authority (supplier QR templates, serial extraction, NCC/TE resolution) | `apps/backend/src/decode/` (`codecs.ts` + `POST /scan/decode`; replaces the deleted `db/scanParse.ts`) |
 | Picking execution (scan, packages, boxes, finish, issues) | `apps/backend/src/db/picking.ts` |
 | Put-away (scans, shelf boxes, lot materialization, auto-clear) | `apps/backend/src/db/putaway.ts` |
 | Put-away tasks (create/complete hooks, queue list, detail + shelf suggestion) | `apps/backend/src/db/putawaytasks.ts` |
@@ -267,7 +267,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Shipping feed (per-box list/detail + ship, derives order `shipped`) | `apps/backend/src/db/shipping.ts` |
 | Flow config (`warehouse_config` row `"flow"` + `FLOW_CONFIG` env override, `isStepEnabled`, `allowDockStock`) | `apps/backend/src/config.ts` |
 | Per-user sub-inventory scope (`user_profiles` read + filter fragments for receiving/picking list/detail reads) | `apps/backend/src/db/user-scope.ts` |
-| Goods verify (generation, queue, verify with ADJUST) | `apps/backend/src/db/goodsverify.ts` |
+| Goods verify (generation, queue, confirmation-only verify) | `apps/backend/src/db/goodsverify.ts` |
 | Stock search | `apps/backend/src/db/stocksearch.ts` |
 | Outdated date-code scan warnings (check / record / resolve / list; canonical YYWW rank helpers) | `apps/backend/src/db/outdated.ts` (+ `apps/backend/src/db/dateCode.ts`) |
 | Allocation engine (`allocateAll`, `allocateForReceivingOrder`, `allocateForPickingOrder`) | `apps/backend/src/db/allocate.ts` |
@@ -276,32 +276,4 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 
 - Server entry / app wiring: `apps/backend/src/index.ts` (migrations auto-apply on startup; boot seed runs when `warehouse_config` is empty unless `WAREHOUSE_SEED=off` — default is reference data + shelves only (incl. the HK warehouse flow config, `HK_FLOW_CONFIG` in `seed.ts`), masters/orders come from upstream sync and users from DocPal; `WAREHOUSE_SEED_DEMO=1` seeds the full demo world for local dev login).
 - All web pages go through `WarehouseService` → these HTTP endpoints.
-- The retired `apps/api` (:3001) routes are gone from the web app's runtime path; the package remains in the repo for history (see `apps/api/README.md`).
-
-## Native Android app (apps/android)
-
-The native rewrite lives in `apps/android` (package `com.docpal.warehousepda`);
-an earlier `native-android/` scaffold listed in older revisions of this page
-was superseded. Entry points:
-
-| Element | Source file |
-|---------|-------------|
-| App entry / DI | `apps/android/app/src/main/java/com/docpal/warehousepda/App.kt`, `AppContainer.kt`, `MainActivity.kt` |
-| Navigation | `apps/android/.../ui/navigation/` |
-| Login / Home | `apps/android/.../ui/login/`, `apps/android/.../ui/home/` |
-| Receiving list + detail (items & picking tabs, dialogs, scan launchers) | `apps/android/.../ui/receiving/` |
-| Picking list + detail (search, batch issue report, boxes, logs, scan-to-pick) | `apps/android/.../ui/picking/`, `domain/PickingRepository.kt` |
-| Put-away candidate list + detail (lots, shelf boxes, scan-to-put-away, auto-clear) | `apps/android/.../ui/putaway/`, `domain/PutAwayRepository.kt` |
-| Goods verify shelf list + box list + box detail (scan-to-verify, mark verified) | `apps/android/.../ui/goodsverify/`, `domain/GoodsVerifyRepository.kt`, `data/db/GoodsVerifyDao.kt`, `domain/model/GoodsVerifyModels.kt` |
-| Shared UI primitives | `apps/android/.../ui/components/` (`StatusBadge`, `EmptyState`, `DetailRow`, `ErrorText`, `OnResumeEffect`) |
-| Room DB, entities, DAOs | `apps/android/.../data/db/`; repositories in `apps/android/.../data/` + `apps/android/.../domain/` |
-| Scan pipeline | `apps/android/.../scanner/` (camera/OCR), `apps/android/.../domain/scan/` (parsers, `ScanMatcher.matchReceiving`/`matchPicking`/`matchPutAway`/`matchGoodsVerify`, wedge buffer), `ui/receiving/ScanLaunchers.kt`, `ui/scan/LabelScanReviewDialog.kt` |
-| JVM tests | `apps/android/app/src/test/...` (Robolectric; fixtures in `DbTestSupport.kt`) |
-
-Full structure and conventions: root `AGENTS.md`, "Native Android app
-(apps/android)", and the handoff notes in
-`docs/superpowers/plans/2026-07-12-native-android-phase-1.md` ("Phase 2
-handoff notes"), `docs/superpowers/plans/2026-07-12-native-android-phase-2.md`
-("Phase 3 handoff notes"), and
-`docs/superpowers/plans/2026-07-12-native-android-phase-3.md` ("Phase 4
-handoff notes").
+- The `apps/api` (:3001) and native `apps/android` packages are **retired** (no longer in the working tree; see git history). The live Android shell is Capacitor inside `apps/pda/android`.
