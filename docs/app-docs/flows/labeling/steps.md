@@ -25,6 +25,8 @@ label type, template) for reprints and external-label info:
 
 - **Print** per row — prints that label with the template's default printer;
   a spinner tracks the print job and errors show as toasts.
+- **Print all** in the panel header prints every internal rule in one go
+  (external info rows are skipped).
 - Labels are re-printable as many times as needed — every print (reprints
   included) is recorded server-side and later checked in Verify.
 - A rule marked **external** shows an info row ("label provided by customer")

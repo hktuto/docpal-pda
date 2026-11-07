@@ -118,8 +118,9 @@
   (`shelfCode`) so reviewed scans follow the same commit rule as gun scans.
   The review form's Apply re-matches the EDITED fields before writing (spec
   `2026-10-07-label-scan-review-edits-and-country-dropdown-design`), and
-  `recordPutAwayScan` lets a supplied batch value overwrite the one stamped
-  on the invoice item (null keeps it). Part no in the form is a select over
+  `recordPutAwayScan` fills only the batch fields the invoice item still has
+  NULL (COALESCE fill — an existing item value always wins over the scanned
+  one). Part no in the form is a select over
   the order's visible lines (the review context's `putAwayItems` carries ALL
   visible lines so a corrected part re-matches; matching still splits FIFO
   over the selected part's lines only). COO/COW are country dropdowns

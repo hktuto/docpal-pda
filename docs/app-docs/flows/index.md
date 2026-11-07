@@ -14,6 +14,15 @@ The app supports these warehouse flows. Each flow has an overview, a step-by-ste
 | [Goods Verify](./goods-verify/overview.md) | Verify goods at appropriate process points. | `/goods-verify` | [Steps](./goods-verify/steps.md) | [Scope](./goods-verify/ai-scope.md) |
 | [Stock Search](./stock-search/overview.md) | Search inventory by supplier or item and see locations. | `/stock-search` | [Overview](./stock-search/overview.md) | [Scope](./stock-search/ai-scope.md) |
 | [Ad-hoc Put-away](./ad-hoc-put-away/overview.md) | Put away items with no receiving order (old store stock, write-out returns). | `/ad-hoc-put-away` | [Steps](./ad-hoc-put-away/steps.md) | [Scope](./ad-hoc-put-away/ai-scope.md) |
+| [Shelf Exchange](./shelf-exchange/overview.md) | Move stock between shelves (preview-first; allocated qty is immovable). | `/shelf-exchange` | [Steps](./shelf-exchange/steps.md) | [Scope](./shelf-exchange/ai-scope.md) |
+
+Two more PDA queues ship without an operator guide yet — **Put-back**
+(`/put-back`, cancelled-invoice stock returns, spec
+`docs/superpowers/specs/2026-11-07-cancel-invoice-putback-design.md`) and
+**Manual receiving** (`/manual-receiving`, CN no-PDF receipt path, spec
+`docs/superpowers/specs/2026-10-27-manual-receiving-pda-design.md`); their
+behavior is covered in those specs and the CN sections of the Receiving docs.
+The CN receiving scan queue lives under Receiving (the `receiving-cn` flow).
 
 ## Common actions across flows
 

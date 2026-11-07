@@ -4,17 +4,18 @@
 
 From the home screen, tap **Ad-hoc Put-away**.
 
-## 2. Select a supplier
+## 2. Select a brand
 
-Choose the supplier whose items you are putting away. This drives:
-- OCR/QR label parsing (qty encoding, date-code encoding)
+Choose the brand of the items you are putting away (from the warehouse's
+`parts.brand` values). This drives:
+- Label parsing (the scan decode is scoped to that brand's supplier profiles)
 - Scanner symbology whitelist (barcode types)
 
-The supplier selection persists across multiple put-away cycles.
+The brand selection persists across multiple put-away cycles.
 
 ## 3. Select a location
 
-Choose the `(org_id, sub_inventory_code)` pair for the items. This is required because there is no receiving order to provide the location context. The location is applied to all items by default, with per-item override available.
+Choose the `(org_id, sub_inventory_code)` pair for the items. This is required because there is no receiving order to provide the location context. The location applies to all scanned items (the commit payload supports per-item pairs, but there is no per-item picker).
 
 ## 4. Scan items
 
@@ -35,7 +36,9 @@ New items default to today's date code in label format (per the `dateCodeFormat`
 
 ## 6. Select a shelf
 
-Scan a shelf QR code or pick a shelf from the dropdown. The selected shelf is shown in the confirm prompt.
+Scan the shelf's QR/barcode — shelf codes are intercepted from the scan stream
+and set the selected shelf (scan-only; there is no shelf dropdown). The
+selected shelf is shown in the confirm prompt.
 
 ## 7. Confirm
 
@@ -43,4 +46,4 @@ Tap the confirm button to put all items to the selected shelf. A confirmation pr
 
 ## 8. Repeat
 
-After confirmation, the item list clears and the supplier selection stays. Repeat from step 4 to scan more items for the same supplier.
+After confirmation, the item list clears and the brand selection stays. Repeat from step 4 to scan more items for the same brand.

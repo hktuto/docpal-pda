@@ -15,7 +15,7 @@ A mismatch occurs when the physical shipment does not match the expected invoice
 
 1. On the receiving detail, tap the mismatch/issue action for the affected line.
 2. Select the mismatch reason.
-3. Enter the actual quantity or notes (required for `wrong_part`).
+3. Enter the actual quantity per the reason: `not_found` takes **no** quantity; `over_shipment` and `wrong_part` require a **positive quantity** (and `wrong_part` additionally the wrong part number); `damaged` / `quality_rejection` are capped at the expected quantity. A note is always optional.
 4. Submit.
 
 ## Storage and lifecycle

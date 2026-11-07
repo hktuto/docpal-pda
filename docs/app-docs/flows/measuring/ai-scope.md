@@ -5,17 +5,20 @@
 - List the open shipping boxes that contain packages **whose picking orders
   are all picking-complete** (`picking_finished`/`measuring_finished`/`shipped`
   — the order's explicit
-  Finish on the picking detail page) **and have cleared the labeling stage**
-  (`labeling_pending = false` — a labeling-pending order keeps its boxes off
-  this list until `POST /picking-orders/:id/labeling-finish`; spec
-  `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`, see
+  Finish on the picking detail page) **and have cleared both label stages**
+  (`labeling_pending = false` **and** `label_printing_pending = false` — a
+  pending order keeps its boxes off this list until `.../labeling-finish` /
+  `.../label-printing-finish`; specs
+  `docs/superpowers/specs/2026-10-28-picking-labeling-step-design.md`,
+  `docs/superpowers/specs/2026-11-02-label-printing-step-design.md`, see
   [Labeling](../labeling/ai-scope.md)), grouped by picking order (box-scoped —
   no measuring task exists; specs
   `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`,
   `docs/superpowers/specs/2026-10-20-measuring-post-picking-list-design.md`).
   A box packed before its order is confirmed (or holding a cross-order
   package of an unfinished order) stays off the list until every related
-  order is finished. List rows carry server-computed counts: `packageCount` /
+  order is finished. Queue visibility is assignee-scoped
+  (`shipping_boxes.assignee` + `assigneeFilter`, PDA `mineText` badge). List rows carry server-computed counts: `packageCount` /
   `verifiedCount` plus the aggregated `orderNos[]` (a box may hold packages
   from several picking orders — cross-order packing); a cross-order box
   appears under each of its orders' groups.

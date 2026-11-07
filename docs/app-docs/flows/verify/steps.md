@@ -31,7 +31,7 @@ The page has up to two sections:
 
 ## 5. Correct measurements if needed
 
-When every package in an open box is verified, the measurements form opens automatically (or tap **Enter measurements** in the header's page-action menu). Box size, net/gross weight (kg — the net weight pre-fills from the part net-weight master), and destination country can be edited; then **Confirm box** closes the box again. See [Box measurements](../measuring/box-measurements.md).
+When every package in an open box is verified, the measurements form opens automatically (or tap **Enter measurements** in the header's page-action menu). Box size and net/gross weight (kg — the net weight pre-fills from the part net-weight master) can be edited (destination country is read-only on the PDA); then **Confirm box** closes the box again. See [Box measurements](../measuring/box-measurements.md).
 
 ## 6. Complete the task
 

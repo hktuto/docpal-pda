@@ -55,7 +55,7 @@ From the home screen, tap **收貨掃描**. The list shows orders waiting to be 
 
 ### 2. Scan the physical items
 
-Tap an order to open its detail. The expected items are grouped by part + batch (date code / COO / COW) — one row per group showing **scanned / ordered** totals, a status badge, and the PO numbers behind it. The header progress is the total scanned vs ordered quantity. Scan each item's label with the hardware scanner or camera; the app parses the label and the server credits the matching group (FIFO across its lines) — no item picking needed, even when several lines share a part:
+Tap an order to open its detail. The expected items are grouped by part number — one row per part showing **scanned / ordered** totals, a status badge, the PO numbers behind it, and the distinct batch values for reference (batch fields do not filter matching; the scanned label overwrites them). The header progress is the total scanned vs ordered quantity. Scan each item's label with the hardware scanner or camera; the app parses the label and the server credits the matching part (FIFO across its lines) — no item picking needed, even when several lines share a part:
 
 - The group's scanned total grows with each scan; when it reaches the ordered quantity the group is complete, and an over-received quantity becomes a **warning** (with an over-received toast).
 - A label that matches nothing on the order is rejected with an error toast; the same label scanned twice in a session is rejected as a duplicate.

@@ -110,23 +110,28 @@
   `useVisibleReload` on `/receiving-cn-scan-tasks`) →
   `apps/pda/pages/receiving-cn-scan/[id].vue` (hardware scanner + camera
   OCR, client-side template parse; the expected items render GROUPED by
-  part + dateCode/COO/COW via `apps/pda/utils/cnScanGroups.ts` —
-  `buildCnScanGroups` — one row per group with summed scanned/ordered
-  quantities, status badge and member PO numbers; header progress is the
+  part alone via `apps/pda/utils/cnScanGroups.ts` —
+  `buildCnScanGroups` — one row per part with summed scanned/ordered
+  quantities, status badge, member PO numbers and the distinct batch values
+  (dateCode/COO/COW) joined for display; header progress is the
   total scanned vs ordered quantity; duplicate raw label → rejected
   session-side; group-level Flag dialog for missing/damaged/wrong
   part/other + note, and group Reset — both loop the per-item endpoints
   over the group's open/touched lines). Scan matching is server-side
-  (spec 2026-11-04): `POST /receiving-cn/scan-tasks/:id/scan-aggregate`
+  (specs 2026-11-04/2026-11-05): `POST /receiving-cn/scan-tasks/:id/scan-aggregate`
   (`{itemId?, wclItemNo?, partNo?, qty, dateCode?, lotCode?, coo?, cow?,
-  raw?}`) matches the task's open lines by normalized part key, filters
-  by the label's batch fields, credits FIFO across lines (`po_no,
+  raw?}`) matches the task's open lines by normalized part key —
+  the label's batch fields never filter candidates — and credits FIFO
+  across lines (`po_no,
   po_line, id`; a partial credit leaves the line open with an accumulated
   `scan_qty`), and returns the full refreshed detail plus
   `lastScan.overQty` for the over-received toast; 404 `no_matching_item`
-  when nothing matches. Other endpoints: `GET
+  means "no open line for this part". Other endpoints: `GET
   /receiving-cn/scan-tasks(/:id)`, `POST
   /receiving-cn/scan-tasks/:id/items/:itemId/flag|reset`, `POST
+  /receiving-cn/scan-tasks/:id/scan-events/:eventId/remove` (CR-046
+  per-scan undo; each scan writes a `receiving_cn_scan_events` row with its
+  per-line FIFO `takes`), `POST
   /receiving-cn/scan-tasks/:id/finalize` (`{unresolvedAs?: 'missing'}`;
   409 `unresolved_items`) in
   `apps/backend/src/routes/receivingCn.ts` over
@@ -137,15 +142,17 @@
   `scanned_by`/`scanned_at`); an over-scan (or a credit on a NULL
   `line_qty` line) is an automatic `warning`, user flags are `error`
   (mirrored into the pre-existing mismatch columns for the admin mismatch
-  display), and credited scans fill the item's date_code/lot_code/COO/COW
-  only where still NULL. **Finalize is the receipt moment**: one tx sets
+  display), and the credited scan's batch fields **overwrite** the line's
+  OCR values (the scanned label is the source of truth — spec
+  2026-11-05). **Finalize is the receipt moment**: one tx sets
   `received_qty = min(scan_qty, line_qty)` on any non-error line with
   `scan_qty > 0` (NULL `line_qty` → `scan_qty`; flagged and untouched
   lines stay 0 so they can never enter put-away — CN put-away remaining
   derives as received − picked − put_away), stamps the order `in_hand`,
   and creates the `put_away_tasks_cn` task (`ON CONFLICT DO NOTHING`)
   only when ≥1 credited line exists; SSE `receiving_cn.scan_started` /
-  `receiving_cn_scan.item_updated` / `receiving_cn.completed` on topics
+  `receiving_cn_scan.item_updated` / `receiving_cn.completed` /
+  `receiving_cn.updated` (admin reset) on topics
   `/receiving-cn-scan-tasks` (+ `/admin/receiving-cn`, `/put-away-tasks`).
   The admin console shows the `scanning` status (list filter +
   `apps/admin/pages/receiving-cn/index.vue` / `[batchNo].vue`) and per-item
@@ -356,7 +363,9 @@
 - `apps/backend/src/routes/admin/receivingCn.ts` +
   `apps/backend/src/db/receivingCn.ts` + `apps/backend/src/docpalWorkflow.ts`
   + `apps/backend/src/jobs/receivingCnSync.ts` — CN customer receiving
-  upload: tracking list/detail, Excel upload → DocPal workflow kick, status
+  upload: tracking list/detail, PDF upload → DocPal workflow kick (batch_no
+  `TE-yyyymmdd-seq`; the `/admin/receiving-cn/excel` route survives with no
+  admin caller), status
   cron + finalize; schema `apps/backend/src/db/schema/receivingCn.ts`.
 - `apps/admin/pages/receiving-cn/index.vue` +
   `apps/admin/pages/receiving-cn/new.vue` +
@@ -371,7 +380,7 @@
   `apps/pda/utils/cnScanGroups.ts` (+ `utils/cnReceivingScan.ts` —
   shared part-key normalization only) — PDA 收貨掃描 receiving scan task
   (PDF path): task list with progress, scan detail grouped by
-  part + batch (server-side aggregate scan matching, group flag/reset,
+  part (server-side aggregate scan matching, group flag/reset,
   finalize).
 - `apps/backend/src/db/receivingCnScan.ts` — CN receiving scan domain
   module (`startCnReceivingScanTx`, server-side aggregate scan matching

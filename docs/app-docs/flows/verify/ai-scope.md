@@ -8,7 +8,10 @@
   List rows carry server-computed counts: `packageCount` /
   `verifyVerifiedCount` plus the aggregated `orderNos[]` and the box's
   `destinationCountry` (a box may hold packages from several picking orders
-  — cross-order packing).
+  — cross-order packing). Queue visibility is assignee-scoped
+  (`verify_tasks.assignee` + `assigneeFilter`, spec
+  `docs/superpowers/specs/2026-11-01-task-assignee-design.md` — foreign
+  assignee detail 404s; PDA `mineText` badge on the list rows).
 - Box detail as **one consolidated read** (`GET /verify-tasks/:id`):
   `{task{id, status, shippingBoxId, createdDate}, box{...,
   suggestedNetWeightKg}, packages[]}` with part identity plus the
@@ -106,9 +109,9 @@
 - Un-shipping a box — `shipped` is terminal for the POC (mark-shipped
   itself lives in the admin shipping feed via
   `POST /shipping-orders/:boxId/ship`, not in the PDA verify flow).
-- Step-config editing — the flow config lives in the backend
-  `warehouse_config` row `"flow"` (or the `FLOW_CONFIG` env override); there
-  is no admin UI.
+- Step-config editing — lives in the admin console (`apps/admin/pages/flow-config.vue`
+  over `GET/PUT /admin/flow-config`); the flow config itself is the backend
+  `warehouse_config` row `"flow"` (or the `FLOW_CONFIG` env override).
 
 ## Key files
 

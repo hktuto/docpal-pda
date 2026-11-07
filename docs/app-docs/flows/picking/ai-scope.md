@@ -36,7 +36,9 @@
   `docs/superpowers/specs/2026-10-22-picking-status-split-design.md` —
   `picking_finished` = operator Finish, `measuring_finished` = the order's
   last verify task completes)
-  with `issue`/`skip` as side states. `allocated` = an admin confirmed the
+  with `issue`/`skip`/`cancelled` as side states (`cancelled` is written by
+  the cancel-invoice ingest cron — spec
+  `docs/superpowers/specs/2026-11-07-cancel-invoice-putback-design.md`). `allocated` = an admin confirmed the
   order's current allocations via the status override — the allocation engine
   NEVER wipes/rebuilds the order's rows again (it is not in `loadDemands` at
   all; the wipe sets derive from the demands, so both cores leave it
@@ -64,9 +66,9 @@
   spec `docs/superpowers/specs/2026-09-17-shelf-warning-design.md`). Display
   metadata only — the allocator is unaware of it and still picks the shelf.
   Surfaces: ⚠️ icon next to the shelf code on the web detail
-  (`PickingItemsSection.vue`), ⚠️ markers in the scan page's
-  `allocationSources` hint (warning text in the tooltip via
-  `allocationWarnings`), and the admin picking-order detail allocation cell +
+  (`PickingItemsSection.vue`), the ⚠️ on the unified page's planned-allocations
+  shelf code (`PickingUnifiedItems.vue`, rendered from
+  `allocation.lot.shelfWarning`), and the admin picking-order detail allocation cell +
   tooltip row.
 - Allocation outdated-stock warning (spec
   `docs/superpowers/specs/2026-10-20-allocation-outdated-stock-warning-design.md`):
@@ -117,9 +119,10 @@
   keep working (`{ withShelfCodes: true }`).
   Each progress row covers one part — same-part lines are merged with their
   required/scanned/queued totals, joined line/shipment numbers, and the
-  concatenated allocation sources (`allocationSources` — `CTN <ctn>`,
-  `<box> @ <shelf>`, or a bare shelf
-  code) so the operator knows what/where to scan. A raw scan that matches no
+  allocation source chips (`allocationChipLabel` in
+  `apps/pda/utils/pickingUnifiedItems.ts` — `CTN <boxId>` for a carton,
+  `<lotCode>-<shelf>-<labelDateCode>-<coo>-<cow>` for a lot, or the
+  receiving-area label) so the operator knows what/where to scan. A raw scan that matches no
   supplier QR template is treated as a location barcode, with two behaviors:
   a **receiving carton** (`ctn_no` — `matchCartonAllocations`) auto-queues
   everything the order still needs from that carton (`addCartonScan`, one
@@ -350,7 +353,7 @@
   admin detail's audit-log table (`GET /admin/picking-orders/:id/logs`,
   server-paged/searchable/sortable via `?page=&pageSize=&q=&sort=&dir=`;
   item-typed rows carry partNo in `metadata`).
-- Page work lock: opening the picking detail or scan-session page acquires
+- Page work lock: opening the picking detail or unified page acquires
   the server-side work lock on the order (`POST /picking-orders/:id/work-lock`,
   refreshed every 3 min while open, keepalive release on leave, expires 10 min
   after `working_at`). A locked order's allocations are never wiped by
@@ -493,7 +496,7 @@
   "Set status" over the multi-selectable list page, both driving
   `PATCH /admin/picking-orders/:id/status` (`overridePickingOrderStatus` in
   `apps/backend/src/db/picking.ts`). The status can be set to any of
-  pending/allocated/skip/picking/issue/picking_finished/measuring_finished/shipped
+  pending/allocated/skip/picking/issue/picking_finished/measuring_finished/shipped/cancelled
   with NO transition guards; a live PDA work lock is force-cleared (the override "steals" it),
   leaving an allocation-holding status (pending/picking/allocated) for a
   non-holding one releases ALL the order's leftover allocations (incl.
@@ -748,9 +751,9 @@
   not all.
 - The admin picking-list xlsx embeds an order-link QR
   (`warehouse://picking/<id>`); scanning it on the PDA opens the order's
-  unified page directly (`/picking/unified/<id>` during the evaluation
-  build — `utils/orderScanRoute.ts` points back at the detail page after
-  the Stage-2 swap). Navigation is global —
+  unified page directly (`/picking/unified/<id>` —
+  `utils/orderScanRoute.ts` routes picking links there unconditionally;
+  CN put-away links (`putaway-cn`) land on `/put-away/cn?task=`). Navigation is global —
   `useOrderScanNav` mounted in `app.vue` handles it from every page; the
   page-level `useHardwareScanner` only skips the value in its page handler.
   It must be scanned from a page without a symbology whitelist (home /
