@@ -10,5 +10,5 @@
  "status": "Delivered",
  "owner": "dev",
  "targetDate": "",
- "remarks": "Implemented 2026-11-07 — commit 71111384, spec docs/superpowers/specs/2026-11-07-admin-order-reset-design.md — pending UAT. POST /admin/picking-orders/:id/reset + POST /admin/receiving-cn/orders/:batchNo/reset (CN behind the receiving-cn step guard); admin buttons on both detail pages with confirm dialog. Also affects ADM-024 (CN receiving detail)."
+ "remarks": "Implemented 2026-11-07 — commit 5e39a365, spec docs/superpowers/specs/2026-11-07-admin-order-reset-design.md — pending UAT. POST /admin/picking-orders/:id/reset + POST /admin/receiving-cn/orders/:batchNo/reset (CN behind the receiving-cn step guard); admin buttons on both detail pages with confirm dialog. Also affects ADM-024 (CN receiving detail)."
 }
