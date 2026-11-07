@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import { db } from "../../db.js";
 import { updatePickingDeliveryDate, updatePickingOrderFields, updateReceivingDeliveryDate, updateReceivingItemFields } from "../../db/adminedits.js";
-import { overridePickingOrderStatus } from "../../db/picking.js";
+import { overridePickingOrderStatus, resetPickingOrderProgress } from "../../db/picking.js";
 import { overrideReceivingOrderStatus } from "../../db/receiving.js";
 import { allocateForReceivingOrder, awaitAllocationTask } from "../../db/allocate.js";
 import { actorFrom } from "../../auth/middleware.js";
@@ -86,6 +86,20 @@ adminFlowEditsRoute.patch("/picking-orders/:id/status", async (c) => {
     orderId: c.req.param("id"),
     status: v.trim(),
     reason: typeof reason === "string" ? reason : null,
+    actorId: actorFrom(c).id,
+  });
+  return c.json(result, 200);
+});
+
+// "Reset order" on the picking detail (spec
+// docs/superpowers/specs/2026-11-07-admin-order-reset-design.md): remove ALL
+// picked/boxed progress (packages reversed like a scan removal — source qty,
+// allocation, reverse PICK ledger rows; boxes deleted) and return the order
+// to 'pending', KEEPING allocations. 404 picking_order_not_found, 409
+// picking_order_shipped.
+adminFlowEditsRoute.post("/picking-orders/:id/reset", async (c) => {
+  const result = await resetPickingOrderProgress(db, {
+    orderId: c.req.param("id"),
     actorId: actorFrom(c).id,
   });
   return c.json(result, 200);

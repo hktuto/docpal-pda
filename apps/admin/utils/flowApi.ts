@@ -1225,6 +1225,13 @@ export function useFlowApi() {
     // request. There is no fleet-wide run: allocation is manual-only.
     reallocatePickingOrder: (id: string) =>
       api.post<{ allocation: AllocationRunSummary }>(`/admin/picking-orders/${id}/reallocate`, {}),
+    // "Reset order": wipe picked/boxed progress, KEEP allocations (spec
+    // 2026-11-07-admin-order-reset-design.md).
+    resetPickingOrder: (id: string) =>
+      api.post<{ id: string; previousStatus: string; packagesRemoved: number; boxesRemoved: number }>(
+        `/admin/picking-orders/${id}/reset`,
+        {}
+      ),
     // allocation is null when the scoped recompute failed (same as
     // confirm-arrival) — demand stays stale until the next Re-allocate.
     reallocateReceivingOrder: (id: string) =>
@@ -1348,6 +1355,12 @@ export function useFlowApi() {
     confirmCnOrder: (batchNo: string) =>
       api.post<{ id: string; batchNo: string; putAwayTaskId: string | null }>(
         `/admin/receiving-cn/orders/${encodeURIComponent(batchNo)}/confirm`,
+        {}
+      ),
+    // "Reset order": clear scan/receive/put-away progress, order → pending.
+    resetCnOrder: (batchNo: string) =>
+      api.post<{ id: string; batchNo: string; previousStatus: string }>(
+        `/admin/receiving-cn/orders/${encodeURIComponent(batchNo)}/reset`,
         {}
       ),
     // CN order audit log — same page/search/sort convention as the standard

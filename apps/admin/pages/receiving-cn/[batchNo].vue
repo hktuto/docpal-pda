@@ -323,6 +323,31 @@ const savingEdit = ref(false);
 // Pending orders (pdf path, awaiting the admin confirm) edit inline in the
 // table — same fields as the modal, saved per cell on change.
 const isPending = computed(() => detail.value?.order.status === "pending");
+// "Reset order" is offered for any non-clear order (a clear order's stock is
+// already in inventory_lots — out of scope for a reset).
+const isClear = computed(() => detail.value?.order.status === "clear");
+
+// ---- reset order (clear scan/receive/put-away progress, order → pending) ----
+
+const resetting = ref(false);
+
+async function resetOrder() {
+  if (!detail.value || resetting.value) return;
+  if (!window.confirm(t("admin.pages.receivingCn.resetOrderConfirm", { batchNo: detail.value.order.batchNo }))) return;
+  resetting.value = true;
+  error.value = "";
+  notice.value = "";
+  try {
+    await flow.resetCnOrder(batchNo);
+    await load();
+    logsKey.value++;
+    notice.value = t("admin.pages.receivingCn.resetOrderDone");
+  } catch (e: any) {
+    error.value = `${t("admin.pages.receivingCn.resetOrderFailed")}: ${e?.message ?? String(e)}`;
+  } finally {
+    resetting.value = false;
+  }
+}
 
 type InlineField =
   | "partNo"
@@ -478,6 +503,14 @@ function putAwayStatusClass(s: string): string {
         </button>
         <button class="btn" :disabled="!detail || loading" @click="printOpen = true">
           {{ $t("admin.pages.receivingCn.printPng") }}
+        </button>
+        <button
+          v-if="detail && !isClear"
+          class="btn"
+          :disabled="resetting || loading"
+          @click="resetOrder"
+        >
+          {{ resetting ? $t("admin.common.saving") : $t("admin.pages.receivingCn.resetOrder") }}
         </button>
         <button class="btn" @click="navigateTo('/receiving-cn')">{{ $t("admin.common.back") }}</button>
       </div>

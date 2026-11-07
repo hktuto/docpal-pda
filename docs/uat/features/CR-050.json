@@ -1,0 +1,14 @@
+{
+ "id": "CR-050",
+ "dateRaised": "2026-11-07",
+ "raisedBy": "Sean",
+ "app": "Admin",
+ "functionId": "ADM-026",
+ "feature": "Reset order — a 'Reset order' button on the picking order detail and the CN receiving order detail pages returns the order to its initial state so users can re-test the flow. Picking reset removes all picked/boxed progress (packages reversed like a scan removal — lot/receiving source qty restored, allocation bumped back, reverse PICK ledger rows — plus the order's shipping boxes and verify tasks deleted) but KEEPS allocations; shipped orders are rejected (409). CN reset clears every item's scan state and received/picked/put-away qty, deletes the scan events and the CN put-away task, and returns the order to pending; clear orders are rejected (409)",
+ "reason": "During UAT testers need to re-run the picking and CN receiving flows on the same order without re-seeding data or flipping statuses by hand; the status override alone leaves packages, boxes and scan state behind",
+ "priority": "Should have",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Implemented 2026-11-07 — commit 71111384, spec docs/superpowers/specs/2026-11-07-admin-order-reset-design.md — pending UAT. POST /admin/picking-orders/:id/reset + POST /admin/receiving-cn/orders/:batchNo/reset (CN behind the receiving-cn step guard); admin buttons on both detail pages with confirm dialog. Also affects ADM-024 (CN receiving detail)."
+}

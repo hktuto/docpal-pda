@@ -591,6 +591,27 @@ const overriding = ref(false);
 // endpoint, without opening the override dialog.
 const confirmingAllocation = ref(false);
 
+// "Reset order": wipe picked/boxed progress (packages, boxes) back to the
+// initial state, KEEPING allocations (spec
+// 2026-11-07-admin-order-reset-design.md). Not offered once shipped.
+const resetting = ref(false);
+
+async function resetOrder() {
+  if (!order.value || resetting.value) return;
+  if (!window.confirm(t("admin.pages.pickingOrders.resetOrderConfirm", { orderNo: order.value.orderNo }))) return;
+  resetting.value = true;
+  error.value = "";
+  try {
+    await flow.resetPickingOrder(orderId);
+    await load();
+    logsKey.value++;
+  } catch (e: any) {
+    error.value = e.message;
+  } finally {
+    resetting.value = false;
+  }
+}
+
 async function confirmAllocation() {
   if (!order.value || confirmingAllocation.value) return;
   confirmingAllocation.value = true;
@@ -714,6 +735,14 @@ const {
         </button>
         <button class="btn" @click="overrideOpen = true">
           {{ $t("admin.pages.pickingOrders.overrideStatus") }}
+        </button>
+        <button
+          v-if="order && order.status !== 'shipped'"
+          class="btn"
+          :disabled="resetting"
+          @click="resetOrder"
+        >
+          {{ resetting ? $t("admin.common.saving") : $t("admin.pages.pickingOrders.resetOrder") }}
         </button>
         <NuxtLink to="/picking-orders" class="btn">{{ $t("admin.common.back") }}</NuxtLink>
       </div>

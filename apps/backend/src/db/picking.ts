@@ -2175,6 +2175,101 @@ export async function claimShelfBox(
  * are credited back across the order's lines reverse-FIFO (last-consumed
  * first — the package does not record which line each portion came from).
  */
+/** Shared core of removeScannedPackage / resetPickingOrderProgress: restore
+ *  the package's source (lot total_qty / receiving-line picked_qty), bump the
+ *  allocation back, write the reverse PICK ledger rows, delete the package,
+ *  recompute the item. Unguarded — callers check first. */
+async function reverseScannedPackageTx(
+  tx: DbOrTx,
+  pkg: {
+    id: string;
+    pickingItemId: string;
+    partNo: string;
+    sourceType: string;
+    sourceId: string;
+    qty: number;
+    dateCode: string | null;
+    lotCode: string | null;
+    coo: string | null;
+    cow: string | null;
+  },
+  actorId: string,
+  txnReason: string
+): Promise<void> {
+  const at = now();
+  const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
+  const base = {
+    partNo: pkg.partNo,
+    txnType: "PICK",
+    dateCode: pkg.dateCode,
+    lotCode: pkg.lotCode,
+    coo: pkg.coo,
+    cow: pkg.cow,
+    referenceType: "picking_item",
+    referenceId: pkg.pickingItemId,
+    actorId,
+    txnReason,
+    txnAt: at,
+  };
+
+  if (pkg.sourceType === "inventory_lot") {
+    const lot = await queryGet<{ id: string; shelfCode: string | null; boxId: string | null }>(
+      tx,
+      sql`SELECT id, shelf_code AS "shelfCode", box_id AS "boxId" FROM inventory_lots WHERE id = ${pkg.sourceId}`
+    );
+    if (!lot) throw new HTTPException(404, { message: "inventory_lot_not_found" });
+    await queryRun(tx, sql`UPDATE inventory_lots SET total_qty = total_qty + ${pkg.qty} WHERE id = ${lot.id}`);
+    if (lot.boxId) await markShelfBoxStockChanged(tx, lot.boxId);
+    await bumpAllocation(tx, { pickingItemId: pkg.pickingItemId, qty: pkg.qty, inventoryLotId: lot.id });
+    txnRows.push(
+      { ...base, id: newId(), inventoryLotId: lot.id, shelfCode: lot.shelfCode, boxId: lot.boxId, receivingInvoiceItemId: null, qtyType: "reserved", qtyDelta: pkg.qty },
+      { ...base, id: newId(), inventoryLotId: lot.id, shelfCode: lot.shelfCode, boxId: lot.boxId, receivingInvoiceItemId: null, qtyType: "on_hand", qtyDelta: pkg.qty }
+    );
+  } else if (pkg.sourceType === "receiving_invoice_item") {
+    const rii = await queryGet<{ id: string; boxId: string | null }>(
+      tx,
+      sql`SELECT id, ctn_no AS "boxId" FROM receiving_invoice_items WHERE id = ${pkg.sourceId}`
+    );
+    if (!rii) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
+    await queryRun(tx, sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty - ${pkg.qty} WHERE id = ${rii.id}`);
+    await bumpAllocation(tx, { pickingItemId: pkg.pickingItemId, qty: pkg.qty, receivingInvoiceItemId: rii.id });
+    txnRows.push(
+      { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: rii.boxId, receivingInvoiceItemId: rii.id, qtyType: "reserved", qtyDelta: pkg.qty },
+      { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: rii.boxId, receivingInvoiceItemId: rii.id, qtyType: "on_hand", qtyDelta: pkg.qty }
+    );
+  } else if (pkg.sourceType === "receiving_order") {
+    const lines = await queryAll<{ id: string; pickedQty: number; boxId: string | null }>(
+      tx,
+      sql`SELECT rii.id, rii.picked_qty AS "pickedQty", rii.ctn_no AS "boxId"
+          FROM receiving_invoice_items rii
+          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          WHERE ri.receiving_order_id = ${pkg.sourceId}
+            AND (rii.part_no = ${pkg.partNo} OR rii.wcl_item_no = ${pkg.partNo})
+            AND rii.picked_qty > 0
+          ORDER BY rii.date_code DESC NULLS FIRST, rii.id DESC`
+    );
+    let left = pkg.qty;
+    for (const line of lines) {
+      if (left <= 0) break;
+      const give = Math.min(line.pickedQty, left);
+      await queryRun(tx, sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty - ${give} WHERE id = ${line.id}`);
+      txnRows.push(
+        { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: line.boxId, receivingInvoiceItemId: line.id, qtyType: "reserved", qtyDelta: give },
+        { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: line.boxId, receivingInvoiceItemId: line.id, qtyType: "on_hand", qtyDelta: give }
+      );
+      left -= give;
+    }
+    if (left > 0) throw new HTTPException(409, { message: "receiving_source_qty_not_available" });
+    await bumpAllocation(tx, { pickingItemId: pkg.pickingItemId, qty: pkg.qty, receivingOrderId: pkg.sourceId });
+  } else {
+    throw new HTTPException(409, { message: "unknown_package_source_type" });
+  }
+
+  await queryRun(tx, sql`DELETE FROM picking_packages WHERE id = ${pkg.id}`);
+  if (txnRows.length > 0) await tx.insert(inventoryTransactions).values(txnRows);
+  await recomputePickingItem(tx, pkg.pickingItemId);
+}
+
 export async function removeScannedPackage(db: AppDb, input: { packageId: string; actorId: string }): Promise<void> {
   return db.transaction(async (tx) => {
     const pkg = await queryGet<{
@@ -2208,78 +2303,7 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
     const order = await loadOrderForWrite(tx, pkg.pickingOrderId);
     assertOrderWritable(order);
 
-    const at = now();
-    const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
-    const base = {
-      partNo: pkg.partNo,
-      txnType: "PICK",
-      dateCode: pkg.dateCode,
-      lotCode: pkg.lotCode,
-      coo: pkg.coo,
-      cow: pkg.cow,
-      referenceType: "picking_item",
-      referenceId: pkg.pickingItemId,
-      actorId: input.actorId,
-      txnReason: "remove package",
-      txnAt: at,
-    };
-
-    if (pkg.sourceType === "inventory_lot") {
-      const lot = await queryGet<{ id: string; shelfCode: string | null; boxId: string | null }>(
-        tx,
-        sql`SELECT id, shelf_code AS "shelfCode", box_id AS "boxId" FROM inventory_lots WHERE id = ${pkg.sourceId}`
-      );
-      if (!lot) throw new HTTPException(404, { message: "inventory_lot_not_found" });
-      await queryRun(tx, sql`UPDATE inventory_lots SET total_qty = total_qty + ${pkg.qty} WHERE id = ${lot.id}`);
-      if (lot.boxId) await markShelfBoxStockChanged(tx, lot.boxId);
-      await bumpAllocation(tx, { pickingItemId: pkg.pickingItemId, qty: pkg.qty, inventoryLotId: lot.id });
-      txnRows.push(
-        { ...base, id: newId(), inventoryLotId: lot.id, shelfCode: lot.shelfCode, boxId: lot.boxId, receivingInvoiceItemId: null, qtyType: "reserved", qtyDelta: pkg.qty },
-        { ...base, id: newId(), inventoryLotId: lot.id, shelfCode: lot.shelfCode, boxId: lot.boxId, receivingInvoiceItemId: null, qtyType: "on_hand", qtyDelta: pkg.qty }
-      );
-    } else if (pkg.sourceType === "receiving_invoice_item") {
-      const rii = await queryGet<{ id: string; boxId: string | null }>(
-        tx,
-        sql`SELECT id, ctn_no AS "boxId" FROM receiving_invoice_items WHERE id = ${pkg.sourceId}`
-      );
-      if (!rii) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
-      await queryRun(tx, sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty - ${pkg.qty} WHERE id = ${rii.id}`);
-      await bumpAllocation(tx, { pickingItemId: pkg.pickingItemId, qty: pkg.qty, receivingInvoiceItemId: rii.id });
-      txnRows.push(
-        { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: rii.boxId, receivingInvoiceItemId: rii.id, qtyType: "reserved", qtyDelta: pkg.qty },
-        { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: rii.boxId, receivingInvoiceItemId: rii.id, qtyType: "on_hand", qtyDelta: pkg.qty }
-      );
-    } else if (pkg.sourceType === "receiving_order") {
-      const lines = await queryAll<{ id: string; pickedQty: number; boxId: string | null }>(
-        tx,
-        sql`SELECT rii.id, rii.picked_qty AS "pickedQty", rii.ctn_no AS "boxId"
-            FROM receiving_invoice_items rii
-            JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-            WHERE ri.receiving_order_id = ${pkg.sourceId}
-              AND (rii.part_no = ${pkg.partNo} OR rii.wcl_item_no = ${pkg.partNo})
-              AND rii.picked_qty > 0
-            ORDER BY rii.date_code DESC NULLS FIRST, rii.id DESC`
-      );
-      let left = pkg.qty;
-      for (const line of lines) {
-        if (left <= 0) break;
-        const give = Math.min(line.pickedQty, left);
-        await queryRun(tx, sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty - ${give} WHERE id = ${line.id}`);
-        txnRows.push(
-          { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: line.boxId, receivingInvoiceItemId: line.id, qtyType: "reserved", qtyDelta: give },
-          { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: line.boxId, receivingInvoiceItemId: line.id, qtyType: "on_hand", qtyDelta: give }
-        );
-        left -= give;
-      }
-      if (left > 0) throw new HTTPException(409, { message: "receiving_source_qty_not_available" });
-      await bumpAllocation(tx, { pickingItemId: pkg.pickingItemId, qty: pkg.qty, receivingOrderId: pkg.sourceId });
-    } else {
-      throw new HTTPException(409, { message: "unknown_package_source_type" });
-    }
-
-    await queryRun(tx, sql`DELETE FROM picking_packages WHERE id = ${pkg.id}`);
-    if (txnRows.length > 0) await tx.insert(inventoryTransactions).values(txnRows);
-    await recomputePickingItem(tx, pkg.pickingItemId);
+    await reverseScannedPackageTx(tx, pkg, input.actorId, "remove package");
     await logTransition(tx, {
       entityType: "picking_item",
       entityId: pkg.pickingItemId,
@@ -3418,6 +3442,127 @@ export async function overridePickingOrderStatus(
       data: { id: order.id, orderNo: order.orderNo, actorId: input.actorId },
     });
     return { id: order.id, orderNo: order.orderNo, status, previousStatus, changed: true };
+  });
+}
+
+// --- admin audit logs (2026-07-27 design) --------------------------------------
+
+/**
+ * Admin "Reset order" (spec 2026-11-07-admin-order-reset-design.md): wipe all
+ * picked/boxed progress so the flow can be re-tested, KEEPING allocations.
+ * Every package of the order is reversed exactly like removeScannedPackage
+ * (source qty restored, allocation bumped back, reverse PICK ledger rows) but
+ * without the boxed/verified guards; the order's shipping boxes go too
+ * (verify_tasks / shipping_box_items cascade — packages of OTHER orders
+ * packed into those boxes are unboxed first so their order keeps them).
+ * Items: picked_qty 0 / status pending (allocated_qty untouched — the
+ * per-package bumpAllocation already restored the rows). Order → 'pending'
+ * with the work lock, labeling / label-printing stage flags AND done stamps,
+ * shipped stamps, and issue columns cleared. 404 picking_order_not_found; 409
+ * picking_order_shipped — a shipped order's stock is gone, nothing to restore.
+ */
+export async function resetPickingOrderProgress(
+  db: AppDb,
+  input: { orderId: string; actorId: string }
+): Promise<{ id: string; orderNo: string; status: string; previousStatus: string; packagesRemoved: number; boxesRemoved: number }> {
+  return db.transaction(async (tx) => {
+    const order = await queryGet<{ id: string; orderNo: string; status: string }>(
+      tx,
+      sql`SELECT id, order_no AS "orderNo", status FROM picking_orders WHERE id = ${input.orderId}`
+    );
+    if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+    if (order.status === "shipped") throw new HTTPException(409, { message: "picking_order_shipped" });
+    await assertActor(tx, input.actorId);
+
+    const packages = await queryAll<{
+      id: string;
+      pickingItemId: string;
+      partNo: string;
+      sourceType: string;
+      sourceId: string;
+      qty: number;
+      dateCode: string | null;
+      lotCode: string | null;
+      coo: string | null;
+      cow: string | null;
+    }>(
+      tx,
+      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pi.part_no AS "partNo",
+                 pp.source_type AS "sourceType", pp.source_id AS "sourceId", pp.qty,
+                 pp.date_code AS "dateCode", pp.lot_code AS "lotCode", pp.coo, pp.cow
+          FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
+          WHERE pp.picking_order_id = ${order.id}
+          ORDER BY pp.created_date, pp.id`
+    );
+    for (const pkg of packages) {
+      await reverseScannedPackageTx(tx, pkg, input.actorId, "admin order reset");
+    }
+
+    // Boxes owned by this order go too; packages of OTHER orders packed into
+    // them (cross-order packing) are unboxed first so their order keeps them.
+    await queryRun(
+      tx,
+      sql`UPDATE picking_packages SET shipping_box_id = NULL, verified = false, last_update_date = ${now()}
+          WHERE shipping_box_id IN (SELECT id FROM shipping_boxes WHERE picking_order_id = ${order.id})`
+    );
+    await queryRun(
+      tx,
+      sql`DELETE FROM shipping_box_items
+          WHERE shipping_box_id IN (SELECT id FROM shipping_boxes WHERE picking_order_id = ${order.id})`
+    );
+    const boxes = await queryRun(tx, sql`DELETE FROM shipping_boxes WHERE picking_order_id = ${order.id}`);
+
+    const at = now();
+    await queryRun(
+      tx,
+      sql`UPDATE picking_items SET picked_qty = 0, status = 'pending', last_update_date = ${at}
+          WHERE picking_order_id = ${order.id}`
+    );
+    await queryRun(
+      tx,
+      sql`UPDATE picking_orders
+          SET status = 'pending',
+              working_by = NULL,
+              working_at = NULL,
+              labeling_pending = false,
+              labeling_done_at = NULL,
+              labeling_done_by = NULL,
+              label_printing_pending = false,
+              label_printing_done_at = NULL,
+              label_printing_done_by = NULL,
+              shipped_at = NULL,
+              shipped_by = NULL,
+              issue_reason = NULL,
+              issue_qty = NULL,
+              issue_pack_size = NULL,
+              issue_note = NULL,
+              issue_remark = NULL,
+              issue_reported_at = NULL,
+              issue_reported_by = NULL,
+              last_update_date = ${at}
+          WHERE id = ${order.id}`
+    );
+    await logTransition(tx, {
+      entityType: "picking_order",
+      entityId: order.id,
+      fromState: order.status,
+      toState: "pending",
+      actorId: input.actorId,
+      metadata: { reset: true, packagesRemoved: packages.length, boxesRemoved: boxes.changes },
+    });
+    await emitEvent(tx, {
+      type: "picking_order.updated",
+      topics: ["/picking-orders"],
+      data: { id: order.id, orderNo: order.orderNo, actorId: input.actorId },
+    });
+    return {
+      id: order.id,
+      orderNo: order.orderNo,
+      status: "pending",
+      previousStatus: order.status,
+      packagesRemoved: packages.length,
+      boxesRemoved: boxes.changes,
+    };
   });
 }
 

@@ -15,6 +15,7 @@ import {
   listCnWorkflows,
   listCnOrderLogs,
   prepareCnOrderDetail,
+  resetCnOrder,
   updateCnReceivingItemFields,
   validateCnPayload,
 } from "../../db/receivingCn.js";
@@ -98,6 +99,19 @@ adminReceivingCnRoute.post("/receiving-cn/orders/:batchNo/confirm", async (c) =>
   const actor = actorFrom(c);
   return c.json(
     await confirmCnOrder(db, c.req.param("batchNo"), { id: actor.id, username: actor.username }),
+    200
+  );
+});
+
+// "Reset order" on the CN order detail (spec
+// docs/superpowers/specs/2026-11-07-admin-order-reset-design.md): clear every
+// item's scan state + received/picked/put-away qty, delete the scan events
+// and the CN put-away task, order → pending. 404 receiving_cn_order_not_found;
+// 409 order_already_clear.
+adminReceivingCnRoute.post("/receiving-cn/orders/:batchNo/reset", async (c) => {
+  const actor = actorFrom(c);
+  return c.json(
+    await resetCnOrder(db, c.req.param("batchNo"), { id: actor.id, username: actor.username }),
     200
   );
 });

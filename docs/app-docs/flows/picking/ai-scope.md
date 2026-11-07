@@ -512,6 +512,19 @@
   pages share `apps/admin/components/picking-orders/StatusOverrideModal.vue`
   (target status + optional reason + a reopen warning when any selected
   order is finished/shipped and the target is open).
+- Admin "Reset order" (spec
+  `docs/superpowers/specs/2026-11-07-admin-order-reset-design.md`): the
+  picking-order detail's Reset order button calls
+  `POST /admin/picking-orders/:id/reset` (`resetPickingOrderProgress` in
+  `apps/backend/src/db/picking.ts`) — every package is reversed like a scan
+  removal (shared `reverseScannedPackageTx`, no boxed/verified guards), the
+  order's boxes + verify tasks are deleted, picked_qty zeroed, order →
+  pending with lock/labeling/shipped/issue columns cleared; allocations are
+  KEPT (restored to the pre-scan qty by the per-package bumps). 409
+  `picking_order_shipped` when shipped. The CN mirror
+  (`POST /admin/receiving-cn/orders/:batchNo/reset`, `resetCnOrder`) clears
+  scan state + received/picked/put-away qty, deletes scan events + the CN
+  put-away task; 409 `order_already_clear`.
 - Allocation location matching: a picking order's `(org_id,
   sub_inventory_code)` pair must match the stock source's pair (pair-less
   orders are org-agnostic), widened by `sub_inventory_share_members` —

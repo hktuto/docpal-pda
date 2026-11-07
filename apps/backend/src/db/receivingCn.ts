@@ -1016,6 +1016,80 @@ export async function confirmCnOrder(
   return { id: order.id, batchNo, putAwayTaskId: null };
 }
 
+/**
+ * Admin "Reset order" (spec 2026-11-07-admin-order-reset-design.md): return a
+ * CN order to its initial state so the flow can be re-tested. Every invoice
+ * item's scan columns go back to unresolved (same shape as the per-item
+ * scan_reset) and received_qty / picked_qty / put_away_qty are zeroed; the
+ * order's scan events and its CN put-away task are deleted; the order goes
+ * back to `pending` with the arrival stamps cleared. 404
+ * receiving_cn_order_not_found; 409 order_already_clear when the order is
+ * `clear` — its stock is already in inventory_lots, out of scope for a reset
+ * (the put-away task can only be pending at reset time).
+ */
+export async function resetCnOrder(
+  db: AppDb,
+  batchNo: string,
+  actor: { id: string; username: string }
+): Promise<{ id: string; batchNo: string; previousStatus: string }> {
+  const order = await queryGet<{ id: string; status: string }>(
+    db,
+    sql`SELECT id, status FROM receiving_orders_cn
+        WHERE batch_no = ${batchNo} ORDER BY created_date DESC LIMIT 1`
+  );
+  if (!order) throw new HTTPException(404, { message: "receiving_cn_order_not_found" });
+  if (order.status === "clear") throw new HTTPException(409, { message: "order_already_clear" });
+  await db.transaction(async (tx) => {
+    const at = now();
+    await queryRun(
+      tx,
+      sql`UPDATE receiving_invoice_items_cn rii
+          SET scan_status = NULL,
+              scan_qty = NULL,
+              scan_reason = NULL,
+              scan_note = NULL,
+              flag_qty = NULL,
+              scanned_by = NULL,
+              scanned_at = NULL,
+              reported_mismatch = false,
+              mismatch_reason = NULL,
+              mismatch_qty = NULL,
+              wrong_part_no = NULL,
+              mismatch_note = NULL,
+              received_qty = 0,
+              picked_qty = 0,
+              put_away_qty = 0,
+              last_update_date = ${at}
+          FROM receiving_invoices_cn ri
+          WHERE rii.receiving_invoice_id = ri.id AND ri.receiving_order_id = ${order.id}`
+    );
+    await queryRun(tx, sql`DELETE FROM receiving_cn_scan_events WHERE order_id = ${order.id}`);
+    await queryRun(tx, sql`DELETE FROM put_away_tasks_cn WHERE receiving_order_cn_id = ${order.id}`);
+    await queryRun(
+      tx,
+      sql`UPDATE receiving_orders_cn
+          SET status = 'pending', arrived_at = NULL, arrived_by = NULL, last_update_date = ${at}
+          WHERE id = ${order.id}`
+    );
+    await tx.insert(transactionLogs).values({
+      id: newId(),
+      entityType: "receiving_order_cn",
+      entityId: order.id,
+      fromState: order.status,
+      toState: "pending",
+      actorId: actor.id,
+      metadata: { reset: true },
+      createdDate: at,
+    });
+    await emitEvent(tx, {
+      type: "receiving_cn.updated",
+      topics: ["/admin/receiving-cn", "/receiving-cn-scan-tasks", "/put-away-tasks"],
+      data: { receivingOrderCnId: order.id, batchNo, reset: true },
+    });
+  });
+  return { id: order.id, batchNo, previousStatus: order.status };
+}
+
 // --- order audit logs -----------------------------------------------------------------
 
 /** Reuse the standard log row/params/page shapes (src/db/receiving.ts). */
