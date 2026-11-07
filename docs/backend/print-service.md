@@ -2,7 +2,7 @@
 
 Server-side print service. Clients never call it directly — the backend proxies it under `/print/*`
 (`apps/backend/src/routes/print.ts` + `src/print.ts`), with the base URL from the `PRINT_API_BASE_URL`
-env var (default `http://192.168.5.116:9003`). Upstream failures surface as `502` with the upstream
+env var (default `http://localhost:9003`). Upstream failures surface as `502` with the upstream
 error message.
 
 Backend endpoints (all require the usual bearer token):
@@ -10,7 +10,7 @@ Backend endpoints (all require the usual bearer token):
 | Endpoint | Proxies | Description |
 |---|---|---|
 | `GET /print/printers` | `GET /api/v1/usb/agent-printers` | Available printers, flattened across print services — each entry carries `serviceId` + `deviceKey` (for the printer picker). |
-| `POST /print/dynamic` | `POST /api/v1/templates/dynamic-print` | Print a template by `templateId` + `printingParams`; validates `templateId` / non-empty `printingParams`. |
+| `POST /print/dynamic` | `POST /api/v1/templates/service-dynamic-print` | Print a template by `templateId` + `printingParams`; validates `templateId` / non-empty `printingParams`. |
 | `POST /print/files` | `POST /api/v1/print/files` | Direct file print — multipart upload or JSON forwarded verbatim. |
 | `GET /print/jobs/:jobId` | `GET /api/v1/print/jobs/{jobId}` | Status of one print job. |
 
@@ -109,12 +109,12 @@ curl -X POST "http://127.0.0.1:9003/api/v1/print/files" \
 
 1. `GET /api/v1/printers` 获取可用打印机
 2. `POST /api/v1/print/route-preview` 预判当前 `templateId + printerName` 的打印链路
-3. `POST /api/v1/templates/dynamic-print` 发起真实打印
+3. `POST /api/v1/templates/service-dynamic-print` 发起真实打印
 4. `GET /api/v1/print/jobs/{jobId}` 查询单个任务执行结果
 
 如需先校对版式：先 `POST /api/v1/render/preview` 生成预览，确认后再调用 `dynamic-print`。
 
-## POST /api/v1/templates/dynamic-print — 按 templateId 动态打印
+## POST /api/v1/templates/service-dynamic-print — 按 templateId 动态打印
 
 后端先按 `templateId` 读取模板，再根据模板类型自动区分 `label-canvas` / `a4-canvas` 两套处理逻辑。
 
@@ -332,7 +332,7 @@ curl -X POST "http://127.0.0.1:9003/api/v1/print/files" \
 打印单张 Label：
 
 ```bash
-curl -X POST "http://127.0.0.1:9003/api/v1/templates/dynamic-print" \
+curl -X POST "http://127.0.0.1:9003/api/v1/templates/service-dynamic-print" \
   -H "Content-Type: application/json" \
   -d '{"templateId":"katata-label","printingParams":[{"deliveryName":"KATATA DELIVERY","itemNum":"ITEM-001","sku":"SKU-001","qrcode":"KATATA|ITEM-001|SKU-001","qty":"100","cust":"KATATA","makeIn":"CN"}],"printerName":"ZDesigner ZD421","copies":1,"mode":"auto"}'
 ```
@@ -340,7 +340,7 @@ curl -X POST "http://127.0.0.1:9003/api/v1/templates/dynamic-print" \
 打印一页 A4：
 
 ```bash
-curl -X POST "http://127.0.0.1:9003/api/v1/templates/dynamic-print" \
+curl -X POST "http://127.0.0.1:9003/api/v1/templates/service-dynamic-print" \
   -H "Content-Type: application/json" \
   -d '{"templateId":"LABEL-HET-INTELLIGENT-3-4","printingParams":[{"items":[{"year":"2026","month":"07","itemCode":"20100000554","itemName":"贴片厚膜电阻器","specModel":"KOA+RK73H1JTTD 4320F","quantity":"125000","supplier":"创意电子（澳门离岸商业服务）有限公司","inspectionStatus":"OK","productionDate":"2629","orderNo":"4500370953","traceCode":"20100000554-10806-2629-125000","extraCode":"ME2607-0634"}]}],"printerName":"Brother HL-5590DN Printer","copies":1,"mode":"auto","orientation":"portrait"}'
 ```

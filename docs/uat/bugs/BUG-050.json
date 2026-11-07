@@ -1,0 +1,14 @@
+{
+ "id": "BUG-050",
+ "dateFound": "2026-11-07",
+ "functionId": "ADM-029",
+ "description": "Admin shipping list 'download shipper (selected)' button has no @click handler wired in apps/admin/pages/shipping/index.vue — clicking does nothing. ADM-029 advertises multi-select shipper download; the backend shipper endpoints exist (routes/admin/receivingShipper) but the selected-boxes path is dead in the UI.",
+ "reproSteps": "Admin → Shipping → tick several boxes → press the shipper-download button for the selection → no file generated, no network call in devtools.",
+ "severity": "Minor",
+ "status": "Open",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Found by the docs-audit of docs/dev-guide-zh (2026-11-07). Note the per-order shipper download on the receiving detail (ADM-022) works — only the shipping-list selected-download button is unbound."
+}

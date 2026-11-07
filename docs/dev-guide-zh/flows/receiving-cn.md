@@ -7,7 +7,7 @@ aliases: [CN收货, 内地收货, Receiving CN]
 
 内地仓的**发票/PDF 驱动**收货:客户收货单经 DocPal OCR 工作流变结构数据 → PDA 逐件物理扫描对账 → finalize 收据 → CN 上架。整条流由 flow config 的 `receiving-cn` 步骤门控(off 时所有 `/receiving-cn/*`、`/put-away-cn/*` 路由 404,PDA 磁贴隐藏)。
 
-**权威细节**:spec `2026-11-01-cn-receiving-scan-design.md`(+ 后续 11-04/11-05 修订)。⚠ **`docs/app-docs/flows/receiving/ai-scope.md` 与 11-01 原文对 CN 扫描的描述已滞后**——批次字段参与过滤、逐行 scan 端点等都被 2026-11-05 part-only 匹配取代,以 `src/db/receivingCnScan.ts` 为准。
+**权威细节**:spec `2026-11-01-cn-receiving-scan-design.md`(+ 11-04/11-05 修订)。✅ 英文 `receiving/ai-scope` 里 CN 扫描的旧措辞(批次字段参与过滤等)已于 2026-11-07 文档审计按 part-only 现状更正;行为权威仍是 `src/db/receivingCnScan.ts`。
 
 ## 1. 流程图(两条并行路径)
 

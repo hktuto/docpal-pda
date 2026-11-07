@@ -7,7 +7,7 @@ aliases: [上架, Put-away]
 
 把收货区(dock)库存搬到货架 lot,库存从此可被[分配](./allocation.md)。现为 **shelf-direct** 形态:操作员只见「扫件 → 选架 → 提交」,箱(`shelf_boxes`)降级为数据模型内部概念。CN 仓走并行变体(`put-away-cn`)。
 
-**权威细节**:[ai-scope](../../app-docs/flows/put-away/ai-scope.md) · [steps](../../app-docs/flows/put-away/steps.md)。⚠ 这两篇部分段落仍描述已移除的操作员箱流程,以 `routes/putaway.ts` + `db/putaway.ts` 为准。
+**权威细节**:[ai-scope](../../app-docs/flows/put-away/ai-scope.md) · [steps](../../app-docs/flows/put-away/steps.md)。✅ ai-scope 的"批次值覆盖"错误措辞已于 2026-11-07 文档审计更正为 COALESCE 填充语义。
 
 ## 1. 流程图(节点标注入口)
 
@@ -43,7 +43,7 @@ flowchart TD
 - **两段式写入**:扫件先进 staging 盒(无账本);提交上架才在一个事务里:货架盒 find-or-create(复用该货架持本单物品的 open 盒 → 采纳空 open 盒 → 新建 `BOX-H-*`)→ lot upsert(唯一键含 canonical YYWW 日期码 + 全批次字段 + org/子库,**pair 取自盒**)→ `put_away_qty += qty` → **两条对冲账**(`RECEIVE_TO_DOCK` dock − / PUT_AWAY on_hand +)。撤销同样两行逆向。
 - **Item-first(armed)**:卡片「枪扫」按钮锁定部件组,组满/切换/重载自动解除;非组内料号 → `scanned_part_does_not_match_item`。free-match 会静默接受「恰好解析成订单内部件」的外标签,所以现场推荐 armed。
 - **FIFO 跨行拆分**:一张标签数量可覆盖同部件多行(300+20000),`findPutAwayTargets` 拆成逐行写;serial 只挂第一份避免自撞去重。
-- **批次回写是「填充」不是「覆盖」**:`recordPutAwayScan` 用 `COALESCE(旧值,新值)` 回填 `receiving_invoice_items`(ai-scope 的 "overwrite" 措辞与代码相反,以代码为准)。
+- **批次回写是「填充」不是「覆盖」**:`recordPutAwayScan` 用 `COALESCE(旧值,新值)` 回填 `receiving_invoice_items`——已有非空值永远赢过扫到的值(ai-scope 已同步为此措辞)。
 - **货架建议 advisory、读时算、不落库**:三级排序 same-part-box → same-part-stock → 子库亲和(`shelves.sub_inventory_scopes`);`suggestShelf=off` 全抑制。
 - **剩余量守卫**:`received − picked − put_away − allocated − staged`;lot 已有拣货分配 → 撤销 409 `lot_has_pick_allocations`。
 - **assignee 语义**:队列列表**无** `allowedOrgIds` 过滤(有任务就能干),candidates 有;foreign assignee detail 404 = 权限语义,不是缺行。

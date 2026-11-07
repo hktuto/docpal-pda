@@ -7,7 +7,7 @@ aliases: [贴标签, Labeling]
 
 拣货完成与衡量之间的人工确认站:操作员声明「内部标签已贴上」。订单状态全程保持 `picking_finished`,本站只是**旁路布尔位** `labeling_pending`——挂起期间箱被扣住,不进[衡量](./measuring.md)/[复核](./verify.md)。命中 internal 打印规则的单先走[打印标签](./label-printing.md),打印完成后**无条件**进入本站。
 
-**权威细节**:[ai-scope](../../app-docs/flows/labeling/ai-scope.md) · [steps](../../app-docs/flows/labeling/steps.md)。⚠ ai-scope 说队列读 `picking_orders.assignee`——**现实现读 `picking_tasks`(step='labeling')的 assignee**(CR-048),以 `db/picking.ts` 注释为准。
+**权威细节**:[ai-scope](../../app-docs/flows/labeling/ai-scope.md) · [steps](../../app-docs/flows/labeling/steps.md)。✅ ai-scope 的 assignee 行已于 2026-11-07 文档审计更正:队列读 `picking_tasks`(step='labeling')的 assignee(CR-048),不是 `picking_orders.assignee`。
 
 ## 1. 流程图(节点标注入口)
 

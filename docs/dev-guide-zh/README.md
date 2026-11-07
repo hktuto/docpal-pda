@@ -127,6 +127,8 @@ Postgres:业务表 + transaction_logs/inventory_transactions(账本,必须同事
 
 ## 7. 权威文档地图(按用途查)
 
+> ✅ 2026-11-07 全量文档审计:下列英文文档已与代码对齐(goods-verify 重写、幽灵路径清除、api-design/event-catalog 补全)。今后**发现文档与代码不一致 = 按 §Feature workflow 修文档 + 记 UAT**;改功能的行为时,同一 commit 里更新对应 ai-scope / registry 行,漂移就不会回来。
+
 - 改后端路由/接口 → [`docs/backend/api-design.md`](../backend/api-design.md)(路由目录)
 - 加/改 SSE 事件 → [`docs/backend/event-catalog.md`](../backend/event-catalog.md)
 - 改表/写查询 → [`docs/backend/schema-tables.md`](../backend/schema-tables.md) + [schema-conventions](../backend/schema-conventions.md)

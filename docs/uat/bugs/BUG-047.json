@@ -1,0 +1,14 @@
+{
+ "id": "BUG-047",
+ "dateFound": "2026-11-07",
+ "functionId": "PDA-007",
+ "description": "Manual receipt on 192.168.6.99 shows a null delivery date, and where set it carried the commit hh:mm:ss — upstream-synced CN orders store the delivery date as a plain date at 00:00:00 (e.g. 2026-11-06 00:00:00). Root cause: createCnManualReceipt inserted receiving_invoices_cn.delivery_date = NULL (the invoice insert never set it) and receiving_orders_cn.delivery_date = full commit timestamp.",
+ "reproSteps": "PDA 手動收貨: scan items, 完成 commit — open the order on the admin /receiving-cn list/detail and the delivery date differs in shape from the upstream-synced orders (time-of-day set / invoice-level date null)",
+ "severity": "Minor",
+ "status": "Fixed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Fix in db/receivingCn.ts createCnManualReceipt: delivery_date = creation day at 00:00:00 (UTC-midnight Date so the stored literal is date-only regardless of server TZ), written to BOTH receiving_orders_cn and receiving_invoices_cn; arrived_at keeps the full timestamp. Pending commit hash"
+}

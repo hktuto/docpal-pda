@@ -1,0 +1,14 @@
+{
+ "id": "BUG-049",
+ "dateFound": "2026-11-07",
+ "functionId": "ADM-036",
+ "description": "Admin ad-hoc put-aways list: the supplier column renders empty and the supplier filter does nothing. Code is brand-driven end-to-end (POST body field, ad_hoc_put_aways.brand column, route reads c.req.query('brand')), but the admin page binds its column/filter to supplierCode — apps/admin/pages/ad-hoc-put-aways/index.vue sends ?supplierCode= (ignored by routes/admin/adHocPutAway.ts) and renders row.supplierCode (absent). listAdHocPutAways keeps a legacy supplierCode parameter name for the brand filter (db/adhocPutaway.ts).",
+ "reproSteps": "Admin → Ad-hoc put-aways → pick any supplier in the filter → list is unfiltered; every row's supplier column is blank although the batches were created with a brand.",
+ "severity": "Minor",
+ "status": "Open",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Found by the docs-audit of docs/dev-guide-zh (2026-11-07); documented in docs/app-docs/flows/ad-hoc-put-away/ai-scope.md + docs/backend/api-design.md. Fix = admin page column + query param to 'brand' (and rename the db param)."
+}

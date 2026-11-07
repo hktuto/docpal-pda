@@ -7,7 +7,7 @@ aliases: [打印标签, Label Printing]
 
 按 `label_print_rules`(管理数据,非代码)为拣货完成的订单打印内部标签;打印参数转换在后端完成,经 `/print/*` 单点代理送打印服务。只收 **internal** 规则命中的单;打印完成后流入[贴标签](./labeling.md)。
 
-**权威细节**:**[docs/backend/label-printing.md](../../backend/label-printing.md)** · [ai-scope](../../app-docs/flows/label-printing/ai-scope.md) · [steps](../../app-docs/flows/label-printing/steps.md)。⚠ label-printing.md 两处过时:默认打印服务 URL(代码 `http://localhost:9003`)、转换器「empty by default」(已注册 `yhft-ch-01`)。
+**权威细节**:**[docs/backend/label-printing.md](../../backend/label-printing.md)** · [ai-scope](../../app-docs/flows/label-printing/ai-scope.md) · [steps](../../app-docs/flows/label-printing/steps.md)。✅ label-printing.md / print-service.md 的默认 URL(`http://localhost:9003`)、转换器注册表(已注册 `yhft-ch-01`)、上游路径名(`service-dynamic-print`)已于 2026-11-07 文档审计与代码对齐。
 
 ## 1. 流程图(节点标注入口)
 

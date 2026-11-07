@@ -1,0 +1,14 @@
+{
+ "id": "BUG-048",
+ "dateFound": "2026-11-07",
+ "functionId": "PDA-023",
+ "description": "Goods-verify list search throws a TypeError on any typed term: pages/goods-verify/index.vue filters on r.boxId / r.partNo / r.wclItemNo, fields the 2026-10-17 shelf-summary redesign removed from GoodsVerifyTaskListRow (services/types.ts) — r.partNo is undefined and .toLowerCase() throws, blanking the queue. Also the 'skipped' status chip can never match (no code path writes that status).",
+ "reproSteps": "PDA 盘点 → list → type any character into the search box → results disappear / console TypeError. Select status 'skipped' → always empty.",
+ "severity": "Minor",
+ "status": "Open",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Found by the docs-audit of docs/dev-guide-zh (2026-11-07); documented in docs/app-docs/flows/goods-verify/ai-scope.md + steps.md (search disabled in the guide until fixed). Fix = filter on shelfCode (+ movements part names client-side), or drop the search box."
+}

@@ -7,7 +7,7 @@ aliases: [复核, Verify, 二次重扫]
 
 出货前对箱子做**二次重扫**核对:一箱一 `verify_tasks`(UNIQUE `shipping_box_id`),从零重扫(衡量时的记账已被清零)。最后一箱完成 → 订单 `measuring_finished`;出货本身在 admin 侧(见下)。
 
-**权威细节**:**[docs/backend/verify-measuring.md](../../backend/verify-measuring.md)** · [ai-scope](../../app-docs/flows/verify/ai-scope.md) · [steps](../../app-docs/flows/verify/steps.md)。⚠ steps.md 步骤5「目的国可编辑」不实:PDA 无编辑控件,`destinationCountry` 只读(API 可 PATCH)。
+**权威细节**:**[docs/backend/verify-measuring.md](../../backend/verify-measuring.md)** · [ai-scope](../../app-docs/flows/verify/ai-scope.md) · [steps](../../app-docs/flows/verify/steps.md)。✅ steps.md「目的国可编辑」已于 2026-11-07 文档审计更正:PDA 无编辑控件(`destinationCountry` 只读,API 可 PATCH)。
 
 ## 1. 流程图(节点标注入口)
 
@@ -68,7 +68,7 @@ flowchart TD
 - 标签路径 404 `label_print_not_found` 被 adapter 归 `null` 落回聚合匹配——**真不匹配与「不是标签」不可区分**;测量模式箱只拦 carton 标签扫(item 标签留给 verify 阶段)。
 - label 模式订单若有包**无打印记录**(贴了标没印)→ 静默回退纯聚合。
 - 无 SSE(measuring/verify 从不 `emitEvent`);`event-catalog.md` 里 `verify_tasks.*` 行是给外部同步的行级 feed,不是 SSE。
-- `db/labelVerify.ts` **不存在**(只有测试文件)——实现在 `db/verify.ts` + `db/picking.ts`,ai-scope 的 Key files 行有误。
+- 没有 `db/labelVerify.ts` 实现文件——label 模式核验逻辑在 `db/verify.ts` + `db/picking.ts`(`labelVerify.test.ts` 测的就是这两个模块)。
 
 ## 6. Admin 控制点
 

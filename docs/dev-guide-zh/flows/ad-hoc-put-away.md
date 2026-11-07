@@ -7,7 +7,7 @@ aliases: [无单上架, Ad-hoc Put-away]
 
 没有收货单支撑的件直接入库存:旧仓回填、写出归还。**单页、单批、一次提交,无任务/无锁/无状态机**;审计存 `ad_hoc_put_aways`(JSONB 快照),库存真相直接落 `inventory_lots`。
 
-**权威细节**:[ai-scope](../../app-docs/flows/ad-hoc-put-away/ai-scope.md) · [overview](../../app-docs/flows/ad-hoc-put-away/overview.md)。⚠ 两篇的 "supplier 选择"「从下拉选架」措辞已过时:代码是 **brand** 驱动 + 选架 scan-only。
+**权威细节**:[ai-scope](../../app-docs/flows/ad-hoc-put-away/ai-scope.md) · [overview](../../app-docs/flows/ad-hoc-put-away/overview.md)。✅ 两篇的 supplier/下拉措辞已于 2026-11-07 文档审计更正:**brand** 驱动 + 选架 scan-only;admin 列/筛选的 `supplierCode` 错位仍是 open bug(BUG-049)。
 
 ## 1. 流程图(节点标注入口)
 

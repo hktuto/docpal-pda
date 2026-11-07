@@ -7,7 +7,7 @@ aliases: [盘点, 货物校验, Goods Verify]
 
 **按货架按日的异动摘要确认**:每晚 cron 对「昨日有非零 `on_hand` 净变动」的货架各生成一条任务,操作员现场核对后**一键确认**。纯确认——**无盘点数录入、无 ADJUST 调账**(2026-10-17 重设计)。
 
-**权威 = 代码**:`apps/backend/src/db/goodsverify.ts`(头部注释)+ spec `2026-10-17-goods-verify-shelf-summary-redesign.md`。⚠ `docs/app-docs/flows/goods-verify/{overview,steps,ai-scope}.md`、`docs/backend/api-design.md` §Goods verify、`schema-tables.md`、`feature-registry.md`/`code-map.md` 多处仍在描述**已废弃的按批盘点**(countedQty/ADJUST/`shelf_box closed→verified`)——不要照抄。
+**权威 = 代码**:`apps/backend/src/db/goodsverify.ts`(头部注释)+ spec `2026-10-17-goods-verify-shelf-summary-redesign.md`。✅ 旧英文手册(overview/steps/ai-scope、api-design、schema-tables、registry/code-map)曾整段停留在已废弃的按批盘点模型——2026-11-07 文档审计已统一改写,现可放心引用。
 
 ## 1. 流程图(节点标注入口)
 
@@ -47,12 +47,11 @@ flowchart TD
 
 ## 5. 坑(含两个实测 live bug)
 
-- **PDA 搜索会抛错**:列表搜索过滤 `r.boxId/r.partNo/r.wclItemNo`——这些字段在 `GoodsVerifyTaskListRow` 上不存在,输入任意字符 `TypeError`(`pages/goods-verify/index.vue`)。修复前别在培训里教搜索。
+- **PDA 搜索会抛错**(BUG-048,Open):列表搜索过滤 `r.boxId/r.partNo/r.wclItemNo`——这些字段在 `GoodsVerifyTaskListRow` 上不存在,输入任意字符 `TypeError`(`pages/goods-verify/index.vue`)。修复前别在培训里教搜索。
 - `skipped` 筛选 chip 永远无结果(无代码写该状态)。
-- **`allowedOrgIds` 并不过滤本队列**,与 `api-design.md`/`flow-config.md` 的说法相反(代码里 goodsverify 没用 org filter)。
+- **`allowedOrgIds` 不过滤本队列**(代码里 goodsverify 没用 org filter;英文文档 2026-11-07 已同步更正)。
 - 「今天」语义易混:PDA 默认日期取 **UTC**(`toISOString().slice(0,10)`);cron 本地午夜触发而账按 DB 日聚合,所以生成覆盖昨+今两日;显式 `date` 必须 `YYYY-MM-DD` 否则 400 `invalid_date`。
 - `GOODS_VERIFY_CRON=off` 或步骤关闭 → 队列恒空;`verify` 不产 SSE,列表靠整页重载。
-- `goodsVerifyDayEnd.ts` 注释写的唯一索引列名有误(实际 `goods_verify_tasks_shelf_day_unique`)。
 
 ## 6. Admin 控制点
 

@@ -1,0 +1,14 @@
+{
+ "id": "BUG-045",
+ "dateFound": "2026-11-06",
+ "functionId": "ADM-026",
+ "description": "In the CN (SZ) warehouse, the picking list merges multiple lines of the same part into one line (combined qty); CN warehouse wants every order line listed separately, one line per part/order-line entry, so pickers can see each line's own qty",
+ "reproSteps": "Open a picking order in the CN warehouse whose detail has the same part on multiple lines (e.g. different delivery lines/date codes); download/open the picking list → the part appears once with the total merged qty instead of one line per order line",
+ "severity": "Major",
+ "status": "Open",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "CN (SZ) warehouse requirement — picking list must not merge parts into one line"
+}

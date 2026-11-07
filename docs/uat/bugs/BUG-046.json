@@ -1,0 +1,14 @@
+{
+ "id": "BUG-046",
+ "dateFound": "2026-11-06",
+ "functionId": "ADM-024",
+ "description": "GET /admin/receiving-cn/orders/:batchNo intermittently times out. Root cause: the detail GET runs prepareCnOrderDetail, whose UPDATE on receiving_orders_cn took a row lock on EVERY open (even when the arrival stamp already existed) and had no lock_timeout — while the upstream sync's CN upsert (INSERT ... ON CONFLICT DO UPDATE via manual_sync) holds row locks on the same rows every few minutes. Any request overlapping a sync batch blocked until the client timed out.",
+ "reproSteps": "Open a pending CN order detail (e.g. /admin/receiving-cn/orders/TE-20261106-08) on 192.168.6.99 while the upstream sync is running (meta_update.last_sync_at advancing) — the request hangs and eventually times out; retries a few minutes later succeed",
+ "severity": "Major",
+ "status": "Fixed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Fix: prepare only rewrites the order when arrived_at IS NULL, runs under SET LOCAL lock_timeout = '2s', and swallows lock_not_available (55P03, retried on next open) — the GET now returns the un-stamped detail instead of hanging"
+}
