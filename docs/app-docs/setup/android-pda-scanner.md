@@ -34,19 +34,20 @@ The scanner broadcast support must be in the installed APK (added
 
 ```bash
 # repo root, web dev server stopped
-export NUXT_PUBLIC_API_BASE_URL=http://<dev-machine-LAN-IP>:3001
+export NUXT_PUBLIC_API_BASE_URL=http://<dev-machine-LAN-IP>:3002
 pnpm --filter @warehouse/pda generate
-pnpm --filter @warehouse/pda cap:sync
-cd apps/pda/android
+cd apps/pda
+node scripts/cap-android-bundled.mjs   # bundled sync (CAPACITOR_SERVER_URL=off)
+cd android
 export JAVA_HOME='/c/Program Files/Android/Android Studio/jbr'
 export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew :app:installDebug
 ```
 
 The app talks to the API over the network, so `NUXT_PUBLIC_API_BASE_URL`
-must be baked in at generate time and the API
-(`pnpm --filter @warehouse/api dev`) must stay running and reachable. If
-the dev machine's LAN IP changes, regenerate and reinstall.
+must be baked in at generate time and the API (`pnpm dev:backend`, :3002)
+must stay running and reachable. If the dev machine's LAN IP changes,
+regenerate and reinstall.
 
 ## 2a. Configure the scanner — Movfast / xcheng (one-time per device)
 
@@ -69,9 +70,12 @@ Notes:
   arrive twice. (The app suppresses the keyboard echo for 1.5 s after a
   broadcast as a safety net, but the pure broadcast mode is the correct
   configuration.)
-- Scanning only does something on pages that listen for hardware scans
-  (receiving order detail, picking order detail). On other pages a scan is
-  ignored, same as before.
+- Scanning only does something on pages that listen for hardware scans —
+  most scan-capable screens: receiving and receiving-cn-scan detail, picking
+  detail, manual-receiving, put-away, put-back, ad-hoc put-away, measuring,
+  verify, shelf-exchange, print-product-label and login (plus the order-link
+  QR navigation that works from any page). On a page without a listener a
+  scan is ignored, same as before.
 
 ## 2b. Configure the scanner — Honeywell (CT32 and similar)
 
@@ -135,7 +139,7 @@ adb logcat -s HoneywellScanner:I ScannerBroadcast:I
 | No log line at all when scanning (Movfast) | Output mode still "Output to keyboard", or wrong PackageName/ClassName | Re-check the table above; watch for characters being typed into the app (wedge mode) |
 | `scan broadcast without barcode extra, extras: ...` | Scan Result Data Key mismatch | The log prints the actual key/value — set the data key to `barcode` (or rely on the `bacode` fallback) |
 | `app not ready, scan dropped` | Scan arrived before the app finished starting | Scan again after the app is visible |
-| UI does not change but log shows the scan | You are on a page without hardware-scan support, or a dialog is open | Use a receiving/picking detail page; close dialogs |
+| UI does not change but log shows the scan | You are on a page without hardware-scan support, or a dialog is open | Use a scan-capable page (e.g. receiving/picking detail); close dialogs |
 | Scan works but feels laggy | Wedge fallback active (output mode = keyboard) | Switch to "Output to broadcast" |
 | Honeywell: no `claim ok` in logcat | DCS unreachable or another app holds the claim | Check for `-30001` (ScannerUnavailable) in the log; kill other scan apps |
 | Honeywell: claim ok but no `barcode event` | Stale APK — events arrive via the one-way `executeAsync` binder call; older builds dropped them | Update the APK (fixed 2026-11-01) |

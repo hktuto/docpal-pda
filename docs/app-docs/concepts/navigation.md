@@ -2,17 +2,29 @@
 
 ## Home screen
 
-The home screen (`pages/index.vue`) shows the main menu cards:
+The home screen (`pages/index.vue`) shows the main menu cards (a 2-column grid):
 
 - Receiving
-- Picking
+- Manual Receiving — only when CN receiving is enabled
+- Receiving Scan — only when CN receiving is enabled
 - Put-away
-- Goods Verify
+- Put-back
+- Picking
+- Label Printing
+- Print Product Label — always shown
+- Labeling
 - Measuring
 - Verify
+- Goods Verify
 - Stock Search
+- Ad-hoc Put-away
+- Shelf Exchange
+- Latency Test — always shown
 
-Tap a card to enter that flow. Steps disabled in the backend flow-step config do not show a card.
+Tap a card to enter that flow. Most cards are gated on the backend flow-step
+config via `composables/useFlowSteps.ts`: steps disabled for the warehouse
+show no card, and the Manual Receiving / Receiving Scan pair follows the
+`receiving-cn` step. Settings and logout live in the app header kebab menu.
 
 ![Home screen](../user-menu/assets/home-page.png)
 
@@ -22,11 +34,16 @@ Tap a card to enter that flow. Steps disabled in the backend flow-step config do
 
 - A back button to return to the previous screen.
 - On detail pages: the order/task title and status badge in the title bar,
-  and a page-action dropdown (horizontal-dots icon left of the ⋯ kebab) with
-  the page's info rows and actions.
-- A reset-database button (demo only).
-- A logout button.
-- A language switcher (`layers/i18n/components/LanguageSwitcher.vue`).
+  and a page-action dropdown (horizontal-dots icon) with the page's info rows
+  and actions.
+- A report-a-bug button (🐞) opening `components/BugReportModal.vue`
+  (in-app bug report with photo attachment).
+- On the home screen (the only screen without a back button), a ⋯ kebab menu:
+  language switcher (`layers/i18n/components/LanguageSwitcher.vue`), Settings
+  (`/settings`) and Logout.
+
+There is no reset-database button: the demo reset is the backend `db:seed`
+CLI (the `POST /dev/reset` endpoint was removed 2026-11-06).
 
 ## Detail pages
 

@@ -16,14 +16,14 @@ Individual flow steps (e.g. measuring, verify) can be turned on/off per warehous
 ## Key design ideas
 
 - **Mobile-first.** The UI is built for a handheld Android device.
-- **Thin client over HTTP.** Pages call `WarehouseService`, which talks to the `apps/backend` Hono API (default `http://localhost:3002`). All business rules and data live server-side.
+- **Thin client over HTTP.** Pages call `WarehouseService`, which talks to the `apps/backend` Hono API (default `http://127.0.0.1:3002` — `127.0.0.1`, not `localhost`, because some device WebViews can't resolve `localhost`; override via `NUXT_PUBLIC_API_BASE_URL`). All business rules and data live server-side.
 - **Persistent demo dataset.** Data is stored in PostgreSQL and survives reloads; a demo reset (`db:seed` CLI) re-seeds it.
 
 ## Demo limitations
 
-- **Demo passwords only.** The seed uses well-known demo passwords (scrypt-hashed); change them before any real deployment. Login is JWT-based against the backend.
+- **Demo passwords only.** There is no local password auth (no scrypt): login *always* delegates to the DocPal API (`apps/backend/src/auth/docpal.ts`). The seeded demo users (`operator`, `admin`) work against the local test/dev fake DocPal with well-known demo passwords; real deployments authenticate against the real DocPal (`DOCPAL_URL`). Sessions are JWT-based against the backend.
 - **Typed scanning.** Camera OCR exists on Android for label capture in some flows, but much scanning is simulated by typed input.
-- **Single shared dataset.** Everyone using the demo works on the same backend database; use the reset control to start fresh.
+- **Single shared dataset.** Everyone using the demo works on the same backend database; start fresh with the `db:seed` CLI reset (the `POST /dev/reset` endpoint was removed 2026-11-06).
 
 ## Who should read this
 

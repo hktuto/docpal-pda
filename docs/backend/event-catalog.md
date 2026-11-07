@@ -2,10 +2,21 @@
 
 Event contract for the **table-change notification table** consumed by the
 external sync service (local DB → remote replica). Events are produced by a
-generic PostgreSQL trigger (`sync_events_notify()`) attached to every business
-table, so coverage is complete by construction — every INSERT/UPDATE/DELETE
+generic PostgreSQL trigger (`sync_events_notify()`) attached to the 30
+**baseline** business tables (migration `0000_baseline.sql` — exactly the
+tables in the "Full event list" below; no later migration adds a trigger), so
+coverage of those tables is complete by construction: every INSERT/UPDATE/DELETE
 committed by the backend lands here, transactionally (a rollback drops the
-event with the change).
+event with the change). Tables created after the baseline have **no trigger**
+and are absent from the outbound feed — the CN queue/scan families
+(`receiving_orders_cn`, `receiving_invoices_cn`, `receiving_invoice_items_cn`,
+`receiving_cn_workflows`, `receiving_cn_scan_events`, `put_away_tasks_cn`),
+put-back/cancel (`put_back_tasks`, `put_back_task_items`, `cancel_records`),
+`internal_transfer_*`, `allocation_snapshot_*`, `label_prints`,
+`inventory_labels`, `ad_hoc_put_aways`, `shelf_exchanges`,
+`date_code_counter_periods`, `user_profiles`, `bug_reports`. Downstream
+readers must not expect CN flows or these newer features in this feed; new
+coverage requires adding triggers in a migration.
 
 ## Circular-write guard
 
@@ -162,11 +173,45 @@ their own transaction and ARE recorded.)
 
 ## Related: the SSE typed events (separate mechanism)
 
-The pre-existing `app_events` outbox (`GET /events` SSE stream, 13 business
-event types such as `picking_order.created`, `allocation.computed`) stays as
+The pre-existing `app_events` outbox (`GET /events` SSE stream) stays as
 is — it exists for PDA/admin cache invalidation, carries business-level
 meaning, and is pruned after 3 days. The sync table above is row-level, not
-business-level, and is the contract for the sync service. (Also on this
+business-level, and is the contract for the sync service.
+
+**31 distinct business event types** are emitted via
+`emitEvent(db, { type, topics, data })` across `src/db/*.ts` and
+`src/routes/` (there is no `picking_order.created`):
+
+| Event type | Topics | Emitted by |
+| --- | --- | --- |
+| `allocation.started` | `/picking-orders`, `/receiving-orders` | `db/allocate.ts` (recompute runner start) |
+| `allocation.finished` | `/picking-orders`, `/receiving-orders` | `db/allocate.ts`, `db/allocationSnapshot.ts` |
+| `allocation.computed` | `/picking-orders` (+`/receiving-orders` on snapshot restore) | `db/allocate.ts`, `db/pickingAllocateForm.ts`, `db/receivingReallocate.ts`, `db/allocationSnapshot.ts` |
+| `picking.reordered` | `/picking-orders` | `db/picking.ts` |
+| `picking.labeling_finished` | `/picking-orders`, `/labeling-orders` | `db/picking.ts` |
+| `picking.label_printing_finished` | `/picking-orders`, `/labeling-orders`, `/label-printing-orders` | `db/picking.ts` |
+| `picking_order.issue_reported` | `/picking-orders` | `db/picking.ts` |
+| `picking_order.updated` | `/picking-orders` | `db/picking.ts`, `db/cancelInvoice.ts` |
+| `receiving.mismatch_reported` / `receiving.mismatch_updated` / `receiving.mismatch_confirmed` / `receiving.mismatch_cancelled` | `/receiving-orders` | `db/receiving.ts` |
+| `receiving_order.item_removed` | `/receiving-orders` | `db/receiving.ts` |
+| `receiving_order.upserted` | `/receiving-orders` | `db/receiving.ts` |
+| `receiving_cn.scan_started` | `/admin/receiving-cn`, `/receiving-cn-scan-tasks` | `db/receivingCn.ts` |
+| `receiving_cn.updated` | `/admin/receiving-cn`, `/receiving-cn-scan-tasks`, `/put-away-tasks` | `db/receivingCn.ts` |
+| `receiving_cn.completed` | `/admin/receiving-cn`, `/receiving-cn-scan-tasks`, `/put-away-tasks` | `db/receivingCn.ts`, `db/receivingCnScan.ts` |
+| `receiving_cn.failed` / `receiving_cn.cancelled` | `/admin/receiving-cn` | `db/receivingCn.ts` (`markCnWorkflowTerminal`, dynamic `` `receiving_cn.${status}` ``) |
+| `receiving_cn_scan.item_updated` | `/receiving-cn-scan-tasks`, `/admin/receiving-cn` | `db/receivingCnScan.ts` |
+| `put_away_task.created` / `put_away_task.completed` | `/put-away-tasks` | `db/putawaytasks.ts` |
+| `put_away_task_cn.completed` | `/put-away-cn-tasks`, `/put-away-tasks` | `db/putawayCn.ts` |
+| `put_back_task.created` | `/put-back-tasks` | `db/cancelInvoice.ts` |
+| `put_back_task.completed` | `/put-back-tasks` | `db/putback.ts` |
+| `cancel_record.processed` | `/cancel-records` | `db/cancelInvoice.ts` |
+| `goods_verify.tasks_created` | `/goods-verify-tasks` | `db/goodsverify.ts` |
+| `outdated.warning.created` / `outdated.warning.resolved` | `/admin/outdated-warnings`, `/picking-orders` or `/receiving-orders` (per `orderKind`) | `db/outdated.ts` |
+| `shipping_box.shipped` | `/shipping-orders`, `/picking-orders` | `db/shipping.ts` |
+| `config.updated` | `/config` | `routes/admin/flowConfig.ts` |
+
+Per-type data payloads and the specs behind several of these are in the
+notes below. (Also on this
 stream: `config.updated` with topics `["/config"]`, emitted by
 `PUT /admin/flow-config` when the save is applied at runtime — PDA clients
 refetch `GET /config` on it so display/flow settings propagate without

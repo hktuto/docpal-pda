@@ -30,6 +30,6 @@ A box created during picking that groups packages shipped to a customer — it m
 
 A second re-scan pass over one closed shipping box (one task per box, created when the box is closed). Another worker re-scans every package before the task can be completed and the box goes to shipping.
 
-## Transition log
+## Transaction log
 
-An audit trail of status changes for orders, boxes, and tasks.
+An audit trail of status changes for orders, boxes, and tasks (`transaction_logs`); quantity movements are recorded in the `inventory_transactions` ledger alongside it.

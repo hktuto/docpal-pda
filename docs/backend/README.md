@@ -33,7 +33,7 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
 
 - Auth (spec: `docs/superpowers/specs/2026-07-21-real-login-design.md`) —
   JWT bearer auth enforced by global middleware (`src/auth/middleware.ts`) on
-  every route except `GET /health`, `POST /auth/login`, `/auth/login-token`,
+  every route except `GET /health`, `GET /latency-ping`, `POST /auth/login`, `/auth/login-token`,
   and `/dev/lab*` (`/dev/allocate` requires a token). Send
   `Authorization: Bearer <token>` on all other calls; `GET /events`
   additionally accepts `?token=` because EventSource cannot set headers.

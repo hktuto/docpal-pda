@@ -21,6 +21,7 @@ Page and component locations mapped to source files.
 | Receiving detail | `/receiving/:id` | `pages/receiving/[id].vue` or equivalent |
 | CN receiving scan list (收貨掃描 — CN orders at `scanning` with progress; `cnReceiving` flag on) | `/receiving-cn-scan` | `pages/receiving-cn-scan/index.vue` |
 | CN receiving scan detail (groups by part + batch via `utils/cnScanGroups.ts`, server-side aggregate scan matching, group flag/reset, finalize) | `/receiving-cn-scan/:id` | `pages/receiving-cn-scan/[id].vue` (+ `utils/cnScanGroups.ts`, `utils/cnReceivingScan.ts`) |
+| Manual receiving (手動收貨 — local staging of order-no chips + scanned labels, one-call commit via `POST /receiving-cn/manual-receipts`; home tile gated by the `cnReceiving` flag) | `/manual-receiving` | `pages/manual-receiving/index.vue` (dedup/qty helpers `utils/manualReceiving.ts`) |
 | Put-away list (dual-source: standard tasks, or CN tasks when the `cnReceiving` flag from `useFlowSteps` is on) | `/put-away` | `pages/put-away/index.vue` |
 | Put-away detail (dual-source: standard flow, or CN local-staging flow — sticky shelf, sticky-footer batch confirm via `completeCnPutAwayTask`; flag from `useFlowSteps`) | `/put-away/:id` | `pages/put-away/[id].vue` or equivalent |
 | Measuring list | `/measuring` | `pages/measuring/index.vue` (open boxes with packages) |
@@ -45,6 +46,7 @@ Page and component locations mapped to source files.
 | App header | `components/AppHeader.vue` |
 | Language switcher | `layers/i18n/components/LanguageSwitcher.vue` |
 | Toast notifications | `components/ToastHost.vue`, `composables/useToast.ts` |
+| Auth route guard (restores the stored session on every navigation and redirects to `/login`; `/server` stays reachable logged out) | `middleware/auth.global.ts` |
 | Inline spinner | `components/InlineSpinner.vue` |
 
 ## Shared detail primitives
@@ -94,6 +96,9 @@ Page and component locations mapped to source files.
 | Issue banner | `components/picking/PickingIssueBanner.vue` |
 | Unified items list (evaluation — collapsed progress/allocation-chip rows, expanded pending/box/line/allocation views) | `components/picking/PickingUnifiedItems.vue` |
 | Unified scan-session routing (queue, sticky shelf context, pick-from-box, carton auto-queue, confirm with re-resolve) | `composables/usePickingScanSession.ts` |
+| Pending-scan queue (scan target resolution + COO/COW / date-code / lot reject rules; the per-allocation queued counts the pick-from-box dialog shows) | `composables/usePickingScanQueue.ts` |
+| Pick-from-box dialog (shelf-scan off mode — scanning a shelf-box/shelf barcode lists what the order still needs from it, required vs queued per allocation) | `components/picking/PickFromBoxDialog.vue` |
+| Picking list filter modal (order status + allocation status multi-select) | `components/picking/PickingFilterModal.vue` |
 | Unified collapsed-row format + pending aggregation (pure, unit-tested) | `utils/pickingUnifiedItems.ts` (`unifiedCollapsedMeta`, `allocationChipLabel`, `pendingScanGroups`) |
 | Label print prompt modal (picking finish) + shared per-rule print panel (also the label-printing/labeling detail body) | `components/picking/LabelPrintPrompt.vue`, `components/picking/LabelPrintRulesPanel.vue` |
 
@@ -129,6 +134,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | HTTP adapter (warehouse) | `services/adapters/backendWarehouse.ts` |
 | HTTP adapter (auth) | `services/adapters/apiAuth.ts` |
 | HTTP fetch wrapper (error mapping to `I18nError`/`ApiError`) | `services/apiClient.ts` |
+| Outdated-scan-warning bus (adapter emits every scan response's `outdatedWarning`; `composables/useOutdatedWarning.ts` registers the handler — module-level wiring keeps the service layer vue-free for the vitest runtime) | `services/scanWarningBus.ts` |
 | Composable entry point | `composables/useWarehouse.ts` |
 
 ## Scan / OCR flow
@@ -151,6 +157,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | OCR text heuristics + candidate extraction (picking drafts via `extractPickingScanDrafts`) | `utils/parseOcrScan.ts` |
 | Label decode (QR/template) — endpoint-first + heuristic fallback | `utils/labelDecode.ts` → `POST /scan/decode` (backend authority `apps/backend/src/decode/`) |
 | Mismatch form validation (pure) | `utils/mismatch.ts` |
+| Keyboard-wedge plumbing shared by the two scanner listeners (broadcast-echo suppression windows — a fix landing in only one listener reopens the duplicate-scan race) | `utils/scannerWedge.ts` (`useHardwareScanner.ts` + `useOrderScanNav.ts`) |
 
 - `composables/useLabelScan.ts` — orchestrates native scan; in browsers falls back to `window.prompt()` + JSON.
 - `composables/useLabelScan.ts` — validates prompt JSON and converts it to a capture in browser fallback mode; supplier QR templates come from `GET /scan-templates` via `WarehouseService.getSupplierQrTemplates`.
@@ -194,6 +201,10 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Receiving order name template (flow-config key `receivingOrderNameTemplate`, default `[batch_no]`; backend renders `displayName` on the receiving list/detail responses; the receiving list batch-no column and detail h1 render `displayName`) | `/display-config` (editor; list: `/receiving`, detail: `/receiving/:id`) | `apps/admin/pages/display-config.vue` (second card + live preview), `apps/admin/utils/receivingOrderName.ts` (client preview formatter), `apps/admin/pages/receiving/index.vue` (batch-no column accessor), `apps/admin/pages/receiving/[id].vue` (h1); backend `apps/backend/src/receivingOrderName.ts` + `src/routes/receiving.ts` |
 | PDA list-row display templates (flow-config key `pdaListTemplates` — per-list `{title, meta}` for the six PDA list pages, served via `GET /config`; edited with a live preview) | `/pda-view-config` | `apps/admin/pages/pda-view-config.vue` (one section per PDA list/detail page: title/meta inputs, placeholder chips, full + missing-fields preview, single shared save), `apps/admin/utils/listRowTemplate.ts` (preview formatter, mirror of the PDA's); PDA side `apps/pda/utils/listRowTemplate.ts`, `apps/pda/composables/useListTemplates.ts`, `apps/pda/pages/{receiving,picking,put-away,goods-verify,verify,measuring}/index.vue` |
 | Customer receiving order upload (CN; tracking list + 2-step upload → verify/edit wizard over a customer receiving Excel — inline cell editing, part-no combobox validated against the parts master, per-item excel-row `index` — confirm posts the file + verified JSON to DocPal and starts the workflow; list + order detail also show the `scanning` status and per-item receiving-scan outcomes — status, scanned qty vs line qty, reason, note — and the confirm action means "OCR verified — send to PDA scanning"; the detail also carries a Reset order action (clears scan/receive/put-away progress, order → pending, 409 when clear)) | `/receiving-cn`, `/receiving-cn/new`, `/receiving-cn/:batchNo` | `apps/admin/pages/receiving-cn/index.vue`, `apps/admin/pages/receiving-cn/new.vue`, `apps/admin/pages/receiving-cn/[batchNo].vue`, `apps/admin/utils/cnReceivingExcel.ts` (AOA parser), `apps/admin/components/receiving-cn/ReceivingCnPartNoSelect.vue`, wrappers in `apps/admin/utils/flowApi.ts` |
+| App download (region dropdown + version metadata + JWT download of the signed release APK served from `apps/backend/public/apk/`; Settings nav) | `/app-download` | `apps/admin/pages/app-download.vue`, backend `apps/backend/src/routes/admin/appDownload.ts` (`GET /admin/app-download(/regions|/file)`) |
+| Issue queues (receiving mismatches with per-row Confirm/Cancel; picking `issue` orders with Resolve-note over `POST /picking-orders/:id/resolve-issue`) | `/issues/receiving`, `/issues/picking` | `apps/admin/pages/issues/receiving.vue`, `apps/admin/pages/issues/picking.vue`, backend `apps/backend/src/routes/admin/issues.ts` (`GET /admin/receiving-mismatches` + order logs), `flowApi` wrappers |
+| Test picking-order create (manual UAT order form — customer/location/PO/delivery + item rows, JSON template export/import; `POST /admin/picking-orders/test-create`) | `/picking-orders/create` | `apps/admin/pages/picking-orders/create.vue`, backend `apps/backend/src/routes/admin/testPickingOrder.ts` (also `GET /admin/picking-orders/:id/export`, `DELETE /admin/picking-orders/:id/test` for `[TEST]` orders) |
+| Customer profiles master (accounts + profile-code link manager; profile CrudTable with `customers` multiSelect) | `/customer-profiles`, `/customer-profiles/:partyName`, `/customer-profile-list` | `apps/admin/pages/customer-profiles/index.vue`, `apps/admin/pages/customer-profiles/[partyName].vue`, `apps/admin/pages/customer-profile-list.vue`, `entities.customerProfiles` in `apps/admin/utils/entities.ts`, backend `apps/backend/src/routes/admin/customerProfiles.ts` (`GET|POST|PATCH|DELETE /admin/customer-profiles(/:code)` + `PUT .../:code/customers`) |
 
 ## Warehouse backend (apps/backend)
 
@@ -222,6 +233,9 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `POST /goods-verify-tasks/generate`, `GET /goods-verify-tasks`, `GET /goods-verify-tasks/:id`, `POST /goods-verify-tasks/:id/verify` | `apps/backend/src/routes/goodsverify.ts` |
 | `GET /stock-search` | `apps/backend/src/routes/stocksearch.ts` |
 | `GET /scan-templates`, `GET /date-code-periods` | `apps/backend/src/routes/scantemplates.ts` |
+| `POST /scan/decode` (server-side label-decode authority — supplier templates + date-code periods + NCC drawing-code / TE part resolution; PDA scans cut over 2026-11-03, `apps/pda/utils/labelDecode.ts`) | `apps/backend/src/routes/decode.ts` over `apps/backend/src/decode/` (+ `src/db/partDrawno.ts`) |
+| `GET /boxes?q=` (box-id substring lookup — shipping + shelf boxes; read-only, blank q = latest 50; no live client today — backed the retired web `/box` QR page) | `apps/backend/src/routes/boxes.ts` (`searchBoxes` in `apps/backend/src/db/boxes.ts`) |
+| `/dev/lab*` (dev-only tokenless browser label tool — brand/part, CN-order and picking-order item pickers, real-decoder read-back + supplier-symbology PNG via bwip-js; builders in `src/lab/labelBuilders.ts`, not mounted in production) | `apps/backend/src/routes/devLab.ts` |
 | Print proxy: `GET /print/printers`, `POST /print/dynamic`, `POST /print/files`, `GET /print/jobs/:jobId` | `apps/backend/src/routes/print.ts`, `apps/backend/src/print.ts` |
 | Upstream sync (outbound `sync_events` table feed; the external service reads the table directly — the `GET /sync-events` endpoint was removed 2026-10 — and writes the business tables directly) | `apps/backend/src/db/schema/events.ts` |
 | `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
