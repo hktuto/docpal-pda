@@ -33,8 +33,9 @@ before(async () => {
           {
             serviceId: "svc-1",
             printers: [
-              { deviceKey: "dev-a", name: "Printer A", alias: "A" },
-              { deviceKey: "dev-b", name: "Printer B" },
+              { deviceKey: "dev-a", name: "Printer A", alias: "A", isActive: true },
+              { deviceKey: "dev-b", name: "Printer B", isActive: true },
+              { deviceKey: "dev-c", name: "Printer C (inactive)", isActive: false },
             ],
           },
         ]));
@@ -68,8 +69,8 @@ test("GET /print/printers flattens the agent-printers list", async () => {
   const res = await app.request("/print/printers");
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), [
-    { deviceKey: "dev-a", name: "Printer A", alias: "A", serviceId: "svc-1" },
-    { deviceKey: "dev-b", name: "Printer B", serviceId: "svc-1" },
+    { deviceKey: "dev-a", name: "Printer A", alias: "A", isActive: true, serviceId: "svc-1" },
+    { deviceKey: "dev-b", name: "Printer B", isActive: true, serviceId: "svc-1" },
   ]);
 });
 
