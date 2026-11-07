@@ -313,7 +313,9 @@ async function upsertCancelRecord(
   );
 }
 
-/** Admin list of the ingest log (newest first). */
+/** Admin list of the ingest log (newest first). Rows that matched nothing
+ *  (`no_match`) are deliberately hidden — they are cron audit trail only, the
+ *  admin page shows what the cancel-ingest actually had to take care of. */
 export async function listCancelRecords(
   db: DbOrTx,
   filter?: { source?: string; outcome?: string }
@@ -329,7 +331,8 @@ export async function listCancelRecords(
                (SELECT COUNT(*)::int FROM put_back_tasks t WHERE t.cancel_source = r.source AND t.cancel_source_id = r.source_id) AS "putBackTasks"
         FROM cancel_records r
         LEFT JOIN picking_orders po ON po.id = r.picking_order_id
-        WHERE (${filter?.source ?? null}::text IS NULL OR r.source = ${filter?.source ?? null})
+        WHERE r.outcome <> 'no_match'
+          AND (${filter?.source ?? null}::text IS NULL OR r.source = ${filter?.source ?? null})
           AND (${filter?.outcome ?? null}::text IS NULL OR r.outcome = ${filter?.outcome ?? null})
         ORDER BY r.created_date DESC
         LIMIT 500`

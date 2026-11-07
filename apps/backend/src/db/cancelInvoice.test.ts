@@ -9,6 +9,7 @@ import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
 import { allocateAll } from "./allocate.js";
 import { runCancelInvoiceSyncOnce } from "../jobs/cancelInvoiceSync.js";
+import { listCancelRecords } from "./cancelInvoice.js";
 
 let client: TestDb;
 
@@ -278,7 +279,7 @@ test("shipped order → ignored, nothing changes", async () => {
   assert.match(rec!.message ?? "", /already shipped/);
 });
 
-test("unknown pi_invoice_num → no_match, no order cancelled", async () => {
+test("unknown pi_invoice_num → no_match, no order cancelled, hidden from the admin list", async () => {
   const sourceId = await insertInvoiceCancel("NOPE-9999");
   await runCancelInvoiceSyncOnce(client.db);
   const rec = await cancelRecordOf("cancel_invoice", sourceId);
@@ -289,6 +290,9 @@ test("unknown pi_invoice_num → no_match, no order cancelled", async () => {
     sql`SELECT COUNT(*)::int AS c FROM picking_orders WHERE status = 'cancelled'`
   );
   assert.equal(cancelled!.c, 0);
+  // no_match rows are cron audit only — the admin list never shows them.
+  const listed = await listCancelRecords(client.db);
+  assert.equal(listed.length, 0);
 });
 
 test("upstream row updated (last_update_date moved) → reprocessed; already-cancelled order → ignored", async () => {

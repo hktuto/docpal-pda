@@ -9,10 +9,12 @@ const flow = useFlowApi();
 const { t } = useI18n();
 
 const SOURCES = ["cancel_invoice", "cancel_invoice_tn"];
-const OUTCOMES = ["cancelled", "cancelled_with_putback", "ignored", "no_match", "error"];
+// no_match rows are never shown (hidden in the backend query) — the filter
+// vocabulary only lists outcomes admins act on.
+const OUTCOMES = ["cancelled", "cancelled_with_putback", "ignored", "error"];
 
-const source = ref<string[]>([]);
-const outcome = ref<string[]>([]);
+const source = ref("");
+const outcome = ref("");
 
 const sourceOptions = computed<SearchableSelectOption[]>(() =>
   SOURCES.map((s) => ({ value: s, label: t(`cancelRecords.sources.${s}`) }))
@@ -30,8 +32,8 @@ async function load() {
   error.value = "";
   try {
     rows.value = await flow.listCancelRecords({
-      source: source.value[0],
-      outcome: outcome.value[0],
+      source: source.value || undefined,
+      outcome: outcome.value || undefined,
     });
   } catch (e: any) {
     error.value = e?.message ?? String(e);
@@ -41,7 +43,11 @@ async function load() {
   }
 }
 
-const change = useChangeNotice(["cancel_record.processed"], load);
+// SSE reload (rows appear as the cron processes them).
+useChangeNotice(["cancel_record.processed"], load);
+
+// Filter changes reload the (server-side filtered) list immediately.
+watch([source, outcome], load);
 
 onMounted(load);
 
@@ -67,12 +73,14 @@ function fmt(ts: string | null): string {
         :options="sourceOptions"
         :all-label="$t('admin.common.all')"
         :aria-label="$t('cancelRecords.colSource')"
+        :multiple="false"
       />
       <SearchableSelect
         v-model="outcome"
         :options="outcomeOptions"
         :all-label="$t('admin.common.all')"
         :aria-label="$t('cancelRecords.colOutcome')"
+        :multiple="false"
       />
     </div>
 
