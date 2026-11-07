@@ -367,6 +367,26 @@ Changes vs old: one aggregate read replaces the 3-call stitch; uniform
 materializes inventory lots (concept: lot + `inventory_lot_sources` +
 `inventory_transactions` PUT_AWAY rows).
 
+### Put-back tasks (`put-back` flow step)
+
+Cancel-invoice queue (spec `docs/superpowers/specs/2026-11-07-cancel-invoice-putback-design.md`):
+stock already picked for an upstream-cancelled order/line returns to a shelf. Tasks
+are created by the `jobs/cancelInvoiceSync.ts` cron (watches the externally-managed
+`cancel_invoice` / `cancel_invoice_tn` tables; `CANCEL_INVOICE_SYNC=off`,
+`CANCEL_INVOICE_SYNC_INTERVAL_SEC` default 120) — never by an API. Outcomes land in
+`cancel_records` (admin read below); the cron never writes back to the upstream tables.
+
+| Route | Description |
+|---|---|
+| `GET /put-back-tasks?status=` | Queue rows `{id, status, pickingOrderId, orderNo, totalQty, itemCount, createdDate, assignee}`; `assigneeFilter` scoped (NULL visible to all). |
+| `GET /put-back-tasks/:id` | Detail + `items[]` (one row per picked `picking_packages` row: part/qty/batch + source `shelfCode` — null for dock-sourced picks). 404 `put_back_task_not_found` (also when assigned to another user). |
+| `POST /put-back-tasks/:id/complete` | Body `{shelfCode?}` — fallback shelf for items without a source shelf. One tx: status claim (2nd call → 409 `put_back_task_not_pending`), missing shelf → 409 `put_back_shelf_required`; credits each item onto its source shelf (or the fallback) via the shared `creditLotTx` lot find-or-create + `ADJUST on_hand +qty` ledger (`txnReason "cancel put-back"`), invalidates any shelf-box verification touched, stamps items `put_back`. No allocation recompute (manual-only). |
+| `GET /admin/cancel-records?source=&outcome=` | Ingest log rows `{id, source, sourceId, invoiceNum, tnLineId, orderNo, pickingOrderId, outcome, message, status, sourceTs, createdDate, lastUpdateDate, putBackTasks}` (newest first, max 500). Outcomes: `cancelled | cancelled_with_putback | ignored | no_match | error`. |
+
+`/admin/task-assignment` accepts `flow=put-back`. SSE: `put_back_task.created` /
+`put_back_task.completed` on `/put-back-tasks`, `cancel_record.processed` on
+`/cancel-records`, plus `picking_order.updated` when an order closes.
+
 ### CN put-away (`receiving-cn` flow step)
 
 Customer-receiving (CN) put-away variant (spec
@@ -855,4 +875,6 @@ incoming-webhook fire-and-forget on insert.
 | Endpoint | Description |
 |---|---|
 | `POST /dev/allocate` | Fleet-wide allocation rebuild (dev/test only; bearer token required). |
-| `GET /dev/lab` (+ `…/data`, `…/parts`, `…/label`, `…/barcode`) | Dev Lab: generate supplier-label barcodes for PDA testing — editable qty/date/lot/COO/serial per supplier template, round-trip verified against the real decoder. Spec `docs/superpowers/specs/2026-11-04-dev-lab-label-generator-design.md`. |
+| `GET /dev/lab` (+ `…/data`, `…/parts`, `…/label`, `…/barcode`) | Dev Lab: generate supplier-label barcodes for PDA testing — editable qty/date/lot/COO/serial per supplier template, round-trip verified against the real decoder. Build randomizes the serial field on every click. Spec `docs/superpowers/specs/2026-11-04-dev-lab-label-generator-design.md`. |
+| `GET /dev/lab/receiving-cn` (+ `…/orders`, `…/orders/:batchNo/items`) | Dev Lab variant driven by a receiving CN order: pick the order by `batch_no`, then one of its items — label fields prefill from it (part/WCL item no, qty, lot, COO, drawing no). Read-only. |
+| `GET /dev/lab/picking` (+ `…/orders`, `…/orders/:id/items`) | Dev Lab variant driven by a picking order: pick the order, then one of its items (brand + MPN resolved via `parts` on `wcl_item_no`) — label fields prefill from it. Read-only. |

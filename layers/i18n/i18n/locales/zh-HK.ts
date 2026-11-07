@@ -13,6 +13,8 @@ export default {
     pickingScan: "揀貨掃碼",
     putAway: "上架",
     putAwayDetail: "上架詳情",
+    putBack: "退回上架",
+    putBackDetail: "退回上架詳情",
     goodsVerify: "查貨",
     goodsVerifyDetail: "查貨任務",
     measuring: "測量",
@@ -121,6 +123,7 @@ export default {
       labelPrinting: { title: "打印標籤" },
       printProductLabel: { title: "打印產品標籤" },
       putAway: { title: "上架" },
+      putBack: { title: "退回上架" },
       goodsVerify: { title: "查貨" },
       measuring: { title: "測量" },
       verify: { title: "覆核" },
@@ -559,6 +562,37 @@ export default {
         validPackSize: "請輸入有效的包裝規格",
         noteOrRemark: "請輸入備註或至少一條訂單備註"
       }
+    }
+  },
+  putBack: {
+    title: "退回上架",
+    hint: "上游已取消訂單的已揀貨物 — 請退回貨架。",
+    noTasks: "沒有退回上架任務",
+    status: {
+      pending: "待處理",
+      completed: "已完成"
+    },
+    source: {
+      cancel_invoice: "發票取消",
+      cancel_invoice_tn: "TN 行取消"
+    },
+    detail: {
+      title: "退回上架詳情",
+      orderNo: "訂單",
+      source: "取消來源",
+      items: "項目",
+      noItems: "沒有項目",
+      part: "貨品",
+      qty: "數量",
+      batch: "批次",
+      shelf: "貨架",
+      pendingShelf: "需指定貨架",
+      fallbackShelf: "目標貨架（已掃描）",
+      scanHint: "掃描貨架，用於沒有來源貨架的項目",
+      complete: "全部退回上架",
+      completing: "退回中…",
+      done: "已退回 {items} 項，共 {qty} 件",
+      notFound: "找不到退回上架任務"
     }
   },
   putAway: {
@@ -1080,7 +1114,8 @@ export default {
       picking_finished: "揀貨完成",
       measuring_finished: "複核完成",
       issue: "異常",
-      shipped: "已出貨"
+      shipped: "已出貨",
+      cancelled: "已取消"
     },
     allocation: {
       allocated: "已分配",
@@ -1323,6 +1358,7 @@ export default {
       boxSizes: "箱型",
       countries: "國家",
       pickingOrders: "揀貨單",
+      cancelRecords: "取消發票",
       reorder: "排序",
       createTestOrder: "建立測試揀貨單",
       receivingOrders: "收貨單",
@@ -2421,6 +2457,7 @@ export default {
           labeling: "待貼標籤",
           "label-printing": "打印標籤",
           "stock-search": "庫存查詢",
+          "put-back": "退回上架",
           "shelf-exchange": "貨架調撥"
         },
         receivingCnStepHint: "客戶收貨 (CN) 取代標準收貨流程。啟用後 PDA 上架會讀取 CN 任務；使用 CN 收貨的倉庫請同時停用標準「收貨」步驟。",
@@ -2708,7 +2745,8 @@ export default {
       "put-away": "上架",
       "put-away-cn": "上架 (CN)",
       measuring: "測量",
-      verify: "覆核"
+      verify: "覆核",
+      "put-back": "退回上架"
     },
     colTask: "任務",
     colStatus: "狀態",
@@ -2716,6 +2754,30 @@ export default {
     unassigned: "未指派",
     none: "此流程暫無待處理任務。",
     saveFailed: "儲存指派失敗"
+  },
+  cancelRecords: {
+    title: "取消發票",
+    explainer: "後端 cron 處理的上游 cancel_invoice / cancel_invoice_tn 記錄 — 取消結果與建立的退回上架任務。",
+    none: "沒有取消記錄。",
+    colSource: "來源",
+    colInvoice: "發票 / TN",
+    colLine: "TN 行",
+    colOrder: "揀貨單",
+    colOutcome: "結果",
+    colPutBack: "退回上架",
+    colMessage: "訊息",
+    colDate: "處理時間",
+    sources: {
+      cancel_invoice: "發票取消",
+      cancel_invoice_tn: "TN 行取消"
+    },
+    outcomes: {
+      cancelled: "已取消",
+      cancelled_with_putback: "已取消 + 退回上架",
+      ignored: "已忽略",
+      no_match: "無法匹配",
+      error: "錯誤"
+    }
   },
   bugReport: {
     title: "報告問題",

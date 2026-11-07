@@ -23,6 +23,7 @@ export const TASK_ASSIGNMENT_FLOWS = [
   "put-away-cn",
   "measuring",
   "verify",
+  "put-back",
 ] as const;
 export type TaskAssignmentFlow = (typeof TASK_ASSIGNMENT_FLOWS)[number];
 
@@ -132,6 +133,15 @@ export async function listTaskAssignments(
             GROUP BY sb.id
             ORDER BY sb.id`
       );
+    case "put-back":
+      return queryAll<TaskAssignmentRow>(
+        db,
+        sql`SELECT t.id, po.order_no AS "label", po.order_no AS "orderNo", t.status, t.assignee
+            FROM put_back_tasks t
+            JOIN picking_orders po ON po.id = t.picking_order_id
+            WHERE t.status = 'pending'
+            ORDER BY po.order_no, t.id`
+      );
     case "verify":
       return queryAll<TaskAssignmentRow>(
         db,
@@ -159,6 +169,7 @@ const FLOW_TABLES: Record<TaskAssignmentFlow, { table: SQL; entityType: string; 
   "put-away-cn": { table: sql`put_away_tasks_cn`, entityType: "put_away_task_cn" },
   measuring: { table: sql`shipping_boxes`, entityType: "shipping_box" },
   verify: { table: sql`verify_tasks`, entityType: "verify_task" },
+  "put-back": { table: sql`put_back_tasks`, entityType: "put_back_task" },
 };
 
 /** Set (or clear with null) one task's assignee. 404 task_not_found on an

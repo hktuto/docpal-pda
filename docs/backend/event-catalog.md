@@ -201,3 +201,13 @@ The picking label-printing stage (spec
 `label_printing_pending`, topics `["/picking-orders", "/label-printing-orders",
 "/labeling-orders"]`, so the PDA label-printing queue, labeling queue (the
 order may have just entered it), and picking pages converge.
+
+The cancel-invoice ingest (spec
+`docs/superpowers/specs/2026-11-07-cancel-invoice-putback-design.md`) adds three
+event types: `put_back_task.created` (topics `["/put-back-tasks"]`, emitted when
+the cron creates a return-to-shelf task for picked stock),
+`put_back_task.completed` (topics `["/put-back-tasks"]`, emitted by
+`POST /put-back-tasks/:id/complete`), and `cancel_record.processed` (topics
+`["/cancel-records"]`, emitted per upstream cancel row the cron applies, data
+`{source, sourceId, outcome}`). Order cancellations reuse `picking_order.updated`
+(topics `["/picking-orders"]`) — PDA picking pages drop cancelled orders on it.

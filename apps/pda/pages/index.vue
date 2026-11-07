@@ -52,6 +52,16 @@
         <p class="menu-card__title">{{ $t('home.menu.putAway.title') }}</p>
       </NuxtLink>
 
+      <NuxtLink v-if="flowSteps['put-back']" to="/put-back" class="menu-card">
+        <div class="menu-card__icon menu-card__icon--putback">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 14 4 9l5-5"/>
+            <path d="M4 9h10a6 6 0 0 1 6 6v6"/>
+          </svg>
+        </div>
+        <p class="menu-card__title">{{ $t('home.menu.putBack.title') }}</p>
+      </NuxtLink>
+
       <NuxtLink v-if="flowSteps.picking" to="/picking" class="menu-card">
         <div class="menu-card__icon menu-card__icon--picking">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -260,6 +270,7 @@ const { flowSteps, cnReceiving } = useFlowSteps();
 .menu-card__icon--label-printing { background: linear-gradient(135deg, #fb7185, #f43f5e); }
 .menu-card__icon--product-label { background: linear-gradient(135deg, #38bdf8, #0ea5e9); }
 .menu-card__icon--putaway { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.menu-card__icon--putback { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
 .menu-card__icon--verify { background: linear-gradient(135deg, #10b981, #059669); }
 .menu-card__icon--measuring { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
 .menu-card__icon--verify2 { background: linear-gradient(135deg, #06b6d4, #0891b2); }

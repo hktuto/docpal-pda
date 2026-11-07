@@ -25,6 +25,7 @@ const steps = ref<Record<FlowStep, boolean>>({
   "goods-verify": true,
   measuring: true,
   verify: true,
+  "put-back": true,
   "stock-search": true,
   "ad-hoc-put-away": true,
   "shelf-exchange": true,

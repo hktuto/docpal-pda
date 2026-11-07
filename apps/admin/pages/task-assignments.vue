@@ -19,6 +19,7 @@ const FLOWS: TaskAssignmentFlow[] = [
   "put-away-cn",
   "measuring",
   "verify",
+  "put-back",
 ];
 
 const activeFlow = ref<TaskAssignmentFlow>("receiving-cn");

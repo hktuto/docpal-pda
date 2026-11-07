@@ -543,7 +543,8 @@ export type TaskAssignmentFlow =
   | "put-away"
   | "put-away-cn"
   | "measuring"
-  | "verify";
+  | "verify"
+  | "put-back";
 
 /** GET /admin/task-assignments?flow= row — id/label/status/assignee are
  *  guaranteed; any other keys are flow-specific context rendered as-is. */
@@ -562,6 +563,25 @@ export interface AdminUserRow {
   username: string;
   displayName: string;
   groupCodes: string[];
+}
+
+/** GET /admin/cancel-records row — the cancel-invoice ingest log
+ *  (spec 2026-11-07-cancel-invoice-putback-design.md). */
+export interface CancelRecordRow {
+  id: string;
+  source: "cancel_invoice" | "cancel_invoice_tn";
+  sourceId: string;
+  invoiceNum: string | null;
+  tnLineId: number | null;
+  orderNo: string | null;
+  pickingOrderId: string | null;
+  outcome: string; // cancelled | cancelled_with_putback | ignored | no_match | error
+  message: string | null;
+  status: string; // done | error
+  sourceTs: string;
+  createdDate: string;
+  lastUpdateDate: string;
+  putBackTasks: number;
 }
 
 // ---- part availability (stock lots + open receiving sources for a part) ----
@@ -1416,6 +1436,16 @@ export function useFlowApi() {
         id,
         assignee,
       }),
+
+    // Cancel-invoice ingest log (spec 2026-11-07): read-only view of the
+    // cancel-invoice cron's per-row outcomes.
+    listCancelRecords: (params: { source?: string; outcome?: string }) => {
+      const q = new URLSearchParams();
+      if (params.source) q.set("source", params.source);
+      if (params.outcome) q.set("outcome", params.outcome);
+      const suffix = q.toString() ? `?${q.toString()}` : "";
+      return api.get<CancelRecordRow[]>(`/admin/cancel-records${suffix}`);
+    },
 
     // Flow config (warehouse_config row "flow"; applies at runtime on save
     // unless the FLOW_CONFIG env override is active)

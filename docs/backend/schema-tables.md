@@ -747,6 +747,78 @@ The transfer variant is the move-to-stock target for finished internal
 transfer orders with no delegated picking order (spec
 `docs/superpowers/specs/2026-09-28-internal-transfer-order-design.md`).
 
+## cancel_records
+
+Cancel-invoice ingest log (spec `docs/superpowers/specs/2026-11-07-cancel-invoice-putback-design.md`):
+one row per upstream `cancel_invoice` / `cancel_invoice_tn` row the
+`jobs/cancelInvoiceSync.ts` cron has processed. The tables it watches are
+**externally managed** (created/owned by the upstream sync — raw SQL only, no
+Drizzle schema, missing table tolerated, like `wcl_part_drawno`):
+`cancel_invoice(id varchar PK, state, batch_no, pi_deliver_id bigint,
+pi_invoice_num varchar NOT NULL, status_code, customer_id bigint,
+last_update_date, organization_id bigint, update_logs jsonb, created_date,
+updated_date)` and `cancel_invoice_tn(id varchar PK, state, batch_no, tn_number,
+org_id bigint, tn_status, last_update_date, tn_line_id bigint, tn_line_num
+bigint, po_number, update_logs jsonb, created_date, updated_date)`. The cron
+never reads or writes `state`/`update_logs`; dedupe is on `(source, source_id)`
+(unique) — a row re-processed only when its timestamp moved or our record is an
+`error`. Outcome columns describe OUR apply (the upstream table keeps its own).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Record id (UUID) |
+| source | varchar NOT NULL | `cancel_invoice` \| `cancel_invoice_tn` |
+| source_id | text NOT NULL | Upstream row id (ULID) |
+| pi_invoice_num / tn_number / tn_line_id / org_id | text / text / bigint / integer | Copied lookup keys (audit) |
+| picking_order_id | text FK → picking_orders(id) ON DELETE SET NULL | Order we matched (NULL = no_match) |
+| picking_item_id | text FK → picking_items(id) ON DELETE SET NULL | TN line we matched (NULL for invoice rows / no_match) |
+| outcome | text NOT NULL | `cancelled` \| `cancelled_with_putback` \| `ignored` (shipped/cancelled order — do-nothing) \| `no_match` \| `error` |
+| message | text | Admin-readable reason |
+| source_ts | timestamp NOT NULL | `greatest(created_date, last_update_date)` at processing time (re-process watermark) |
+| status | text NOT NULL DEFAULT 'done' | `done` \| `error` (error rows are retried every pass) |
+| created_date / last_update_date | timestamp NOT NULL DEFAULT now() | Audit |
+
+## put_back_tasks
+
+Put-back queue rows (same spec): created by the cancel-invoice cron when a
+cancelled order/line has picked `picking_packages` that must go physically back
+onto a shelf. Unique on `(cancel_source, cancel_source_id, picking_order_id,
+picking_item_id)` (item id `''` = whole-order task) — re-ingesting a row never
+duplicates a task.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Task id (UUID) |
+| cancel_source / cancel_source_id | varchar / text NOT NULL | Upstream cancel table + row id that created it |
+| picking_order_id | text FK → picking_orders(id) ON DELETE CASCADE | Cancelled order |
+| picking_item_id | text NOT NULL DEFAULT '' | Cancelled line (TN rows); `''` = whole-order (invoice) cancel |
+| status | text NOT NULL DEFAULT 'pending' | `pending` \| `completed` |
+| assignee | text | Queue assignee convention (NULL = visible to all) |
+| created_date / last_update_date | timestamp NOT NULL DEFAULT now() | Audit |
+
+## put_back_task_items
+
+One row per picked `picking_packages` unit the task returns — unique on
+`picking_package_id` (a package is never put back twice, even if two cancel rows
+touch it). Batch fields prefer the pick-time scanned values; `shelf_code` is the
+source lot's shelf (NULL for dock-sourced picks — the completion uses the
+operator's scanned fallback shelf). Completion credits the stock via the shared
+`creditLotTx` (ad-hoc put-away primitive) with `ADJUST on_hand +qty` ledger rows.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Item id (UUID) |
+| put_back_task_id | text FK → put_back_tasks(id) ON DELETE CASCADE | Task |
+| picking_package_id | text FK → picking_packages(id) ON DELETE CASCADE | Physical picked unit |
+| part_no / wcl_item_no | text NOT NULL / text | Item |
+| qty | integer NOT NULL CHECK > 0 | Qty to return |
+| date_code / lot_code / coo / cow | text | Batch (canonical YYWW date code) |
+| shelf_code | text | Source shelf (NULL = dock-sourced) |
+| org_id / sub_inventory_code | integer / text | Stock pair (source lot's, else the order's) |
+| status | text NOT NULL DEFAULT 'pending' | `pending` \| `put_back` |
+| done_shelf_code / done_at | text / timestamp | Actual shelf + time on completion |
+| created_date / last_update_date | timestamp NOT NULL DEFAULT now() | Audit |
+
 ## goods_verify_tasks
 
 Daily goods-verify tasks (concept 7): generated at day end from

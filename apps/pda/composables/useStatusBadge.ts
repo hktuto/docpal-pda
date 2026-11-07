@@ -7,6 +7,6 @@ export function badgeClass(status: string | null | undefined): string {
   }
   if (s === "partial") return "badge--in-hand";
   if (s === "unallocated") return "badge--pending";
-  if (s === "issue" || s === "danger") return "badge--danger";
+  if (s === "issue" || s === "danger" || s === "cancelled") return "badge--danger";
   return "";
 }

@@ -98,7 +98,7 @@ test("status override: 404 for an unknown picking order", async () => {
 
 test("status override: 400 for an invalid status value", async () => {
   const orderId = await seedAllocatedOrder("badstatus");
-  const res = await patchStatus(orderId, "cancelled");
+  const res = await patchStatus(orderId, "closed");
   assert.equal(res.status, 400);
   assert.match(await res.text(), /invalid_status/);
 

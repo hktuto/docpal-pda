@@ -25,7 +25,7 @@
  4.3 reorder picking order
  
 5. Cancel Order Management
-  - tbc
+  5.1 cancel-records — read-only ingest log of upstream cancelled invoices / TN lines (`/cancel-records`)
   
 6. Internal Transfer Management
   - tbc

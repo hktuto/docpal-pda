@@ -1,0 +1,14 @@
+{
+ "id": "CR-051",
+ "dateRaised": "2026-11-07",
+ "raisedBy": "Sean",
+ "app": "Admin",
+ "functionId": "ADM-038",
+ "feature": "Cancel invoice — the upstream publishes `cancel_invoice` / `cancel_invoice_tn` into the warehouse DB when a customer withdraws an invoice or a TN line. A backend cron watches those tables (ignore the upstream `state`/`update_logs` columns, never write back): it cancels the matched picking order/line (`pending`/`allocated`/open statuses → new `cancelled` status, allocations released with RESERVE ledger rows; already-picked stock spawns a PDA put-back task per package to return it to its source shelf; shipped orders are a no-op) and records the outcome in `cancel_records` for the admin. TN rows cancel only the matching line (by `tn_number` + `tn_line_id`); the order closes when all its lines are cancelled",
+ "reason": "Picking orders are created upstream and the warehouse never learned about cancellations — allocated/picked stock stayed committed against orders that would never ship",
+ "priority": "Must have",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Implemented 2026-11-07 — spec docs/superpowers/specs/2026-11-07-cancel-invoice-putback-design.md, plan docs/superpowers/plans/2026-11-07-cancel-invoice-putback.md — pending UAT. Backend: jobs/cancelInvoiceSync.ts + db/cancelInvoice.ts + db/putback.ts + migration 0059; PDA: put-back queue pages (also affects PDA-028) + `cancelled` status everywhere; admin: /cancel-records page (ADM-038), task-assignment `put-back` flow, status override lists. Cron env CANCEL_INVOICE_SYNC / CANCEL_INVOICE_SYNC_INTERVAL_SEC."
+}

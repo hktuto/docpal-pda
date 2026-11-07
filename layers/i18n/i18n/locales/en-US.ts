@@ -13,6 +13,8 @@ export default {
     pickingScan: "Picking Scan",
     putAway: "Put-away",
     putAwayDetail: "Put-away Detail",
+    putBack: "Put-back",
+    putBackDetail: "Put-back Detail",
     goodsVerify: "Goods Verify",
     goodsVerifyDetail: "Goods Verify Task",
     measuring: "Measuring",
@@ -121,6 +123,7 @@ export default {
       labelPrinting: { title: "Label Printing" },
       printProductLabel: { title: "Print Product Label" },
       putAway: { title: "Put-away" },
+      putBack: { title: "Put-back" },
       goodsVerify: { title: "Goods Verify" },
       measuring: { title: "Measuring" },
       verify: { title: "Verify" },
@@ -560,6 +563,37 @@ export default {
         validPackSize: "Enter a valid pack size",
         noteOrRemark: "Enter a note or at least one remark"
       }
+    }
+  },
+  putBack: {
+    title: "Put-back",
+    hint: "Stock picked for upstream-cancelled orders — return it to a shelf.",
+    noTasks: "No put-back tasks",
+    status: {
+      pending: "Pending",
+      completed: "Completed"
+    },
+    source: {
+      cancel_invoice: "Invoice cancel",
+      cancel_invoice_tn: "TN line cancel"
+    },
+    detail: {
+      title: "Put-back Detail",
+      orderNo: "Order",
+      source: "Cancel source",
+      items: "Items",
+      noItems: "No items",
+      part: "Item",
+      qty: "Qty",
+      batch: "Batch",
+      shelf: "Shelf",
+      pendingShelf: "needs a shelf",
+      fallbackShelf: "Target shelf (scanned)",
+      scanHint: "Scan a shelf for items without a source shelf",
+      complete: "Put everything back",
+      completing: "Returning…",
+      done: "Returned {items} item(s), {qty} pcs",
+      notFound: "Put-back task not found"
     }
   },
   putAway: {
@@ -1081,7 +1115,8 @@ export default {
       picking_finished: "Picking finished",
       measuring_finished: "Measuring finished",
       issue: "Issue",
-      shipped: "Shipped"
+      shipped: "Shipped",
+      cancelled: "Cancelled"
     },
     allocation: {
       allocated: "Allocated",
@@ -1324,6 +1359,7 @@ export default {
       boxSizes: "Box Sizes",
       countries: "Countries",
       pickingOrders: "Picking Orders",
+      cancelRecords: "Cancel Invoices",
       reorder: "Reorder",
       createTestOrder: "Create Test Order",
       receivingOrders: "Receiving Orders",
@@ -2425,6 +2461,7 @@ export default {
           labeling: "Labeling",
           "label-printing": "Label Printing",
           "stock-search": "Stock Search",
+          "put-back": "Put-back",
           "shelf-exchange": "Shelf Exchange"
         },
         receivingCnStepHint: "Customer Receiving (CN) replaces the standard receiving flow. When on, the PDA put-away reads CN tasks; warehouses using CN receiving should also disable the standard Receiving step.",
@@ -2712,7 +2749,8 @@ export default {
       "put-away": "Put-away",
       "put-away-cn": "Put-away (CN)",
       measuring: "Measuring",
-      verify: "Verify"
+      verify: "Verify",
+      "put-back": "Put-back"
     },
     colTask: "Task",
     colStatus: "Status",
@@ -2720,6 +2758,30 @@ export default {
     unassigned: "Unassigned",
     none: "No open tasks for this flow.",
     saveFailed: "Failed to save the assignment"
+  },
+  cancelRecords: {
+    title: "Cancel Invoices",
+    explainer: "Upstream cancel_invoice / cancel_invoice_tn rows processed by the backend cron — cancel-invoice outcomes and created put-back tasks.",
+    none: "No cancel records.",
+    colSource: "Source",
+    colInvoice: "Invoice / TN",
+    colLine: "TN line",
+    colOrder: "Picking order",
+    colOutcome: "Outcome",
+    colPutBack: "Put-back",
+    colMessage: "Message",
+    colDate: "Processed",
+    sources: {
+      cancel_invoice: "Invoice cancel",
+      cancel_invoice_tn: "TN line cancel"
+    },
+    outcomes: {
+      cancelled: "Cancelled",
+      cancelled_with_putback: "Cancelled + put-back",
+      ignored: "Ignored",
+      no_match: "No match",
+      error: "Error"
+    }
   },
   bugReport: {
     title: "Report a bug",

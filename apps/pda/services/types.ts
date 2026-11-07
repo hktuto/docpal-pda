@@ -799,6 +799,48 @@ export interface PutAwayTaskListRow {
   assignee?: string | null;
 }
 
+/** PUT /put-back-tasks?status= row — the put-back queue created by the
+ *  cancel-invoice ingest cron (spec 2026-11-07-cancel-invoice-putback-design.md):
+ *  picked stock of cancelled orders/lines must go back onto shelves. */
+export interface PutBackTaskListRow {
+  id: string;
+  status: string; // pending | completed
+  pickingOrderId: string;
+  orderNo: string;
+  totalQty: number;
+  itemCount: number;
+  createdDate: string;
+  assignee?: string | null;
+}
+
+export interface PutBackTaskItem {
+  id: string;
+  pickingPackageId: string;
+  partNo: string;
+  wclItemNo: string | null;
+  qty: number;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  /** Source shelf (where the stock came from); null = dock-sourced — the
+   *  operator's scanned shelf is used on completion. */
+  shelfCode: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  status: string; // pending | put_back
+  doneShelfCode?: string | null;
+  doneAt?: string | null;
+}
+
+export interface PutBackTaskDetail extends PutBackTaskListRow {
+  cancelSource: string;
+  cancelSourceId: string;
+  pickingItemId: string;
+  lastUpdateDate: string;
+  items: PutBackTaskItem[];
+}
+
 /** Expected (receivable) invoice item; remainingQty = received − picked −
  *  putAway − allocated − staged. */
 export interface PutAwayExpectedItem {
@@ -1304,6 +1346,7 @@ export type FlowStep =
   | "goods-verify"
   | "measuring"
   | "verify"
+  | "put-back"
   | "stock-search"
   | "ad-hoc-put-away"
   | "shelf-exchange";

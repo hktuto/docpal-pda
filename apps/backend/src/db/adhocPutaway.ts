@@ -7,6 +7,7 @@ import { shelves, parts, subInventories } from "./schema/master.js";
 import { inventoryLabels } from "./schema/inventory-labels.js";
 import { newId } from "./id.js";
 import { now } from "./now.js";
+import type { DbOrTx } from "./query.js";
 import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
 import { normalizePartNo } from "../decode/codecs.js";
 import { normPartExpr } from "./partIdentity.js";
@@ -57,17 +58,10 @@ interface LotKey {
   subInventoryCode: string;
 }
 
-function lotKey(item: AdHocPutAwayItemInput, shelfCode: string): LotKey {
-  return {
-    partNo: item.partNo,
-    shelfCode,
-    dateCode: item.dateCode,
-    lotCode: item.lotCode,
-    coo: item.coo,
-    cow: item.cow,
-    orgId: item.orgId,
-    subInventoryCode: item.subInventoryCode,
-  };
+/** One lot credit for creditLotTx. */
+export interface CreditLotInput extends LotKey {
+  wclItemNo: string | null;
+  qty: number;
 }
 
 /**
@@ -96,6 +90,80 @@ export async function lookupAdHocPutAwayPart(
     ))
     .limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * Find-or-create the shelf lot for these batch keys and credit `qty` to
+ * total_qty (no box in the match key — shelf-direct, spec
+ * 2026-10-07-ad-hoc-put-away-design.md). Shared by commitAdHocPutAway and the
+ * cancel put-back completion (spec 2026-11-07-cancel-invoice-putback-design.md)
+ * so "stock lands on a shelf" has ONE implementation. dateCode must already be
+ * canonical YYWW. Pass a `cache` from a multi-item batch to merge in-batch
+ * lots. Callers write their own ledger rows.
+ */
+export async function creditLotTx(
+  tx: DbOrTx,
+  input: CreditLotInput,
+  cache?: Map<string, string>
+): Promise<{ lotId: string; boxId: string | null }> {
+  const key: LotKey = {
+    partNo: input.partNo,
+    shelfCode: input.shelfCode,
+    dateCode: input.dateCode,
+    lotCode: input.lotCode,
+    coo: input.coo,
+    cow: input.cow,
+    orgId: input.orgId,
+    subInventoryCode: input.subInventoryCode,
+  };
+  const cacheKey = JSON.stringify(key);
+  let lotId = cache?.get(cacheKey);
+  if (!lotId) {
+    // nullable columns need sql conditions
+    const conditions = [
+      eq(inventoryLots.partNo, key.partNo),
+      eq(inventoryLots.shelfCode, key.shelfCode),
+      key.dateCode === null ? isNull(inventoryLots.dateCode) : eq(inventoryLots.dateCode, key.dateCode),
+      key.lotCode === null ? isNull(inventoryLots.lotCode) : eq(inventoryLots.lotCode, key.lotCode),
+      key.coo === null ? isNull(inventoryLots.coo) : eq(inventoryLots.coo, key.coo),
+      key.cow === null ? isNull(inventoryLots.cow) : eq(inventoryLots.cow, key.cow),
+      eq(inventoryLots.orgId, key.orgId),
+      eq(inventoryLots.subInventoryCode, key.subInventoryCode),
+    ];
+    const existing = await tx
+      .select({ id: inventoryLots.id })
+      .from(inventoryLots)
+      .where(and(...conditions));
+    if (existing.length) {
+      lotId = existing[0].id;
+    } else {
+      lotId = newId();
+      await tx.insert(inventoryLots).values({
+        id: lotId,
+        partNo: key.partNo,
+        wclItemNo: input.wclItemNo,
+        dateCode: key.dateCode,
+        lotCode: key.lotCode,
+        coo: key.coo,
+        cow: key.cow,
+        shelfCode: key.shelfCode,
+        orgId: key.orgId,
+        subInventoryCode: key.subInventoryCode,
+        totalQty: 0,
+        allocatedQty: 0,
+      });
+    }
+    cache?.set(cacheKey, lotId);
+  }
+  await tx
+    .update(inventoryLots)
+    .set({ totalQty: sql`${inventoryLots.totalQty} + ${input.qty}`, lastUpdateDate: now() })
+    .where(eq(inventoryLots.id, lotId));
+  const box = await tx
+    .select({ boxId: inventoryLots.boxId })
+    .from(inventoryLots)
+    .where(eq(inventoryLots.id, lotId));
+  return { lotId, boxId: box[0]?.boxId ?? null };
 }
 
 /**
@@ -162,61 +230,7 @@ export async function commitAdHocPutAway(
       // ledger rows and the audit snapshot store canonical YYWW (spec
       // 2026-10-22-datecode-format-config-design.md).
       item.dateCode = toCanonicalDateCode(item.dateCode, fmt);
-      const key = lotKey(item, shelfCode);
-      const cacheKey = JSON.stringify(key);
-
-      let lotId = lotCache.get(cacheKey);
-      if (!lotId) {
-        // Try to find existing lot — nullable columns need sql conditions
-        const conditions = [
-          eq(inventoryLots.partNo, key.partNo),
-          eq(inventoryLots.shelfCode, key.shelfCode),
-          key.dateCode === null
-            ? isNull(inventoryLots.dateCode)
-            : eq(inventoryLots.dateCode, key.dateCode),
-          key.lotCode === null
-            ? isNull(inventoryLots.lotCode)
-            : eq(inventoryLots.lotCode, key.lotCode),
-          key.coo === null
-            ? isNull(inventoryLots.coo)
-            : eq(inventoryLots.coo, key.coo),
-          key.cow === null
-            ? isNull(inventoryLots.cow)
-            : eq(inventoryLots.cow, key.cow),
-          eq(inventoryLots.orgId, key.orgId),
-          eq(inventoryLots.subInventoryCode, key.subInventoryCode),
-        ];
-        const existing = await tx
-          .select({ id: inventoryLots.id })
-          .from(inventoryLots)
-          .where(and(...conditions));
-        if (existing.length) {
-          lotId = existing[0].id;
-        } else {
-          lotId = newId();
-          await tx.insert(inventoryLots).values({
-            id: lotId,
-            partNo: key.partNo,
-            wclItemNo: item.wclItemNo,
-            dateCode: key.dateCode,
-            lotCode: key.lotCode,
-            coo: key.coo,
-            cow: key.cow,
-            shelfCode: key.shelfCode,
-            orgId: key.orgId,
-            subInventoryCode: key.subInventoryCode,
-            totalQty: 0,
-            allocatedQty: 0,
-          });
-        }
-        lotCache.set(cacheKey, lotId);
-      }
-
-      // Increment lot total_qty
-      await tx
-        .update(inventoryLots)
-        .set({ totalQty: sql`${inventoryLots.totalQty} + ${item.qty}`, lastUpdateDate: nowDate })
-        .where(eq(inventoryLots.id, lotId));
+      const { lotId } = await creditLotTx(tx, { ...item, shelfCode }, lotCache);
 
       // Write ledger row
       await tx.insert(inventoryTransactions).values({

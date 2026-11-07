@@ -31,6 +31,8 @@ import type {
   PutAwayDetail,
   PutAwayTaskDetail,
   PutAwayTaskListRow,
+  PutBackTaskDetail,
+  PutBackTaskListRow,
   PutAwayScanResult,
   CnPutAwayCompleteItem,
   CnManualReceiptOrder,
@@ -188,6 +190,9 @@ export interface WarehouseService {
   // the same aggregate plus the task row and per-item shelf hints.
   listPutAwayTasks(status?: string): Promise<PutAwayTaskListRow[]>;
   getPutAwayTaskDetail(id: string): Promise<PutAwayTaskDetail>;
+  listPutBackTasks(status?: string): Promise<PutBackTaskListRow[]>;
+  getPutBackTaskDetail(id: string): Promise<PutBackTaskDetail>;
+  completePutBackTask(id: string, shelfCode?: string | null): Promise<{ id: string; itemsCredited: number; totalQty: number }>;
   getShelves(): Promise<Shelf[]>;
   // Scans with a shelfCode commit straight onto that shelf in the same tx
   // (the order's invisible box there is found-or-created backend-side — spec

@@ -86,6 +86,23 @@ export function receivingCnSyncIntervalSec(): number {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 120;
 }
 
+// ---------------------------------------------------------------------------
+// Cancel-invoice ingest cron (spec
+// docs/superpowers/specs/2026-11-07-cancel-invoice-putback-design.md).
+// Watches the externally-managed cancel_invoice / cancel_invoice_tn tables.
+// ---------------------------------------------------------------------------
+
+/** Env kill-switch for the cancel-invoice ingest cron (CANCEL_INVOICE_SYNC=off). */
+export function cancelInvoiceSyncDisabled(): boolean {
+  return process.env.CANCEL_INVOICE_SYNC === "off";
+}
+
+/** Cron poll interval for the cancel-invoice ingest (seconds, default 120). */
+export function cancelInvoiceSyncIntervalSec(): number {
+  const n = Number(process.env.CANCEL_INVOICE_SYNC_INTERVAL_SEC ?? 120);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 120;
+}
+
 // DocPal groupId → local group codes. DocPal has 1 group = 1 role and the
 // role carries the permissions (UAT credentials sheet): the API only returns
 // groups, so permissions are enforced through this mapping:
@@ -205,6 +222,7 @@ export const FLOW_STEPS = [
   "goods-verify",
   "measuring",
   "verify",
+  "put-back",
   "stock-search",
   "ad-hoc-put-away",
   "shelf-exchange",

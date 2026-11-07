@@ -116,7 +116,9 @@ export async function logTransition(
 }
 
 /** picking_items: allocated_qty = Σ allocations, picked_qty = Σ BOXED packages (old semantics);
- *  status = 'picked' once picked_qty covers qty, else 'pending'. */
+ *  status = 'picked' once picked_qty covers qty, else 'pending'. A 'cancelled'
+ *  item (cancel-invoice cron, spec 2026-11-07-cancel-invoice-putback-design.md)
+ *  stays cancelled — recomputes must not resurrect it. */
 export async function recomputePickingItem(tx: DbOrTx, pickingItemId: string): Promise<void> {
   const alloc = await queryGet<{ s: number }>(
     tx,
@@ -130,7 +132,8 @@ export async function recomputePickingItem(tx: DbOrTx, pickingItemId: string): P
   await queryRun(
     tx,
     sql`UPDATE picking_items SET allocated_qty = ${alloc?.s ?? 0}, picked_qty = ${boxed?.s ?? 0},
-          status = CASE WHEN ${boxed?.s ?? 0} >= qty THEN 'picked' ELSE 'pending' END,
+          status = CASE WHEN status = 'cancelled' THEN 'cancelled'
+                        WHEN ${boxed?.s ?? 0} >= qty THEN 'picked' ELSE 'pending' END,
           last_update_date = ${now()}
         WHERE id = ${pickingItemId}`
   );
@@ -3285,14 +3288,104 @@ export async function resolvePickingOrderIssue(
   });
 }
 
-export const PICKING_ORDER_STATUSES = ["pending", "allocated", "skip", "picking", "issue", "picking_finished", "measuring_finished", "shipped"] as const;
+export const PICKING_ORDER_STATUSES = ["pending", "allocated", "skip", "picking", "issue", "picking_finished", "measuring_finished", "shipped", "cancelled"] as const;
 /** Statuses whose orders may hold allocation rows. The status override
  *  releases allocations only when leaving this set (allocated→picking and
  *  pending→allocated preserve them — the `allocated` lock is the point). */
 const ALLOCATION_HOLDING_STATUSES = new Set(["pending", "picking", "allocated"]);
 
+/** Release every allocation row of the given picking items: RESERVE-release
+ *  ledger rows (reserved −qty), freed lots, `allocated_qty` zeroed. Shared by
+ *  the admin status override and the cancel-invoice cron (spec
+ *  2026-11-07-cancel-invoice-putback-design.md) — idempotent (no rows → no-op),
+ *  actorId nullable (background job). Returns the number of released rows.
+ *  Caller refreshes `allocation_status` (override relies on the order leaving
+ *  the open set; removePickingAllocation calls refreshAllocationStatus). */
+export async function releaseAllocationsForItemsTx(
+  tx: DbOrTx,
+  itemIds: string[],
+  actorId: string | null,
+  txnReason: string
+): Promise<number> {
+  if (itemIds.length === 0) return 0;
+  const released = await queryAll<{
+    id: string;
+    qty: number;
+    inventoryLotId: string | null;
+    partNo: string;
+    shelfCode: string | null;
+    boxId: string | null;
+    dateCode: string | null;
+    lotCode: string | null;
+    coo: string | null;
+    cow: string | null;
+    receivingInvoiceItemId: string | null;
+  }>(
+    tx,
+    sql`SELECT a.id, a.qty, a.inventory_lot_id AS "inventoryLotId",
+              pi.part_no AS "partNo",
+              il.shelf_code AS "shelfCode", COALESCE(il.box_id, rii.ctn_no) AS "boxId",
+              COALESCE(il.date_code, rii.date_code) AS "dateCode",
+              COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
+              COALESCE(il.coo, rii.coo) AS "coo", COALESCE(il.cow, rii.cow) AS "cow",
+              a.receiving_invoice_item_id AS "receivingInvoiceItemId"
+        FROM allocations a
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+        LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+        WHERE ${inArray(sql`pi.id`, itemIds)} AND a.qty > 0`
+  );
+  await queryRun(
+    tx,
+    sql`DELETE FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)}`
+  );
+  if (released.length === 0) {
+    await queryRun(
+      tx,
+      sql`UPDATE picking_items SET allocated_qty = 0, last_update_date = ${now()}
+          WHERE ${inArray(sql`id`, itemIds)}`
+    );
+    return 0;
+  }
+  const at = now();
+  const freedLots = new Set<string>();
+  const txnRows = released.map((a) => {
+    if (a.inventoryLotId) freedLots.add(a.inventoryLotId);
+    return {
+      id: newId(),
+      inventoryLotId: a.inventoryLotId,
+      partNo: a.partNo,
+      shelfCode: a.shelfCode,
+      boxId: a.boxId,
+      txnType: "RESERVE",
+      qtyType: "reserved",
+      qtyDelta: -a.qty,
+      dateCode: a.dateCode,
+      lotCode: a.lotCode,
+      coo: a.coo,
+      cow: a.cow,
+      referenceType: "allocation",
+      referenceId: a.id,
+      receivingInvoiceItemId: a.receivingInvoiceItemId,
+      actorId,
+      txnReason,
+      txnAt: at,
+    };
+  });
+  for (const lotId of freedLots) await recomputeLot(tx, lotId);
+  await tx.insert(inventoryTransactions).values(txnRows);
+  // Allocated_qty on the items is Σ allocations — refresh after the wipe.
+  await queryRun(
+    tx,
+    sql`UPDATE picking_items SET allocated_qty = 0, last_update_date = ${at}
+        WHERE ${inArray(sql`id`, itemIds)}`
+  );
+  return released.length;
+}
+
+
 /** Admin status override (spec docs/superpowers/specs/2026-09-17-admin-picking-status-override-design.md).
- *  Sets the status to any of the 8 values with no transition guards. Side
+ *  Sets the status to any of the 9 values with no transition guards. Side
  *  effects inside the tx:
  *  - leaving open (pending/picking) releases ALL the order's leftover
  *    allocations (incl. manual pins — a closed order is out of demand so
@@ -3334,73 +3427,13 @@ export async function overridePickingOrderStatus(
     const at = now();
 
     if (leavingOpen) {
-      // Release every allocation of the order's items (same shape as the
-      // whole-box claim release): RESERVE reserved −qty ledger rows and free
-      // the lots.
-      const released = await queryAll<{
-        id: string;
-        qty: number;
-        inventoryLotId: string | null;
-        partNo: string;
-        shelfCode: string | null;
-        boxId: string | null;
-        dateCode: string | null;
-        lotCode: string | null;
-        coo: string | null;
-        cow: string | null;
-        receivingInvoiceItemId: string | null;
-      }>(
+      // Release every allocation of the order's items (shared with the
+      // cancel-invoice cron): RESERVE reserved −qty ledger rows and free the lots.
+      const itemRows = await queryAll<{ id: string }>(
         tx,
-        sql`SELECT a.id, a.qty, a.inventory_lot_id AS "inventoryLotId",
-                   pi.part_no AS "partNo",
-                   il.shelf_code AS "shelfCode", COALESCE(il.box_id, rii.ctn_no) AS "boxId",
-                   COALESCE(il.date_code, rii.date_code) AS "dateCode",
-                   COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
-                   COALESCE(il.coo, rii.coo) AS "coo", COALESCE(il.cow, rii.cow) AS "cow",
-                   a.receiving_invoice_item_id AS "receivingInvoiceItemId"
-            FROM allocations a
-            JOIN picking_items pi ON pi.id = a.picking_item_id
-            LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
-            LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
-            WHERE pi.picking_order_id = ${order.id} AND a.qty > 0`
+        sql`SELECT id FROM picking_items WHERE picking_order_id = ${order.id}`
       );
-      await queryRun(
-        tx,
-        sql`DELETE FROM allocations WHERE picking_item_id IN (
-              SELECT id FROM picking_items WHERE picking_order_id = ${order.id})`
-      );
-      const freedLots = new Set<string>();
-      const txnRows = released.map((a) => {
-        if (a.inventoryLotId) freedLots.add(a.inventoryLotId);
-        return {
-          id: newId(),
-          inventoryLotId: a.inventoryLotId,
-          partNo: a.partNo,
-          shelfCode: a.shelfCode,
-          boxId: a.boxId,
-          txnType: "RESERVE",
-          qtyType: "reserved",
-          qtyDelta: -a.qty,
-          dateCode: a.dateCode,
-          lotCode: a.lotCode,
-          coo: a.coo,
-          cow: a.cow,
-          referenceType: "allocation",
-          referenceId: a.id,
-          receivingInvoiceItemId: a.receivingInvoiceItemId,
-          actorId: input.actorId,
-          txnReason: "status override: release",
-          txnAt: at,
-        };
-      });
-      for (const lotId of freedLots) await recomputeLot(tx, lotId);
-      if (txnRows.length > 0) await tx.insert(inventoryTransactions).values(txnRows);
-      // Allocated_qty on the items is Σ allocations — refresh after the wipe.
-      await queryRun(
-        tx,
-        sql`UPDATE picking_items SET allocated_qty = 0, last_update_date = ${at}
-            WHERE picking_order_id = ${order.id}`
-      );
+      await releaseAllocationsForItemsTx(tx, itemRows.map((r) => r.id), input.actorId, "status override: release");
     }
 
     // JS-side CASE operands (avoids boolean params in the SQL template).

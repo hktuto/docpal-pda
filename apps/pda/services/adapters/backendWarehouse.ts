@@ -31,6 +31,8 @@ import type {
   PutAwayDetail,
   PutAwayTaskDetail,
   PutAwayTaskListRow,
+  PutBackTaskDetail,
+  PutBackTaskListRow,
   Shelf,
   MeasuringBoxListRow,
   MeasuringBoxDetail,
@@ -483,6 +485,17 @@ export function createBackendWarehouseService(
     },
     async getPutAwayTaskDetail(id: string): Promise<PutAwayTaskDetail> {
       return client.get(`/put-away-tasks/${id}`);
+    },
+    // Put-back queue (cancel-invoice cron, spec 2026-11-07) — returned stock
+    // goes back onto shelves; complete credits the lots server-side.
+    async listPutBackTasks(status?: string): Promise<PutBackTaskListRow[]> {
+      return client.get("/put-back-tasks", { status });
+    },
+    async getPutBackTaskDetail(id: string): Promise<PutBackTaskDetail> {
+      return client.get(`/put-back-tasks/${id}`);
+    },
+    async completePutBackTask(id: string, shelfCode?: string | null): Promise<{ id: string; itemsCredited: number; totalQty: number }> {
+      return client.post(`/put-back-tasks/${id}/complete`, { shelfCode });
     },
     // The admin CRUD read doubles as the PDA shelf list. Cached in-memory
     // for the app session — shelf layouts change rarely.
