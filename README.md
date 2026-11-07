@@ -6,6 +6,7 @@ A Nuxt 3 proof-of-concept for the DocPal warehouse mobile/Android flows. The web
 
 ## Documentation
 
+- [开发者上手指南(中文)](./docs/dev-guide-zh/README.md) — 项目交接文档:架构、流程图解、关键业务决策,新开发者自学入口。
 - [App documentation (manual + AI lookup)](./docs/app-docs/README.md) — training guides for operators and a feature registry for coding agents.
 - [Backend database schema](./docs/backend/schema-tables.md) — table-by-table PostgreSQL schema of `apps/backend`.
 - [Backend docs](./docs/backend/README.md) — API overview, event catalog, deployment.
