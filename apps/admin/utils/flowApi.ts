@@ -914,8 +914,9 @@ export async function submitCnPdfUpload(files: File[]): Promise<CnWorkflowRow> {
  *  orderNo the 发货项. */
 export interface CnExcelFileEntry {
   filename: string;
-  /** Drives the `[brand]-yyyymmdd-seq` batch/invoice numbering. */
-  brand: string;
+  /** Drives the `[brand]-yyyymmdd-seq` batch/invoice numbering. Blank =
+   *  derived server-side from the first item's parts-master brand. */
+  brand?: string;
   payload: unknown;
 }
 

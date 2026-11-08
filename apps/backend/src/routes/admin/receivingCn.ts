@@ -229,10 +229,11 @@ async function cnUploadActor(c: Context): Promise<{ id: string; username: string
 
 // Excel upload (reworked 2026-11-08: decoded LOCALLY in the admin browser —
 // spec docs/superpowers/specs/2026-11-08-receiving-cn-excel-local-upload-design.md):
-// JSON {files: [{filename, brand, payload}]} → one tx creates the pending CN
+// JSON {files: [{filename, brand?, payload}]} → one tx creates the pending CN
 // orders + completed tracking rows directly (no DocPal workflow; the admin
 // confirm + PDA receiving-scan steps follow). N files in one upload = N
-// orders, all-or-nothing. 400 invalid_payload on shape errors.
+// orders, all-or-nothing; `brand` optional — blank derives from the first
+// item's parts-master brand. 400 invalid_payload on shape errors.
 // NB: createCnUpload's "excel" phase remains in the domain but no route uses
 // it — the old DocPal excel workflow was retired with this cutover.
 const CN_BRAND_RE = /^[A-Z][A-Z0-9]{1,9}$/;
@@ -246,12 +247,15 @@ adminReceivingCnRoute.post("/receiving-cn/excel", async (c) => {
       throw new HTTPException(400, { message: `invalid_payload: files[${i}] must be an object` });
     }
     const f = raw as Record<string, unknown>;
-    const brand = typeof f.brand === "string" ? f.brand.trim().toUpperCase() : "";
-    if (!CN_BRAND_RE.test(brand)) {
-      throw new HTTPException(400, { message: `invalid_payload: files[${i}].brand must match ${CN_BRAND_RE}` });
+    let brand: string | undefined;
+    if (typeof f.brand === "string" && f.brand.trim() !== "") {
+      brand = f.brand.trim().toUpperCase();
+      if (!CN_BRAND_RE.test(brand)) {
+        throw new HTTPException(400, { message: `invalid_payload: files[${i}].brand must match ${CN_BRAND_RE}` });
+      }
     }
     const filename = typeof f.filename === "string" && f.filename.trim() ? f.filename.trim() : "upload.xls";
-    return { filename, brand, payload: validateCnPayload(f.payload) };
+    return { filename, ...(brand ? { brand } : {}), payload: validateCnPayload(f.payload) };
   });
   const result = await createCnExcelUploads(db, { files, actor: actorFrom(c) });
   return c.json(result, 201);

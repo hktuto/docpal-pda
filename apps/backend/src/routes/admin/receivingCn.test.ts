@@ -185,14 +185,38 @@ test("excel upload: empty files array → 400 invalid_payload", async () => {
   assert.match(await notObject.text(), /files\[0\] must be an object/);
 });
 
-test("excel upload: brand errors → 400 invalid_payload", async () => {
+test("excel upload: invalid brand override → 400 invalid_payload", async () => {
   await reseed(client);
   const token = await login("admin", "DocPalAdmin2026!");
-  for (const brand of [undefined, "", "1KO", "KOA INC", "A".repeat(12)]) {
+  for (const brand of ["1KO", "KOA INC", "A".repeat(12)]) {
     const res = await postExcel(token, [excelFile({ brand })]);
     assert.equal(res.status, 400, String(brand));
     assert.match(await res.text(), /brand must match/);
   }
+});
+
+test("excel upload: blank brand derives from the first item's parts master", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  await client.db.execute(
+    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no)
+        VALUES ('p-derive-test', 'KOA', 'KOA+RK73H2BRTTD 4303F', 'WCL-KOA-DERIVE')`
+  );
+  const payload = {
+    ...VALID_PAYLOAD,
+    items: [{ ...VALID_PAYLOAD.items[0], brand: undefined, partNo: "KOA+RK73H2BRTTD 4303F" }],
+  };
+  const res = await postExcel(token, [excelFile({ brand: "", payload })]);
+  assert.equal(res.status, 201);
+  const { orders } = (await res.json()) as { orders: { batchNo: string }[] };
+  assert.match(orders[0].batchNo, /^KOA-\d{8}-\d{2}$/);
+
+  // No unique parts-master brand → 400 naming the item.
+  const bad = await postExcel(token, [
+    excelFile({ brand: undefined, payload: { ...VALID_PAYLOAD, items: [{ ...VALID_PAYLOAD.items[0], partNo: "NO-SUCH-PART" }] } }),
+  ]);
+  assert.equal(bad.status, 400);
+  assert.match(await bad.text(), /no unique parts-master brand/);
 });
 
 test("excel upload: payload shape errors → 400 invalid_payload", async () => {

@@ -150,18 +150,14 @@ function backToPick() {
   error.value = "";
 }
 
-const brandMissing = computed(() => drafts.value.some((d) => d.brand.trim() === ""));
-
 async function submit() {
   if (submitting.value || (files.value.length === 0 && drafts.value.length === 0)) return;
   submitting.value = true;
   error.value = "";
   try {
     if (drafts.value.length > 0) {
-      if (brandMissing.value) {
-        error.value = t("admin.pages.receivingCn.brandRequired");
-        return;
-      }
+      // Blank brand derives from each sheet's first item via the parts
+      // master server-side.
       await submitCnExcelUpload(drafts.value.map(cnDraftToEntry));
     } else {
       await submitCnPdfUpload(files.value);

@@ -2149,7 +2149,7 @@ export default {
         invalidFileType: "只接受 .pdf / .xls / .xlsx 文件。",
         pickFile: "选择 PDF / Excel 文件（可多选）",
         mixedTypes: "PDF 与 Excel 文件不能同批上传。",
-        brandRequired: "请为每份文件填写品牌 — 用于收货单批次号编号。",
+        brandAuto: "留空 — 自动取首条明细在零件主档的品牌",
         noSheet: "文件内找不到工作表。",
         noItems: "解析不到任何收货明细 — 请确认文件格式正确。",
         partNotFound: "零件主档中不存在",

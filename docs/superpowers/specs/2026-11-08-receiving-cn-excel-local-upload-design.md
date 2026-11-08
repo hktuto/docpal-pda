@@ -15,7 +15,7 @@ Operators now want the Excel upload back. The sheet data is the supplier's own �
 - **Multiple Excel files per upload**: one submit decodes N files and creates **N orders** (each file is its own 收货确认 with its own 編號/供應商/日期) in ONE transaction — all-or-nothing. PDF and Excel can't be mixed in one submit (rejected with the file-type error).
 - **No DocPal involvement**: file bytes are not uploaded anywhere (the order detail already re-exports the sheet as .xlsx via `cnReceivingExcelExport`; the full verified payload is preserved on the tracking row).
 - **Numbering**: shared branded namespace — `batch_no = invoice_no = [brand]-YYYYMMDD-seq` via `nextCnBrandedNo` (same as pdf/manual). The sheet's 編號 (e.g. `SH-KOA261029K2-2`) is stored on the tracking row's `invoice_no`, which the admin CN list joins back by `batch_no` — traceability without a schema change.
-- **Brand is admin input, not derived**: each file's verify section has a required 品牌 input (drives the `[brand]-…` numbering; `KOA`, `TE`, …). Prefill is deliberately not derived from supplier profiles or 編號 parsing.
+- **Brand**: blank by default — the backend derives the numbering brand from the **first item's parts-master row** (`parts.brand`); operators confirmed one upload (every file) is single-brand. An explicit per-file brand input stays as an override for parts that are not in the master. Derived brands are sanitized to `[A-Z0-9]` so the branded numbering keeps matching.
 
 ## Endpoint contract
 
@@ -24,7 +24,7 @@ Operators now want the Excel upload back. The sheet data is the supplier's own �
 ```json
 { "files": [
   { "filename": "收货确认SH-KOA261029K2-2.xls",
-    "brand": "KOA",
+    "brand": "KOA (optional)",
     "payload": { "receivedOffice": "...", "supplier": "...", "receiptNo": "...",
                  "invoiceNo": "SH-KOA261029K2-2", "receivedDate": "2026-10-29",
                  "items": [ { "index": 1, "orderNo": "发货项", "poNo": "訂單號",
@@ -34,8 +34,8 @@ Operators now want the Excel upload back. The sheet data is the supplier's own �
 ```
 
 - `payload` is validated by the existing `validateCnPayload` (wire contract: `poNo` carries 訂單號 — required; `orderNo` the 发货項 — may be blank; qty positive integer).
-- `brand` must match `^[A-Z][A-Z0-9]{1,9}$` (uppercased before validation). `filename` optional (defaults `upload.xls`).
-- Errors: 400 `invalid_payload: files must be a non-empty array` / per-item shape errors / `invalid_payload: brand must match ...`.
+- `brand` optional — when sent it must match `^[A-Z][A-Z0-9]{1,9}$` (uppercased before validation); when blank the backend derives it from the first item's parts-master `brand` (sanitized to `[A-Z0-9]`), 400 when that row is not a unique match. `filename` optional (defaults `upload.xls`).
+- Errors: 400 `invalid_payload: files must be a non-empty array` / per-item shape errors / `invalid_payload: brand must match ...` / `invalid_payload: brand — first item ... has no unique parts-master brand`.
 - 201 `{ "orders": [{ "id", "batchNo" }, ...] }`.
 
 ## What the transaction writes, per file

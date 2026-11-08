@@ -118,7 +118,7 @@ const sheetTotalsLabel = computed(() => `${sheetTotals.value.carton} / ${sheetTo
     <fieldset class="header-form">
       <div class="form-row">
         <label :for="`cn-brand-${draft.uid}`">{{ $t("admin.pages.receivingCn.fields.brand") }}</label>
-        <input :id="`cn-brand-${draft.uid}`" v-model="draft.brand" type="text" required />
+        <input :id="`cn-brand-${draft.uid}`" v-model="draft.brand" type="text" :placeholder="$t('admin.pages.receivingCn.brandAuto')" />
       </div>
       <div class="form-row">
         <label :for="`cn-receivedOffice-${draft.uid}`">{{ $t("admin.pages.receivingCn.fields.receivedOffice") }}</label>

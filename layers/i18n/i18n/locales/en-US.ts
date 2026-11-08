@@ -2152,7 +2152,7 @@ export default {
         invalidFileType: "Only .pdf / .xls / .xlsx files are accepted.",
         pickFile: "Pick PDF / Excel File(s)",
         mixedTypes: "PDFs and Excel files cannot be uploaded together.",
-        brandRequired: "Enter a brand for every file — it numbers the receiving orders.",
+        brandAuto: "Blank = brand of the first item's parts master",
         noSheet: "The file contains no worksheet.",
         noItems: "No receiving items could be parsed — check the file format.",
         partNotFound: "Not in parts master",

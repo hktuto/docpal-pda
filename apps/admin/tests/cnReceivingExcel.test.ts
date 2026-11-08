@@ -373,4 +373,9 @@ describe("cnDraftToEntry", () => {
     expect(item.cartonMerged).toBeUndefined();
     expect(item.partNo).toBe("KOA+RK73H2BRTTD 4303F");
   });
+
+  it("omits a blank brand so the server derives it from the parts master", () => {
+    const entry = cnDraftToEntry({ ...draft, brand: "  " });
+    expect(entry.brand).toBeUndefined();
+  });
 });

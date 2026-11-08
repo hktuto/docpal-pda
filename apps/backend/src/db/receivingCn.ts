@@ -435,12 +435,13 @@ async function resolveWclItemNo(tx: DbOrTx, partNo: string): Promise<string | nu
 
 /** The parts-master row for any scanned key — a unique space/case-insensitive
  *  unwrapped match on EITHER parts column, else NULL. Used to backfill the
- *  canonical keys at manual-receipt commit. */
-async function resolvePartByKey(tx: DbOrTx, key: string): Promise<{ partNo: string; wclItemNo: string } | null> {
+ *  canonical keys at manual-receipt commit and to derive the excel-upload
+ *  numbering brand. */
+async function resolvePartByKey(tx: DbOrTx, key: string): Promise<{ partNo: string; wclItemNo: string; brand: string } | null> {
   const k = normalizePartNo(key);
-  const rows = await queryAll<{ partNo: string; wclItemNo: string }>(
+  const rows = await queryAll<{ partNo: string; wclItemNo: string; brand: string }>(
     tx,
-    sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo" FROM parts
+    sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo", MAX(brand) AS brand FROM parts
         WHERE ${unwrappedPartCol(sql`part_no`)} = ${k} OR ${unwrappedPartCol(sql`wcl_item_no`)} = ${k}
         GROUP BY part_no, wcl_item_no`
   );
@@ -620,8 +621,9 @@ export async function createCnManualReceipt(
 
 export interface CnExcelFileInput {
   filename: string;
-  /** Numbering brand — `[brand]-YYYYMMDD-seq` batch/invoice no (validated). */
-  brand: string;
+  /** Numbering brand — `[brand]-YYYYMMDD-seq` batch/invoice no (validated).
+   *  Omitted = derived from the first item's parts-master brand. */
+  brand?: string;
   payload: CnUploadPayload;
 }
 
@@ -633,8 +635,20 @@ async function insertCnExcelOrderTx(
   actor: { id: string; username: string }
 ): Promise<{ orderId: string; batchNo: string }> {
   const at = now();
-  const brand = file.brand;
   const payload = file.payload;
+  // Numbering brand: admin override, else the first item's parts-master brand
+  // (uploads are single-brand by convention — spec 2026-11-08). Sanitized so
+  // the `[brand]-yyyymmdd-seq` regex in nextCnBrandedNo keeps matching.
+  let brand = file.brand;
+  if (!brand) {
+    const first = await resolvePartByKey(tx, payload.items[0].partNo);
+    brand = (first?.brand ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!brand) {
+      throw new HTTPException(400, {
+        message: `invalid_payload: brand — first item ${payload.items[0].partNo} has no unique parts-master brand; set the brand explicitly`,
+      });
+    }
+  }
   // Group items by 訂單號 (wire `poNo`) — the same order→po_no shape the manual
   // receipt commits. Empty groups are impossible (validateCnPayload requires
   // non-empty poNo per item).

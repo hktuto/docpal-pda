@@ -344,12 +344,13 @@ export interface CnReceivingDraft {
  *  发货项 cell value as `orderNo`. */
 export function cnDraftToEntry(draft: CnReceivingDraft): {
   filename: string;
-  brand: string;
+  brand?: string;
   payload: Record<string, unknown>;
 } {
+  const brand = draft.brand.trim().toUpperCase();
   return {
     filename: draft.filename,
-    brand: draft.brand.trim().toUpperCase(),
+    ...(brand ? { brand } : {}),
     payload: {
       ...draft.header,
       items: draft.items.map(
