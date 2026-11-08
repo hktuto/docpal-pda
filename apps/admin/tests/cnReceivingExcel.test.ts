@@ -281,8 +281,9 @@ describe("parseCnReceivingAoa — synthetic edge cases", () => {
       ["329A1", "W4", "P-2", 20],
     ];
     const r = parseCnReceivingAoa(aoa);
-    // First row of each group carries the box count; the others stay blank.
-    expect(r.items.map((i) => i.cartonNo)).toEqual(["3", "", "", "1"]);
+    // Every row of a group shows the box count; followers are merge-marked.
+    expect(r.items.map((i) => i.cartonNo)).toEqual(["3", "3", "3", "1"]);
+    expect(r.items.map((i) => i.cartonMerged ?? false)).toEqual([false, true, true, false]);
     expect(r.totals.carton).toBe(4); // Σ = box row count
   });
 });
@@ -310,10 +311,11 @@ describe("parseCnReceivingAoa — 收货确认SH-KOA261029K2-2.xls (multi-tab wo
     expect(result.receivedDate).toBe("2026-10-29");
     expect(result.items).toHaveLength(635);
     expect(result.totals.qty).toBe(54719500);
-    // 箱號-only sheet: 箱数 is derived per 訂單號+型號 group (first row of a
-    // group carries the size; the Σ equals the box row count).
+    // 箱號-only sheet: 箱数 is derived per 訂單號+型號 group — every row of a
+    // group shows its size (followers merge-marked), Σ = box row count.
     expect(result.items[0].cartonNo).toBe("4");
-    expect(result.items[1].cartonNo).toBe("");
+    expect(result.items[1].cartonNo).toBe("4");
+    expect(result.items[1].cartonMerged).toBe(true);
     expect(result.totals.carton).toBe(635);
     expect(result.items[0]).toMatchObject({
       orderNo: "329A12339K2", // draft model: orderNo carries the 訂單號

@@ -280,21 +280,27 @@ export function parseCnReceivingAoa(aoa: unknown[][], filledCells?: Set<string>)
 
     // 箱號-only sheets (KOA style): no 箱数 column exists, and the box count
     // is implicit — rows sharing 訂單號+型號 are the individual boxes of one
-    // group. Stamp each group's size on its first row so the review table,
-    // the carton total (Σ = one count per group) and the payload all show a
-    // 箱數. shortcut: derives only when the 箱数 column is ABSENT — sheets
-    // that ship an empty 箱数 column keep their blanks; upgrade path is to
-    // also derive then.
+    // group. Stamp the group size on EVERY row (like the merged 箱数 cells TE
+    // sheets ship, so no row reads blank; a lone box shows 1), merge-marking
+    // the followers so the carton Σ counts the group once.
+    // shortcut: derives only when the 箱数 column is ABSENT — sheets that
+    // ship an empty 箱数 column keep their blanks; upgrade path is to also
+    // derive then.
     const ctnIdx = colMap.indexOf("ctnNo");
     if (cartonIdx < 0 && ctnIdx >= 0 && items.some((i) => i.ctnNo !== "")) {
-      const groupFirst = new Map<string, CnReceivingItem>();
-      const groupCount = new Map<string, number>();
+      const groupsOf = new Map<string, CnReceivingItem[]>();
       for (const item of items) {
         const key = `${item.orderNo}\u0000${item.partNo}`;
-        if (!groupFirst.has(key)) groupFirst.set(key, item);
-        groupCount.set(key, (groupCount.get(key) ?? 0) + 1);
+        const g = groupsOf.get(key);
+        if (g) g.push(item);
+        else groupsOf.set(key, [item]);
       }
-      for (const [key, first] of groupFirst) first.cartonNo = String(groupCount.get(key));
+      for (const group of groupsOf.values()) {
+        for (const [j, item] of group.entries()) {
+          item.cartonNo = String(group.length);
+          if (j > 0) item.cartonMerged = true;
+        }
+      }
     }
   }
 
