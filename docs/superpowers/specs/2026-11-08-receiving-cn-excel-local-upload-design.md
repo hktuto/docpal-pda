@@ -55,6 +55,7 @@ One dropzone, `accept=".pdf,.xls,.xlsx"` `multiple`. Classification on pick: PDF
 ## Ceilings (`shortcut:` comments in code)
 
 - `total_ctn` not filled — the merge-aware carton sum exists only client-side before submit; revisit if a consumer needs it.
+- On 箱號-only sheets (KOA style) the 箱数 is derived client-side: rows sharing 訂單號+型號 are one box group, its size lands on the group's first row so the carton Σ = box count. Sheets with an empty 箱数 column keep their blanks.
 - 发货項/箱数/重量/辦事處/備註 live only in the tracking-row payload, not on item columns (箱號 is a column: `ctn_no`).
 - No duplicate-編號 guard: the sheet 編號 is free text on the tracking row; `batch_no` uniqueness comes from the branded sequence.
 - `delivery_date` = sheet date else today; the sheet date is not sanity-checked against upstream order dates.

@@ -271,6 +271,20 @@ describe("parseCnReceivingAoa — synthetic edge cases", () => {
     // …but the total counts it once, matching the printed 合计.
     expect(r.totals).toEqual({ carton: 1, qty: 100 });
   });
+
+  it("derives 箱数 per 訂單號+型號 group on a 箱號-only sheet", () => {
+    const aoa = [
+      ["訂單號", "箱號", "型號", "數量(PCS)"],
+      ["329A1", "W1", "P-1", 100],
+      ["329A1", "W2", "P-1", 100],
+      ["329A1", "W3", "P-1", 50],
+      ["329A1", "W4", "P-2", 20],
+    ];
+    const r = parseCnReceivingAoa(aoa);
+    // First row of each group carries the box count; the others stay blank.
+    expect(r.items.map((i) => i.cartonNo)).toEqual(["3", "", "", "1"]);
+    expect(r.totals.carton).toBe(4); // Σ = box row count
+  });
 });
 
 describe("parseCnReceivingAoa — 收货确认SH-KOA261029K2-2.xls (multi-tab workbook)", () => {
@@ -296,6 +310,11 @@ describe("parseCnReceivingAoa — 收货确认SH-KOA261029K2-2.xls (multi-tab wo
     expect(result.receivedDate).toBe("2026-10-29");
     expect(result.items).toHaveLength(635);
     expect(result.totals.qty).toBe(54719500);
+    // 箱號-only sheet: 箱数 is derived per 訂單號+型號 group (first row of a
+    // group carries the size; the Σ equals the box row count).
+    expect(result.items[0].cartonNo).toBe("4");
+    expect(result.items[1].cartonNo).toBe("");
+    expect(result.totals.carton).toBe(635);
     expect(result.items[0]).toMatchObject({
       orderNo: "329A12339K2", // draft model: orderNo carries the 訂單號
       ctnNo: "W5167", // the 箱號 column — the physical carton number

@@ -277,6 +277,25 @@ export function parseCnReceivingAoa(aoa: unknown[][], filledCells?: Set<string>)
       const hasKeyField = text(item.orderNo) !== "" || text(item.partNo) !== "" || text(item.qty) !== "";
       if (any && hasKeyField) items.push(item);
     }
+
+    // 箱號-only sheets (KOA style): no 箱数 column exists, and the box count
+    // is implicit — rows sharing 訂單號+型號 are the individual boxes of one
+    // group. Stamp each group's size on its first row so the review table,
+    // the carton total (Σ = one count per group) and the payload all show a
+    // 箱數. shortcut: derives only when the 箱数 column is ABSENT — sheets
+    // that ship an empty 箱数 column keep their blanks; upgrade path is to
+    // also derive then.
+    const ctnIdx = colMap.indexOf("ctnNo");
+    if (cartonIdx < 0 && ctnIdx >= 0 && items.some((i) => i.ctnNo !== "")) {
+      const groupFirst = new Map<string, CnReceivingItem>();
+      const groupCount = new Map<string, number>();
+      for (const item of items) {
+        const key = `${item.orderNo}\u0000${item.partNo}`;
+        if (!groupFirst.has(key)) groupFirst.set(key, item);
+        groupCount.set(key, (groupCount.get(key) ?? 0) + 1);
+      }
+      for (const [key, first] of groupFirst) first.cartonNo = String(groupCount.get(key));
+    }
   }
 
   const totals = {
