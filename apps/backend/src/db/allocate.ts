@@ -10,6 +10,7 @@ import { allowDockStock, pickingFromSubinventoryOrgs, receivingSubInventoryRules
 import { matchSubInventoryRule } from "./receiving.js";
 import { logTransition, recomputeLot, recomputePickingItem } from "./picking.js";
 import { locationMatches } from "./locationMatch.js";
+import { StepTimer } from "./stepTimer.js";
 
 // ---------------------------------------------------------------------------
 // Allocation engine (concepts 5-6 in docs/backend/concepts.md).
@@ -682,9 +683,10 @@ export interface ScopedAllocateResult extends AllocateSummary {
 }
 
 export async function allocateForReceivingOrder(db: AppDb, receivingOrderId: string): Promise<ScopedAllocateResult> {
-  const startedAt = Date.now();
+  const timer = new StepTimer();
   return db.transaction(async (tx) => {
-    const keyRows = await queryAll<{ partKey: string }>(
+    const keyRows = await timer.measure("loadPartKeys", () =>
+      queryAll<{ partKey: string }>(
       tx,
       sql`SELECT DISTINCT k AS "partKey" FROM (
             SELECT rii.part_no AS k
@@ -698,8 +700,11 @@ export async function allocateForReceivingOrder(db: AppDb, receivingOrderId: str
             WHERE ri.receiving_order_id = ${receivingOrderId}
           ) keys
           WHERE k IS NOT NULL`
+      )
     );
-    return runScopedAllocation(tx, keyRows.map((r) => r.partKey), { scope: "receiving-order", receivingOrderId }, startedAt);
+    const result = await runScopedAllocation(tx, timer, keyRows.map((r) => r.partKey), { scope: "receiving-order", receivingOrderId });
+    console.log(timer.report(`allocateForReceivingOrder ${receivingOrderId}`));
+    return result;
   });
 }
 
@@ -721,12 +726,13 @@ export async function allocateForReceivingOrder(db: AppDb, receivingOrderId: str
  * affected order (fleet-wide: POST /dev/allocate).
  */
 export async function allocateForPickingOrder(db: AppDb, pickingOrderId: string): Promise<ScopedAllocateResult> {
-  const startedAt = Date.now();
+  const timer = new StepTimer();
   // The status + work-lock check lives INSIDE the transaction, locking the
   // order row, so a PDA claim can't land between the check and the wipe
   // (audit 2026-11-06 #12). The claim UPDATE in picking.ts locks the same row.
   return db.transaction(async (tx) => {
-    const order = await queryGet<{
+    const order = await timer.measure("orderLockCheck", () =>
+      queryGet<{
       id: string;
       status: string;
       workingBy: string | null;
@@ -740,6 +746,7 @@ export async function allocateForPickingOrder(db: AppDb, pickingOrderId: string)
           LEFT JOIN users u ON u.id = po.working_by
           WHERE po.id = ${pickingOrderId}
           FOR UPDATE OF po`
+      )
     );
     if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
     if (order.status !== "pending" && order.status !== "picking" && order.status !== "allocated") {
@@ -753,13 +760,21 @@ export async function allocateForPickingOrder(db: AppDb, pickingOrderId: string)
         ),
       });
     }
-    const keyRows = await queryAll<{ partKey: string }>(
-      tx,
-      sql`SELECT DISTINCT part_no AS "partKey" FROM picking_items WHERE picking_order_id = ${pickingOrderId}`
+    const keyRows = await timer.measure("loadPartKeys", () =>
+      queryAll<{ partKey: string }>(
+        tx,
+        sql`SELECT DISTINCT part_no AS "partKey" FROM picking_items WHERE picking_order_id = ${pickingOrderId}`
+      )
     );
-    return runScopedAllocation(tx, keyRows.map((r) => r.partKey), { scope: "picking-order", pickingOrderId }, startedAt, {
-      onlyOrderId: pickingOrderId,
-    });
+    const result = await runScopedAllocation(
+      tx,
+      timer,
+      keyRows.map((r) => r.partKey),
+      { scope: "picking-order", pickingOrderId },
+      { onlyOrderId: pickingOrderId }
+    );
+    console.log(timer.report(`allocateForPickingOrder ${pickingOrderId}`));
+    return result;
   });
 }
 
@@ -1618,12 +1633,13 @@ export async function transferPickingAllocation(
 // what triggered the run. `onlyOrderId` switches to the order-only scope
 // (admin picking Re-allocate): demands are just that order's items and dock
 // availability nets EVERY remaining allocation row (all other orders'
-// rows survive the wipe).
+// rows survive the wipe). `timer` accumulates per-step wall-clock and is
+// reported by the caller (dev diagnostic for slow recomputes).
 async function runScopedAllocation(
   tx: DbOrTx,
+  timer: StepTimer,
   partKeys: string[],
   scope: Record<string, unknown>,
-  startedAt: number,
   opts?: { onlyOrderId?: string }
 ): Promise<ScopedAllocateResult> {
   const summary: AllocateSummary = {
@@ -1644,11 +1660,11 @@ async function runScopedAllocation(
       topics: ["/picking-orders", "/receiving-orders"],
       data: { ...summary, changed: false, ...scope },
     });
-    return { ...summary, partKeys, changed: false, durationMs: Date.now() - startedAt };
+    return { ...summary, partKeys, changed: false, durationMs: timer.total() };
   }
 
   const orderOnly = !!opts?.onlyOrderId;
-  const demands = await loadDemands(tx, partKeys, opts?.onlyOrderId);
+  const demands = await timer.measure("loadDemands", () => loadDemands(tx, partKeys, opts?.onlyOrderId));
   summary.demands = demands.length;
 
   const allocationKey = (
@@ -1669,7 +1685,10 @@ async function runScopedAllocation(
 
   if (demands.length > 0) {
     const itemIds = demands.map((d) => d.pickingItemId);
-    const existing = await queryAll<{
+    const existing = await timer.measure(
+      "loadExisting",
+      () =>
+        queryAll<{
       id: string;
       pickingItemId: string;
       inventoryLotId: string | null;
@@ -1705,6 +1724,7 @@ async function runScopedAllocation(
           LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
           LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
           WHERE ${inArray(sql`a.picking_item_id`, itemIds)}`
+        )
     );
     // Pinned manual allocations survive the wipe: excluded from the
     // net-change keys, not deleted, and their qty is pre-subtracted from each
@@ -1744,13 +1764,15 @@ async function runScopedAllocation(
         txnAt: now(),
       });
     }
-    await tx.execute(sql`DELETE FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)} AND NOT manual`);
+    await timer.measure("wipeDelete", () => tx.execute(sql`DELETE FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)} AND NOT manual`));
     // Apply the wipe to lot allocated_qty up front so the per-demand source
     // queries see availability net of the removed reservations.
-    for (const [lotId, delta] of lotDelta) {
-      if (delta === 0) continue;
-      await tx.execute(sql`UPDATE inventory_lots il SET allocated_qty = allocated_qty + ${delta} WHERE il.id = ${lotId} AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))`);
-    }
+    await timer.measure("wipeLotDeltas", async () => {
+      for (const [lotId, delta] of lotDelta) {
+        if (delta === 0) continue;
+        await tx.execute(sql`UPDATE inventory_lots il SET allocated_qty = allocated_qty + ${delta} WHERE il.id = ${lotId} AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))`);
+      }
+    });
     lotDelta.clear();
 
     // ---- Dock pre-passes (spec
@@ -1783,7 +1805,7 @@ async function runScopedAllocation(
     // the real shelf allocation.
     const shelfSimUsed = new Map<string, number>();
     for (const item of perfect) {
-      const lots = await loadLotSources(tx, item.d);
+      const lots = await timer.measure("sim.loadLots", () => loadLotSources(tx, item.d));
       for (const lot of lots) {
         if (item.remaining <= 0) break;
         const usable = lot.available - (shelfSimUsed.get(lot.lotId) ?? 0);
@@ -1874,7 +1896,7 @@ async function runScopedAllocation(
         if (item.remaining <= 0) continue;
         const demandPo = item.d.itemPoNo?.trim() || item.d.orderPoNo?.trim() || null;
         if (!demandPo) continue;
-        const rows = allocatableRows(await loadReceivingSources(tx, item.d, orderOnly));
+        const rows = allocatableRows(await timer.measure("passPO.loadRecv", () => loadReceivingSources(tx, item.d, orderOnly)));
         const pieces: { qty: number; recv: ReceivingRow }[] = [];
         for (const r of rows) {
           if (item.remaining <= 0) break;
@@ -1884,7 +1906,7 @@ async function runScopedAllocation(
           item.remaining -= take;
         }
         if (pieces.length > 0) {
-          await pinDockRows(item.d, pieces, "recompute: po match");
+          await timer.measure("passPO.pin", () => pinDockRows(item.d, pieces, "recompute: po match"));
           summary.poMatched += 1;
         }
       }
@@ -1894,7 +1916,7 @@ async function runScopedAllocation(
       // oldest available dock date code → pin every box of that order.
       for (const item of perfect) {
         if (item.remaining <= 0) continue;
-        const rows = allocatableRows(await loadReceivingSources(tx, item.d, orderOnly));
+        const rows = allocatableRows(await timer.measure("passA.loadRecv", () => loadReceivingSources(tx, item.d, orderOnly)));
         const oldest = oldestDateCode(rows);
         const groups = new Map<string, { sum: number; rows: ReceivingRow[] }>();
         for (const r of rows) {
@@ -1906,7 +1928,9 @@ async function runScopedAllocation(
         }
         for (const g of groups.values()) {
           if (g.sum === item.remaining && g.rows.every((r) => r.dateCode === oldest)) {
-            await pinDockRows(item.d, g.rows.map((r) => ({ qty: r.available, recv: r })), "recompute: perfect match");
+            await timer.measure("passA.pin", () =>
+              pinDockRows(item.d, g.rows.map((r) => ({ qty: r.available, recv: r })), "recompute: perfect match")
+            );
             summary.perfectMatched += 1;
             item.remaining = 0;
             break;
@@ -1918,11 +1942,11 @@ async function runScopedAllocation(
       // oldest dock date code exactly equals the remaining dock qty.
       for (const item of perfect) {
         if (item.remaining <= 0) continue;
-        const rows = allocatableRows(await loadReceivingSources(tx, item.d, orderOnly));
+        const rows = allocatableRows(await timer.measure("passB.loadRecv", () => loadReceivingSources(tx, item.d, orderOnly)));
         const oldest = oldestDateCode(rows);
         const hit = rows.find((r) => r.available === item.remaining && r.dateCode === oldest);
         if (hit) {
-          await pinDockRows(item.d, [{ qty: hit.available, recv: hit }], "recompute: perfect match");
+          await timer.measure("passB.pin", () => pinDockRows(item.d, [{ qty: hit.available, recv: hit }], "recompute: perfect match"));
           summary.perfectMatched += 1;
           item.remaining = 0;
         }
@@ -1938,7 +1962,7 @@ async function runScopedAllocation(
       let remaining = Math.max(0, d.openQty - (manualQtyByItem.get(d.pickingItemId) ?? 0));
       const allocatedForItem: { qty: number; lotId?: string; recv?: ReceivingRow }[] = [];
 
-      const lots = await loadLotSources(tx, d);
+      const lots = await timer.measure("main.loadLots", () => loadLotSources(tx, d));
       for (const lot of lots) {
         if (remaining <= 0) break;
         const usable = lot.available - (lotUsed.get(lot.lotId) ?? 0);
@@ -1950,7 +1974,7 @@ async function runScopedAllocation(
       }
 
       if (remaining > 0 && allowDockStock()) {
-        const rows = await loadReceivingSources(tx, d, orderOnly);
+        const rows = await timer.measure("main.loadRecv", () => loadReceivingSources(tx, d, orderOnly));
         for (const r of rows) {
           if (remaining <= 0) break;
           if (r.orgId === null || r.subInventoryCode === null) {
@@ -1973,64 +1997,70 @@ async function runScopedAllocation(
       if (remaining <= 0) summary.fullyAllocated += 1;
       else summary.partiallyAllocated += 1;
 
-      for (const alloc of allocatedForItem) {
-        const id = newId();
-        await tx.insert(allocations).values({
-          id,
-          pickingItemId: d.pickingItemId,
-          inventoryLotId: alloc.lotId ?? null,
-          receivingInvoiceItemId: alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
-          receivingOrderId: alloc.recv && !alloc.recv.ctnNo ? alloc.recv.receivingOrderId : null,
-          qty: alloc.qty,
-        });
-        summary.allocationsCreated += 1;
-        afterKeys.push(
-          allocationKey(
-            d.pickingItemId,
-            alloc.lotId ?? null,
-            alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
-            alloc.recv && !alloc.recv.ctnNo ? alloc.recv.receivingOrderId : null,
-            alloc.qty
-          )
-        );
-        if (alloc.lotId) {
-          lotDelta.set(alloc.lotId, (lotDelta.get(alloc.lotId) ?? 0) + alloc.qty);
+      await timer.measure("main.writes", async () => {
+        for (const alloc of allocatedForItem) {
+          const id = newId();
+          await tx.insert(allocations).values({
+            id,
+            pickingItemId: d.pickingItemId,
+            inventoryLotId: alloc.lotId ?? null,
+            receivingInvoiceItemId: alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
+            receivingOrderId: alloc.recv && !alloc.recv.ctnNo ? alloc.recv.receivingOrderId : null,
+            qty: alloc.qty,
+          });
+          summary.allocationsCreated += 1;
+          afterKeys.push(
+            allocationKey(
+              d.pickingItemId,
+              alloc.lotId ?? null,
+              alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
+              alloc.recv && !alloc.recv.ctnNo ? alloc.recv.receivingOrderId : null,
+              alloc.qty
+            )
+          );
+          if (alloc.lotId) {
+            lotDelta.set(alloc.lotId, (lotDelta.get(alloc.lotId) ?? 0) + alloc.qty);
+          }
+          txnRows.push({
+            id: newId(),
+            inventoryLotId: alloc.lotId ?? null,
+            partNo: d.partNo,
+            shelfCode: null,
+            boxId: alloc.recv?.ctnNo ?? null,
+            txnType: "RESERVE",
+            qtyType: "reserved",
+            qtyDelta: alloc.qty,
+            dateCode: alloc.recv?.dateCode ?? null,
+            referenceType: "allocation",
+            referenceId: id,
+            receivingInvoiceItemId: alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
+            txnReason: "recompute: reserve",
+            txnAt: now(),
+          });
         }
-        txnRows.push({
-          id: newId(),
-          inventoryLotId: alloc.lotId ?? null,
-          partNo: d.partNo,
-          shelfCode: null,
-          boxId: alloc.recv?.ctnNo ?? null,
-          txnType: "RESERVE",
-          qtyType: "reserved",
-          qtyDelta: alloc.qty,
-          dateCode: alloc.recv?.dateCode ?? null,
-          referenceType: "allocation",
-          referenceId: id,
-          receivingInvoiceItemId: alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
-          txnReason: "recompute: reserve",
-          txnAt: now(),
-        });
-      }
-      await tx.execute(
-        sql`UPDATE picking_items SET allocated_qty = ${d.openQty - remaining}, last_update_date = ${now()} WHERE id = ${d.pickingItemId}`
-      );
+        await tx.execute(
+          sql`UPDATE picking_items SET allocated_qty = ${d.openQty - remaining}, last_update_date = ${now()} WHERE id = ${d.pickingItemId}`
+        );
+      });
     }
 
-    for (const [lotId, delta] of lotDelta) {
-      if (delta === 0) continue;
-      await tx.execute(sql`UPDATE inventory_lots il SET allocated_qty = allocated_qty + ${delta} WHERE il.id = ${lotId} AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))`);
-    }
+    await timer.measure("finalLotDeltas", async () => {
+      for (const [lotId, delta] of lotDelta) {
+        if (delta === 0) continue;
+        await tx.execute(sql`UPDATE inventory_lots il SET allocated_qty = allocated_qty + ${delta} WHERE il.id = ${lotId} AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))`);
+      }
+    });
     if (txnRows.length > 0) {
-      await tx.insert(inventoryTransactions).values(txnRows);
+      await timer.measure("ledgerInsert", () => tx.insert(inventoryTransactions).values(txnRows));
     }
     // Demands with no source leave allocated_qty at 0.
-    await tx.execute(
-      sql`UPDATE picking_items SET allocated_qty = 0, last_update_date = ${now()}
+    await timer.measure("zeroOut", () =>
+      tx.execute(
+        sql`UPDATE picking_items SET allocated_qty = 0, last_update_date = ${now()}
           WHERE ${inArray(sql`id`, itemIds)} AND id NOT IN (
             SELECT DISTINCT picking_item_id FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)}
           )`
+      )
     );
     if (summary.skippedReceivingSources > 0) {
       console.warn(
@@ -2041,19 +2071,23 @@ async function runScopedAllocation(
 
   const changed = prePassPinsCreated > 0 || beforeKeys.slice().sort().join("\n") !== afterKeys.slice().sort().join("\n");
   if (changed) {
-    await emitEvent(tx, {
-      type: "allocation.computed",
-      topics: ["/picking-orders"],
-      data: { ...summary, ...scope },
-    });
+    await timer.measure("emitComputed", () =>
+      emitEvent(tx, {
+        type: "allocation.computed",
+        topics: ["/picking-orders"],
+        data: { ...summary, ...scope },
+      })
+    );
   }
-  await emitEvent(tx, {
-    type: "allocation.finished",
-    topics: ["/picking-orders", "/receiving-orders"],
-    data: { ...summary, changed, ...scope },
-  });
-  await refreshAllocationStatus(tx);
-  return { ...summary, partKeys, changed, durationMs: Date.now() - startedAt };
+  await timer.measure("emitFinished", () =>
+    emitEvent(tx, {
+      type: "allocation.finished",
+      topics: ["/picking-orders", "/receiving-orders"],
+      data: { ...summary, changed, ...scope },
+    })
+  );
+  await timer.measure("refreshStatus", () => refreshAllocationStatus(tx));
+  return { ...summary, partKeys, changed, durationMs: timer.total() };
 }
 
 // ---------------------------------------------------------------------------

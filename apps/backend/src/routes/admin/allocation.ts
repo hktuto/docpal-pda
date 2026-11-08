@@ -34,8 +34,13 @@ adminAllocationRoute.post("/allocation/restore", async (c) => {
 // numbers keep their rows (404 picking_order_not_found / 409 order_not_open /
 // 409 lock_held). Spec 2026-11-05-picking-reallocate-single-order-design.md.
 adminAllocationRoute.post("/picking-orders/:id/reallocate", async (c) => {
+  const httpStartedAt = Date.now();
   const allocation = await awaitAllocationTask(db, "admin re-allocate (picking)", (runnerDb) =>
     allocateForPickingOrder(runnerDb, c.req.param("id"))
+  );
+  console.log(
+    `[alloc-timing] POST /admin/picking-orders/${c.req.param("id")}/reallocate http=${Date.now() - httpStartedAt}ms ` +
+      `engine=${allocation.durationMs}ms queueWait≈${Date.now() - httpStartedAt - allocation.durationMs}ms`
   );
   return c.json({ allocation });
 });
@@ -53,8 +58,13 @@ adminAllocationRoute.post("/receiving-orders/:id/reallocate", async (c) => {
   );
   if (!head) throw new HTTPException(404, { message: "receiving_order_not_found" });
   if (head.status !== "in_hand") throw new HTTPException(409, { message: "order_not_in_hand" });
+  const httpStartedAt = Date.now();
   const allocation = await awaitAllocationTask(db, "admin re-allocate (receiving)", (runnerDb) =>
     allocateForReceivingOrder(runnerDb, id)
+  );
+  console.log(
+    `[alloc-timing] POST /admin/receiving-orders/${id}/reallocate http=${Date.now() - httpStartedAt}ms ` +
+      `engine=${allocation.durationMs}ms queueWait≈${Date.now() - httpStartedAt - allocation.durationMs}ms`
   );
   return c.json({ allocation });
 });
@@ -105,12 +115,17 @@ adminAllocationRoute.post("/picking-orders/:id/items/:itemId/allocate-form", asy
     qty: Number(r.qty),
     override: r.override === true,
   }));
-  const result = await allocatePickingItemFromSources(
-    db,
-    c.req.param("id"),
-    c.req.param("itemId"),
-    rows,
-    actorFrom(c).id
+  // Serialized through the allocation runner like every other allocation
+  // mutation: the tx ends with a fleet-wide picking_orders status refresh
+  // that deadlocks against a concurrent recompute's picking_items updates.
+  const result = await awaitAllocationTask(db, "admin allocate form (picking item)", (runnerDb) =>
+    allocatePickingItemFromSources(
+      runnerDb,
+      c.req.param("id"),
+      c.req.param("itemId"),
+      rows,
+      actorFrom(c).id
+    )
   );
   return c.json(result);
 });
@@ -133,12 +148,14 @@ adminAllocationRoute.post("/picking-orders/:id/allocate-group", async (c) => {
     qty: Number(r.qty),
     override: r.override === true,
   }));
-  const result = await allocatePickingGroupFromSources(
-    db,
-    c.req.param("id"),
-    String(body.partNo ?? ""),
-    rows,
-    actorFrom(c).id
+  const result = await awaitAllocationTask(db, "admin allocate form (picking group)", (runnerDb) =>
+    allocatePickingGroupFromSources(
+      runnerDb,
+      c.req.param("id"),
+      String(body.partNo ?? ""),
+      rows,
+      actorFrom(c).id
+    )
   );
   return c.json(result);
 });
