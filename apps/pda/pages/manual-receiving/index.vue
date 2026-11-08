@@ -29,6 +29,11 @@ let nextUid = 1;
 // One task = one brand: locked by the first label that resolves to a supplier
 // template (single-brand profile → the brand, otherwise the supplier code).
 const taskBrand = ref<string | null>(null);
+// The locking label's supplier profile — once locked, restrict the hardware
+// decoder to its barcode types (same scope standard receiving applies; no
+// profile or empty barcodeTypes = keep scanning every type).
+const taskSupplierCode = ref<string | null>(null);
+useSupplierSymbologyScope(computed(() => taskSupplierCode.value ?? undefined));
 
 const view = ref<"task" | "scan">("task");
 const scanOrderIndex = ref(-1);
@@ -157,8 +162,10 @@ async function handleRawScan(raw: string): Promise<boolean | void> {
       ? (result.supplier.brands?.length === 1 ? result.supplier.brands[0] : result.supplier.code)
       : undefined;
     if (scanBrand) {
-      if (!taskBrand.value) taskBrand.value = scanBrand;
-      else if (taskBrand.value !== scanBrand) {
+      if (!taskBrand.value) {
+        taskBrand.value = scanBrand;
+        taskSupplierCode.value = result.supplier?.code ?? null;
+      } else if (taskBrand.value !== scanBrand) {
         showToast(t("manualReceiving.mixedBrand", { brand: taskBrand.value }));
         return false;
       }
