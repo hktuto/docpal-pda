@@ -10,5 +10,5 @@
  "owner": "dev",
  "closedDate": "",
  "tester": "",
- "remarks": "Fix in db/receivingCn.ts createCnManualReceipt: delivery_date = creation day at 00:00:00 (UTC-midnight Date so the stored literal is date-only regardless of server TZ), written to BOTH receiving_orders_cn and receiving_invoices_cn; arrived_at keeps the full timestamp. Pending commit hash"
+ "remarks": "Fix in db/receivingCn.ts createCnManualReceipt: delivery_date = creation day at 00:00:00 (UTC-midnight Date so the stored literal is date-only regardless of server TZ), written to BOTH receiving_orders_cn and receiving_invoices_cn; arrived_at keeps the full timestamp. Fixed — commit 0c8d703c"
 }
