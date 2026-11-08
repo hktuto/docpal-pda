@@ -254,7 +254,7 @@ function cancel() {
         </button>
         <button
           class="btn btn-primary"
-          :disabled="submitting || drafts.length === 0 || brandMissing"
+          :disabled="submitting || drafts.length === 0"
           @click="submit"
         >
           {{ submitting ? $t("admin.pages.receivingCn.submitting") : $t("admin.pages.receivingCn.submit") }}
