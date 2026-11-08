@@ -157,7 +157,7 @@ test("happy path: one order + ONE branded invoice; batch_no = invoice_no; items 
   }>(
     client.db,
     sql`SELECT ro.batch_no AS "batchNo", ro.status, ro.org_id AS "orgId",
-               ro.delivery_date AS "deliveryDate", ro.arrived_at AS "arrivedAt",
+               ro.delivery_date::text AS "deliveryDate", ro.arrived_at AS "arrivedAt",
                u.display_name AS "arrivedByName"
         FROM receiving_orders_cn ro LEFT JOIN users u ON u.id = ro.arrived_by
         WHERE ro.id = ${created.id}`
@@ -165,19 +165,24 @@ test("happy path: one order + ONE branded invoice; batch_no = invoice_no; items 
   assert.equal(order!.batchNo, created.batchNo);
   assert.equal(order!.status, "in_hand"); // confirm IS the receipt moment
   assert.equal(order!.orgId, 14); // first po_no (329…) → org 14
-  assert.ok(order!.deliveryDate); // = the creation date
+  assert.ok(order!.deliveryDate); // = the creation day at 00:00:00
+  assert.match(order!.deliveryDate!, /^\d{4}-\d{2}-\d{2} 00:00:00$/);
+  assert.equal(order!.deliveryDate!.slice(0, 10).replace(/-/g, ""), created.batchNo.slice(4, 12)); // same day as the invoice no
   assert.ok(order!.arrivedAt);
   assert.equal(order!.arrivedByName, "Demo Operator");
 
   // Exactly ONE invoice for the whole task, invoice_no = batch_no.
-  const invoices = await queryAll<{ invoiceNo: string; totalQty: number | null }>(
+  const invoices = await queryAll<{ invoiceNo: string; totalQty: number | null; deliveryDate: string | null }>(
     client.db,
-    sql`SELECT invoice_no AS "invoiceNo", total_qty AS "totalQty"
+    sql`SELECT invoice_no AS "invoiceNo", total_qty AS "totalQty",
+                delivery_date::text AS "deliveryDate"
         FROM receiving_invoices_cn WHERE receiving_order_id = ${created.id}`
   );
   assert.equal(invoices.length, 1);
   assert.equal(invoices[0].invoiceNo, created.batchNo);
   assert.equal(invoices[0].totalQty, 35100);
+  // invoices carry the delivery date too (was left NULL pre-2026-11-07)
+  assert.equal(invoices[0].deliveryDate, order!.deliveryDate);
 
   const items = await queryAll<{
     partNo: string;

@@ -490,7 +490,8 @@ export function deriveCnManualOrgSub(poNo: string): { orgId: number; subInventor
  *  the CN put-away task + audit + SSE, one tx. The task's single brand (first
  *  scanned item's) drives the invoice number `[brand]-yyyymmdd-[seq]` (seq =
  *  that brand's invoice count for the day + 1); batch_no = invoice_no;
- *  delivery_date = the creation date; each order number lands on its items as
+ *  delivery_date = the creation day at 00:00:00 (the format the upstream sync
+ *  writes); each order number lands on its items as
  *  po_no and derives their org/sub-inventory. */
 export async function createCnManualReceipt(
   db: AppDb,
@@ -503,6 +504,11 @@ export async function createCnManualReceipt(
   const invoiceId = newId();
   const taskId = newId();
   const at = now();
+  // delivery_date stored as the creation day's UTC-midnight Date — the
+  // postgres driver writes a Date's UTC wall-clock into the timestamp column,
+  // so this lands as the `YYYY-MM-DD 00:00:00` literal the upstream sync uses
+  // (a local-midnight Date would shift the day on non-UTC servers).
+  const deliveryDate = new Date(Date.UTC(at.getFullYear(), at.getMonth(), at.getDate()));
   const orderOrgId = deriveCnManualOrgSub(orders[0].orderNo).orgId;
   let invoiceNo = "";
 
@@ -512,7 +518,7 @@ export async function createCnManualReceipt(
     await tx.insert(receivingOrdersCn).values({
       id: orderId,
       batchNo: invoiceNo,
-      deliveryDate: at,
+      deliveryDate,
       status: "in_hand",
       arrivedAt: at,
       arrivedBy: actor.id,
@@ -524,6 +530,7 @@ export async function createCnManualReceipt(
       id: invoiceId,
       receivingOrderId: orderId,
       invoiceNo,
+      deliveryDate,
       totalQty: orders.reduce((s, o) => s + o.items.reduce((si, it) => si + it.qty, 0), 0),
       orgId: orderOrgId,
       createdDate: at,
@@ -781,6 +788,7 @@ export async function createCnExcelUploads(
 }
 
 // --- reads -------------------------------------------------------------------
+
 
 export type CnWorkflowRow = typeof receivingCnWorkflows.$inferSelect;
 
@@ -1137,7 +1145,9 @@ async function rederiveCnItemOrgSubTx(tx: AppDb, orderId: string, at: Date): Pro
  * admin confirms it. Opening the detail normalizes the record — item
  * org/sub-inventory from the po_no prefix rules, and the arrival stamp
  * (arrived_at / arrived_by, filled only when NULL). No-op for non-pending
- * orders. Never throws on unknown batch_no.
+ * orders. Never throws on unknown batch_no — and never blocks on a row lock
+ * held by the upstream sync (lock_timeout → silently skipped, retried next
+ * open).
  */
 export async function prepareCnOrderDetail(db: AppDb, batchNo: string, actorId: string | null): Promise<void> {
   const order = await queryGet<{ id: string; status: string }>(
@@ -1146,17 +1156,32 @@ export async function prepareCnOrderDetail(db: AppDb, batchNo: string, actorId: 
   );
   if (!order || order.status !== "pending") return;
   const at = now();
-  await db.transaction(async (tx) => {
-    await rederiveCnItemOrgSubTx(tx, order.id, at);
-    await queryRun(
-      tx,
-      sql`UPDATE receiving_orders_cn
-          SET arrived_at = COALESCE(arrived_at, ${at}),
-              arrived_by = COALESCE(arrived_by, ${actorId}),
-              last_update_date = ${at}
-          WHERE id = ${order.id}`
-    );
-  });
+  try {
+    await db.transaction(async (tx) => {
+      // The upstream sync's CN upsert (INSERT ... ON CONFLICT DO UPDATE) holds
+      // row locks on these tables while it runs — every few minutes, for as
+      // long as a batch takes. This prepare is best-effort normalization, so
+      // fail fast on a lock wait (code 55P03) instead of stalling the admin
+      // detail GET until the client times out; the next open retries.
+      await queryRun(tx, sql`SET LOCAL lock_timeout = '2s'`);
+      await rederiveCnItemOrgSubTx(tx, order.id, at);
+      // Skip the no-op rewrite once the arrival stamp exists — otherwise every
+      // detail open takes a row lock on the order and races the sync.
+      await queryRun(
+        tx,
+        sql`UPDATE receiving_orders_cn
+            SET arrived_at = COALESCE(arrived_at, ${at}),
+                arrived_by = COALESCE(arrived_by, ${actorId}),
+                last_update_date = ${at}
+            WHERE id = ${order.id} AND arrived_at IS NULL`
+      );
+    });
+  } catch (err) {
+    // drizzle rethrows as DrizzleQueryError — the SQLSTATE lives on .cause.
+    const code = (err as { code?: string }).code ?? (err as { cause?: { code?: string } }).cause?.code;
+    if (code === "55P03") return;
+    throw err;
+  }
 }
 
 /**
