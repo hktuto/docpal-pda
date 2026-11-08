@@ -11,6 +11,7 @@ import { sql } from "drizzle-orm";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { setupTestDb, reseed, TEST_DATABASE_URL, FAKE_DOCPAL_URL, type TestDb } from "../../db/test-helper.js";
+import postgres from "postgres";
 import { _setCnReceivingForTests, _resetFlowConfigForTests } from "../../config.js";
 import { queryAll, queryGet } from "../../db/query.js";
 import { transactionLogs } from "../../db/schema/index.js";
@@ -87,19 +88,16 @@ async function login(username: string, password: string): Promise<string> {
   return (await res.json()).token as string;
 }
 
-function uploadForm(payload: unknown, opts: { withFile?: boolean; withData?: boolean } = {}): FormData {
-  const form = new FormData();
-  if (opts.withFile !== false) {
-    form.append("file", new Blob(["fake-xls-bytes"], { type: "application/vnd.ms-excel" }), "TE20261010-2.xls");
-  }
-  if (opts.withData !== false) {
-    form.append("data", JSON.stringify(payload));
-  }
-  return form;
+function excelFile(overrides: Record<string, unknown> = {}) {
+  return { filename: "TE20261010-2.xls", brand: "TE", payload: VALID_PAYLOAD, ...overrides };
 }
 
-async function postExcel(token: string, form: FormData) {
-  return app.request("/admin/receiving-cn/excel", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+async function postExcel(token: string, files: unknown[]) {
+  return app.request("/admin/receiving-cn/excel", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ files }),
+  });
 }
 
 const VALID_PAYLOAD = {
@@ -166,11 +164,7 @@ test("config gate: every /admin/receiving-cn route 404s while the receiving-cn s
     assert.equal(list.status, 404);
     const orders = await app.request("/admin/receiving-cn/orders", { headers: { Authorization: `Bearer ${token}` } });
     assert.equal(orders.status, 404);
-    const upload = await app.request("/admin/receiving-cn/excel", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: uploadForm(VALID_PAYLOAD),
-    });
+    const upload = await postExcel(token, [excelFile()]);
     assert.equal(upload.status, 404);
     assert.match(await upload.text(), /not_found/);
   } finally {
@@ -178,27 +172,26 @@ test("config gate: every /admin/receiving-cn route 404s while the receiving-cn s
   }
 });
 
-test("excel upload: missing file → 400 file_required", async () => {
+test("excel upload: empty files array → 400 invalid_payload", async () => {
   await reseed(client);
   const token = await login("admin", "DocPalAdmin2026!");
-  const res = await postExcel(token, uploadForm(VALID_PAYLOAD, { withFile: false }));
-  assert.equal(res.status, 400);
-  assert.match(await res.text(), /file_required/);
+  const missing = await postExcel(token, []);
+  assert.equal(missing.status, 400);
+  assert.match(await missing.text(), /files must be a non-empty array/);
+
+  const notObject = await postExcel(token, ["nope"]);
+  assert.equal(notObject.status, 400);
+  assert.match(await notObject.text(), /files\[0\] must be an object/);
 });
 
-test("excel upload: missing/invalid data → 400 invalid_payload", async () => {
+test("excel upload: brand errors → 400 invalid_payload", async () => {
   await reseed(client);
   const token = await login("admin", "DocPalAdmin2026!");
-  const missing = await postExcel(token, uploadForm(VALID_PAYLOAD, { withData: false }));
-  assert.equal(missing.status, 400);
-  assert.match(await missing.text(), /invalid_payload/);
-
-  const badJson = new FormData();
-  badJson.append("file", new Blob(["x"]), "a.xls");
-  badJson.append("data", "not-json{");
-  const bad = await postExcel(token, badJson);
-  assert.equal(bad.status, 400);
-  assert.match(await bad.text(), /invalid_payload/);
+  for (const brand of [undefined, "", "1KO", "KOA INC", "A".repeat(12)]) {
+    const res = await postExcel(token, [excelFile({ brand })]);
+    assert.equal(res.status, 400, String(brand));
+    assert.match(await res.text(), /brand must match/);
+  }
 });
 
 test("excel upload: payload shape errors → 400 invalid_payload", async () => {
@@ -210,127 +203,172 @@ test("excel upload: payload shape errors → 400 invalid_payload", async () => {
     { ...VALID_PAYLOAD, items: [{ ...VALID_PAYLOAD.items[0], poNo: undefined }] },
     { ...VALID_PAYLOAD, items: [{ ...VALID_PAYLOAD.items[0], qty: 0 }] },
     { ...VALID_PAYLOAD, items: [{ ...VALID_PAYLOAD.items[0], qty: "abc" }] },
-    { ...VALID_PAYLOAD, items: [{ ...VALID_PAYLOAD.items[0], qty: 1.5 }] },
     { ...VALID_PAYLOAD, supplier: 42 },
   ];
   for (const payload of cases) {
-    const res = await postExcel(token, uploadForm(payload));
+    const res = await postExcel(token, [excelFile({ payload })]);
     assert.equal(res.status, 400, JSON.stringify(payload));
     assert.match(await res.text(), /invalid_payload/);
   }
 });
 
-test("excel upload: workflow token unset → 500 docpal_workflow_token_not_configured", async (t) => {
-  await reseed(client);
-  const token = await login("admin", "DocPalAdmin2026!");
-  delete process.env.DOCPAL_WORKFLOW_TOKEN;
-  t.after(() => {
-    process.env.DOCPAL_WORKFLOW_TOKEN = WORKFLOW_TOKEN;
-  });
-  await withWorkflowFake(async () => {
-    const res = await postExcel(token, uploadForm(VALID_PAYLOAD));
-    assert.equal(res.status, 500);
-    assert.match(await res.text(), /docpal_workflow_token_not_configured/);
-  });
-});
-
 // --- happy path -------------------------------------------------------------------
 
-test("excel upload: upload + kick → 201 tracking row with real creator + docpal ids", async () => {
+test("excel upload: one file → pending order + items + completed tracking row, no DocPal call", async () => {
   await reseed(client);
   const token = await login("admin", "DocPalAdmin2026!");
-  await withWorkflowFake(async () => {
-    const res = await postExcel(token, uploadForm(VALID_PAYLOAD));
-    assert.equal(res.status, 201);
-    const { id } = (await res.json()) as { id: string };
+  const res = await postExcel(token, [excelFile()]);
+  assert.equal(res.status, 201);
+  const { orders } = (await res.json()) as { orders: { id: string; batchNo: string }[] };
+  assert.equal(orders.length, 1);
+  const batchNo = orders[0].batchNo;
+  assert.match(batchNo, /^TE-\d{8}-\d{2}$/);
+  // The local path never touches the DocPal workflow server.
+  assert.equal(fake.requests.length, 0);
 
-    const row = await queryGet<{
-      phase: string;
-      status: string;
-      invoiceNo: string;
-      supplier: string;
-      filename: string;
-      docpalDocumentId: string;
-      docpalProcessId: string;
-      docpalBusinessKey: string;
-      batchNo: string;
-      createdBy: string;
-    }>(
-      client.db,
-      sql`SELECT phase, status, invoice_no AS "invoiceNo", supplier, filename,
-                 docpal_document_id AS "docpalDocumentId", docpal_process_id AS "docpalProcessId",
-                 docpal_business_key AS "docpalBusinessKey", batch_no AS "batchNo", created_by AS "createdBy"
-          FROM receiving_cn_workflows WHERE id = ${id}`
-    );
-    assert.equal(row!.phase, "excel");
-    assert.equal(row!.status, "workflow_running");
-    assert.equal(row!.invoiceNo, "TE20261010-2");
-    assert.equal(row!.supplier, "TE");
-    assert.equal(row!.docpalDocumentId, "doc-1");
-    assert.equal(row!.docpalProcessId, "proc-1");
-    assert.equal(row!.docpalBusinessKey, "bk-1");
-    assert.match(row!.batchNo, /^CN-\d{8}-[A-Z2-9]{6}$/);
-    assert.equal(row!.createdBy, "admin"); // the real logged-in admin, not the service token user
+  const order = await queryGet<{
+    status: string;
+    deliveryDate: Date;
+    orgId: number;
+    arrivedAt: Date | null;
+  }>(
+    client.db,
+    sql`SELECT status, delivery_date AS "deliveryDate", org_id AS "orgId", arrived_at AS "arrivedAt"
+        FROM receiving_orders_cn WHERE id = ${orders[0].id}`
+  );
+  assert.equal(order!.status, "pending");
+  assert.equal(order!.orgId, 14); // 329-prefix po_no → GZSZ org
+  assert.equal(order!.arrivedAt, null); // prepare/confirm stamps arrival later
+  assert.equal(order!.deliveryDate.toISOString(), "2026-10-10T00:00:00.000Z"); // sheet 收貨日期
 
-    // The workflow kick carried the upload entry, the verified payload, and
-    // the real user as creator variables.
-    const startReq = fake.requests.find((r) => r.method === "POST" && r.url === "/oniflow/api/v1/processes");
-    assert.ok(startReq);
-    const startBody = JSON.parse(startReq!.body);
-    assert.equal(startBody.definition_id, EXCEL_WORKFLOW_ID);
-    assert.equal(startBody.start_user_id, "admin");
-    assert.equal(startBody.variables.start_user_id, "admin");
-    assert.equal(startBody.variables.__system__user_creator_id, "admin");
-    assert.equal(startBody.variables.__system__user_creator_name, "Demo Admin");
-    assert.ok(Array.isArray(startBody.variables.excel_result_data));
-    assert.equal(startBody.variables.excel_result_data.length, 1);
-    assert.equal(startBody.variables.excel_result_data[0].invoiceNo, "TE20261010-2");
-    assert.equal(startBody.variables.excel_result_data[0].batchNo, row!.batchNo);
-    // Swapped wire contract: poNo carries the 訂單號, orderNo the (blank) 发货項.
-    assert.equal(startBody.variables.excel_result_data[0].items[0].poNo, "329062100T3");
-    assert.equal(startBody.variables.excel_result_data[0].items[0].orderNo, "");
-    assert.equal(startBody.variables.excelFiles[0].id, "doc-1");
-    assert.equal(startBody.variables.excelFiles[0].extension, "xls");
-    assert.equal(startBody.variables.excelFiles[0].mime_type, "application/vnd.ms-excel");
-    assert.equal(startBody.variables.excelFiles[0].response.data.fileContentExtension, "xls");
-    // Bearer service token + X-Tenant-ID on both the upload and the kick.
-    const uploadReq = fake.requests.find((r) => r.method === "POST" && r.url === "/api/docpal/workflow/upload/file");
-    assert.match(String(uploadReq?.body), /fake-xls-bytes/);
-    assert.equal(uploadReq?.headers.authorization, `Bearer ${WORKFLOW_TOKEN}`);
-    assert.equal(uploadReq?.headers["x-tenant-id"], "demo");
-    const startReqHeaders = fake.requests.find((r) => r.method === "POST" && r.url === "/oniflow/api/v1/processes")?.headers;
-    assert.equal(startReqHeaders?.authorization, `Bearer ${WORKFLOW_TOKEN}`);
-    assert.equal(startReqHeaders?.["x-tenant-id"], "demo");
+  const item = await queryGet<{
+    poNo: string;
+    poLine: string;
+    partNo: string;
+    lineQty: number;
+    receivedQty: number;
+    dateCode: string;
+    orgId: number;
+    subInventoryCode: string;
+    additionalData: { source: string; filename: string; invoiceNo: string };
+  }>(
+    client.db,
+    sql`SELECT po_no AS "poNo", po_line AS "poLine", part_no AS "partNo", line_qty AS "lineQty",
+               received_qty AS "receivedQty", date_code AS "dateCode", org_id AS "orgId",
+               sub_inventory_code AS "subInventoryCode", additional_data AS "additionalData"
+        FROM receiving_invoice_items_cn WHERE receiving_invoice_id =
+          (SELECT id FROM receiving_invoices_cn WHERE invoice_no = ${batchNo})`
+  );
+  // Swapped wire contract: poNo carries the 訂單號.
+  assert.equal(item!.poNo, "329062100T3");
+  assert.equal(item!.poLine, "1");
+  assert.equal(item!.lineQty, 500);
+  assert.equal(item!.receivedQty, 0); // the PDA scan fills it
+  assert.equal(item!.dateCode, "2641");
+  assert.equal(item!.orgId, 14);
+  assert.equal(item!.subInventoryCode, "GZSZ");
+  assert.equal(item!.additionalData.source, "excel");
+  assert.equal(item!.additionalData.invoiceNo, "TE20261010-2");
 
-    const logs = await queryAll<{ toState: string }>(
-      client.db,
-      sql`SELECT to_state AS "toState" FROM transaction_logs
-          WHERE entity_type = 'receiving_cn_workflow' AND entity_id = ${id}`
-    );
-    assert.deepEqual(logs.map((l) => l.toState), ["workflow_running"]);
-  });
+  const wf = await queryGet<{
+    phase: string;
+    status: string;
+    invoiceNo: string;
+    supplier: string;
+    filename: string;
+    docpalProcessId: string | null;
+    batchNo: string;
+    payload: { invoiceNo: string };
+  }>(
+    client.db,
+    sql`SELECT phase, status, invoice_no AS "invoiceNo", supplier, filename,
+               docpal_process_id AS "docpalProcessId", batch_no AS "batchNo", payload
+        FROM receiving_cn_workflows WHERE batch_no = ${batchNo}`
+  );
+  assert.equal(wf!.phase, "excel");
+  assert.equal(wf!.status, "completed");
+  assert.equal(wf!.invoiceNo, "TE20261010-2"); // sheet 編號 kept for the list join
+  assert.equal(wf!.supplier, "TE");
+  assert.equal(wf!.docpalProcessId, null); // the status cron ignores this row
+  assert.equal(wf!.payload.invoiceNo, "TE20261010-2");
+
+  const logs = await queryAll<{ entity: string; toState: string }>(
+    client.db,
+    sql`SELECT entity_type AS entity, to_state AS "toState" FROM transaction_logs
+        WHERE entity_id = ${orders[0].id} OR entity_id =
+          (SELECT id FROM receiving_cn_workflows WHERE batch_no = ${batchNo})`
+  );
+  assert.deepEqual(logs.map((l) => `${l.entity}:${l.toState}`).sort(), [
+    "receiving_cn_workflow:completed",
+    "receiving_order_cn:pending",
+  ]);
 });
 
-test("excel upload: startProcess failure deletes the orphaned attachment → 502", async () => {
+test("excel upload: multi-file → N pending orders, same-brand numbering continues", async () => {
   await reseed(client);
   const token = await login("admin", "DocPalAdmin2026!");
-  fake.startFails = true;
-  try {
-    await withWorkflowFake(async () => {
-      const res = await postExcel(token, uploadForm(VALID_PAYLOAD));
-      assert.equal(res.status, 502);
-      assert.match(await res.text(), /docpal_workflow/);
-      const del = fake.requests.find(
-        (r) => r.method === "DELETE" && r.url.startsWith("/api/docpal/workflow/task/attachment?attachmentId=doc-1")
-      );
-      assert.ok(del, "expected the orphaned attachment to be deleted");
-      // No tracking row — the kick never happened.
-      const count = await queryGet<{ n: number }>(client.db, sql`SELECT COUNT(*)::int AS n FROM receiving_cn_workflows`);
-      assert.equal(count!.n, 0);
-    });
-  } finally {
-    fake.startFails = false;
-  }
+  const res = await postExcel(token, [
+    excelFile({ brand: "koa", payload: { ...VALID_PAYLOAD, invoiceNo: "KOA-001" } }),
+    excelFile({ filename: "收货确认2.xls", brand: "KOA", payload: { ...VALID_PAYLOAD, invoiceNo: "KOA-002" } }),
+  ]);
+  assert.equal(res.status, 201);
+  const { orders } = (await res.json()) as { orders: { id: string; batchNo: string }[] };
+  const ymd = new Date().getFullYear().toString() + String(new Date().getMonth() + 1).padStart(2, "0") + String(new Date().getDate()).padStart(2, "0");
+  assert.equal(orders[0].batchNo, `KOA-${ymd}-01`); // brand uppercased
+  assert.equal(orders[1].batchNo, `KOA-${ymd}-02`);
+  const n = await queryGet<{ c: number }>(client.db, sql`SELECT COUNT(*)::int AS c FROM receiving_orders_cn`);
+  assert.equal(n!.c, 2);
+});
+
+test("excel upload: 訂單號 groups route their own org/sub; order org = first group", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  const payload = {
+    ...VALID_PAYLOAD,
+    receivedDate: "not-a-date", // falls back to the creation day
+    items: [
+      { ...VALID_PAYLOAD.items[0], poNo: "329062100T3" }, // → 14/GZSZ
+      { ...VALID_PAYLOAD.items[0], poNo: "339062100T3", index: 2 }, // → 5/SHSZ
+    ],
+  };
+  const res = await postExcel(token, [excelFile({ payload })]);
+  assert.equal(res.status, 201);
+  const { batchNo } = ((await res.json()) as { orders: { id: string; batchNo: string }[] }).orders[0];
+  const items = await queryAll<{ poNo: string; orgId: number; sub: string }>(
+    client.db,
+    sql`SELECT i.po_no AS "poNo", i.org_id AS "orgId", i.sub_inventory_code AS sub
+        FROM receiving_invoice_items_cn i
+        JOIN receiving_invoices_cn v ON v.id = i.receiving_invoice_id
+        WHERE v.invoice_no = ${batchNo} ORDER BY i.po_no`
+  );
+  assert.deepEqual(items, [
+    { poNo: "329062100T3", orgId: 14, sub: "GZSZ" },
+    { poNo: "339062100T3", orgId: 5, sub: "SHSZ" },
+  ]);
+  const order = await queryGet<{ orgId: number; deliveryDate: Date }>(
+    client.db,
+    sql`SELECT org_id AS "orgId", delivery_date AS "deliveryDate" FROM receiving_orders_cn WHERE batch_no = ${batchNo}`
+  );
+  const today = new Date();
+  const expected = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  assert.equal(order!.deliveryDate.getTime(), expected); // invalid sheet date → creation day
+});
+
+test("excel upload: created pending order flows through the admin confirm chain", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  const res = await postExcel(token, [excelFile()]);
+  const { orders } = (await res.json()) as { orders: { id: string; batchNo: string }[] };
+  const confirm = await app.request(`/admin/receiving-cn/orders/${orders[0].batchNo}/confirm`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(confirm.status, 200);
+  const order = await queryGet<{ status: string }>(
+    client.db,
+    sql`SELECT status FROM receiving_orders_cn WHERE batch_no = ${orders[0].batchNo}`
+  );
+  assert.equal(order!.status, "scanning"); // the PDA 收貨掃描 step takes it from here
 });
 
 // --- pdf upload (phase 2) ------------------------------------------------------
@@ -523,10 +561,18 @@ test("pdf upload: kick failure with multiple files deletes every orphaned attach
 test("list + detail: status filter, paging, payload round-trip", async () => {
   await reseed(client);
   const token = await login("admin", "DocPalAdmin2026!");
-  await withWorkflowFake(async () => {
-    await postExcel(token, uploadForm(VALID_PAYLOAD));
-    await postExcel(token, uploadForm({ ...VALID_PAYLOAD, invoiceNo: "TE20261010-3" }));
-  });
+  // Read-side fixture: tracking rows as the DocPal upload path writes them
+  // (the local excel path now creates completed rows — covered by its own tests).
+  for (const [i, no] of ["TE20261010-2", "TE20261010-3"].entries()) {
+    await client.db.execute(
+      sql`INSERT INTO receiving_cn_workflows (id, phase, invoice_no, supplier, filename,
+               docpal_document_id, docpal_process_id, docpal_business_key, batch_no, status, payload, created_by, created_date)
+          VALUES (${"wf-list-" + i}, 'excel', ${no}, 'TE', ${no + ".xls"}, 'doc-1', 'proc-1', 'bk-1',
+                  ${"CN-20261010-00000" + i}, 'workflow_running',
+                  ${JSON.stringify({ ...VALID_PAYLOAD, invoiceNo: no, items: [{ ...VALID_PAYLOAD.items[0], qty: 500 }] })}::jsonb, 'admin',
+                  now() + ${i} * interval '1 second')`
+    );
+  }
 
   const all = await app.request("/admin/receiving-cn?page=1&pageSize=10", {
     headers: { Authorization: `Bearer ${token}` },
@@ -552,7 +598,7 @@ test("list + detail: status filter, paging, payload round-trip", async () => {
   const detailBody = (await detail.json()) as { invoiceNo: string; payload: { items: { partNo: string; qty: number }[] } };
   assert.equal(detailBody.invoiceNo, "TE20261010-3");
   assert.equal(detailBody.payload.items[0].partNo, "iC-HAUS-001");
-  assert.equal(detailBody.payload.items[0].qty, 500); // qty coerced from the string "500"
+  assert.equal(detailBody.payload.items[0].qty, 500); // validated qty is a number on the wire
 });
 
 test("detail: unknown id → 404 receiving_cn_workflow_not_found", async () => {
@@ -595,17 +641,20 @@ async function seedCnOrderByBatch(batchNo: string, opts: { withTask?: boolean } 
 test("orders list: synced order row (kind order) + unmatched workflow in pending; no duplicates", async () => {
   await reseed(client);
   const token = await login("admin", "DocPalAdmin2026!");
-  let orderBatchNo = "";
-  await withWorkflowFake(async () => {
-    await postExcel(token, uploadForm(VALID_PAYLOAD));
-    orderBatchNo = (
-      await queryGet<{ batchNo: string }>(client.db, sql`SELECT batch_no AS "batchNo" FROM receiving_cn_workflows ORDER BY created_date DESC LIMIT 1`)
-    )!.batchNo;
-    // The upstream sync writes the order stamped with that batch_no.
-    await seedCnOrderByBatch(orderBatchNo, { withTask: true });
-    // Second upload whose order hasn't synced → pending placeholder.
-    await postExcel(token, uploadForm({ ...VALID_PAYLOAD, invoiceNo: "TE20261010-3" }));
-  });
+  const orderBatchNo = "CN-20261010-AAAAAA";
+  const pendingBatchNo = "CN-20261010-BBBBBB";
+  const insertWf = (id: string, batchNo: string, no: string, status: string) =>
+    client.db.execute(
+      sql`INSERT INTO receiving_cn_workflows (id, phase, invoice_no, supplier, filename,
+               docpal_document_id, docpal_process_id, docpal_business_key, batch_no, status, payload, created_by, created_date)
+          VALUES (${id}, 'excel', ${no}, 'TE', ${no + ".xls"}, 'doc-1', ${"proc-" + id}, 'bk-1', ${batchNo},
+                  ${status}, '{}'::jsonb, 'admin', now() + ${batchNo === pendingBatchNo ? 1 : 0} * interval '1 second')`
+    );
+  // Workflow whose order the upstream sync has written (stamped with its
+  // batch_no) + its put-away task, and a running one whose order is missing.
+  await insertWf("wf-matched", orderBatchNo, "TE20261010-2", "workflow_running");
+  await seedCnOrderByBatch(orderBatchNo, { withTask: true });
+  await insertWf("wf-running", pendingBatchNo, "TE20261010-3", "workflow_running");
 
   const res = await app.request("/admin/receiving-cn/orders", {
     headers: { Authorization: `Bearer ${token}` },
@@ -1245,6 +1294,56 @@ test("order detail prepare: pending order — items re-derived from po_no, arriv
     sql`SELECT arrived_at AS "arrivedAt" FROM receiving_orders_cn WHERE batch_no = 'TE-PREP-2'`
   );
   assert.equal(new Date(after!.arrivedAt).getTime(), new Date(before!.arrivedAt).getTime());
+});
+
+test("order detail prepare: sync holding the order row lock — GET returns without stamping and retries next open; stamped order not rewritten", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  await seedDerivedOrgInfoPairs();
+  const { orderId } = await seedPendingCnOrder("TE-PREP-LOCK", "329063176T3");
+
+  // Simulate the upstream sync mid-batch: a second connection holds the order
+  // row lock that the prepare's UPDATE would need (single-connection client
+  // so postgres.js allows manual transaction control).
+  const lockSql = postgres(TEST_DATABASE_URL, { max: 1, prepare: false });
+  await lockSql.unsafe("BEGIN");
+  await lockSql.unsafe(`SELECT 1 FROM receiving_orders_cn WHERE id = '${orderId}' FOR UPDATE`);
+
+  const t0 = Date.now();
+  const res = await app.request("/admin/receiving-cn/orders/TE-PREP-LOCK", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const elapsed = Date.now() - t0;
+  assert.equal(res.status, 200);
+  assert.ok(elapsed < 10_000, `detail GET stalled ${elapsed}ms behind the held lock`);
+  const detail = (await res.json()) as { order: { arrivedAt: string | null } };
+  assert.equal(detail.order.arrivedAt, null); // prepare skipped on lock wait — retried next open
+
+  await lockSql.unsafe("ROLLBACK");
+  await lockSql.end();
+
+  const res2 = await app.request("/admin/receiving-cn/orders/TE-PREP-LOCK", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(res2.status, 200);
+  const detail2 = (await res2.json()) as { order: { arrivedAt: string | null } };
+  assert.ok(detail2.order.arrivedAt); // stamped once the lock is released
+
+  // A stamped pending order is not rewritten on every detail open.
+  const before = await queryGet<{ at: string }>(
+    client.db,
+    sql`SELECT last_update_date AS "at" FROM receiving_orders_cn WHERE id = ${orderId}`
+  );
+  await new Promise((r) => setTimeout(r, 1100)); // last_update_date would move if rewritten
+  const res3 = await app.request("/admin/receiving-cn/orders/TE-PREP-LOCK", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(res3.status, 200);
+  const after = await queryGet<{ at: string }>(
+    client.db,
+    sql`SELECT last_update_date AS "at" FROM receiving_orders_cn WHERE id = ${orderId}`
+  );
+  assert.equal(new Date(after!.at).getTime(), new Date(before!.at).getTime());
 });
 
 test("confirm: pending → scanning (NO received fill, NO put-away task); 409 when not pending; 404 unknown", async () => {

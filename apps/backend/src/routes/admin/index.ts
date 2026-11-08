@@ -472,8 +472,10 @@ adminRoute.route("/ad-hoc-put-aways", adHocPutAwayRoute);
 // Test picking order creator (create / export / delete test orders).
 adminRoute.route("/", adminTestPickingOrderRoute);
 
-// Customer receiving (CN) upload tracking + Excel upload (spec
-// 2026-10-16-customer-receiving-upload-design.md).
+// Customer receiving (CN) upload tracking + uploads: PDF → DocPal OCR
+// workflow, Excel → decoded locally in the admin browser (spec
+// 2026-10-16-customer-receiving-upload-design.md +
+// 2026-11-08-receiving-cn-excel-local-upload-design.md).
 adminRoute.route("/", adminReceivingCnRoute);
 
 // Task assignee management for the PDA queues (spec

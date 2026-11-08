@@ -1,0 +1,14 @@
+{
+ "id": "CR-052",
+ "dateRaised": "2026-11-08",
+ "raisedBy": "Sean",
+ "app": "Admin",
+ "functionId": "ADM-023",
+ "feature": "CN receiving Excel upload, decoded locally — the upload page takes 收货确认 Excel files alongside PDFs: the browser decodes each sheet (reusing the retained cnReceivingExcel parser) into a verify/edit section (header fields + brand + inline item table), and one submit creates one PENDING CN receiving order per file directly in the DB (invoice + items, line qty = sheet qty), no DocPal workflow. The orders then run the existing confirm → PDA 收貨掃描 → put-away chain exactly like the pdf path",
+ "reason": "The excel sheet data is the supplier's own confirmation — effectively already verified — so the OCR workflow round-trip is unnecessary; operators wanted the retired excel upload back",
+ "priority": "Must have",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Implemented 2026-11-08 — spec docs/superpowers/specs/2026-11-08-receiving-cn-excel-local-upload-design.md, plan docs/superpowers/plans/2026-11-08-receiving-cn-excel-local-upload.md — pending UAT. Backend: POST /admin/receiving-cn/excel now takes JSON {files:[{filename,brand,payload}]} → createCnExcelUploads (pending order + completed tracking row per file, one tx). Admin: new.vue dual-path (pdf/excel, no mixing), CnExcelDraftEditor.vue, flowApi.submitCnExcelUpload. Brand is admin-entered (numbers [brand]-yyyymmdd-seq). Also affects ADM-024 (tracking list shows the completed excel rows)."
+}

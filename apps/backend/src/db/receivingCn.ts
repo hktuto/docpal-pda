@@ -604,6 +604,165 @@ export async function createCnManualReceipt(
   return { id: orderId, batchNo: invoiceNo, putAwayTaskId: taskId };
 }
 
+// --- excel upload, decoded locally (spec
+// docs/superpowers/specs/2026-11-08-receiving-cn-excel-local-upload-design.md) --
+// The admin browser decodes the customer receiving Excel and posts the verified
+// payload here; we write the SAME pending world the upstream sync writes for a
+// pdf workflow — order `pending` + one invoice + items (line_qty = sheet qty,
+// received_qty 0) — then the existing admin confirm → PDA 收貨掃描 → finalize
+// chain runs unchanged. One tx for all files in the upload (all-or-nothing);
+// each file also gets a `receiving_cn_workflows` tracking row (status
+// completed, docpal ids NULL — the status cron only polls workflow_running
+// rows with a process id, so it ignores these) so the admin list keeps
+// showing supplier + the sheet 編號 via its batch_no join.
+
+export interface CnExcelFileInput {
+  filename: string;
+  /** Numbering brand — `[brand]-YYYYMMDD-seq` batch/invoice no (validated). */
+  brand: string;
+  payload: CnUploadPayload;
+}
+
+/** Insert one file's order + invoice + items into tx — the pending twin of
+ *  createCnManualReceipt (shares its numbering/org-derivation helpers). */
+async function insertCnExcelOrderTx(
+  tx: DbOrTx,
+  file: CnExcelFileInput,
+  actor: { id: string; username: string }
+): Promise<{ orderId: string; batchNo: string }> {
+  const at = now();
+  const brand = file.brand;
+  const payload = file.payload;
+  // Group items by 訂單號 (wire `poNo`) — the same order→po_no shape the manual
+  // receipt commits. Empty groups are impossible (validateCnPayload requires
+  // non-empty poNo per item).
+  const groups = new Map<string, CnUploadItem[]>();
+  for (const item of payload.items) {
+    const list = groups.get(item.poNo!);
+    if (list) list.push(item);
+    else groups.set(item.poNo!, [item]);
+  }
+  const orderNos = [...groups.keys()];
+  // Sheet 收貨日期 → UTC-midnight Date (the `YYYY-MM-DD 00:00:00` literal the
+  // sync writes); missing/invalid falls back to the creation day, like manual.
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(payload.receivedDate ?? "");
+  const deliveryDate = dm
+    ? new Date(Date.UTC(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3])))
+    : new Date(Date.UTC(at.getFullYear(), at.getMonth(), at.getDate()));
+  const batchNo = await nextCnBrandedNo(tx, brand, at);
+  const orderId = newId();
+  const invoiceId = newId();
+  await tx.insert(receivingOrdersCn).values({
+    id: orderId,
+    batchNo,
+    deliveryDate,
+    status: "pending",
+    orgId: deriveCnManualOrgSub(orderNos[0]).orgId,
+    createdDate: at,
+    lastUpdateDate: at,
+  });
+  await tx.insert(receivingInvoicesCn).values({
+    id: invoiceId,
+    receivingOrderId: orderId,
+    invoiceNo: batchNo,
+    deliveryDate,
+    totalQty: payload.items.reduce((s, i) => s + i.qty, 0),
+    // shortcut: total_ctn left NULL — the merge-aware carton sum exists only
+    // client-side before submit; fill it if a consumer needs the count.
+    orgId: deriveCnManualOrgSub(orderNos[0]).orgId,
+    createdDate: at,
+    lastUpdateDate: at,
+  });
+  for (const [orderNo, items] of groups) {
+    const pair = deriveCnManualOrgSub(orderNo);
+    for (const item of items) {
+      const master = await resolvePartByKey(tx, item.partNo);
+      await tx.insert(receivingInvoiceItemsCn).values({
+        id: newId(),
+        receivingInvoiceId: invoiceId,
+        partNo: master?.partNo ?? item.partNo,
+        wclItemNo: master?.wclItemNo ?? null,
+        poNo: orderNo,
+        poLine: String(item.index ?? 0),
+        lineQty: item.qty,
+        receivedQty: 0,
+        dateCode: item.dateCode ?? null,
+        // shortcut: 发货項/箱数/重量/辦事處/備註 are not item columns — they
+        // live on the tracking row's payload jsonb.
+        additionalData: {
+          source: "excel",
+          filename: file.filename,
+          ...(payload.invoiceNo ? { invoiceNo: payload.invoiceNo } : {}),
+        },
+        orgId: pair.orgId,
+        subInventoryCode: pair.subInventoryCode,
+        createdDate: at,
+        lastUpdateDate: at,
+      });
+    }
+  }
+  await tx.insert(transactionLogs).values({
+    id: newId(),
+    entityType: "receiving_order_cn",
+    entityId: orderId,
+    fromState: null,
+    toState: "pending",
+    actorId: actor.id,
+    metadata: { source: "excel", filename: file.filename, orderNos },
+    createdDate: at,
+  });
+  return { orderId, batchNo };
+}
+
+/** Commit one local excel upload: all files in one tx (orders + tracking rows
+ *  + audit + SSE). 400s come from the route-side validators. */
+export async function createCnExcelUploads(
+  db: AppDb,
+  input: { files: CnExcelFileInput[]; actor: { id: string; username: string } }
+): Promise<{ orders: { id: string; batchNo: string }[] }> {
+  const { files, actor } = input;
+  const out: { orders: { id: string; batchNo: string }[] } = { orders: [] };
+  await db.transaction(async (tx) => {
+    const at = now();
+    for (const file of files) {
+      const { orderId, batchNo } = await insertCnExcelOrderTx(tx, file, actor);
+      out.orders.push({ id: orderId, batchNo });
+      const wfId = newId();
+      await tx.insert(receivingCnWorkflows).values({
+        id: wfId,
+        phase: "excel",
+        invoiceNo: file.payload.invoiceNo ?? null,
+        supplier: file.payload.supplier ?? null,
+        filename: file.filename,
+        batchNo,
+        status: "completed",
+        payload: file.payload,
+        createdBy: actor.username,
+        createdDate: at,
+        lastUpdateDate: at,
+      });
+      // Same shape as finalizeCnOrder's workflow log, so the order's audit
+      // trail shows the upload.
+      await tx.insert(transactionLogs).values({
+        id: newId(),
+        entityType: "receiving_cn_workflow",
+        entityId: wfId,
+        fromState: null,
+        toState: "completed",
+        actorId: actor.id,
+        metadata: { receivingOrderCnId: orderId, source: "excel", filename: file.filename },
+        createdDate: at,
+      });
+    }
+    await emitEvent(tx, {
+      type: "receiving_cn.updated",
+      topics: ["/admin/receiving-cn"],
+      data: { source: "excel", batchNos: out.orders.map((o) => o.batchNo) },
+    });
+  });
+  return out;
+}
+
 // --- reads -------------------------------------------------------------------
 
 export type CnWorkflowRow = typeof receivingCnWorkflows.$inferSelect;

@@ -8,6 +8,7 @@ import { queryGet } from "../../db/query.js";
 import { sql } from "drizzle-orm";
 import {
   confirmCnOrder,
+  createCnExcelUploads,
   createCnUpload,
   getCnOrderDetail,
   getCnWorkflow,
@@ -23,10 +24,12 @@ import type { OrderLogsParams } from "../../db/receiving.js";
 
 // Customer receiving (CN) upload tracking (spec
 // docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md):
-// the admin console's tracking list + the upload endpoints. Phase 1 (excel) is
-// superseded by the PDA manual receiving flow; phase 2 (pdf) uploads the
-// scanned PDF and lets DocPal OCR extract the data inside the workflow (the
-// verify step comes later). All calls carry the admin JWT (mounted under
+// the admin console's tracking list + the upload endpoints. PDF uploads
+// (phase 2) upload the scanned PDF and let DocPal OCR extract the data
+// inside the workflow; Excel uploads (spec
+// docs/superpowers/specs/2026-11-08-receiving-cn-excel-local-upload-design.md)
+// are decoded LOCALLY in the admin browser and create the pending CN orders
+// directly — no workflow. All calls carry the admin JWT (mounted under
 // /admin); actor comes from the token.
 
 export const adminReceivingCnRoute = new Hono();
@@ -224,30 +227,33 @@ async function cnUploadActor(c: Context): Promise<{ id: string; username: string
   return { id: tokenUser.id, username: tokenUser.username, displayName: row?.displayName ?? tokenUser.username, email: row?.email ?? null };
 }
 
-// Excel upload (phase 1, superseded by the PDA manual receiving flow — kept
-// for existing workflow definitions): multipart (file + data JSON string of
-// the verified rows) → DocPal file upload + workflow kick + tracking row.
-// 400 file_required / invalid_payload; 502 docpal_workflow: ...;
-// 500 docpal_workflow_token_not_configured.
+// Excel upload (reworked 2026-11-08: decoded LOCALLY in the admin browser —
+// spec docs/superpowers/specs/2026-11-08-receiving-cn-excel-local-upload-design.md):
+// JSON {files: [{filename, brand, payload}]} → one tx creates the pending CN
+// orders + completed tracking rows directly (no DocPal workflow; the admin
+// confirm + PDA receiving-scan steps follow). N files in one upload = N
+// orders, all-or-nothing. 400 invalid_payload on shape errors.
+// NB: createCnUpload's "excel" phase remains in the domain but no route uses
+// it — the old DocPal excel workflow was retired with this cutover.
+const CN_BRAND_RE = /^[A-Z][A-Z0-9]{1,9}$/;
 adminReceivingCnRoute.post("/receiving-cn/excel", async (c) => {
-  const body = await c.req.parseBody();
-  const file = body.file;
-  if (!(file instanceof File)) throw new HTTPException(400, { message: "file_required" });
-  const rawData = body.data;
-  if (typeof rawData !== "string") throw new HTTPException(400, { message: "invalid_payload" });
-  let parsedJson: unknown;
-  try {
-    parsedJson = JSON.parse(rawData);
-  } catch {
-    throw new HTTPException(400, { message: "invalid_payload" });
+  const body = await readJson<{ files?: unknown }>(c);
+  if (!Array.isArray(body.files) || body.files.length === 0) {
+    throw new HTTPException(400, { message: "invalid_payload: files must be a non-empty array" });
   }
-  const payload = validateCnPayload(parsedJson);
-  const result = await createCnUpload(db, {
-    phase: "excel",
-    files: [{ filename: file.name || "upload.xls", mime: file.type || "application/octet-stream", bytes: new Uint8Array(await file.arrayBuffer()) }],
-    payload,
-    actor: await cnUploadActor(c),
+  const files = body.files.map((raw, i) => {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      throw new HTTPException(400, { message: `invalid_payload: files[${i}] must be an object` });
+    }
+    const f = raw as Record<string, unknown>;
+    const brand = typeof f.brand === "string" ? f.brand.trim().toUpperCase() : "";
+    if (!CN_BRAND_RE.test(brand)) {
+      throw new HTTPException(400, { message: `invalid_payload: files[${i}].brand must match ${CN_BRAND_RE}` });
+    }
+    const filename = typeof f.filename === "string" && f.filename.trim() ? f.filename.trim() : "upload.xls";
+    return { filename, brand, payload: validateCnPayload(f.payload) };
   });
+  const result = await createCnExcelUploads(db, { files, actor: actorFrom(c) });
   return c.json(result, 201);
 });
 

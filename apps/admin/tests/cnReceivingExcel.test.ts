@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { parseCnReceivingAoa, fillMergedCells } from "~/utils/cnReceivingExcel";
+import { cnDraftToEntry, fillMergedCells, parseCnReceivingAoa, type CnReceivingDraft } from "~/utils/cnReceivingExcel";
 
 const require = createRequire(import.meta.url);
 
@@ -269,5 +269,84 @@ describe("parseCnReceivingAoa — synthetic edge cases", () => {
     expect(r.items[0].cartonMerged).toBeUndefined();
     // …but the total counts it once, matching the printed 合计.
     expect(r.totals).toEqual({ carton: 1, qty: 100 });
+  });
+});
+
+describe("parseCnReceivingAoa — 收货确认SH-KOA261029K2-2.xls (multi-tab workbook)", () => {
+  // The local excel upload (spec
+  // docs/superpowers/specs/2026-11-08-receiving-cn-excel-local-upload-design.md)
+  // picks the first sheet whose item table decodes — for this workbook that is
+  // Sheet1, the master 收货确认 spanning all offices; the SH/BJ/GZ tabs are
+  // per-office mirrors without the label/value header block.
+  const KOA_FIXTURE = path.resolve(
+    fileURLToPath(import.meta.url),
+    "../../../../supporting_doc/cn_receiving/收货确认SH-KOA261029K2-2.xls"
+  );
+  const merged = fillMergedCells(
+    fixtureAoaWithMerges(KOA_FIXTURE).aoa,
+    fixtureAoaWithMerges(KOA_FIXTURE).merges
+  );
+  const result = parseCnReceivingAoa(merged.aoa, merged.filled);
+
+  it("decodes the Sheet1 master confirmation", () => {
+    expect(result.invoiceNo).toBe("SH-KOA261029K2-2");
+    expect(result.supplier).toBe("上海兴亚");
+    expect(result.receivedOffice).toBe("上海办事处");
+    expect(result.receivedDate).toBe("2026-10-29");
+    expect(result.items).toHaveLength(635);
+    expect(result.totals.qty).toBe(54719500);
+    expect(result.items[0]).toMatchObject({
+      orderNo: "329A12339K2", // draft model: orderNo carries the 訂單號
+      partNo: "KOA+RK73H2BRTTD 4303F",
+      qty: "300000",
+      office: "广州办",
+    });
+  });
+});
+
+describe("cnDraftToEntry", () => {
+  const draft: CnReceivingDraft = {
+    uid: 1,
+    filename: "收货确认.xls",
+    brand: " koa ",
+    header: {
+      receivedOffice: "上海办事处",
+      supplier: "上海兴亚",
+      receiptNo: "",
+      invoiceNo: "SH-KOA261029K2-2",
+      receivedDate: "2026-10-29",
+    },
+    items: [
+      {
+        uid: 2,
+        index: 1,
+        orderNo: "329A12339K2",
+        cartonNo: "1",
+        partNo: "KOA+RK73H2BRTTD 4303F",
+        dateCode: "",
+        qty: "300000",
+        weight: "",
+        office: "广州办",
+        poNo: "SHIP-1",
+        remark: "留",
+        cartonMerged: true,
+      },
+    ],
+    totals: { carton: 1, qty: 300000 },
+    sheetTotals: null,
+  };
+
+  it("uppers the brand and applies the poNo/orderNo wire swap", () => {
+    const entry = cnDraftToEntry(draft);
+    expect(entry.filename).toBe("收货确认.xls");
+    expect(entry.brand).toBe("KOA");
+    expect(entry.payload.invoiceNo).toBe("SH-KOA261029K2-2");
+    const item = (entry.payload.items as Record<string, unknown>[])[0];
+    // Wire contract: poNo carries the 訂單號, orderNo the 发货项.
+    expect(item.poNo).toBe("329A12339K2");
+    expect(item.orderNo).toBe("SHIP-1");
+    expect(item.uid).toBeUndefined();
+    expect(item.cartonMerged).toBeUndefined();
+    expect(item.partNo).toBe("KOA+RK73H2BRTTD 4303F");
   });
 });

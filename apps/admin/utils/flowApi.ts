@@ -908,6 +908,36 @@ export async function submitCnPdfUpload(files: File[]): Promise<CnWorkflowRow> {
   return (await res.json()) as CnWorkflowRow;
 }
 
+/** One locally decoded Excel receiving confirmation (spec
+ *  docs/superpowers/specs/2026-11-08-receiving-cn-excel-local-upload-design.md).
+ *  `payload` uses the sheet wire contract: item poNo carries the 訂單號,
+ *  orderNo the 发货项. */
+export interface CnExcelFileEntry {
+  filename: string;
+  /** Drives the `[brand]-yyyymmdd-seq` batch/invoice numbering. */
+  brand: string;
+  payload: unknown;
+}
+
+/** POST /admin/receiving-cn/excel — the verified payloads the browser decoded
+ *  from the customer receiving Excel file(s). N files create N pending CN
+ *  orders in one upload (no DocPal workflow); the admin confirm + PDA
+ *  receiving-scan steps follow. 400 invalid_payload on shape errors. */
+export async function submitCnExcelUpload(
+  files: CnExcelFileEntry[]
+): Promise<{ orders: { id: string; batchNo: string }[] }> {
+  const res = await fetch(`${cnApiBaseUrl()}/admin/receiving-cn/excel`, {
+    method: "POST",
+    headers: { ...cnAuthHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ files }),
+  });
+  if (!res.ok) {
+    const text = (await res.text()).trim();
+    throw new Error(text || `Request failed (${res.status})`);
+  }
+  return (await res.json()) as { orders: { id: string; batchNo: string }[] };
+}
+
 // ---- customer receiving (CN) orders (synced receiving_orders_cn rows) ----
 
 /** Finalized CN receiving order row (kind "order"). */

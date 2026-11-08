@@ -282,3 +282,54 @@ export function parseCnReceivingAoa(aoa: unknown[][], filledCells?: Set<string>)
 
   return { ...header, receivedDate: header.receivedDate, items, totals, sheetTotals };
 }
+
+// --- upload wizard drafts -----------------------------------------------------
+
+/** One decoded sheet + the admin's edits (uid = stable row key for the table). */
+export interface CnReceivingDraftItem extends CnReceivingItem {
+  uid: number;
+}
+
+export interface CnReceivingDraft {
+  uid: number;
+  filename: string;
+  /** Numbering brand (`[brand]-yyyymmdd-seq`) — admin-entered, uppercased.
+   *  shortcut: no prefill from supplier profiles or 編號 parsing; the admin
+   *  types it. Upgrade path: suggest from a single-brand supplier_profiles
+   *  match on header.supplier. */
+  brand: string;
+  header: Pick<
+    CnReceivingPayload,
+    "receivedOffice" | "supplier" | "receiptNo" | "invoiceNo" | "receivedDate"
+  >;
+  items: CnReceivingDraftItem[];
+  /** Σ captured at parse time (totals cross-check fallback). */
+  totals: { carton: number; qty: number };
+  /** The sheet's printed 合计 row, when present (cross-check target). */
+  sheetTotals: { carton: number | null; qty: number | null } | null;
+}
+
+/** Build one POST /admin/receiving-cn/excel file entry. Wire contract (same
+ *  as the retired DocPal upload): the submitted item keys are swapped
+ *  relative to the sheet/UI — the 訂單號 cell value goes as `poNo`, the
+ *  发货项 cell value as `orderNo`. */
+export function cnDraftToEntry(draft: CnReceivingDraft): {
+  filename: string;
+  brand: string;
+  payload: Record<string, unknown>;
+} {
+  return {
+    filename: draft.filename,
+    brand: draft.brand.trim().toUpperCase(),
+    payload: {
+      ...draft.header,
+      items: draft.items.map(
+        ({ uid: _uid, cartonMerged: _cm, orderNo, poNo, ...rest }) => ({
+          ...rest,
+          orderNo: poNo,
+          poNo: orderNo,
+        })
+      ),
+    },
+  };
+}

@@ -245,7 +245,7 @@
     "id": "ADM-023",
     "app": "Admin",
     "module": "Receiving",
-    "name": "CN receiving upload — upload customer receiving Excel, in-browser decode/verify, workflow submit + status",
+    "name": "CN receiving upload — Excel upload (in-browser decode/verify, orders created locally) + PDF upload (DocPal OCR workflow) + status",
     "tester": "",
     "testDate": "",
     "result": "",
