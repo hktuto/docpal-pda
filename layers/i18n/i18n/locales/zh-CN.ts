@@ -1458,6 +1458,8 @@ export default {
       scale: "打印缩放（%）",
       copies: "份数",
       print: "打印",
+      downloadPdf: "下载为 PDF",
+      pdfPreparing: "正在生成 PDF…",
       downloadQr: "下载标签",
       printSelected: "打印所选（{count}）",
       printAll: "打印全部（{count}）",

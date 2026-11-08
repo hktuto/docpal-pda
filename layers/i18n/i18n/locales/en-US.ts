@@ -1459,6 +1459,8 @@ export default {
       scale: "Print scale (%)",
       copies: "Copies",
       print: "Print",
+      downloadPdf: "Download as PDF",
+      pdfPreparing: "Preparing PDF…",
       downloadQr: "Download label",
       printSelected: "Print selected ({count})",
       printAll: "Print all ({count})",

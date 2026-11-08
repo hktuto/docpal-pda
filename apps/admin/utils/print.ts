@@ -431,6 +431,27 @@ function apiBaseUrl(): string {
   return (useRuntimeConfig().public.apiBaseUrl as string).replace(/\/+$/, "");
 }
 
+// Combine already-rendered A4 PNG pages into one downloadable PDF (the
+// "Download as PDF" button in the batch print dialogs — same pages the print
+// path sends, no printer needed). jsPDF is imported on demand so the ~140 KB
+// gzip library only loads when the button is pressed.
+export async function downloadPagesAsPdf(pages: Blob[], filename: string): Promise<void> {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  for (const [i, page] of pages.entries()) {
+    if (i > 0) doc.addPage("a4", "portrait");
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result as string);
+      fr.onerror = () => reject(fr.error ?? new Error("FileReader failed"));
+      fr.readAsDataURL(page);
+    });
+    // Full-bleed 210 x 297 mm: the PNG is a 2480 x 3508 (A4 @ 300 dpi) canvas.
+    doc.addImage(dataUrl, "PNG", 0, 0, 210, 297);
+  }
+  doc.save(filename);
+}
+
 function authHeaders(): Record<string, string> {
   const token = import.meta.client ? localStorage.getItem("admin_token") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};

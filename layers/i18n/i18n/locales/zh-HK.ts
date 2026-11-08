@@ -1458,6 +1458,8 @@ export default {
       scale: "列印縮放（%）",
       copies: "份數",
       print: "列印",
+      downloadPdf: "下載為 PDF",
+      pdfPreparing: "正在產生 PDF…",
       downloadQr: "下載標籤",
       printSelected: "列印所選（{count}）",
       printAll: "列印全部（{count}）",

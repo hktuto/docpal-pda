@@ -7,6 +7,7 @@
 // agent printers; the chosen printer is remembered in localStorage.
 import {
   activeLabelSizes,
+  downloadPagesAsPdf,
   labelSize,
   listPrinters,
   parsePrinterKey,
@@ -41,6 +42,7 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>();
 
 const printing = ref(false);
+const downloading = ref(false);
 const dlg = useOverlayDismiss(() => {
   if (!printing.value) emit("close");
 });
@@ -103,6 +105,19 @@ watch(scale, () => renderPages());
 watch(labelLayout, () => renderPages(), { deep: true });
 
 onBeforeUnmount(() => previews.value.forEach((u) => URL.revokeObjectURL(u)));
+
+async function downloadPdf() {
+  if (!pageBlobs.value.length || downloading.value) return;
+  downloading.value = true;
+  error.value = "";
+  try {
+    await downloadPagesAsPdf(pageBlobs.value, "shelf-labels.pdf");
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    downloading.value = false;
+  }
+}
 
 async function print() {
   const printer = selectedPrinter.value;
@@ -181,6 +196,9 @@ async function print() {
       <div class="dialog-actions">
         <button class="btn" :disabled="printing" @click="emit('close')">
           {{ $t("admin.common.close") }}
+        </button>
+        <button class="btn" :disabled="!pageBlobs.length || downloading || printing" @click="downloadPdf">
+          {{ downloading ? $t("admin.print.pdfPreparing") : $t("admin.print.downloadPdf") }}
         </button>
         <button class="btn btn-primary" :disabled="!selectedPrinter || !pageBlobs.length || printing" @click="print">
           {{ printing ? $t("admin.print.printing", { progress }) : $t("admin.print.print") }}
