@@ -348,6 +348,7 @@ export const navSections: { title: string; links: { route: string; title: string
     title: "admin.nav.picking",
     links: [
       { route: "/picking-orders", title: "admin.navLinks.pickingOrders" },
+      { route: "/internal-transfer-orders", title: "admin.navLinks.internalTransferOrders" },
       { route: "/cancel-records", title: "admin.navLinks.cancelRecords" },
       { route: "/picking/reorder", title: "admin.navLinks.reorder" },
       { route: "/picking-orders/create", title: "admin.navLinks.createTestOrder" },

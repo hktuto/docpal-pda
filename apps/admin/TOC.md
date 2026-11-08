@@ -28,7 +28,8 @@
   5.1 cancel-records — read-only ingest log of upstream cancelled invoices / TN lines (`/cancel-records`)
   
 6. Internal Transfer Management
-  - tbc
+  6.1 internal-transfer-orders — read-only list + detail of upstream-synced internal transfer orders (`/internal-transfer-orders`)
+  - flow actions tbc
   
 7. Document generation
   7.1 "Delivery Order List" (Excel)

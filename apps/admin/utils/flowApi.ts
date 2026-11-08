@@ -584,6 +584,57 @@ export interface CancelRecordRow {
   putBackTasks: number;
 }
 
+/** GET /admin/internal-transfer-orders row — upstream-synced transfer order
+ *  with per-order item aggregates. */
+export interface InternalTransferOrderRow {
+  id: string;
+  orderNo: string;
+  fromOrgId: number | null;
+  fromSubInventoryCode: string | null;
+  toOrgId: number | null;
+  toSubInventoryCode: string | null;
+  status: string; // pending | allocated | picking | issue | finished
+  allocationStatus: string; // unallocated | partial | allocated
+  customerName: string | null;
+  remark: string | null;
+  createdDate: string;
+  lastUpdateDate: string;
+  itemCount: number;
+  totalQty: number;
+  pickedQty: number;
+  allocatedQty: number;
+}
+
+/** GET /admin/internal-transfer-orders/:id order header (no aggregates). */
+export interface InternalTransferOrderDetailRow
+  extends Omit<InternalTransferOrderRow, "itemCount" | "totalQty" | "pickedQty" | "allocatedQty"> {
+  prioritySeq: number;
+  pickingOrderId: string | null;
+  issueReason: string | null;
+  issueQty: number | null;
+  issueNote: string | null;
+  issueRemark: string | null;
+  issueReportedAt: string | null;
+  additionalData: Record<string, unknown> | null;
+}
+
+/** GET /admin/internal-transfer-orders/:id item line. */
+export interface InternalTransferItemRow {
+  id: string;
+  partNo: string;
+  wclItemNo: string | null;
+  qty: number;
+  pickedQty: number;
+  allocatedQty: number;
+  status: string; // pending | picked
+  poNo: string | null;
+  lineId: number | null;
+  lineNumber: number | null;
+  additionalData: Record<string, unknown> | null;
+  createdDate: string;
+  lastUpdateDate: string;
+}
+
 // ---- part availability (stock lots + open receiving sources for a part) ----
 
 export interface PartAvailabilityStockRow {
@@ -1485,6 +1536,23 @@ export function useFlowApi() {
       const suffix = q.toString() ? `?${q.toString()}` : "";
       return api.get<CancelRecordRow[]>(`/admin/cancel-records${suffix}`);
     },
+
+    // Internal transfer orders (upstream-synced; read-only until the flow
+    // itself lands — spec 2026-09-28-internal-transfer-order-design.md).
+    // Server-paged: 1-based page, default 50 rows.
+    listInternalTransferOrders: (params: { status?: string; search?: string; page?: number; pageSize?: number }) => {
+      const q = new URLSearchParams();
+      if (params.status) q.set("status", params.status);
+      if (params.search) q.set("search", params.search);
+      if (params.page) q.set("page", String(params.page));
+      if (params.pageSize) q.set("pageSize", String(params.pageSize));
+      const suffix = q.toString() ? `?${q.toString()}` : "";
+      return api.get<{ rows: InternalTransferOrderRow[]; total: number }>(`/admin/internal-transfer-orders${suffix}`);
+    },
+    getInternalTransferOrder: (id: string) =>
+      api.get<{ order: InternalTransferOrderDetailRow; items: InternalTransferItemRow[] }>(
+        `/admin/internal-transfer-orders/${encodeURIComponent(id)}`
+      ),
 
     // Flow config (warehouse_config row "flow"; applies at runtime on save
     // unless the FLOW_CONFIG env override is active)

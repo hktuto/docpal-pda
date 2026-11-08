@@ -44,6 +44,7 @@ import { adminTestPickingOrderRoute } from "./testPickingOrder.js";
 import { adminReceivingCnRoute } from "./receivingCn.js";
 import { adminTaskAssignmentsRoute } from "./taskAssignments.js";
 import { adminCancelRecordsRoute } from "./cancelRecords.js";
+import { adminInternalTransferRoute } from "./internalTransferOrders.js";
 import { adminBugReportsRoute } from "./bugReports.js";
 import { parseScopeEntries, type UserScopeEntry } from "../../db/user-scope.js";
 
@@ -486,6 +487,8 @@ adminRoute.route("/", adminPartsLookupRoute);
 // 2026-11-01-task-assignee-design.md).
 adminRoute.route("/", adminTaskAssignmentsRoute);
 adminRoute.route("/", adminCancelRecordsRoute);
+// Internal transfer orders — read-only view of the upstream-synced tables.
+adminRoute.route("/", adminInternalTransferRoute);
 
 // Bug report triage queue (spec 2026-11-05-in-app-bug-report-design.md) —
 // sub-router uses relative paths, mounted at the resource path.
