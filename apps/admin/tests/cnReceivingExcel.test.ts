@@ -246,8 +246,9 @@ describe("parseCnReceivingAoa — synthetic edge cases", () => {
     ];
     const r = parseCnReceivingAoa(aoa);
     expect(r.invoiceNo).toBe("FIGARO20260429-1");
-    // Bare 摘要 / 數量 headers map to dateCode / qty.
-    expect(r.items[0].dateCode).toBe("2618");
+    // Bare 數量 maps to qty. A BARE 摘要 column is free-text (KOA sheets
+    // ship end-customer names there) — only 摘要(D/C) decodes into dateCode.
+    expect(r.items[0].dateCode).toBe("");
     expect(r.items[0].qty).toBe("20");
   });
 

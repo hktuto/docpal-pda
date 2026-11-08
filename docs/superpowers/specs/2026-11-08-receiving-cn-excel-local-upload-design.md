@@ -44,7 +44,7 @@ Mirrors the `createCnManualReceipt` insert block with pending-path values (share
 
 1. `receiving_orders_cn`: `status='pending'`, `batch_no = [brand]-YYYYMMDD-seq`, `delivery_date` = sheet `receivedDate` (UTC-midnight literal) else creation day, `org_id` = first 訂單號 prefix derivation, arrival stamps NULL (detail-open `prepareCnOrderDetail` stamps them as today).
 2. One `receiving_invoices_cn` (`invoice_no = batch_no`, `total_qty` = Σ qty; `total_ctn` NULL — see ceilings).
-3. `receiving_invoice_items_cn`: grouped by `poNo` (訂單號), `po_no = 訂單號`, `line_qty = qty`, `received_qty` 0 (default), `po_line = sheet row index`, `date_code` from 摘要, `ctn_no` = 箱號 carton number, org/sub per `deriveCnManualOrgSub(訂單號)`, canonical `part_no`/`wcl_item_no` backfilled on a unique parts-master match, `additional_data = { "source": "excel", "filename", "invoiceNo": 編號 }`.
+3. `receiving_invoice_items_cn`: grouped by `poNo` (訂單號), `po_no = 訂單號`, `line_qty = qty`, `received_qty` 0 (default), `po_line = sheet row index`, `date_code` from the 摘要(D/C) column only (a bare 摘要 is free-text — KOA sheets put end-customer names there, no D/C), `ctn_no` = 箱號 carton number, org/sub per `deriveCnManualOrgSub(訂單號)`, canonical `part_no`/`wcl_item_no` backfilled on a unique parts-master match, `additional_data = { "source": "excel", "filename", "invoiceNo": 編號 }`.
 4. `receiving_cn_workflows` tracking row: `phase='excel'`, `status='completed'`, `batch_no` = generated number, `invoice_no` = sheet 編號, `supplier`, `filename`, `payload` = validated payload, docpal document/process/business-key NULL. The status cron selects only `workflow_running AND docpal_process_id IS NOT NULL`, so it ignores these rows.
 5. `transaction_logs`: order `null → pending` (+ workflow `null → completed` referencing the order, like `finalizeCnOrder` does) and one `receiving_cn.updated` SSE on `/admin/receiving-cn`.
 
@@ -56,6 +56,7 @@ One dropzone, `accept=".pdf,.xls,.xlsx"` `multiple`. Classification on pick: PDF
 
 - `total_ctn` not filled — the merge-aware carton sum exists only client-side before submit; revisit if a consumer needs it.
 - On 箱號-only sheets (KOA style) the 箱数 is derived client-side: rows sharing 訂單號+型號 are one box group, its size shows on every row (followers merge-marked so Σ counts once); a lone box defaults to 1. Sheets with an empty 箱数 column keep their blanks.
+- A bare 摘要 column (no `(D/C)` suffix) is dropped at decode — KOA sheets put end-customer names there, and the sheets carry no real date code. Upgrade path: map it to a dedicated note field if that text ever needs traceability.
 - 发货項/箱数/重量/辦事處/備註 live only in the tracking-row payload, not on item columns (箱號 is a column: `ctn_no`).
 - No duplicate-編號 guard: the sheet 編號 is free text on the tracking row; `batch_no` uniqueness comes from the branded sequence.
 - `delivery_date` = sheet date else today; the sheet date is not sanity-checked against upstream order dates.

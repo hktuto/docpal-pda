@@ -120,7 +120,8 @@ const ITEM_COLUMNS: Record<string, keyof CnReceivingItem> = {
   箱數: "cartonNo",
   型號: "partNo",
   型号: "partNo",
-  摘要: "dateCode",
+  // dateCode only via the explicit D/C header — a bare 摘要 column carries
+  // free-text notes (end-customer names on KOA sheets), NOT the date code.
   "摘要(D/C)": "dateCode",
   數量: "qty",
   数量: "qty",
