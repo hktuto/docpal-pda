@@ -219,8 +219,10 @@ async function submitExcelDrafts() {
   submitting.value = true;
   error.value = "";
   try {
-    await submitCnExcelUpload(drafts.value.map(cnDraftToEntry));
-    await navigateTo("/receiving-cn");
+    const { orders } = await submitCnExcelUpload(drafts.value.map(cnDraftToEntry));
+    // Open the created order detail (multi-file uploads land on the first;
+    // back returns to the tracking list with the rest).
+    await navigateTo(orders[0] ? `/receiving-cn/${encodeURIComponent(orders[0].batchNo)}` : "/receiving-cn");
   } catch (e: any) {
     error.value = e?.message ?? String(e);
     step.value = 2;
