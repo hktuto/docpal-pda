@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { cnDraftToEntry, fillMergedCells, parseCnReceivingAoa, type AoaMergeRange, type CnReceivingDraft } from "~/utils/cnReceivingExcel";
-import { submitCnExcelUpload, submitCnPdfUpload } from "~/utils/flowApi";
+import { submitCnExcelUpload, submitCnPdfUpload, useFlowApi } from "~/utils/flowApi";
 
 const { t } = useI18n();
+const flow = useFlowApi();
 
 // Two upload paths (spec
 // docs/superpowers/specs/2026-11-08-receiving-cn-excel-local-upload-design.md):
@@ -134,6 +135,27 @@ async function addExcelDraft(picked: File) {
       sheetTotals: result.sheetTotals,
     },
   ];
+  // Prefill brand via the REACTIVE entry (raw-object writes skip the input).
+  void prefillBrand(drafts.value[drafts.value.length - 1]!);
+}
+
+// Uploads are single-brand: prefill the numbering brand from the first
+// item's parts-master row (the sheet 型号 usually IS the wcl_item_no, so
+// both columns are matched). Editable override; if the lookup misses, the
+// brand stays blank and the server derives (or 400s) at submit.
+async function prefillBrand(draft: CnReceivingDraft) {
+  const first = draft.items[0];
+  const key = first?.partNo.trim().toUpperCase();
+  if (!key || draft.brand.trim()) return;
+  try {
+    const res = await flow.searchParts({ q: first!.partNo, pageSize: 20 });
+    const hit = res.rows.find(
+      (r) => r.partNo.trim().toUpperCase() === key || r.wclItemNo.trim().toUpperCase() === key
+    );
+    if (hit?.brand) draft.brand = hit.brand;
+  } catch {
+    // Offline master lookup — server-side derivation still guards submit.
+  }
 }
 
 function removeFile(index: number) {
