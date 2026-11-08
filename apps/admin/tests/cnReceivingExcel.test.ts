@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { cnDraftToEntry, fillMergedCells, parseCnReceivingAoa, type CnReceivingDraft } from "~/utils/cnReceivingExcel";
+import { checkCnDraft, cnDraftToEntry, fillMergedCells, parseCnReceivingAoa, type CnReceivingDraft } from "~/utils/cnReceivingExcel";
 
 const require = createRequire(import.meta.url);
 
@@ -377,5 +377,46 @@ describe("cnDraftToEntry", () => {
   it("omits a blank brand so the server derives it from the parts master", () => {
     const entry = cnDraftToEntry({ ...draft, brand: "  " });
     expect(entry.brand).toBeUndefined();
+  });
+});
+
+describe("checkCnDraft", () => {
+  const draft: CnReceivingDraft = {
+    uid: 1,
+    filename: "f.xls",
+    brand: "KOA",
+    header: { receivedOffice: "", supplier: "S", receiptNo: "", invoiceNo: "NO-1", receivedDate: "2026-10-29" },
+    items: [
+      { uid: 1, index: 1, orderNo: "329A1", ctnNo: "W1", cartonNo: "1", partNo: "P-1", dateCode: "", qty: "100", weight: "", office: "", poNo: "", remark: "" },
+      { uid: 2, index: 2, orderNo: "329A1", ctnNo: "W2", cartonNo: "1", partNo: "P-1", dateCode: "", qty: "50", weight: "", office: "", poNo: "", remark: "" },
+    ],
+    totals: { carton: 2, qty: 150 },
+    sheetTotals: null,
+  };
+
+  it("passes a clean draft", () => {
+    expect(checkCnDraft(draft, () => true)).toEqual([]);
+  });
+
+  it("flags bad qty rows, missing 訂單號/型號, unknown parts (deduped) and a missing 編號", () => {
+    const bad = structuredClone(draft);
+    bad.header.invoiceNo = "";
+    bad.items[1]!.qty = "1.5";
+    bad.items.push({ uid: 3, index: 3, orderNo: "", ctnNo: "", cartonNo: "", partNo: "", dateCode: "", qty: "0", weight: "", office: "", poNo: "", remark: "" });
+    const issues = checkCnDraft(bad, (k) => k !== "P-Z");
+    expect(issues).toContainEqual({ code: "noInvoiceNo" });
+    expect(issues).toContainEqual({ code: "invalidQty", row: 2 });
+    expect(issues).toContainEqual({ code: "noOrderNo", row: 3 });
+    expect(issues).toContainEqual({ code: "noPartNo", row: 3 });
+  });
+
+  it("reports an unknown part key once with the row and key", () => {
+    const withUnknown = structuredClone(draft);
+    withUnknown.items.push({ ...withUnknown.items[0]!, uid: 9, index: 9, partNo: "P-Z" });
+    withUnknown.items.push({ ...withUnknown.items[0]!, uid: 10, index: 10, partNo: "P-Z" });
+    const issues = checkCnDraft(withUnknown, (k) => k !== "P-Z");
+    expect(issues.filter((i) => i.code === "unknownPart")).toEqual([
+      { code: "unknownPart", row: 9, partNo: "P-Z" },
+    ]);
   });
 });

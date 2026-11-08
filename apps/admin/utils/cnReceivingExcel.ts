@@ -363,3 +363,43 @@ export function cnDraftToEntry(draft: CnReceivingDraft): {
     },
   };
 }
+
+// --- upload data gate (auto-create check) -------------------------------------
+
+/** Issue codes resolved by the caller via
+ *  `admin.pages.receivingCn.gate.<code>` i18n keys. */
+export type CnDraftIssueCode = "noInvoiceNo" | "noOrderNo" | "noPartNo" | "invalidQty" | "unknownPart";
+
+export interface CnDraftIssue {
+  code: CnDraftIssueCode;
+  /** Sheet item row number (1-based); header issues carry none. */
+  row?: number;
+  /** The offending part key for unknownPart issues. */
+  partNo?: string;
+}
+
+/** Check one decoded draft against the upload rules: 編號 header present and
+ *  every item row having 訂單號, a parts-master-resolvable 型號 and a
+ *  positive-integer qty. `partKnown` reads the batch-check cache (see
+ *  composables/usePartsBrandCheck). */
+export function checkCnDraft(draft: CnReceivingDraft, partKnown: (key: string) => boolean): CnDraftIssue[] {
+  const issues: CnDraftIssue[] = [];
+  if (draft.header.invoiceNo.trim() === "") issues.push({ code: "noInvoiceNo" });
+  const seenUnknown = new Set<string>();
+  for (const item of draft.items) {
+    if (item.orderNo.trim() === "") issues.push({ code: "noOrderNo", row: item.index });
+    const partNo = item.partNo.trim();
+    if (partNo === "") issues.push({ code: "noPartNo", row: item.index });
+    else if (!partKnown(partNo) && !seenUnknown.has(cacheKeyOf(partNo))) {
+      seenUnknown.add(cacheKeyOf(partNo));
+      issues.push({ code: "unknownPart", row: item.index, partNo });
+    }
+    const q = Number(item.qty.trim());
+    if (!Number.isInteger(q) || q <= 0) issues.push({ code: "invalidQty", row: item.index });
+  }
+  return issues;
+}
+
+function cacheKeyOf(key: string): string {
+  return key.trim().replace(/\s+/g, " ").toLowerCase();
+}

@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { cnDraftToEntry, fillMergedCells, parseCnReceivingAoa, type AoaMergeRange, type CnReceivingDraft } from "~/utils/cnReceivingExcel";
-import { submitCnExcelUpload, submitCnPdfUpload, useFlowApi } from "~/utils/flowApi";
+import { checkCnDraft, cnDraftToEntry, fillMergedCells, parseCnReceivingAoa, type AoaMergeRange, type CnDraftIssue, type CnReceivingDraft } from "~/utils/cnReceivingExcel";
+import { submitCnExcelUpload, submitCnPdfUpload } from "~/utils/flowApi";
 
 const { t } = useI18n();
-const flow = useFlowApi();
+const parts = usePartsBrandCheck();
 
 // Two upload paths (spec
 // docs/superpowers/specs/2026-11-08-receiving-cn-excel-local-upload-design.md):
 // - PDF(s): kick the DocPal OCR workflow, one upload per file set (unchanged).
-// - Excel(s): decode LOCALLY in the browser, verify/edit each sheet, then
-//   create one pending CN order per file in one submit. The two types never
-//   mix in one upload.
+// - Excel(s): decode LOCALLY in the browser, batch-check every part key and
+//   the row shapes — all clean creates the pending CN orders directly (one
+//   per file); problems open the verify/edit step with the issue list. The
+//   two types never mix in one upload.
 const fileInput = ref<HTMLInputElement | null>(null);
 const files = ref<File[]>([]); // PDFs
 const drafts = ref<CnReceivingDraft[]>([]); // decoded Excels
@@ -84,8 +85,9 @@ async function acceptFiles(picked: File[]) {
   }
   parsing.value = true;
   try {
-    for (const f of excels) await addExcelDraft(f);
-    step.value = 2;
+    const added: CnReceivingDraft[] = [];
+    for (const f of excels) added.push(await addExcelDraft(f));
+    await gateAndAutoCreate(added);
   } catch (e: any) {
     error.value = e?.message ?? String(e);
   } finally {
@@ -135,27 +137,46 @@ async function addExcelDraft(picked: File) {
       sheetTotals: result.sheetTotals,
     },
   ];
-  // Prefill brand via the REACTIVE entry (raw-object writes skip the input).
-  void prefillBrand(drafts.value[drafts.value.length - 1]!);
+  // Return the REACTIVE entry (raw-object writes skip the editor's inputs).
+  return drafts.value[drafts.value.length - 1]!;
 }
 
-// Uploads are single-brand: prefill the numbering brand from the first
-// item's parts-master row (the sheet 型号 usually IS the wcl_item_no, so
-// both columns are matched). Editable override; if the lookup misses, the
-// brand stays blank and the server derives (or 400s) at submit.
-async function prefillBrand(draft: CnReceivingDraft) {
-  const first = draft.items[0];
-  const key = first?.partNo.trim().toUpperCase();
-  if (!key || draft.brand.trim()) return;
-  try {
-    const res = await flow.searchParts({ q: first!.partNo, pageSize: 20 });
-    const hit = res.rows.find(
-      (r) => r.partNo.trim().toUpperCase() === key || r.wclItemNo.trim().toUpperCase() === key
-    );
-    if (hit?.brand) draft.brand = hit.brand;
-  } catch {
-    // Offline master lookup — server-side derivation still guards submit.
+// Decode→create gate: batch-check every 型號 once, prefill the brand from
+// the parts master, and auto-create when the data is clean. Problems keep
+// the verify/edit step open with the issues banner (inline fix beats a
+// re-upload round-trip).
+async function gateAndAutoCreate(added: CnReceivingDraft[]) {
+  const keys = added.flatMap((d) => d.items.map((i) => i.partNo.trim())).filter((k) => k !== "");
+  if (keys.length > 0) {
+    const failed = await parts.ensure(keys);
+    if (failed) {
+      error.value = t("admin.pages.receivingCn.partsCheckFailed");
+      step.value = 2;
+      return;
+    }
   }
+  const msgs: string[] = [];
+  for (const d of added) {
+    for (const iss of checkCnDraft(d, (k) => parts.check(k)?.found === true)) {
+      msgs.push(fmtIssue(d.filename, iss));
+    }
+    if (d.brand.trim() === "") {
+      const b = parts.brandOf(d.items[0]?.partNo ?? "");
+      if (typeof b === "string") d.brand = b;
+    }
+  }
+  if (msgs.length > 0) {
+    error.value = msgs.join("\n");
+    step.value = 2;
+    return;
+  }
+  await submitExcelDrafts();
+}
+
+function fmtIssue(file: string, iss: CnDraftIssue): string {
+  const key = `admin.pages.receivingCn.gate.${iss.code}`;
+  const msg = iss.partNo !== undefined ? t(key, { partNo: iss.partNo }) : t(key);
+  return `${file}${iss.row !== undefined ? ` #${iss.row}` : ""}: ${msg}`;
 }
 
 function removeFile(index: number) {
@@ -174,19 +195,35 @@ function backToPick() {
 
 async function submit() {
   if (submitting.value || (files.value.length === 0 && drafts.value.length === 0)) return;
+  if (drafts.value.length > 0) {
+    await submitExcelDrafts();
+    return;
+  }
   submitting.value = true;
   error.value = "";
   try {
-    if (drafts.value.length > 0) {
-      // Blank brand derives from each sheet's first item via the parts
-      // master server-side.
-      await submitCnExcelUpload(drafts.value.map(cnDraftToEntry));
-    } else {
-      await submitCnPdfUpload(files.value);
-    }
+    await submitCnPdfUpload(files.value);
     await navigateTo("/receiving-cn");
   } catch (e: any) {
     error.value = e?.message ?? String(e);
+  } finally {
+    submitting.value = false;
+  }
+}
+
+/** POST all decoded drafts — blank brand derives server-side from each
+ *  sheet's first item. Failures land in the verify/edit step with the
+ *  message banner (the data is fixable there). */
+async function submitExcelDrafts() {
+  if (submitting.value || drafts.value.length === 0) return;
+  submitting.value = true;
+  error.value = "";
+  try {
+    await submitCnExcelUpload(drafts.value.map(cnDraftToEntry));
+    await navigateTo("/receiving-cn");
+  } catch (e: any) {
+    error.value = e?.message ?? String(e);
+    step.value = 2;
   } finally {
     submitting.value = false;
   }
@@ -354,5 +391,9 @@ function cancel() {
 .wizard-actions {
   display: flex;
   gap: 0.625rem;
+}
+/* Gate issue lists are newline-joined. */
+.error-banner {
+  white-space: pre-line;
 }
 </style>

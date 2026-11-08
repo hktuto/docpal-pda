@@ -2153,6 +2153,14 @@ export default {
         pickFile: "Pick PDF / Excel File(s)",
         mixedTypes: "PDFs and Excel files cannot be uploaded together.",
         brandAuto: "Blank = brand of the first item's parts master",
+        partsCheckFailed: "Parts-master batch check failed — review the rows below before submitting.",
+        gate: {
+          noInvoiceNo: "Ref no. (編號) is missing.",
+          noOrderNo: "Order no. (訂單號) is missing.",
+          noPartNo: "Part no. (型號) is missing.",
+          invalidQty: "Qty must be a positive integer.",
+          unknownPart: "Part \"{partNo}\" is not in the parts master — fix it before submitting."
+        },
         noSheet: "The file contains no worksheet.",
         noItems: "No receiving items could be parsed — check the file format.",
         partNotFound: "Not in parts master",

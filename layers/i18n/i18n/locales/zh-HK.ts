@@ -2150,6 +2150,14 @@ export default {
         pickFile: "選擇 PDF / Excel 檔案（可多選）",
         mixedTypes: "PDF 與 Excel 檔案不能同批上傳。",
         brandAuto: "留空 — 自動取首筆明細在零件主檔的品牌",
+        partsCheckFailed: "零件主檔批量核對失敗 — 請於下方逐項核對後再送出。",
+        gate: {
+          noInvoiceNo: "缺少編號。",
+          noOrderNo: "缺少訂單號。",
+          noPartNo: "缺少型號。",
+          invalidQty: "數量必須為正整數。",
+          unknownPart: "型號「{partNo}」不在零件主檔 — 請修正後再送出。"
+        },
         noSheet: "檔案內找不到工作表。",
         noItems: "解析不到任何收貨明細 — 請確認檔案格式正確。",
         partNotFound: "零件主檔中不存在",

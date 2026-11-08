@@ -29,6 +29,7 @@ import { adminIssuesRoute } from "./issues.js";
 import { adminAppDownloadRoute } from "./appDownload.js";
 import { adminFlowConfigRoute } from "./flowConfig.js";
 import { adminReceivingShipperRoute } from "./receivingShipper.js";
+import { adminPartsLookupRoute } from "./partsLookup.js";
 import { adminPickingListRoute } from "./pickingList.js";
 import { shelfBatchImportRoute } from "./shelfBatchImport.js";
 import { adminAllocationRoute } from "./allocation.js";
@@ -477,6 +478,9 @@ adminRoute.route("/", adminTestPickingOrderRoute);
 // 2026-10-16-customer-receiving-upload-design.md +
 // 2026-11-08-receiving-cn-excel-local-upload-design.md).
 adminRoute.route("/", adminReceivingCnRoute);
+
+// Batch parts-master check for the CN excel upload (src/db/partsLookup.ts).
+adminRoute.route("/", adminPartsLookupRoute);
 
 // Task assignee management for the PDA queues (spec
 // 2026-11-01-task-assignee-design.md).

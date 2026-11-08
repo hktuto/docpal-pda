@@ -1338,6 +1338,14 @@ export function useFlowApi() {
       if (params.brand?.trim()) qs.set("brand", params.brand.trim());
       return api.get<{ rows: PartMasterRow[]; total: number }>(`/admin/parts?${qs}`);
     },
+    // CN excel upload verify sweep: batch parts-master existence/brand check
+    // (one request per distinct-key batch — POST /admin/parts-lookup,
+    // spec 2026-11-08-receiving-cn-excel-local-upload-design.md).
+    checkParts: (keys: string[]) =>
+      api.post<{ matches: { key: string; found: boolean; brand: string | null }[] }>(
+        "/admin/parts-lookup",
+        { keys }
+      ),
     createTestPickingOrder: (body: TestPickingOrderCreate) =>
       api.post<{ id: string; orderNo: string; items: { id: string; partNo: string; qty: number; lineNumber: number | null }[] }>(
         "/admin/picking-orders/test-create",

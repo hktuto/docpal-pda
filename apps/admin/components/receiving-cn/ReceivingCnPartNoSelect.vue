@@ -23,6 +23,7 @@ const emit = defineEmits<{
 }>();
 const { t } = useI18n();
 const flow = useFlowApi();
+const parts = usePartsBrandCheck();
 
 interface PartOption {
   wclItemNo: string;
@@ -104,8 +105,18 @@ function scheduleSearch(raw: string, showPanel: boolean) {
   }, 300);
 }
 
-// Validate prefilled values (excel decode / added rows) without popping panels.
-onMounted(() => scheduleSearch(props.modelValue, false));
+// Validate prefilled values (excel decode / added rows) through the SHARED
+// batch parts check — a 635-row sheet must not fire 635 queries (spec
+// docs/superpowers/specs/2026-11-08-receiving-cn-excel-local-upload-design.md);
+// typed edits still use the per-instance debounced search below.
+onMounted(() => {
+  const v = props.modelValue?.trim();
+  if (!v) return;
+  void parts.ensure([v]).then((failed) => {
+    if (failed) return;
+    unknown.value = parts.check(v)?.found === false;
+  });
+});
 
 // The last value this instance committed (pick or blur) — blur only commits
 // when the value changed since. (Panel picks use mousedown.prevent, so the
