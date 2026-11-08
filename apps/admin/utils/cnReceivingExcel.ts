@@ -7,7 +7,7 @@
  * — the page does the XLSX.read), so this util never imports the xlsx lib.
  * Sheet layout: title row, label/value header rows (收貨辦事處 / 供應商 /
  * 發票號碼 / 編號 / 收貨日期, or their simplified-Chinese spellings), an item
- * table (訂單號 | 箱数 | 型號 | 摘要(D/C) | 數量(PCS) | 重量（KG) | 辦事處 | 发货项 |
+ * table (訂單號 | 箱號 | 箱数 | 型號 | 摘要(D/C) | 數量(PCS) | 重量（KG) | 辦事處 | 发货项 |
  * 備註 — column subsets and simplified spellings tolerated) terminated by a
  * 合计 row, then footer/notice rows.
  */
@@ -17,6 +17,8 @@ export interface CnReceivingItem {
    *  row order; passes through to the workflow payload). */
   index: number;
   orderNo: string;
+  /** 箱號 — the physical carton/CTN number (distinct from the cartonNo count). */
+  ctnNo: string;
   cartonNo: string;
   /** True when the carton cell was filled in from a merged range (the group's
    *  carton count shows on every row it covers, but counts once toward the
@@ -112,6 +114,8 @@ const LABEL_FIELDS: Record<string, keyof Pick<CnReceivingPayload, "receivedOffic
 const ITEM_COLUMNS: Record<string, keyof CnReceivingItem> = {
   訂單號: "orderNo",
   订单号: "orderNo",
+  箱號: "ctnNo",
+  箱号: "ctnNo",
   箱数: "cartonNo",
   箱數: "cartonNo",
   型號: "partNo",
@@ -255,7 +259,7 @@ export function parseCnReceivingAoa(aoa: unknown[][], filledCells?: Set<string>)
       }
       if (c0.startsWith("收貨注意事項") || c0.startsWith("收货注意事项")) break;
       if (isBlankRow(row)) continue;
-      const item: CnReceivingItem = { index: items.length + 1, orderNo: "", cartonNo: "", partNo: "", dateCode: "", qty: "", weight: "", office: "", poNo: "", remark: "" };
+      const item: CnReceivingItem = { index: items.length + 1, orderNo: "", ctnNo: "", cartonNo: "", partNo: "", dateCode: "", qty: "", weight: "", office: "", poNo: "", remark: "" };
       let any = false;
       for (let c = 0; c < row.length; c++) {
         const field = colMap[c];

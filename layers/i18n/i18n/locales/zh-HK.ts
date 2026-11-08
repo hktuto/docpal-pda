@@ -2207,6 +2207,7 @@ export default {
           receiptNo: "發票號碼",
           receivedDate: "收貨日期",
           orderNo: "訂單號",
+          ctnNo: "箱號",
           cartonNo: "箱数",
           partNo: "型號",
           dateCode: "摘要(D/C)",

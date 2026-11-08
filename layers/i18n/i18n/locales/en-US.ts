@@ -2210,6 +2210,7 @@ export default {
           receiptNo: "Invoice No.",
           receivedDate: "Receiving Date",
           orderNo: "Order No.",
+          ctnNo: "Carton No.",
           cartonNo: "Cartons",
           partNo: "Part No.",
           dateCode: "Date Code",

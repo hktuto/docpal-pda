@@ -17,6 +17,7 @@ const { t } = useI18n();
 const columnDefs = computed<AdminColumnDef<CnReceivingDraftItem>[]>(() => [
   { key: "index", label: t("admin.pages.receivingCn.fields.index"), size: 56 },
   { key: "orderNo", label: t("admin.pages.receivingCn.fields.orderNo"), size: 130 },
+  { key: "ctnNo", label: t("admin.pages.receivingCn.fields.ctnNo"), size: 90 },
   { key: "cartonNo", label: t("admin.pages.receivingCn.fields.cartonNo"), size: 80 },
   { key: "partNo", label: t("admin.pages.receivingCn.fields.partNo"), size: 220 },
   { key: "dateCode", label: t("admin.pages.receivingCn.fields.dateCode"), size: 90 },
@@ -53,6 +54,7 @@ function addItem() {
     uid: -nextUid--,
     index: nextIndex(),
     orderNo: "",
+    ctnNo: "",
     cartonNo: "",
     partNo: "",
     dateCode: "",
@@ -158,6 +160,9 @@ const sheetTotalsLabel = computed(() => `${sheetTotals.value.carton} / ${sheetTo
       <template #cell-index="{ row }">{{ row.index }}</template>
       <template #cell-orderNo="{ row }">
         <input v-model="row.orderNo" class="cell-input" type="text" />
+      </template>
+      <template #cell-ctnNo="{ row }">
+        <input v-model="row.ctnNo" class="cell-input" type="text" />
       </template>
       <template #cell-cartonNo="{ row }">
         <input v-model="row.cartonNo" class="cell-input" type="text" />

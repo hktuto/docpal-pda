@@ -112,6 +112,7 @@ const VALID_PAYLOAD = {
       // value (blank is fine), poNo carries the 訂單號 (required).
       orderNo: "",
       cartonNo: "1",
+      ctnNo: "CTN-1",
       partNo: "iC-HAUS-001",
       dateCode: "2641",
       qty: "500",
@@ -248,13 +249,14 @@ test("excel upload: one file → pending order + items + completed tracking row,
     lineQty: number;
     receivedQty: number;
     dateCode: string;
+    ctnNo: string;
     orgId: number;
     subInventoryCode: string;
     additionalData: { source: string; filename: string; invoiceNo: string };
   }>(
     client.db,
     sql`SELECT po_no AS "poNo", po_line AS "poLine", part_no AS "partNo", line_qty AS "lineQty",
-               received_qty AS "receivedQty", date_code AS "dateCode", org_id AS "orgId",
+               received_qty AS "receivedQty", date_code AS "dateCode", ctn_no AS "ctnNo", org_id AS "orgId",
                sub_inventory_code AS "subInventoryCode", additional_data AS "additionalData"
         FROM receiving_invoice_items_cn WHERE receiving_invoice_id =
           (SELECT id FROM receiving_invoices_cn WHERE invoice_no = ${batchNo})`
@@ -265,6 +267,7 @@ test("excel upload: one file → pending order + items + completed tracking row,
   assert.equal(item!.lineQty, 500);
   assert.equal(item!.receivedQty, 0); // the PDA scan fills it
   assert.equal(item!.dateCode, "2641");
+  assert.equal(item!.ctnNo, "CTN-1"); // 箱號 → ctn_no
   assert.equal(item!.orgId, 14);
   assert.equal(item!.subInventoryCode, "GZSZ");
   assert.equal(item!.additionalData.source, "excel");

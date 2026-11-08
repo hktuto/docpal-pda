@@ -60,6 +60,7 @@ describe("parseCnReceivingAoa — TE20261010-2.xls", () => {
     expect(result.items[0]).toEqual({
       index: 1,
       orderNo: "329062100T3",
+      ctnNo: "",
       cartonNo: "3",
       partNo: "TE-AMP(5205208-1)",
       dateCode: "2641",
@@ -297,6 +298,7 @@ describe("parseCnReceivingAoa — 收货确认SH-KOA261029K2-2.xls (multi-tab wo
     expect(result.totals.qty).toBe(54719500);
     expect(result.items[0]).toMatchObject({
       orderNo: "329A12339K2", // draft model: orderNo carries the 訂單號
+      ctnNo: "W5167", // the 箱號 column — the physical carton number
       partNo: "KOA+RK73H2BRTTD 4303F",
       qty: "300000",
       office: "广州办",
@@ -321,6 +323,7 @@ describe("cnDraftToEntry", () => {
         uid: 2,
         index: 1,
         orderNo: "329A12339K2",
+        ctnNo: "W5167",
         cartonNo: "1",
         partNo: "KOA+RK73H2BRTTD 4303F",
         dateCode: "",

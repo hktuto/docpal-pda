@@ -41,6 +41,8 @@ export interface CnUploadItem {
   index?: number;
   /** Wire contract: the sheet's 发货項 value (may be blank). */
   orderNo: string;
+  /** 箱號 — the physical carton/CTN number (stored on the item's ctn_no). */
+  ctnNo?: string;
   cartonNo?: string;
   partNo: string;
   dateCode?: string;
@@ -63,7 +65,7 @@ export interface CnUploadPayload {
 }
 
 const HEADER_STRING_FIELDS = ["receivedOffice", "supplier", "receiptNo", "invoiceNo", "receivedDate"] as const;
-const ITEM_STRING_FIELDS = ["orderNo", "cartonNo", "partNo", "dateCode", "weight", "office", "poNo", "remark"] as const;
+const ITEM_STRING_FIELDS = ["orderNo", "ctnNo", "cartonNo", "partNo", "dateCode", "weight", "office", "poNo", "remark"] as const;
 
 function headerString(value: unknown, field: string): string | undefined {
   if (value === undefined || value === null) return undefined;
@@ -687,6 +689,7 @@ async function insertCnExcelOrderTx(
         lineQty: item.qty,
         receivedQty: 0,
         dateCode: item.dateCode ?? null,
+        ctnNo: item.ctnNo ?? null,
         // shortcut: 发货項/箱数/重量/辦事處/備註 are not item columns — they
         // live on the tracking row's payload jsonb.
         additionalData: {
