@@ -234,7 +234,7 @@
     "id": "ADM-022",
     "app": "Admin",
     "module": "Receiving",
-    "name": "Receiving detail — edit item date/lot/COO/COW/CTN (single+batch), confirm arrival, re-allocate, status override, shipper/delivery-order download, put-away audit",
+    "name": "Receiving detail — edit item date/lot/COO/COW/CTN (single+batch), confirm arrival, re-allocate, confirm all related picking allocations, status override, shipper/delivery-order download, put-away audit",
     "tester": "",
     "testDate": "",
     "result": "",

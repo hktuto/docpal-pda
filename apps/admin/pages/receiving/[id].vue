@@ -353,7 +353,6 @@ async function confirmInHand() {
 // "Re-allocate": awaited scoped recompute (allocateForReceivingOrder) —
 // only meaningful once the order is in-hand (409 order_not_in_hand).
 const reallocating = ref(false);
-
 async function reallocate() {
   if (!order.value || reallocating.value) return;
   if (!window.confirm(t("admin.pages.receiving.reallocateConfirm", { batchNo: order.value.batchNo }))) return;
@@ -389,6 +388,39 @@ async function reallocate() {
     if (!handled) error.value = e.message;
   } finally {
     reallocating.value = false;
+  }
+}
+
+// "Confirm all allocations": flips every picking order holding allocations
+// sourced from this receiving order to `allocated` server-side (the same
+// lock as the picking detail's per-order Confirm allocation). The backend
+// attempts every order and reports per-order failures.
+const confirmingAll = ref(false);
+const actionMsg = ref("");
+
+async function confirmAllAllocations() {
+  if (!order.value || confirmingAll.value) return;
+  if (!window.confirm(t("admin.pages.receiving.confirmAllAllocationsConfirm", { batchNo: order.value.batchNo }))) return;
+  confirmingAll.value = true;
+  error.value = "";
+  actionMsg.value = "";
+  try {
+    const res = await flow.confirmReceivingPickingAllocations(orderId, t("admin.pages.receiving.confirmAllAllocations"));
+    await load();
+    logsKey.value++;
+    if (res.failed.length > 0) {
+      error.value = t("admin.pages.receiving.confirmAllAllocationsFailed", {
+        orders: res.failed.map((f) => `${f.orderNo}: ${f.message}`).join("; "),
+      });
+    } else if (res.total === 0) {
+      actionMsg.value = t("admin.pages.receiving.confirmAllAllocationsNone");
+    } else {
+      actionMsg.value = t("admin.pages.receiving.confirmAllAllocationsDone", { n: res.confirmed.length });
+    }
+  } catch (e: any) {
+    error.value = e.message;
+  } finally {
+    confirmingAll.value = false;
   }
 }
 
@@ -684,6 +716,9 @@ const {
         >
           {{ reallocating ? $t("admin.common.saving") : $t("admin.pages.receiving.reallocate") }}
         </button>
+        <button class="btn" :disabled="!order || confirmingAll" @click="confirmAllAllocations">
+          {{ confirmingAll ? $t("admin.common.saving") : $t("admin.pages.receiving.confirmAllAllocations") }}
+        </button>
         <button
           v-if="order && (order.status === 'pending' || order.status === 'provisional_received')"
           class="btn btn-primary"
@@ -700,6 +735,7 @@ const {
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <div v-if="actionMsg" class="alloc-banner alloc-done">{{ actionMsg }}</div>
     <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="allocState" class="alloc-banner" :class="`alloc-${allocState}`">
       {{ allocState === "done" && allocDurationMs > 0

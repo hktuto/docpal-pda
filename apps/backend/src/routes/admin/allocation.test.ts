@@ -16,7 +16,7 @@ import { queryAll, queryGet } from "../../db/query.js";
 import { confirmReceivingArrival } from "../../db/receiving.js";
 import { insertReceivingOrder, insertPickingOrder } from "../../db/test-fixtures.js";
 import { allocateAll } from "../../db/allocate.js";
-import { recomputeLot, recomputePickingItem } from "../../db/picking.js";
+import { recomputeLot, recomputePickingItem, overridePickingOrderStatus } from "../../db/picking.js";
 import { _setPickingAllocationForTests, _setPickingFromSubinventoryOrgsForTests, _setReceivingSubInventoryRulesForTests, _resetFlowConfigForTests } from "../../config.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
@@ -2078,4 +2078,80 @@ test("admin allocation snapshot and restore triggers capture, restore, and repor
   const retry = await req("/admin/allocation/restore", { method: "POST" });
   assert.equal(retry.status, 200);
   assert.equal((await retry.json()).restored, 0);
+});
+
+// POST /admin/receiving-orders/:id/confirm-picking-allocations — flips every
+// pending picking order holding allocations sourced from the receiving order
+// (invoice-item rows or whole-order rows) to `allocated`; non-pending orders
+// are left alone; repeat call is a no-op.
+test("confirm-picking-allocations: flips related pending picking orders to allocated", async () => {
+  await reseed(client);
+  const { orderA, orderB, orderC, receivingOrderId } = await seedScenario();
+  const actorId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`)
+  )!.id;
+  // orderC has started picking — it must NOT be confirmed.
+  await overridePickingOrderStatus(client.db, { orderId: orderC, status: "picking", actorId });
+  // orderD shares no invoice-item allocation; it is only related via a
+  // whole-order allocation row (receiving_order_id, no invoice item).
+  const orderD = randomUUID();
+  await insertPickingOrder(client.db, orderD, {
+    order: { orderNo: "SO-RD-004", orgId: 2, subInventoryCode: "STORE1" },
+    items: [{ partNo: "REALLOC-P9", qty: 10 }],
+  });
+  const orderDItemId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM picking_items WHERE picking_order_id = ${orderD} LIMIT 1`)
+  )!.id;
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, qty, manual, receiving_order_id)
+    VALUES (${randomUUID()}, ${orderDItemId}, 10, true, ${receivingOrderId})
+  `);
+
+  const res = await req(`/admin/receiving-orders/${receivingOrderId}/confirm-picking-allocations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "test confirm all" }),
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), {
+    confirmed: ["SO-RA-001", "SO-RA-002", "SO-RD-004"],
+    failed: [],
+    total: 3,
+  });
+
+  const statuses = async () =>
+    Object.fromEntries(
+      (
+        await queryAll<{ orderNo: string; status: string }>(
+          client.db,
+          sql`SELECT order_no AS "orderNo", status FROM picking_orders WHERE order_no LIKE 'SO-R%'`
+        )
+      ).map((r) => [r.orderNo, r.status])
+    );
+  assert.deepEqual(await statuses(), {
+    "SO-RA-001": "allocated",
+    "SO-RA-002": "allocated",
+    "SO-RD-004": "allocated",
+    "SO-RC-003": "picking",
+  });
+
+  // Repeat call: nothing pending left → no-op.
+  const again = await req(`/admin/receiving-orders/${receivingOrderId}/confirm-picking-allocations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  assert.equal(again.status, 200);
+  assert.deepEqual(await again.json(), { confirmed: [], failed: [], total: 0 });
+});
+
+test("confirm-picking-allocations: 404 for an unknown receiving order", async () => {
+  await reseed(client);
+  const res = await req(`/admin/receiving-orders/${randomUUID()}/confirm-picking-allocations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  assert.equal(res.status, 404);
+  assert.match(await res.text(), /receiving_order_not_found/);
 });

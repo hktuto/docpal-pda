@@ -1357,6 +1357,15 @@ export function useFlowApi() {
     // confirm-arrival) — demand stays stale until the next Re-allocate.
     reallocateReceivingOrder: (id: string) =>
       api.post<{ allocation: AllocationRunSummary | null }>(`/admin/receiving-orders/${id}/reallocate`, {}),
+    // "Confirm all allocations" on the receiving detail: flips every related
+    // pending picking order to `allocated` server-side (whole-order and
+    // invoice-item allocation links). Per-order failures ride the response
+    // instead of failing the request.
+    confirmReceivingPickingAllocations: (id: string, reason?: string) =>
+      api.post<{ confirmed: string[]; failed: { orderNo: string; message: string }[]; total: number }>(
+        `/admin/receiving-orders/${id}/confirm-picking-allocations`,
+        reason?.trim() ? { reason: reason.trim() } : {}
+      ),
     removePickingAllocation: (orderId: string, itemId: string, allocationId: string) =>
       api.del<{ removed: number; qty: number }>(`/admin/picking-orders/${orderId}/items/${itemId}/allocations/${allocationId}`),
     addManualPickingAllocation: (

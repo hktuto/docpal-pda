@@ -245,6 +245,11 @@
   awaits `POST /admin/receiving-orders/:id/reallocate` (same scoped core as
   confirm-arrival; 404 `receiving_order_not_found`, 409
   `order_not_in_hand`) to recompute the order's allocations first if stale;
+  a Confirm-all-allocations button (no status gate) posts
+  `POST /admin/receiving-orders/:id/confirm-picking-allocations`, which
+  flips every related pending picking order (allocations sourced from this
+  receiving order, whole-order or per invoice item) to `allocated` —
+  per-order failures ride the response `failed` list, not an HTTP error;
   whole-order (no `ctn_no`) allocations close each group on a closing
   `(order-level)` block. Completed (`clear`) orders get
   `?mode=finished` instead — same layout, slots from actual

@@ -2,8 +2,9 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import { db } from "../../db.js";
-import { queryGet } from "../../db/query.js";
+import { queryAll, queryGet } from "../../db/query.js";
 import { allocateForPickingOrder, allocateForReceivingOrder, addManualPickingAllocation, removePickingAllocation, transferPickingAllocation, awaitAllocationTask } from "../../db/allocate.js";
+import { overridePickingOrderStatus } from "../../db/picking.js";
 import { actorFrom } from "../../auth/middleware.js";
 import { reallocateReceivingItemDemand } from "../../db/receivingReallocate.js";
 import { allocatePickingItemFromSources, allocatePickingGroupFromSources, type AllocateFormRow } from "../../db/pickingAllocateForm.js";
@@ -67,6 +68,51 @@ adminAllocationRoute.post("/receiving-orders/:id/reallocate", async (c) => {
       `engine=${allocation.durationMs}ms queueWait≈${Date.now() - httpStartedAt - allocation.durationMs}ms`
   );
   return c.json({ allocation });
+});
+
+// "Confirm all allocations" on the receiving order detail: every pending
+// picking order holding allocations sourced from this receiving order
+// (whole-order rows or per invoice item) is flipped to `allocated` — the
+// same admin-confirmed lock as the picking detail's per-order "Confirm
+// allocation". Attempts every order and reports per-order failures instead
+// of failing the request; 404 receiving_order_not_found. No recompute —
+// allocated orders leave the demand pool, so their rows survive wipes.
+adminAllocationRoute.post("/receiving-orders/:id/confirm-picking-allocations", async (c) => {
+  const id = c.req.param("id");
+  const head = await queryGet<{ id: string }>(db, sql`SELECT id FROM receiving_orders WHERE id = ${id}`);
+  if (!head) throw new HTTPException(404, { message: "receiving_order_not_found" });
+  const body = await c.req.json<{ reason?: string }>();
+  const orders = await queryAll<{ id: string; orderNo: string }>(
+    db,
+    sql`
+      SELECT DISTINCT po.id, po.order_no AS "orderNo"
+      FROM picking_orders po
+      JOIN picking_items pi ON pi.picking_order_id = po.id
+      JOIN allocations a ON a.picking_item_id = pi.id
+      LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+      LEFT JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+      WHERE po.status = 'pending'
+        AND (a.receiving_order_id = ${id} OR ri.receiving_order_id = ${id})
+      ORDER BY po.order_no
+    `
+  );
+  const actorId = actorFrom(c).id;
+  const confirmed: string[] = [];
+  const failed: { orderNo: string; message: string }[] = [];
+  for (const o of orders) {
+    try {
+      await overridePickingOrderStatus(db, {
+        orderId: o.id,
+        status: "allocated",
+        reason: body.reason ?? null,
+        actorId,
+      });
+      confirmed.push(o.orderNo);
+    } catch (e) {
+      failed.push({ orderNo: o.orderNo, message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return c.json({ confirmed, failed, total: orders.length });
 });
 
 // "Allocate" in the availability modal: pin a manual allocation of `qty`

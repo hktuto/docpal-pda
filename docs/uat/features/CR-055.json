@@ -1,0 +1,14 @@
+{
+ "id": "CR-055",
+ "dateRaised": "2026-11-09",
+ "raisedBy": "Sean",
+ "app": "Admin",
+ "functionId": "ADM-022",
+ "feature": "Receiving detail — Confirm all allocations button in the top actions bar: one click flips every picking order holding allocations sourced from this receiving order (whole-order or per-invoice-item) to `allocated`, locking their current allocations the same way the picking detail's per-order Confirm allocation does",
+ "reason": "After a receiving order's allocations are computed, admins had to open each related picking order and confirm its allocation one by one before the allocation rows were safe from the next recompute's wipe/rebuild",
+ "priority": "Must have",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Implemented 2026-11-09 — `POST /admin/receiving-orders/:id/confirm-picking-allocations` in `apps/backend/src/routes/admin/allocation.ts` (reuses `overridePickingOrderStatus` per order; only pending picking orders are confirmed, per-order failures reported in the response `failed` list, no recompute — allocated orders leave the demand pool); admin button on `apps/admin/pages/receiving/[id].vue` head actions (`flow.confirmReceivingPickingAllocations`), success/no-op/partial-failure banners; route tests in `apps/backend/src/routes/admin/allocation.test.ts`."
+}
