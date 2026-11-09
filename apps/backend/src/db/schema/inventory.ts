@@ -88,10 +88,15 @@ export const shelfBoxItems = pgTable(
     partNo: text("part_no").notNull(), // plain text (no FK — parts.part_no is not unique)
     wclItemNo: text("wcl_item_no"),
     qty: integer("qty").notNull(),
-    // supplier-label serial (e.g. iC-Haus LTS) — put-away dedups per part per
-    // receiving order on it when present (409 label_already_scanned on a
-    // repeat of the same part's serial)
+    // supplier-label serial (e.g. iC-Haus LTS) — fallback dedup key per part
+    // per receiving order when the scan carried no raw (409
+    // label_already_scanned on a repeat of the same part's serial)
     serialNo: text("serial_no"),
+    // Full scanned QR string (first split portion of one label only) — the
+    // primary put-away dedup key per order, mirroring receiving_scan_labels
+    // (raw-keyed since migration 0060; serial alone false-rejects KOA reels
+    // that share segment-6 S-keys across lots).
+    raw: text("raw"),
     verified: boolean("verified").default(false),
     verifiedAt: timestamp("verified_at", { mode: "date" }),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
@@ -99,6 +104,10 @@ export const shelfBoxItems = pgTable(
   },
   (t) => ({
     boxIdx: index("idx_shelf_box_items_box").on(t.shelfBoxId),
+    // Raw = full label string, globally one row (only the first split
+    // portion of a label carries it). NULL raw rows (serial-only / manual
+    // scans) are never deduped here — pre-check only, as before.
+    rawUq: uniqueIndex("idx_shelf_box_items_raw").on(t.raw),
   })
 );
 

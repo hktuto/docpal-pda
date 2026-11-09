@@ -206,9 +206,13 @@ export interface WarehouseService {
     coo: string | null,
     cow: string | null,
     shelfCode?: string | null,
-    /** Supplier-template serial (e.g. iC-Haus LTS); the backend rejects a
-     *  repeat serial on the same order with 409 label_already_scanned. */
-    serialNo?: string | null
+    /** Supplier-template serial (e.g. iC-Haus LTS); fallback dedup key when
+     *  no raw is sent. */
+    serialNo?: string | null,
+    /** Full scanned QR string; the backend rejects a repeat raw on the same
+     *  order with 409 label_already_scanned (sent on the first split portion
+     *  of a label only). */
+    raw?: string | null
   ): Promise<PutAwayScanResult>;
   // Commit pending scans onto a shelf in one tx (all of them, or just the
   // given scanIds for the pending list's per-row "Add to shelf").

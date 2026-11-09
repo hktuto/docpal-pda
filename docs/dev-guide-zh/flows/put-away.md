@@ -42,7 +42,7 @@ flowchart TD
 
 - **两段式写入**:扫件先进 staging 盒(无账本);提交上架才在一个事务里:货架盒 find-or-create(复用该货架持本单物品的 open 盒 → 采纳空 open 盒 → 新建 `BOX-H-*`)→ lot upsert(唯一键含 canonical YYWW 日期码 + 全批次字段 + org/子库,**pair 取自盒**)→ `put_away_qty += qty` → **两条对冲账**(`RECEIVE_TO_DOCK` dock − / PUT_AWAY on_hand +)。撤销同样两行逆向。
 - **Item-first(armed)**:卡片「枪扫」按钮锁定部件组,组满/切换/重载自动解除;非组内料号 → `scanned_part_does_not_match_item`。free-match 会静默接受「恰好解析成订单内部件」的外标签,所以现场推荐 armed。
-- **FIFO 跨行拆分**:一张标签数量可覆盖同部件多行(300+20000),`findPutAwayTargets` 拆成逐行写;serial 只挂第一份避免自撞去重。
+- **FIFO 跨行拆分**:一张标签数量可覆盖同部件多行(300+20000),`findPutAwayTargets` 拆成逐行写;raw+serial 只挂第一份避免自撞去重。
 - **批次回写是「填充」不是「覆盖」**:`recordPutAwayScan` 用 `COALESCE(旧值,新值)` 回填 `receiving_invoice_items`——已有非空值永远赢过扫到的值(ai-scope 已同步为此措辞)。
 - **货架建议 advisory、读时算、不落库**:三级排序 same-part-box → same-part-stock → 子库亲和(`shelves.sub_inventory_scopes`);`suggestShelf=off` 全抑制。
 - **剩余量守卫**:`received − picked − put_away − allocated − staged`;lot 已有拣货分配 → 撤销 409 `lot_has_pick_allocations`。
@@ -70,7 +70,7 @@ flowchart TD
 - **种子默认与代码相反**:`seed.ts` 的 HK/SZ flow config 都开 `skipScan: true`(代码默认 false)——培训按仓库实况讲。
 - staging 盒**跨订单复用**:`shelf_boxes` 没有订单列,盒↔订单靠 items 派生(空盒回退 `transaction_logs.metadata`)。
 - `put-away-commit` 返回 `{count:0}` 是合法结果(并发设备先提交了);循环中任一守卫失败整个提交回滚。
-- serial 去重只在同部件内;相机 OCR / 多品表格路径**不传 serial** → 完全不 dedup。
+- 去重以**完整 QR 字符串(raw)**为键(订单内,迁移 0061);无 raw 的路径退回「同部件+serial」。枪扫路径带 raw;相机 OCR / 多品表格路径**不传 raw/serial** → 完全不 dedup。
 - 详情页无 SSE topic(仅列表订阅);多设备收敛靠 mount/visibility 重载。
 - CN flag 双向陷阱:`/put-away-cn/*` 在标准仓 404;PDA 页面 `load()` 必须先 `await loadFlowSteps()`(代码注释明说);CN 详情必须带 `?task=`。
 - 代码残留:`[id].vue` CN 路径有 `console.log("parsed", ...)` 调试遗留。

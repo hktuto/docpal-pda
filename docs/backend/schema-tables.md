@@ -721,12 +721,14 @@ Contents of a shelf box.
 | part_no | text NOT NULL | Part (plain text — no FK, parts.part_no is not unique) |
 | wcl_item_no | text | WCL Part No |
 | qty | integer NOT NULL | Quantity in the box |
+| serial_no | text | Supplier-label serial — fallback dedup key (part-scoped, raw-less rows only) |
+| raw | text UNIQUE (nullable) | Full scanned QR string — primary put-away dedup key (spec migration 0061; only the first FIFO-split portion of a label carries it; a repeat → 409 `label_already_scanned`) |
 | verified | boolean DEFAULT false | Item verified (goods verify) |
 | verified_at | timestamp | Verification time |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
-Note: index on `shelf_box_id`.
+Note: index on `shelf_box_id`; unique index on `raw` (NULL rows are never deduped).
 
 ## put_away_tasks
 

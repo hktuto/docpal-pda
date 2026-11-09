@@ -297,6 +297,31 @@ test("scan: serialNo dedups per order+part (409 label_already_scanned); delete f
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100, serialNo: "50788" });
 });
 
+test("scan: raw dedups per order; same part+serial with a different raw is allowed", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await daitoInHand();
+  const itemId = await itemIdOf(orderId, "RK73B1JTTD181G"); // qty 5000
+
+  // Two KOA reels of one part share the segment-6 S-key across lots (real
+  // sample collisions) — the full raw differs, so both stage fine.
+  const raw1 = ":RK73B1JTTD181G:S1:102:X:L2601A:602:KOA/RK73B1JTTD 181G";
+  const raw2 = ":RK73B1JTTD181G:S1:102:X:L2602B:602:KOA/RK73B1JTTD 181G";
+  const first = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100, raw: raw1, serialNo: "602" });
+  const second = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100, raw: raw2, serialNo: "602" });
+  assert.ok(first.id && second.id);
+
+  // repeating the same physical label is rejected (raw key, before the qty guard)
+  const dup = await catchHttp(
+    recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100, raw: raw1 })
+  );
+  assert.equal(dup.status, 409);
+  assert.equal(dup.message, "label_already_scanned");
+
+  // deleting the first scan frees its raw for a genuine re-scan
+  await deleteStagedPutAwayScan(client.db, { scanId: first.id, actorId });
+  await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100, raw: raw1 });
+});
+
 test("delete staged scan: mis-scan correction; boxed scan rejected", async () => {
   await reseed(client);
   const { orderId, actorId } = await daitoInHand();

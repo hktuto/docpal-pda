@@ -513,7 +513,8 @@ export function createBackendWarehouseService(
       coo: string | null,
       cow: string | null,
       shelfCode?: string | null,
-      serialNo?: string | null
+      serialNo?: string | null,
+      raw?: string | null
     ): Promise<PutAwayScanResult> {
       const result = await client.post<PutAwayScanResult>(`/receiving-orders/${receivingOrderId}/put-away-scans`, {
         receivingInvoiceItemId,
@@ -524,6 +525,7 @@ export function createBackendWarehouseService(
         cow: cow ?? undefined,
         shelfCode: shelfCode ?? undefined,
         serialNo: serialNo ?? undefined,
+        raw: raw ?? undefined,
       });
       emitOutdatedWarning(result.outdatedWarning);
       return result;

@@ -820,13 +820,18 @@ export interface RecordPutAwayScanInput {
    *  the order's box there is found-or-created invisibly. Mutually exclusive
    *  with `shelfBoxId`; null/absent = stay pending in staging. */
   shelfCode?: string | null;
-  /** Supplier-label serial (e.g. iC-Haus LTS): unique per part in the order —
-   *  a repeat serial for the same part on the same receiving order is a
-   *  double-scan of the same physical label and rejected with 409
-   *  label_already_scanned. Serials are only compared within the same part —
-   *  some suppliers (KOA segment 6) reuse serial values across parts of one
-   *  delivery. */
+  /** Supplier-label serial (e.g. iC-Haus LTS): fallback dedup key — a repeat
+   *  serial for the same part on the same receiving order is a double-scan
+   *  of the same physical label and rejected with 409 label_already_scanned.
+   *  Serials are only compared within the same part and only against scans
+   *  without a raw — some suppliers (KOA segment 6) reuse serial values
+   *  across parts and lots of one delivery. */
   serialNo?: string | null;
+  /** Full scanned QR string: primary dedup key per receiving order (mirrors
+   *  the receiving raw dedup, migration 0060). Sent only once per physical
+   *  label — a label split FIFO across items carries it on the first
+   *  portion only. */
+  raw?: string | null;
 }
 
 /**
@@ -861,21 +866,27 @@ export async function recordPutAwayScan(
     if (!Number.isInteger(input.qty) || input.qty <= 0) {
       throw new HTTPException(400, { message: "qty_must_be_positive_integer" });
     }
-    // Serial dedup pre-check (mirrors the receiving S-key check): a serial
-    // already scanned for this same part on this order is a double-scan of the
-    // same physical label — reject before the qty guard so the operator gets
-    // the specific error. Deleting the scan frees the serial again. Scoped to
-    // the part: KOA reel labels reuse segment-6 values across different parts
-    // of one delivery (observed 2026-10-21: 133J and 563J reels both "S603"),
-    // so an order-wide check false-rejects different physical labels.
+    // Label dedup pre-check (mirrors the receiving raw check): the full
+    // scanned QR string is the physical-label identity — a repeat raw on this
+    // order is a double-scan of the same label. Scans without a raw (manual /
+    // parsed-only paths) fall back to the part-scoped serial, compared only
+    // against other raw-less rows. KOA reel labels reuse segment-6 values
+    // across lots and parts of one delivery (observed 2026-10-21), so a
+    // serial-only key false-rejects different physical labels. Reject before
+    // the qty guard so the operator gets the specific error. Deleting the
+    // scan frees the key again.
+    const raw = input.raw?.trim() || null;
     const serialNo = input.serialNo?.trim() || null;
-    if (serialNo) {
+    if (raw || serialNo) {
       const dup = await queryGet<{ id: string }>(
         tx,
         sql`SELECT sbi.id FROM shelf_box_items sbi
             JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
             JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-            WHERE ri.receiving_order_id = ${orderId} AND sbi.part_no = ${item.partNo} AND sbi.serial_no = ${serialNo}
+            WHERE ri.receiving_order_id = ${orderId} AND
+              ${raw
+                ? sql`sbi.raw = ${raw}`
+                : sql`sbi.raw IS NULL AND sbi.part_no = ${item.partNo} AND sbi.serial_no = ${serialNo}`}
             LIMIT 1`
       );
       if (dup) throw new HTTPException(409, { message: "label_already_scanned" });
@@ -897,8 +908,8 @@ export async function recordPutAwayScan(
     const id = newId();
     await queryRun(
       tx,
-      sql`INSERT INTO shelf_box_items (id, shelf_box_id, receiving_invoice_item_id, part_no, wcl_item_no, qty, verified, serial_no)
-          VALUES (${id}, ${stagingBoxId}, ${item.id}, ${item.partNo}, ${item.wclItemNo}, ${input.qty}, false, ${serialNo})`
+      sql`INSERT INTO shelf_box_items (id, shelf_box_id, receiving_invoice_item_id, part_no, wcl_item_no, qty, verified, serial_no, raw)
+          VALUES (${id}, ${stagingBoxId}, ${item.id}, ${item.partNo}, ${item.wclItemNo}, ${input.qty}, false, ${serialNo}, ${raw})`
     );
     // Auto-put: with a shelfCode the order's box on that shelf is found-or-
     // created invisibly (shelf-direct flow); with shelfBoxId the caller names

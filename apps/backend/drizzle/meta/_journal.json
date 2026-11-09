@@ -421,6 +421,13 @@
       "when": 1794194325547,
       "tag": "0060_nice_phantom_reporter",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1794196612771,
+      "tag": "0061_brave_bug",
+      "breakpoints": true
     }
   ]
 }

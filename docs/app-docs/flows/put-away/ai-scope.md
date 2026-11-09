@@ -265,19 +265,18 @@
   support splitting a single scanned piece across multiple shelves.
 - Moving committed stock between shelves is not supported (reverse + re-scan
   instead).
-- Put-away scans dedup by supplier serial only when the label carries one
-  (e.g. iC-Haus LTS → `serialNo` template group → `shelf_box_items.serial_no`):
-  a repeat serial of the same part on the same receiving order is rejected
-  with 409 `label_already_scanned` (receiving dedups on the full raw QR
-  string instead; put-away scans never carry the raw — the PDA sends parsed
-  fields only, so this stays serial-keyed and can false-reject two KOA reels
-  of one part that share an S-key). Deleting the scan frees the serial. The
-  dedup is part-scoped — KOA reel
-  labels reuse segment-6 serial values across parts of one delivery (observed
-  2026-10-21: 133J and 563J reels both "S603"), so an order-wide check
-  false-rejects different physical labels. Labels without a serial group are
-  not deduped — the camera-OCR and multi-item paths do not pass a serial
-  either.
+- Put-away scans dedup on the full raw QR string (since migration 0061,
+  `shelf_box_items.raw` — unique index; mirrors the receiving raw dedup):
+  the PDA sends the scanned label value on the first FIFO-split portion of a
+  scan, and a repeat raw on the same receiving order is rejected with 409
+  `label_already_scanned` (deleting the scan frees it). Scans without a raw
+  (serial-only paths) fall back to the part-scoped `serialNo`, compared only
+  against other raw-less rows — KOA reel labels reuse segment-6 serial values
+  across parts AND lots of one delivery (observed 2026-10-21: 133J and 563J
+  reels both "S603"; 5 part+serial collisions across different lots in the
+  96-label KOA sample), so a serial-only key false-rejects different physical
+  labels. The skip-scan bulk path (no label) is not deduped; the multi-item
+  table modal sends neither raw nor serial.
 
 ## Related specs/plans
 

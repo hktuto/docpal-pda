@@ -62,9 +62,9 @@ putawayRoute.get("/receiving-orders/:id/put-away", async (c) => {
 
 // Record one staging scan (staging-box insert + batch-attr backfill on the
 // item). 409 scanned_qty_exceeds_remaining when over the remaining qty; 409
-// label_already_scanned when the same part's `serialNo` repeats on the order.
-// With
-// `shelfBoxId` or `shelfCode` the scan is committed straight onto the shelf
+// label_already_scanned when the scan's raw QR string repeats on the order
+// (no raw → the part-scoped `serialNo` fallback). With `shelfBoxId` or
+// `shelfCode` the scan is committed straight onto the shelf
 // in the same tx (lot + ledger included); `shelfCode` finds-or-creates the
 // order's invisible box on that shelf (spec 2026-10-06).
 putawayRoute.post("/receiving-orders/:id/put-away-scans", async (c) => {
@@ -78,6 +78,7 @@ putawayRoute.post("/receiving-orders/:id/put-away-scans", async (c) => {
     shelfBoxId?: string;
     shelfCode?: string;
     serialNo?: string;
+    raw?: string;
   }>(c);
   if (!body.receivingInvoiceItemId) {
     throw new HTTPException(400, { message: "receivingInvoiceItemId is required" });
@@ -93,6 +94,7 @@ putawayRoute.post("/receiving-orders/:id/put-away-scans", async (c) => {
     shelfBoxId: body.shelfBoxId ?? null,
     shelfCode: body.shelfCode ?? null,
     serialNo: body.serialNo ?? null,
+    raw: body.raw ?? null,
   });
   return c.json(row, 201);
 });

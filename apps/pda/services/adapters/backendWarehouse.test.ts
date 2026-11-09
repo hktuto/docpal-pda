@@ -383,6 +383,20 @@ describe('backendWarehouse put-away flow', () => {
     });
   });
 
+  it('recordPutAwayScan sends serialNo + raw for label dedup', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 'scan1' }, 201));
+
+    await service().recordPutAwayScan('ro1', 'rii1', 100, null, null, null, null, 'A-01-02', '602', ':RK73H1JTTD1002F:S1:102:X:L2601A:602:KOA+RK73H1JTTD 1002F');
+
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({
+      receivingInvoiceItemId: 'rii1',
+      qty: 100,
+      shelfCode: 'A-01-02',
+      serialNo: '602',
+      raw: ':RK73H1JTTD1002F:S1:102:X:L2601A:602:KOA+RK73H1JTTD 1002F',
+    });
+  });
+
   it('commitPutAwayToShelf POSTs shelfCode (+ optional scanIds) to the commit route', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ count: 2, qty: 2100 }));
 

@@ -445,7 +445,8 @@ useHardwareScanner({
           selectedShelf.value,
           // The label's serial rides on the first split portion only — one
           // physical label split across lines must not trip its own dedup.
-          portionIdx === 0 ? rawCode(parsed.serialNo) : null
+          portionIdx === 0 ? rawCode(parsed.serialNo) : null,
+          portionIdx === 0 ? value : null
         );
       }
       showToast(t("common.scanSuccess"));

@@ -463,8 +463,9 @@ arrive via upstream sync / DocPal auth.
   part (and across parts, observed 2026-10-21 — 5 collisions in the 96-label
   sample), so the old order+part+serial key false-rejected different reels.
   Manual scans with no raw still dedup by order + part + serial (partial
-  unique index on `raw IS NULL` rows); `serial_no` is now nullable. The same
-  table can be reused for put-away scan dedup later.
+  unique index on `raw IS NULL` rows); `serial_no` is now nullable. Put-away
+  got the same treatment: `shelf_box_items.raw` (unique, migration 0061),
+  sent by the PDA hardware-scan path, serial fallback for raw-less scans.
 - **Allocation ids are unstable between scan and boxing:** a recompute
   (manual Re-allocate / confirm-arrival) rebuilds a picking item's allocation
   rows until its packages are boxed (`allocatedQty` appears to "resurrect").
