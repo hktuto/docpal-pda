@@ -178,15 +178,15 @@ test("GET /picking-orders + /:id are scoped by the actor's profile", async () =>
   assert.equal((await (await authed(token, "/picking-orders")).json()).rows.length, baseline);
 });
 
-// --- picking type-split visibility (invoice / tn / NULL) ---------------------
+// --- picking type-split visibility (invoice / vmi / tn / NULL) ---------------
 
-// pickingOrderOrgFilter: invoice orders get allowedOrgIds + the exact
+// pickingOrderOrgFilter: invoice AND vmi orders get allowedOrgIds + the exact
 // (org, sub) scope pairs; tn (transfer) orders are org-aware (spec
 // 2026-10-27-picking-tn-org-aware-visibility-design.md) — visible when the
 // caller's scope covers ANY sub-inventory of the order's org, or ANY
 // sub-inventory of org 143 (global transfer view); NULL-typed orders are
 // always visible.
-test("picking visibility splits by picking_order_type (invoice / tn / NULL)", async () => {
+test("picking visibility splits by picking_order_type (invoice / vmi / tn / NULL)", async () => {
   await reseed(client);
   _setAllowedOrgIdsForTests([]);
   await queryRun(client.db, sql`DELETE FROM picking_orders`);
@@ -202,6 +202,7 @@ test("picking visibility splits by picking_order_type (invoice / tn / NULL)", as
   };
   const invoiceIn = await mk("SO-VIS-INV-IN", "invoice", 2, "STORE1");
   const invoiceOut = await mk("SO-VIS-INV-OUT", "invoice", 2, "WSTORE1");
+  const vmiIn = await mk("SO-VIS-VMI-IN", "vmi", 2, "STORE1");
   const tn143 = await mk("SO-VIS-TN-143", "tn", 143, "store1");
   const tnOtherOrg = await mk("SO-VIS-TN-2", "tn", 2, "STORE1");
   const tn220 = await mk("SO-VIS-TN-220", "tn", 220, "THTH1");
@@ -212,7 +213,8 @@ test("picking visibility splits by picking_order_type (invoice / tn / NULL)", as
 
   // Invoice scope: exact pairs only. tn: org-aware — the scope covers the
   // order's org (any store), so the org-2 transfer shows but 143/220 don't.
-  assert.deepEqual(await visible(STORE1), [invoiceIn, tnOtherOrg, nullType].sort());
+  // vmi rides the invoice branch (exact pairs) — STORE1 shows, WSTORE1 not.
+  assert.deepEqual(await visible(STORE1), [invoiceIn, vmiIn, tnOtherOrg, nullType].sort());
   // A 220-store scope sees the org-220 transfer (any 220 store covers it) —
   // not the org-2 or org-143 ones.
   assert.deepEqual(await visible([{ orgId: 220, code: "THTH1" }]), [tn220, nullType].sort());
@@ -228,10 +230,10 @@ test("picking visibility splits by picking_order_type (invoice / tn / NULL)", as
   // Unrestricted caller: everything.
   assert.deepEqual(
     await visible(null),
-    [invoiceIn, invoiceOut, nullType, tn143, tnOtherOrg, tn220].sort()
+    [invoiceIn, invoiceOut, vmiIn, nullType, tn143, tnOtherOrg, tn220].sort()
   );
 
-  // allowedOrgIds filters invoice orders only; tn and NULL bypass it.
+  // allowedOrgIds filters invoice + vmi orders only; tn and NULL bypass it.
   _setAllowedOrgIdsForTests([99]);
   assert.deepEqual(await visible(null), [nullType, tn143, tnOtherOrg, tn220].sort());
   _setAllowedOrgIdsForTests([]);

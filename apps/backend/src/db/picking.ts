@@ -23,8 +23,10 @@ import {
 } from "./outdated.js";
 
 // Picking-order org visibility, split by picking_order_type:
-//   invoice → the flow config's allowedOrgIds AND the caller's exact
-//             (org_id, sub_inventory_code) scope pairs;
+//   invoice | vmi → the flow config's allowedOrgIds AND the caller's exact
+//             (org_id, sub_inventory_code) scope pairs (VMI orders are
+//             store-bound shipments too — spec
+//             2026-11-09-vmi-picking-excel-upload-design.md);
 //   tn      → transfers belong to the org, not to one store (spec
 //             2026-10-27-picking-tn-org-aware-visibility-design.md): visible
 //             when the caller's scope covers ANY sub-inventory of the ORDER's
@@ -45,9 +47,10 @@ const unwrappedPartCol = (col: SQL) =>
 function pickingOrderOrgFilter(orgCol: SQL, subCol: SQL, typeCol: SQL, scope?: UserScopeEntry[] | null): SQL {
   const invoiceConds = [allowedOrgCondition(orgCol), userScopeCondition(orgCol, subCol, scope)]
     .filter((c): c is SQL => c !== undefined);
+  const locScoped = sql`${typeCol} = ANY(ARRAY['invoice', 'vmi'])`;
   const invoice = invoiceConds.length
-    ? sql`(${typeCol} = 'invoice' AND ${sql.join(invoiceConds, sql` AND `)})`
-    : sql`${typeCol} = 'invoice'`;
+    ? sql`(${locScoped} AND ${sql.join(invoiceConds, sql` AND `)})`
+    : locScoped;
   const scopeOrgIds = scope?.length ? [...new Set(scope.map((e) => e.orgId))] : [];
   const globalTn = scopeOrgIds.length === 0 || scopeOrgIds.includes(TN_ORG_ID);
   const tn = globalTn

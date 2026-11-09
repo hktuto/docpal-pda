@@ -41,6 +41,7 @@ import { adminCustomerProfilesRoute } from "./customerProfiles.js";
 import { adminOutdatedWarningsRoute } from "./outdatedWarnings.js";
 import { adHocPutAwayRoute } from "./adHocPutAway.js";
 import { adminTestPickingOrderRoute } from "./testPickingOrder.js";
+import { adminVmiPickingOrderRoute } from "./vmiPickingOrder.js";
 import { adminReceivingCnRoute } from "./receivingCn.js";
 import { adminTaskAssignmentsRoute } from "./taskAssignments.js";
 import { adminCancelRecordsRoute } from "./cancelRecords.js";
@@ -473,6 +474,10 @@ adminRoute.route("/ad-hoc-put-aways", adHocPutAwayRoute);
 
 // Test picking order creator (create / export / delete test orders).
 adminRoute.route("/", adminTestPickingOrderRoute);
+
+// VMI picking order creator — "New VMI" Excel upload batch-create
+// (spec 2026-11-09-vmi-picking-excel-upload-design.md).
+adminRoute.route("/", adminVmiPickingOrderRoute);
 
 // Customer receiving (CN) upload tracking + uploads: PDF → DocPal OCR
 // workflow, Excel → decoded locally in the admin browser (spec

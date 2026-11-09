@@ -67,6 +67,7 @@
     - pick a part (search by wcl item no / part no), view current stock lots + totals and the full in/out transaction history (receiving order in, picking order out, date code / lot code / COO / COW per record)
 - Invoice/Picking Management
   - list picking order with filter and sort , reorder picking order 4.3
+    - New VMI — upload a VMI_Template_*.xlsx, one picking order per VMI Ref.No (decoded in the browser, gated on parts master + Sub Inventory→org)
     - detail picking order ( change item datacode, delevery date, download packing list and TN  ) 4.1, 4.2, 7.2, 7.4
 - Receving Management
   - list receiving order with filter and sort

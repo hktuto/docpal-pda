@@ -1,0 +1,14 @@
+{
+ "id": "CR-053",
+ "dateRaised": "2026-11-09",
+ "raisedBy": "Sean",
+ "app": "Admin",
+ "functionId": "ADM-025",
+ "feature": "New VMI picking-order Excel upload — a \"New VMI\" button on the picking order list opens /picking-orders/vmi: the browser decodes a VMI_Template_*.xlsx (one picking order per VMI Ref.No, rows become items with PO Line → line number and Customer Item kept in additional_data), gates it (every Item in the parts master, Sub Inventory known to org_info — multi-org codes resolved per order from an org · sub-inventory dropdown, plus one apply-to-all picker for the usual single-location file), and one click batch-creates the orders (type 'vmi', allocated like any new order) before opening the first order's detail page",
+ "reason": "VMI is a new source of picking demand upstream never syncs; operators hold these sheets and needed them in the pipeline without manual re-typing",
+ "priority": "Must have",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Implemented 2026-11-09 — spec docs/superpowers/specs/2026-11-09-vmi-picking-excel-upload-design.md. Backend: POST /admin/picking-orders/vmi-create (routes/admin/vmiPickingOrder.ts) — batch tx insert + per-order scoped allocation like test-create but no [TEST] remark, batch duplicate-order_no guard 409. Admin: utils/vmiExcel.ts parser/gate (fixture supporting_doc/vmi/VMI_Template_20261105.xlsx), pages/picking-orders/vmi.vue, flowApi.createVmiPickingOrders. Deliberate limits: no draft-edit UI (issues fall back to the manual create page), group header fields taken from the group's first row. Same-day UAT fixes: sub-inventory codes spanning several orgs get per-order org · sub-inventory dropdowns plus an apply-to-all picker; created VMI orders were invisible on GET /picking-orders because pickingOrderOrgFilter whitelisted only invoice/tn/NULL types — vmi now rides the invoice visibility branch (user-scope.test extended)."
+}

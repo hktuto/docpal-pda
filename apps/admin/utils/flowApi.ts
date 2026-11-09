@@ -173,6 +173,19 @@ export interface TestPickingOrderCreate {
   items: { partNo: string; qty: number; lineNumber?: number }[];
 }
 
+/** VMI picking-order batch creation payload (POST /admin/picking-orders/vmi-create,
+ *  spec 2026-11-09-vmi-picking-excel-upload-design.md). One entry per VMI
+ *  Ref.No group; the backend fixes pickingOrderType to 'vmi'. */
+export interface VmiPickingOrderCreate {
+  orderNo: string;
+  customerCode?: string;
+  orgId: number;
+  subInventoryCode: string;
+  shipTo?: string;
+  poNo?: string;
+  items: { partNo: string; qty: number; lineNumber?: number | null; customerItem?: string }[];
+}
+
 /** customer_accounts row (GET /admin/customer-accounts) — dropdown source for customer_code. */
 export interface CustomerAccountRow {
   custAccountId: number;
@@ -1401,6 +1414,11 @@ export function useFlowApi() {
       api.post<{ id: string; orderNo: string; items: { id: string; partNo: string; qty: number; lineNumber: number | null }[] }>(
         "/admin/picking-orders/test-create",
         body
+      ),
+    createVmiPickingOrders: (orders: VmiPickingOrderCreate[]) =>
+      api.post<{ created: { id: string; orderNo: string }[] }>(
+        "/admin/picking-orders/vmi-create",
+        { orders }
       ),
     exportTestPickingOrder: (id: string) =>
       api.get<TestPickingOrderTemplate>(`/admin/picking-orders/${id}/export`),

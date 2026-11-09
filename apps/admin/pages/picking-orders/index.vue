@@ -16,7 +16,7 @@ const deliveryDateTo = ref("");
 const selected = ref<Set<string>>(new Set());
 
 const STATUSES = ["pending", "allocated", "skip", "picking", "picking_finished", "measuring_finished", "issue", "shipped", "cancelled"];
-const ORDER_TYPES = ["invoice", "tn"];
+const ORDER_TYPES = ["invoice", "tn", "vmi"];
 
 const statusOptions = computed<SearchableSelectOption[]>(() =>
   STATUSES.map((s) => ({ value: s, label: t(`status.picking.${s}`) }))
@@ -266,6 +266,7 @@ const {
           }}
         </button>
         <NuxtLink to="/picking/reorder" class="btn">{{ $t("admin.pages.pickingOrders.reorderPriority") }}</NuxtLink>
+        <NuxtLink to="/picking-orders/vmi" class="btn">{{ $t("admin.pages.pickingOrders.newVmi") }}</NuxtLink>
       </div>
     </div>
 
