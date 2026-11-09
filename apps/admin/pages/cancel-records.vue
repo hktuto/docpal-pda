@@ -155,14 +155,13 @@ async function confirmPutBack(row: CancelRecordRow) {
             </td>
             <td>
               <div class="replacement">
-                <input
+                <PickingOrderSearchInput
                   v-model="drafts[row.id]"
-                  class="replacement__input"
-                  type="text"
-                  :placeholder="$t('cancelRecords.replacementPlaceholder')"
                   :disabled="busy[row.id]"
+                  :exclude-id="row.pickingOrderId ?? undefined"
                   :aria-label="$t('cancelRecords.colReplacement')"
-                  @change="saveReplacement(row)"
+                  :placeholder="$t('cancelRecords.replacementPlaceholder')"
+                  @commit="saveReplacement(row)"
                 />
                 <NuxtLink
                   v-if="row.replacementOrderId"
@@ -220,11 +219,6 @@ async function confirmPutBack(row: CancelRecordRow) {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-}
-
-.replacement__input {
-  width: 11ch;
-  font: inherit;
 }
 
 .replacement__link {

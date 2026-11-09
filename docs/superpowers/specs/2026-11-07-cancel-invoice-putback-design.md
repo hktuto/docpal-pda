@@ -238,9 +238,12 @@ before an admin has seen the cancel. Delivered:
   that picked nothing is a no-op error by design — there was never work to gate.
 - The replacement is **optional**: an order that is simply dead (no corrected
   invoice) still needs its stock put back, so confirm does not require one.
-- Admin page `cancel-records.vue`: a per-row "Replacement invoice" input (saved
-  on blur/Enter) + an "n awaiting confirm" chip with a **Confirm put-back**
-  button in the Put-back column.
+- Admin page `cancel-records.vue`: a per-row "Replacement invoice" **searchable
+  picker** (`components/PickingOrderSearchInput.vue` — debounced
+  `GET /picking-orders?search=`, suggestions show status + items·qty, the
+  cancelled order itself is excluded, free text stays allowed for numbers not
+  synced in yet; saved on pick/blur) + an "n awaiting confirm" chip with a
+  **Confirm put-back** button in the Put-back column.
 
 ## Out of scope (deliberate, one line each)
 
