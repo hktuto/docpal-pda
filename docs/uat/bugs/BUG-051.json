@@ -1,0 +1,14 @@
+{
+ "id": "BUG-051",
+ "dateFound": "2026-11-09",
+ "functionId": "PDA-010",
+ "description": "Put-away detail lost the operator's scroll position after removing a scan or removing a scan from a shelf — every reload flipped the page back to the loading state, which unmounted the whole item panel and reset scrollTop to the top of a long order",
+ "reproSteps": "Open a put-away order with many part groups → expand a group, scroll down → press Remove scan (or Remove from shelf) → the page reloads and jumps back to the top, forcing the operator to scroll down again",
+ "severity": "Minor",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-09",
+ "tester": "",
+ "remarks": "Fixed in commit 1d432efa (11-09) — load() no longer sets pending=true on reloads (initial load still shows the loading state), so the panel stays mounted and scroll is preserved; retest in UAT"
+}
