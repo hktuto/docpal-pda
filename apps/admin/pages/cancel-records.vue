@@ -104,7 +104,12 @@ function fmt(ts: string | null): string {
         <tbody>
           <tr v-for="row in rows" :key="row.id">
             <td>{{ $t(`cancelRecords.sources.${row.source}`) }}</td>
-            <td>{{ row.invoiceNum ?? "—" }}</td>
+            <td>
+              <NuxtLink v-if="row.pickingOrderId" :to="`/picking-orders/${row.pickingOrderId}`">
+                {{ row.invoiceNum ?? "—" }}
+              </NuxtLink>
+              <span v-else>{{ row.invoiceNum ?? "—" }}</span>
+            </td>
             <td>{{ row.tnLineId ?? "—" }}</td>
             <td>
               <NuxtLink v-if="row.pickingOrderId" :to="`/picking-orders/${row.pickingOrderId}`">
