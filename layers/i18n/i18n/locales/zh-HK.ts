@@ -1378,6 +1378,7 @@ export default {
       userBadges: "用戶證件",
       userProfiles: "用戶子庫範圍",
       labelPrintRules: "標籤列印規則",
+      customPrintLabel: "自訂列印標籤",
       inventoryLabels: "庫存標籤",
       dateCodePeriods: "日期碼週期",
       outdatedWarnings: "過期日期碼警告",
@@ -2732,6 +2733,13 @@ export default {
           labelCount: "標籤數量"
         },
         saved: "已儲存。"
+      },
+      customPrintLabel: {
+        title: "自訂列印標籤",
+        description: "上傳標籤資料的 CSV，由瀏覽器解析後送至印表機列印。",
+        chooseFile: "CSV 檔案",
+        selected: "已選擇：{name}（{size}）",
+        comingSoon: "解析與列印功能尚未接上。"
       },
       labelPrintRules: {
         activate: "啟用",

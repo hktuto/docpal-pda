@@ -715,6 +715,17 @@
     "remarks": "Spec docs/superpowers/specs/2026-11-07-cancel-invoice-putback-design.md"
   },
   {
+    "id": "ADM-039",
+    "app": "Admin",
+    "module": "Printing",
+    "name": "Custom Print Label — upload a CSV, parse it in the browser, print the labels (placeholder page: file picker only)",
+    "tester": "",
+    "testDate": "",
+    "result": "",
+    "bugIds": "",
+    "remarks": "Placeholder — parsing + printing not implemented yet"
+  },
+  {
     "id": "PDA-028",
     "app": "PDA",
     "module": "Put-away",

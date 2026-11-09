@@ -1379,6 +1379,7 @@ export default {
       userBadges: "User Badges",
       userProfiles: "User Scope",
       labelPrintRules: "Label Print Rules",
+      customPrintLabel: "Custom Print Label",
       inventoryLabels: "Inventory Labels",
       dateCodePeriods: "Date Code Periods",
       outdatedWarnings: "Outdated Warnings",
@@ -2736,6 +2737,13 @@ export default {
           labelCount: "Label count"
         },
         saved: "Saved."
+      },
+      customPrintLabel: {
+        title: "Custom Print Label",
+        description: "Upload a CSV of label data; the browser parses it and sends the labels to the printer.",
+        chooseFile: "CSV file",
+        selected: "Selected: {name} ({size})",
+        comingSoon: "Parsing and printing are not wired up yet."
       },
       labelPrintRules: {
         activate: "Activate",

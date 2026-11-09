@@ -89,4 +89,5 @@
   - Box Sizes (was under Warehouse)
   - Country List (was under Warehouse)
   - Label Print Rules — CRUD rules mapping AND/OR conditions (org / sub-inventory / supplier / order no / customer) to a print template per label type (carton / item box / item), with priority and activate/deactivate (was under Settings)
+  - Custom Print Label — upload a CSV, parse it in the browser, print the labels (placeholder page: file picker only)
 - Inventory Labels — per-warehouse sub-inventory display labels; map a friendly label to each (org_id, sub_inventory_code) pair, with sort order and active flag

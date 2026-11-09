@@ -1378,6 +1378,7 @@ export default {
       userBadges: "用户工牌",
       userProfiles: "用户子库范围",
       labelPrintRules: "标签打印规则",
+      customPrintLabel: "自定义打印标签",
       inventoryLabels: "库存标签",
       dateCodePeriods: "日期码周期",
       outdatedWarnings: "过期日期码警告",
@@ -2732,6 +2733,13 @@ export default {
           labelCount: "标签数量"
         },
         saved: "已保存。"
+      },
+      customPrintLabel: {
+        title: "自定义打印标签",
+        description: "上传标签数据的 CSV，由浏览器解析后发送到打印机打印。",
+        chooseFile: "CSV 文件",
+        selected: "已选择：{name}（{size}）",
+        comingSoon: "解析与打印功能尚未接入。"
       },
       labelPrintRules: {
         activate: "启用",

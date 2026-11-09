@@ -398,6 +398,7 @@ export const navSections: { title: string; links: { route: string; title: string
       { route: "/box-sizes", title: "admin.navLinks.boxSizes" },
       { route: "/countries", title: "admin.navLinks.countries" },
       { route: "/label-print-rules", title: "admin.navLinks.labelPrintRules" },
+      { route: "/custom-print-label", title: "admin.navLinks.customPrintLabel" },
     ],
   },
 ];
