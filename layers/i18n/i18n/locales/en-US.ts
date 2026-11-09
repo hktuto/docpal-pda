@@ -2513,7 +2513,8 @@ export default {
           "label-printing": "Label Printing",
           "stock-search": "Stock Search",
           "put-back": "Put-back",
-          "shelf-exchange": "Shelf Exchange"
+          "shelf-exchange": "Shelf Exchange",
+          "internal-transfer": "Internal Transfer"
         },
         receivingCnStepHint: "Customer Receiving (CN) replaces the standard receiving flow. When on, the PDA put-away reads CN tasks; warehouses using CN receiving should also disable the standard Receiving step.",
         pickingSection: "Picking allocation",

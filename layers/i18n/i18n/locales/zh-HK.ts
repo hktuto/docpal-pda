@@ -2509,7 +2509,8 @@ export default {
           "label-printing": "打印標籤",
           "stock-search": "庫存查詢",
           "put-back": "退回上架",
-          "shelf-exchange": "貨架調撥"
+          "shelf-exchange": "貨架調撥",
+          "internal-transfer": "內部調撥"
         },
         receivingCnStepHint: "客戶收貨 (CN) 取代標準收貨流程。啟用後 PDA 上架會讀取 CN 任務；使用 CN 收貨的倉庫請同時停用標準「收貨」步驟。",
         pickingSection: "執貨分配",

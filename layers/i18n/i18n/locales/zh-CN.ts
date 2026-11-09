@@ -2509,7 +2509,8 @@ export default {
           "label-printing": "打印标签",
           "stock-search": "库存查询",
           "put-back": "退回上架",
-          "shelf-exchange": "货架调拨"
+          "shelf-exchange": "货架调拨",
+          "internal-transfer": "内部调拨"
         },
         receivingCnStepHint: "客户收货 (CN) 取代标准收货流程。启用后 PDA 上架会读取 CN 任务；使用 CN 收货的仓库请同时停用标准「收货」步骤。",
         pickingSection: "拣货分配",

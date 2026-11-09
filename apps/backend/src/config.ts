@@ -226,6 +226,7 @@ export const FLOW_STEPS = [
   "stock-search",
   "ad-hoc-put-away",
   "shelf-exchange",
+  "internal-transfer",
 ] as const;
 export type FlowStep = (typeof FLOW_STEPS)[number];
 

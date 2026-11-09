@@ -36,6 +36,7 @@ test("seed creates the flow row with defaults ({})", async () => {
   assert.deepEqual(row?.value, {});
   await loadFlowConfig(client.db);
   assert.equal(isStepEnabled("put-away"), true);
+  assert.equal(isStepEnabled("internal-transfer"), true); // new steps default on
   assert.equal(allowDockStock(), true);
   assert.deepEqual(putAwayConfig(), { autoCreateTasks: false, suggestShelf: "existing-stock", skipScan: false });
 });
