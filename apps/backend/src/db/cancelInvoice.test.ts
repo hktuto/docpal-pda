@@ -9,7 +9,12 @@ import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
 import { allocateAll } from "./allocate.js";
 import { runCancelInvoiceSyncOnce } from "../jobs/cancelInvoiceSync.js";
-import { listCancelRecords } from "./cancelInvoice.js";
+import {
+  confirmCancelPutBack,
+  listCancelRecords,
+  setCancelReplacement,
+} from "./cancelInvoice.js";
+import { listPutBackTasks } from "./putback.js";
 
 let client: TestDb;
 
@@ -87,10 +92,16 @@ async function insertTnCancel(tnNumber: string, tnLineId: number, ts: Date = new
 }
 
 async function cancelRecordOf(source: string, sourceId: string) {
-  return queryGet<{ outcome: string; status: string; message: string | null; picking_order_id: string | null; picking_item_id: string | null }>(
+  return queryGet<{ id: string; outcome: string; status: string; message: string | null; picking_order_id: string | null; picking_item_id: string | null }>(
     client.db,
-    sql`SELECT outcome, status, message, picking_order_id, picking_item_id FROM cancel_records WHERE source = ${source} AND source_id = ${sourceId}`
+    sql`SELECT id, outcome, status, message, picking_order_id, picking_item_id FROM cancel_records WHERE source = ${source} AND source_id = ${sourceId}`
   );
+}
+
+/** transaction_logs.actor_id has an FK — confirm/replacement need a real user. */
+async function anyUserId(): Promise<string> {
+  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users ORDER BY created_date LIMIT 1`);
+  return row!.id;
 }
 async function insertOpenOrderWithLines(orderNo: string, lineIds: number[]): Promise<{ orderId: string; itemIds: Record<number, string> }> {
   const orderId = randomUUID();
@@ -189,12 +200,13 @@ test("cancel_invoice with a picked boxed package → put-back task + item (sourc
   const sourceId = await insertInvoiceCancel("SO-DEMO-0001");
   await runCancelInvoiceSyncOnce(client.db);
 
-  const task = await queryGet<{ id: string; picking_item_id: string }>(
+  const task = await queryGet<{ id: string; picking_item_id: string; status: string }>(
     client.db,
-    sql`SELECT id, picking_item_id FROM put_back_tasks WHERE cancel_source = 'cancel_invoice' AND cancel_source_id = ${sourceId}`
+    sql`SELECT id, picking_item_id, status FROM put_back_tasks WHERE cancel_source = 'cancel_invoice' AND cancel_source_id = ${sourceId}`
   );
   assert.ok(task);
   assert.equal(task.picking_item_id, ""); // whole-order task
+  assert.equal(task.status, "awaiting"); // created by the cron, NOT released to the PDA yet
 
   const item = await queryGet<{ part_no: string; qty: number; shelf_code: string; status: string; org_id: number | null }>(
     client.db,
@@ -217,6 +229,53 @@ test("cancel_invoice with a picked boxed package → put-back task + item (sourc
 
   const rec = await cancelRecordOf("cancel_invoice", sourceId);
   assert.equal(rec!.outcome, "cancelled_with_putback");
+
+  // Confirm gate (2026-11-09): the awaiting task is not work yet — the PDA
+  // queue (status='pending') hides it until the admin confirms the cancel.
+  assert.equal((await listPutBackTasks(client.db, "pending", undefined)).length, 0);
+  const actorId = await anyUserId();
+  const released = await confirmCancelPutBack(client.db, { recordId: rec!.id, actorId });
+  assert.equal(released.tasksReleased, 1);
+  const afterConfirm = await queryGet<{ status: string }>(
+    client.db,
+    sql`SELECT status FROM put_back_tasks WHERE id = ${task.id}`
+  );
+  assert.equal(afterConfirm!.status, "pending");
+  assert.equal((await listPutBackTasks(client.db, "pending", undefined)).length, 1);
+  // Second confirm → nothing awaiting.
+  await assert.rejects(
+    () => confirmCancelPutBack(client.db, { recordId: rec!.id, actorId }),
+    /no_awaiting_putback_tasks/
+  );
+});
+
+test("admin records the replacement invoice on a cancel record", async () => {
+  await insertOpenOrderWithLines("REPL-TEST-01", [888001]);
+  const sourceId = await insertInvoiceCancel("REPL-TEST-01");
+  await runCancelInvoiceSyncOnce(client.db);
+  const rec = await cancelRecordOf("cancel_invoice", sourceId);
+
+  const actorId = await anyUserId();
+  await setCancelReplacement(client.db, { recordId: rec!.id, replacementOrderNo: "REPL-NEW-01", actorId });
+  let listed = (await listCancelRecords(client.db)) as Array<Record<string, unknown>>;
+  let row = listed.find((r) => r.id === rec!.id)!;
+  assert.equal(row.replacementOrderNo, "REPL-NEW-01");
+  assert.equal(row.replacementOrderId, null); // the replacement order is not synced in yet
+
+  // Once the replacement exists, the list resolves it for the admin link.
+  await client.db.execute(
+    sql`INSERT INTO picking_orders (id, order_no, status, created_date, last_update_date)
+        VALUES (${randomUUID()}, 'REPL-NEW-01', 'pending', now(), now())`
+  );
+  listed = (await listCancelRecords(client.db)) as Array<Record<string, unknown>>;
+  row = listed.find((r) => r.id === rec!.id)!;
+  assert.notEqual(row.replacementOrderId, null);
+
+  // Clearing works too.
+  await setCancelReplacement(client.db, { recordId: rec!.id, replacementOrderNo: "  ", actorId });
+  listed = (await listCancelRecords(client.db)) as Array<Record<string, unknown>>;
+  row = listed.find((r) => r.id === rec!.id)!;
+  assert.equal(row.replacementOrderNo, null);
 });
 
 test("cancel_invoice_tn: cancels only the matching line (line_id); order closes when the last line cancels", async () => {

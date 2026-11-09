@@ -1,4 +1,5 @@
 import { sql, inArray } from "drizzle-orm";
+import { HTTPException } from "hono/http-exception";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { newId } from "./id.js";
@@ -182,10 +183,16 @@ async function applyCancel(tx: DbOrTx, source: CancelSource, row: CancelSourceRo
 
     if (pkgs.length > 0) {
       const taskItemId = source === "cancel_invoice_tn" ? itemIds[0] : "";
+      // Created as `awaiting`, not `pending`: the office usually re-raises a
+      // corrected invoice for the cancelled one, so the admin confirms the
+      // cancel (and records the replacement) on /cancel-records before the
+      // stock is allowed to move back to the shelves (spec 2026-11-07 confirm
+      // gate, 2026-11-09). The PDA queue and task assignment show `pending`
+      // only, so an awaiting task is invisible to operators.
       const task = await queryGet<{ id: string }>(
         tx,
         sql`INSERT INTO put_back_tasks (id, cancel_source, cancel_source_id, picking_order_id, picking_item_id, status, created_date, last_update_date)
-            VALUES (${newId()}, ${source}, ${row.id}, ${order.id}, ${taskItemId}, 'pending', ${now()}, ${now()})
+            VALUES (${newId()}, ${source}, ${row.id}, ${order.id}, ${taskItemId}, 'awaiting', ${now()}, ${now()})
             ON CONFLICT (cancel_source, cancel_source_id, picking_order_id, picking_item_id)
             DO UPDATE SET last_update_date = ${now()}
             RETURNING id`
@@ -331,14 +338,112 @@ export async function listCancelRecords(
                r.tn_line_id::int AS "tnLineId",
                po.order_no AS "orderNo", r.picking_order_id AS "pickingOrderId",
                r.outcome, r.message, r.status,
+               r.replacement_order_no AS "replacementOrderNo", rep.id AS "replacementOrderId",
                r.source_ts AS "sourceTs", r.created_date AS "createdDate", r.last_update_date AS "lastUpdateDate",
-               (SELECT COUNT(*)::int FROM put_back_tasks t WHERE t.cancel_source = r.source AND t.cancel_source_id = r.source_id) AS "putBackTasks"
+               (SELECT COUNT(*)::int FROM put_back_tasks t WHERE t.cancel_source = r.source AND t.cancel_source_id = r.source_id) AS "putBackTasks",
+               (SELECT COUNT(*)::int FROM put_back_tasks t WHERE t.cancel_source = r.source AND t.cancel_source_id = r.source_id AND t.status = 'awaiting') AS "awaitingPutBacks"
         FROM cancel_records r
         LEFT JOIN picking_orders po ON po.id = r.picking_order_id
+        -- The replacement is matched by order_no (no FK — it may not be synced
+        -- in yet); ambiguous duplicates resolve to no link.
+        LEFT JOIN LATERAL (
+          SELECT min(po2.id) AS id FROM picking_orders po2
+          WHERE po2.order_no = r.replacement_order_no
+          HAVING COUNT(DISTINCT po2.id) = 1
+        ) rep ON TRUE
         WHERE r.outcome <> 'no_match'
           AND (${filter?.source ?? null}::text IS NULL OR r.source = ${filter?.source ?? null})
           AND (${filter?.outcome ?? null}::text IS NULL OR r.outcome = ${filter?.outcome ?? null})
         ORDER BY r.created_date DESC
         LIMIT 500`
   );
+}
+
+/** Admin: record the corrected invoice the office raised instead of the
+ *  cancelled one. Free-text order number, no FK — the replacement order may
+ *  not be synced in yet. Empty clears it. */
+export async function setCancelReplacement(
+  db: AppDb,
+  input: { recordId: string; replacementOrderNo: string | null; actorId: string }
+): Promise<{ id: string; replacementOrderNo: string | null }> {
+  const value = input.replacementOrderNo?.trim() || null;
+  return db.transaction(async (tx) => {
+    const rec = await queryGet<{ id: string; source: CancelSource; sourceId: string; current: string | null }>(
+      tx,
+      sql`SELECT id, source, source_id AS "sourceId", replacement_order_no AS "current"
+          FROM cancel_records WHERE id = ${input.recordId}`
+    );
+    if (!rec) throw new HTTPException(404, { message: "cancel_record_not_found" });
+    await queryRun(
+      tx,
+      sql`UPDATE cancel_records SET replacement_order_no = ${value}, last_update_date = ${now()} WHERE id = ${rec.id}`
+    );
+    await logTransition(tx, {
+      entityType: "cancel_record",
+      entityId: rec.id,
+      fromState: rec.current,
+      toState: value ?? "(cleared)", // to_state is NOT NULL
+      actorId: input.actorId,
+      metadata: { source: rec.source, source_id: rec.sourceId, field: "replacement_order_no" },
+    });
+    await emitEvent(tx, {
+      type: "cancel_record.processed",
+      topics: ["/cancel-records"],
+      data: { source: rec.source, sourceId: rec.sourceId, outcome: "replacement_set" },
+    });
+    return { id: rec.id, replacementOrderNo: value };
+  });
+}
+
+/** Admin confirm gate: release the awaiting put-back tasks of one cancel row
+ *  to the PDA queue. The cancel cron creates tasks as `awaiting` because the
+ *  stock usually moves to a re-raised invoice — until an admin confirms here,
+ *  no operator sees the task and it is not assignable. */
+export async function confirmCancelPutBack(
+  db: AppDb,
+  input: { recordId: string; actorId: string }
+): Promise<{ id: string; tasksReleased: number }> {
+  return db.transaction(async (tx) => {
+    const rec = await queryGet<{ id: string; source: CancelSource; sourceId: string; orderNo: string | null }>(
+      tx,
+      sql`SELECT r.id, r.source, r.source_id AS "sourceId", po.order_no AS "orderNo"
+          FROM cancel_records r
+          LEFT JOIN picking_orders po ON po.id = r.picking_order_id
+          WHERE r.id = ${input.recordId}`
+    );
+    if (!rec) throw new HTTPException(404, { message: "cancel_record_not_found" });
+    const tasks = await queryAll<{ id: string; pickingOrderId: string }>(
+      tx,
+      sql`SELECT id, picking_order_id AS "pickingOrderId" FROM put_back_tasks
+          WHERE cancel_source = ${rec.source} AND cancel_source_id = ${rec.sourceId} AND status = 'awaiting'
+          ORDER BY created_date`
+    );
+    if (tasks.length === 0) throw new HTTPException(409, { message: "no_awaiting_putback_tasks" });
+
+    for (const task of tasks) {
+      await queryRun(
+        tx,
+        sql`UPDATE put_back_tasks SET status = 'pending', last_update_date = ${now()} WHERE id = ${task.id}`
+      );
+      await logTransition(tx, {
+        entityType: "put_back_task",
+        entityId: task.id,
+        fromState: "awaiting",
+        toState: "pending",
+        actorId: input.actorId,
+        metadata: { cancel_source: rec.source, source_id: rec.sourceId, order_no: rec.orderNo },
+      });
+      await emitEvent(tx, {
+        type: "put_back_task.created",
+        topics: ["/put-back-tasks"],
+        data: { taskId: task.id, pickingOrderId: task.pickingOrderId, orderNo: rec.orderNo },
+      });
+    }
+    await emitEvent(tx, {
+      type: "cancel_record.processed",
+      topics: ["/cancel-records"],
+      data: { source: rec.source, sourceId: rec.sourceId, outcome: "putback_confirmed" },
+    });
+    return { id: rec.id, tasksReleased: tasks.length };
+  });
 }

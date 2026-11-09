@@ -775,7 +775,9 @@ updated_date)` and `cancel_invoice_tn(id varchar PK, state, batch_no, tn_number,
 org_id bigint, tn_status, last_update_date, tn_line_id bigint, tn_line_num
 bigint, po_number, update_logs jsonb, created_date, updated_date)`. The cron
 never reads or writes `state`/`update_logs`; dedupe is on `(source, source_id)`
-(unique) — a row re-processed only when its timestamp moved or our record is an
+(unique) — a row re-processed only when its timestamp moved (**compared at
+millisecond** precision, because `source_ts` is written from a JS `Date` and a µs
+upstream stamp would otherwise look "updated" every pass) or our record is an
 `error`. Outcome columns describe OUR apply (the upstream table keeps its own).
 
 | Field | Type | Description |
@@ -784,10 +786,11 @@ never reads or writes `state`/`update_logs`; dedupe is on `(source, source_id)`
 | source | varchar NOT NULL | `cancel_invoice` \| `cancel_invoice_tn` |
 | source_id | text NOT NULL | Upstream row id (ULID) |
 | pi_invoice_num / tn_number / tn_line_id / org_id | text / text / bigint / integer | Copied lookup keys (audit) |
-| picking_order_id | text FK → picking_orders(id) ON DELETE SET NULL | Order we matched (NULL = no_match) |
+| picking_order_id | text FK → picking_orders(id) ON DELETE SET NULL | Order we matched (NULL = no_match); recorded for **every** matched order, including `ignored` rows, so the admin list links the invoice/TN |
 | picking_item_id | text FK → picking_items(id) ON DELETE SET NULL | TN line we matched (NULL for invoice rows / no_match) |
 | outcome | text NOT NULL | `cancelled` \| `cancelled_with_putback` \| `ignored` (shipped/cancelled order — do-nothing) \| `no_match` \| `error` |
 | message | text | Admin-readable reason |
+| replacement_order_no | text | Corrected invoice the office re-raised (admin-entered, `PATCH /admin/cancel-records/:id`; no FK — the order may not be synced in yet) |
 | source_ts | timestamp NOT NULL | `greatest(created_date, last_update_date)` at processing time (re-process watermark) |
 | status | text NOT NULL DEFAULT 'done' | `done` \| `error` (error rows are retried every pass) |
 | created_date / last_update_date | timestamp NOT NULL DEFAULT now() | Audit |
@@ -800,13 +803,18 @@ onto a shelf. Unique on `(cancel_source, cancel_source_id, picking_order_id,
 picking_item_id)` (item id `''` = whole-order task) — re-ingesting a row never
 duplicates a task.
 
+Tasks are created **`awaiting`** (2026-11-09 confirm gate): the PDA queue and
+`/admin/task-assignments` select `pending` only, and `completePutBackTask` 409s
+on anything else, so the stock cannot move until an admin confirms the cancel on
+the cancel-records page.
+
 | Field | Type | Description |
 | --- | --- | --- |
 | id | text PK | Task id (UUID) |
 | cancel_source / cancel_source_id | varchar / text NOT NULL | Upstream cancel table + row id that created it |
 | picking_order_id | text FK → picking_orders(id) ON DELETE CASCADE | Cancelled order |
 | picking_item_id | text NOT NULL DEFAULT '' | Cancelled line (TN rows); `''` = whole-order (invoice) cancel |
-| status | text NOT NULL DEFAULT 'pending' | `pending` \| `completed` |
+| status | text NOT NULL DEFAULT 'pending' | `awaiting` (cron-created, hidden) \| `pending` (admin-confirmed, = PDA work) \| `completed` |
 | assignee | text | Queue assignee convention (NULL = visible to all) |
 | created_date / last_update_date | timestamp NOT NULL DEFAULT now() | Audit |
 

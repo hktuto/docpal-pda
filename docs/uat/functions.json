@@ -707,7 +707,7 @@
     "id": "ADM-038",
     "app": "Admin",
     "module": "Picking",
-    "name": "Cancel invoices — read-only ingest log of upstream cancelled invoices / TN lines (cancel-records page: source, matched order link, outcome, message, put-back count, SSE auto-refresh)",
+    "name": "Cancel invoices — ingest log of upstream cancelled invoices / TN lines (cancel-records page: source, matched order + replacement invoice links, outcome, message, put-back count, SSE auto-refresh; admin records the replacement invoice and confirms to release the awaiting put-back tasks to the PDA)",
     "tester": "",
     "testDate": "",
     "result": "",

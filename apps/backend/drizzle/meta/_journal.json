@@ -428,6 +428,13 @@
       "when": 1794196612771,
       "tag": "0061_brave_bug",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1794197437571,
+      "tag": "0062_famous_romulus",
+      "breakpoints": true
     }
   ]
 }

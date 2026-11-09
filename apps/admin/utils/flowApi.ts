@@ -591,10 +591,16 @@ export interface CancelRecordRow {
   outcome: string; // cancelled | cancelled_with_putback | ignored | no_match | error
   message: string | null;
   status: string; // done | error
+  /** Corrected invoice the office raised instead (admin-entered, nullable). */
+  replacementOrderNo: string | null;
+  /** Resolved picking order id for the replacement (null when unknown/ambiguous). */
+  replacementOrderId: string | null;
   sourceTs: string;
   createdDate: string;
   lastUpdateDate: string;
   putBackTasks: number;
+  /** Put-back tasks waiting for the admin confirm (hidden from the PDA). */
+  awaitingPutBacks: number;
 }
 
 /** GET /admin/internal-transfer-orders row — upstream-synced transfer order
@@ -1554,6 +1560,16 @@ export function useFlowApi() {
       const suffix = q.toString() ? `?${q.toString()}` : "";
       return api.get<CancelRecordRow[]>(`/admin/cancel-records${suffix}`);
     },
+
+    // Confirm gate: the replacement invoice the office raised for the
+    // cancelled one, and the release of the awaiting put-back tasks.
+    setCancelReplacement: (id: string, replacementOrderNo: string | null) =>
+      api.patch<{ id: string; replacementOrderNo: string | null }>(`/admin/cancel-records/${id}`, {
+        replacementOrderNo,
+      }),
+
+    confirmCancelPutBack: (id: string) =>
+      api.post<{ id: string; tasksReleased: number }>(`/admin/cancel-records/${id}/confirm-putback`, {}),
 
     // Internal transfer orders (upstream-synced; read-only until the flow
     // itself lands — spec 2026-09-28-internal-transfer-order-design.md).

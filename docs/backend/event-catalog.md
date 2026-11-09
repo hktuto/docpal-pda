@@ -202,7 +202,7 @@ business-level, and is the contract for the sync service.
 | `receiving_cn_scan.item_updated` | `/receiving-cn-scan-tasks`, `/admin/receiving-cn` | `db/receivingCnScan.ts` |
 | `put_away_task.created` / `put_away_task.completed` | `/put-away-tasks` | `db/putawaytasks.ts` |
 | `put_away_task_cn.completed` | `/put-away-cn-tasks`, `/put-away-tasks` | `db/putawayCn.ts` |
-| `put_back_task.created` | `/put-back-tasks` | `db/cancelInvoice.ts` |
+| `put_back_task.created` | `/put-back-tasks` | `db/cancelInvoice.ts` (cron create + admin confirm) |
 | `put_back_task.completed` | `/put-back-tasks` | `db/putback.ts` |
 | `cancel_record.processed` | `/cancel-records` | `db/cancelInvoice.ts` |
 | `goods_verify.tasks_created` | `/goods-verify-tasks` | `db/goodsverify.ts` |
@@ -256,3 +256,10 @@ the cron creates a return-to-shelf task for picked stock),
 `["/cancel-records"]`, emitted per upstream cancel row the cron applies, data
 `{source, sourceId, outcome}`). Order cancellations reuse `picking_order.updated`
 (topics `["/picking-orders"]`) — PDA picking pages drop cancelled orders on it.
+The confirm gate (2026-11-09) reuses both cancel types: `PATCH
+/admin/cancel-records/:id` (replacement invoice) emits one
+`cancel_record.processed` with `outcome: "replacement_set"`, and `POST
+/admin/cancel-records/:id/confirm-putback` emits one `put_back_task.created` per
+released task plus a final `cancel_record.processed` with
+`outcome: "putback_confirmed"` — the PDA list reloads on the former, the admin
+page on either.

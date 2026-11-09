@@ -1,0 +1,1 @@
+ALTER TABLE "cancel_records" ADD COLUMN "replacement_order_no" text;

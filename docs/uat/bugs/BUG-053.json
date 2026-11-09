@@ -1,0 +1,14 @@
+{
+ "id": "BUG-053",
+ "dateFound": "2026-11-09",
+ "functionId": "ADM-038",
+ "description": "Cancel-records rows that matched a picking order but applied nothing (order already cancelled/shipped, TN line not found) stored no `picking_order_id`, so the list could not link to the order detail — the 揀貨單 column showed \"—\" and the invoice/TN cell was dead text",
+ "reproSteps": "Cancel an order twice (or cancel a shipped one) → open Admin → Picking → Cancel invoices → the row's 發票 / TN and 揀貨單 cells have no link even though the order exists",
+ "severity": "Minor",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-09",
+ "tester": "",
+ "remarks": "Fixed in commit b447a25b (`applyCancel` records the matched order for every outcome) + f5a27818 (invoice/TN cell links to `/picking-orders/:id`); existing dev-DB rows backfilled by order_no where the match was unambiguous"
+}

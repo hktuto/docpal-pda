@@ -2845,16 +2845,20 @@ export default {
   },
   cancelRecords: {
     title: "Cancel Invoices",
-    explainer: "Upstream cancel_invoice / cancel_invoice_tn rows processed by the backend cron — cancel-invoice outcomes and created put-back tasks.",
+    explainer: "Upstream cancel_invoice / cancel_invoice_tn rows processed by the backend cron — cancel-invoice outcomes and created put-back tasks. A cancel's put-back tasks stay hidden from the PDA until an admin records the replacement invoice and confirms them here.",
     none: "No cancel records.",
     colSource: "Source",
     colInvoice: "Invoice / TN",
     colLine: "TN line",
     colOrder: "Picking order",
+    colReplacement: "Replacement invoice",
     colOutcome: "Outcome",
     colPutBack: "Put-back",
     colMessage: "Message",
     colDate: "Processed",
+    replacementPlaceholder: "order no.",
+    awaiting: "{n} awaiting confirm",
+    confirmPutBack: "Confirm put-back",
     sources: {
       cancel_invoice: "Invoice cancel",
       cancel_invoice_tn: "TN line cancel"

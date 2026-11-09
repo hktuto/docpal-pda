@@ -1,0 +1,14 @@
+{
+ "id": "BUG-052",
+ "dateFound": "2026-11-09",
+ "functionId": "ADM-038",
+ "description": "Cancel-invoice cron re-processed every upstream cancel row on every pass and overwrote the recorded outcome with `ignored` — the dedupe compared a microsecond upstream timestamp against `cancel_records.source_ts`, which is written from a JS Date (milliseconds), so the stored row always looked older than its own source",
+ "reproSteps": "Point a dev backend at a DB with cancel_invoice rows + a running cron → wait 2 passes (~4 min) → the row's outcome flips from `cancelled`/`cancelled_with_putback` to `ignored` (\"order … already cancelled\") and `last_update_date` keeps moving; the admin list loses the true outcome and the page reloads forever",
+ "severity": "Major",
+ "status": "Closed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "2026-11-09",
+ "tester": "",
+ "remarks": "Fixed in commit b447a25b — `fetchCancelRows` compares at millisecond precision (`date_trunc('milliseconds', …)`); regression test \"µs-precision upstream stamp is not treated as an update on every pass\". Outcomes already overwritten in shared/live DBs are log text only — the cancellations/allocations were never re-applied (already-cancelled orders short-circuit); dev DB repaired manually"
+}

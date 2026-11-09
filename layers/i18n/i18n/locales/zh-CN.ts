@@ -2841,16 +2841,20 @@ export default {
   },
   cancelRecords: {
     title: "取消发票",
-    explainer: "后端 cron 处理的上游 cancel_invoice / cancel_invoice_tn 记录 — 取消结果与建立的退回上架任务。",
+    explainer: "后端 cron 处理的上游 cancel_invoice / cancel_invoice_tn 记录 — 取消结果与建立的退回上架任务。退回上架任务需管理员在此填写替代发票并确认后，才会出现在 PDA。",
     none: "没有取消记录。",
     colSource: "来源",
     colInvoice: "发票 / TN",
     colLine: "TN 行",
     colOrder: "拣货单",
+    colReplacement: "替代发票",
     colOutcome: "结果",
     colPutBack: "退回上架",
     colMessage: "消息",
     colDate: "处理时间",
+    replacementPlaceholder: "单号",
+    awaiting: "{n} 项待确认",
+    confirmPutBack: "确认退回上架",
     sources: {
       cancel_invoice: "发票取消",
       cancel_invoice_tn: "TN 行取消"

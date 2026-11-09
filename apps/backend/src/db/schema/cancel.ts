@@ -31,6 +31,11 @@ export const cancelRecords = pgTable(
     pickingItemId: text("picking_item_id").references(() => pickingItems.id, { onDelete: "set null" }),
     outcome: text("outcome").notNull(), // cancelled | cancelled_with_putback | ignored | no_match | error
     message: text("message"),
+    /** The corrected invoice the office raised instead of the cancelled one
+     *  (admin-entered, spec 2026-11-09 change below): traceability only — no
+     *  FK, the replacement order may not be synced in yet. Set together with
+     *  the put-back confirm, which releases the awaiting tasks to the PDA. */
+    replacementOrderNo: text("replacement_order_no"),
     /** greatest(created_date, last_update_date) of the source row at processing time — also the watermark. */
     sourceTs: timestamp("source_ts", { mode: "date" }).notNull(),
     /** done = final; error = retried on the next cron pass. */
@@ -48,6 +53,11 @@ export const cancelRecords = pgTable(
 // physically back onto a shelf. The picked packages are kept (they are the
 // record of what was picked); this queue is the move instruction. assignee
 // follows the queue convention (NULL = visible to everyone).
+// `awaiting` = created by the cancel cron but NOT work yet — the admin
+// confirms the cancel on /cancel-records (optionally with the replacement
+// invoice) and the task flips to `pending`. The PDA list and the admin
+// task-assignment query both select `pending`, so awaiting tasks are invisible
+// to operators until then (spec 2026-11-07, confirm gate 2026-11-09).
 export const putBackTasks = pgTable(
   "put_back_tasks",
   {

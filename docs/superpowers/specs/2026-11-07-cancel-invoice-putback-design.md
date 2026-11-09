@@ -99,6 +99,7 @@ order.status = 'shipped'      → 'ignored'
 order/item already 'cancelled'→ 'ignored'
 order.status ∈ {pending, allocated, skip, issue, picking}      → cancel_order()
 order.status ∈ {picking_finished, measuring_finished} + picked qty → cancel_order() + put-back tasks
+  (tasks start `awaiting` — released to the PDA only by the admin confirm, 2026-11-09 change below)
 ```
 
 `cancel_order` reuses the existing close machinery: the allocation-release block extracted from
@@ -210,6 +211,36 @@ allocation is manual-only (fleet convention).
   `navSections`. Reload on `picking_order.updated` / `cancel_record.processed` via `useChangeNotice`.
 - `task-assignments.vue` gains the `put-back` flow option.
 - picking order/item status filter + detail badge gain `cancelled`.
+
+## Change 2026-11-09 — replacement invoice + admin confirm gate
+
+Requester change: when an invoice is wrong the office re-raises a **corrected**
+invoice and cancels the old one, so the returned stock should not start moving
+before an admin has seen the cancel. Delivered:
+
+- The cron **still applies the cancel immediately** (order/line → `cancelled`,
+  allocations released, packages un-boxed, emptied boxes deleted) — the order is
+  dead upstream and must not stay in the picking queue.
+- Put-back tasks are created with status **`awaiting`** instead of `pending`.
+  The PDA queue (`listPutBackTasks('pending')`) and `/admin/task-assignments`
+  (also `status = 'pending'`) both ignore them, so no operator sees the move and
+  it cannot be assigned — until confirmed. `completePutBackTask` already 409s on
+  any non-`pending` task, so an awaiting task can never be credited early.
+- Admin `PATCH /admin/cancel-records/:id {replacementOrderNo}` stores the
+  corrected invoice the office raised. Free-text `order_no` with **no FK** (the
+  replacement order may not be synced in yet); `listCancelRecords` resolves it to
+  `replacementOrderId` by `order_no` when exactly one order matches, so the page
+  can link it.
+- Admin `POST /admin/cancel-records/:id/confirm-putback` flips every `awaiting`
+  task of that cancel row to `pending` (one `logTransition` per task,
+  `put_back_task.created` + `cancel_record.processed` events) and 409s
+  `no_awaiting_putback_tasks` when there is nothing waiting. Confirming a cancel
+  that picked nothing is a no-op error by design — there was never work to gate.
+- The replacement is **optional**: an order that is simply dead (no corrected
+  invoice) still needs its stock put back, so confirm does not require one.
+- Admin page `cancel-records.vue`: a per-row "Replacement invoice" input (saved
+  on blur/Enter) + an "n awaiting confirm" chip with a **Confirm put-back**
+  button in the Put-back column.
 
 ## Out of scope (deliberate, one line each)
 

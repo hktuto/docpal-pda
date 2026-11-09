@@ -1,0 +1,14 @@
+{
+ "id": "CR-054",
+ "dateRaised": "2026-11-09",
+ "raisedBy": "Sean",
+ "app": "Both",
+ "functionId": "ADM-038",
+ "feature": "Cancel invoice — replacement invoice + admin confirm gate: when an invoice is wrong the office re-raises a corrected invoice and cancels the old one, so the cancelled order's picked stock must not start moving back to the shelves before an admin has seen it. The cancel cron still cancels the order/line and releases allocations immediately, but creates the put-back tasks as `awaiting`; the admin cancel-records page shows an \"n awaiting confirm\" chip, takes the replacement invoice number, and a Confirm put-back action releases the tasks (`awaiting` → `pending`), which is when they first appear on the PDA put-back queue and in task assignments",
+ "reason": "Returned stock is normally re-used by the replacement invoice; releasing the put-back automatically meant operators moved stock before the office decision was visible, and there was no record of which invoice replaced the cancelled one",
+ "priority": "Must have",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Implemented 2026-11-09 — spec docs/superpowers/specs/2026-11-07-cancel-invoice-putback-design.md (section \"Change 2026-11-09 — replacement invoice + admin confirm gate\"). Backend: `cancel_records.replacement_order_no` (migration 0062) + `setCancelReplacement`/`confirmCancelPutBack` in `db/cancelInvoice.ts`, `PATCH /admin/cancel-records/:id` + `POST /admin/cancel-records/:id/confirm-putback`; admin `pages/cancel-records.vue` input + confirm button; PDA unchanged (queue already lists `pending` only). Also affects PDA-028 (task appears only after confirm)."
+}
