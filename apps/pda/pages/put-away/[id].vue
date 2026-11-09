@@ -796,7 +796,8 @@ function cnOrderFromTaskDetail(detail: PutAwayTaskDetail): ReceivingOrderDetail 
 }
 
 async function load() {
-  pending.value = true;
+  // Never flip pending back to true on a reload: that unmounts the panel and
+  // throws the operator's scroll position away after a scan removal.
   error.value = null;
   try {
     // Resolve the config before picking the source — direct navigation
@@ -863,9 +864,9 @@ async function load() {
     pending.value = false;
   }
 
-  // Scroll AFTER pending flips false: while pending, the v-if unmounts the
-  // whole panel, so the target element does not exist yet and the scroll
-  // would silently no-op (long lists also jump back to the top on remount).
+  // Scroll to the just-scanned group after the reload (scrollTargetGroupKey
+  // is only set by the scan paths; removals leave it null and keep the
+  // operator's current scroll position).
   if (scrollTargetGroupKey.value) {
     const targetKey = scrollTargetGroupKey.value;
     scrollTargetGroupKey.value = null;
