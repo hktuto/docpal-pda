@@ -217,6 +217,9 @@ const itemsViewRows = computed<ItemsViewRow[]>(() =>
   itemsView.value === "grouped" ? groupedItems.value : (order.value?.items ?? [])
 );
 
+// Cancelled lines (cancel-invoice cron) strike through in the flat item table.
+const itemsRowClass = (row: ItemsViewRow) => (!row.grouped && row.status === "cancelled" ? "row-cancelled" : "");
+
 // Detail lists are small and were previously shown in full — no Pager, so
 // the tables get a generous default page size (TanStack still owns sorting).
 const itemsColumnDefs = computed<AdminColumnDef<PickingOrderDetail["items"][number]>[]>(() => [
@@ -923,7 +926,7 @@ const {
           </button>
         </span>
       </h2>
-      <DataTable :table="itemsTable" :on-reset-columns="resetItemsColumns">
+      <DataTable :table="itemsTable" :on-reset-columns="resetItemsColumns" :row-class="itemsRowClass">
         <template #cell-partNo="{ row }">
           <span class="partno-cell">
             {{ row.wclItemNo ?? row.partNo }}
@@ -1119,6 +1122,12 @@ const {
 </template>
 
 <style scoped>
+:deep(.row-cancelled) {
+  text-decoration: line-through;
+  color: var(--muted);
+  opacity: 0.75;
+}
+
 .head-chip {
   margin-right: auto;
   margin-left: 0.75rem;

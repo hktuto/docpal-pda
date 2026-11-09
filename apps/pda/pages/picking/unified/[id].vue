@@ -203,6 +203,13 @@ useHead({ title: t("picking.detail.title") });
 const pending = ref(true);
 const error = ref<string | null>(null);
 const order = ref<PickingOrderDetail | null>(null);
+
+// Cancelled lines (cancel-invoice cron) never reach the PDA — withdrawn work
+// is not work; the put-back queue handles returning their stock. Filtering at
+// fetch keeps the item list, scan queue and the finish gate consistent.
+function withVisibleItems(data: PickingOrderDetail): PickingOrderDetail {
+  return { ...data, items: (data.items ?? []).filter((i) => i.status !== "cancelled") };
+}
 const adding = ref<Record<string, boolean>>({});
 const removing = ref<Record<string, boolean>>({});
 const removingScans = ref<Record<string, boolean>>({});
@@ -529,7 +536,7 @@ async function confirm() {
     async () => {
       // The backend rebuilds allocation rows (new ids) after every applied
       // scan — refetch and re-resolve the remaining queued rows.
-      order.value = await warehouse.getPickingOrder(orderId);
+      order.value = withVisibleItems(await warehouse.getPickingOrder(orderId));
       session.reresolveQueued();
     }
   );
@@ -634,7 +641,7 @@ usePageHeader({
 async function load() {
   error.value = null;
   try {
-    order.value = await warehouse.getPickingOrder(orderId);
+    order.value = withVisibleItems(await warehouse.getPickingOrder(orderId));
     // Disarm only when the armed box is one of THIS order's boxes and left
     // the open state — a cross-order armed box (chosen via Choose box) has no
     // card here and stays armed; a stale one fails loudly on the next scan.

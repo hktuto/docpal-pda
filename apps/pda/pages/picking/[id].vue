@@ -356,7 +356,9 @@ function goScan() {
 async function load() {
   try {
     const data = await warehouse.getPickingOrder(orderId);
-    order.value = data;
+    // Cancelled lines (cancel-invoice cron) never reach the PDA — what is
+    // withdrawn is not work; the put-back queue handles returning its stock.
+    order.value = { ...data, items: (data.items ?? []).filter((i) => i.status !== "cancelled") };
     // Disarm only when the armed box is one of THIS order's boxes and left
     // the open state — a cross-order armed box (chosen via Choose box) has no
     // card here and stays armed; a stale one fails loudly on the next scan.

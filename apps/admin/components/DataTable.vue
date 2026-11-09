@@ -17,6 +17,9 @@ const props = defineProps<{
   rowId?: (row: any) => string;
   loading?: boolean;
   emptyText?: string;
+  /** Optional per-row CSS class from the row object (e.g. strike through
+   *  cancelled picking lines). */
+  rowClass?: (row: any) => string;
   /** Provided by useAdminTable consumers; enables the "Reset columns" button. */
   onResetColumns?: () => void;
   /** Share horizontal scroll position with other DataTables using the same key. */
@@ -318,7 +321,7 @@ const emptyColspan = computed(
           <tr
             v-for="row in table.getRowModel().rows"
             :key="row.id"
-            :class="{ clickable: hasRowClick }"
+            :class="[{ clickable: hasRowClick }, rowClass?.(row.original) ?? '']"
             @click="emit('row-click', row.original)"
             @dblclick="emit('row-dblclick', row.original)"
           >

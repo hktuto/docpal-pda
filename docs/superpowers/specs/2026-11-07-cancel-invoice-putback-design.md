@@ -193,7 +193,13 @@ allocation is manual-only (fleet convention).
   the rest land on the scanned fallback).
 - `services/types.ts` + `WarehouseService` + `backendWarehouse.ts`: `listPutBackTasks`,
   `getPutBackTaskDetail`, `completePutBackTask`.
-- `useStatusBadge` / `statusLabel`: `cancelled` → `badge--finished`, `put_back pending/completed`.
+- PDA picking detail pages (`pages/picking/[id].vue`, `pages/picking/unified/[id].vue`)
+  filter `status='cancelled'` lines out at fetch — withdrawn lines are not work, and
+  the finish gate / scan queue must not wait on them. The put-back queue carries their
+  stock back to the shelves instead.
+- Admin picking detail: items table gains a Status column (Created/Pending/Picked/
+  Cancelled) and struck-through rows for cancelled lines (DataTable `rowClass`).
+- `useStatusBadge` / `statusLabel`: `cancelled` → `badge--danger`, `put_back pending/completed`.
 
 ## Admin (`apps/admin`)
 
