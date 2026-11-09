@@ -647,9 +647,9 @@ const PICKING_LIST_SORTS: Record<string, ReturnType<typeof sql>[]> = {
   poNo: [sql`po.po_no`],
   shipTo: [sql`po.ship_to`],
   deliveryDate: [sql`po.delivery_date`],
-  itemCount: [sql`COUNT(pi.id)`],
-  pickedRatio: [sql`CASE WHEN SUM(pi.qty) > 0 THEN SUM(pi.picked_qty)::float8 / SUM(pi.qty) ELSE 0 END`],
-  allocation: [sql`CASE WHEN SUM(pi.qty) > 0 THEN SUM(pi.allocated_qty)::float8 / SUM(pi.qty) ELSE 0 END`],
+  itemCount: [sql`COUNT(pi.id) FILTER (WHERE pi.status <> 'cancelled')`],
+  pickedRatio: [sql`CASE WHEN SUM(pi.qty) FILTER (WHERE pi.status <> 'cancelled') > 0 THEN SUM(pi.picked_qty) FILTER (WHERE pi.status <> 'cancelled')::float8 / SUM(pi.qty) FILTER (WHERE pi.status <> 'cancelled') ELSE 0 END`],
+  allocation: [sql`CASE WHEN SUM(pi.qty) FILTER (WHERE pi.status <> 'cancelled') > 0 THEN SUM(pi.allocated_qty) FILTER (WHERE pi.status <> 'cancelled')::float8 / SUM(pi.qty) FILTER (WHERE pi.status <> 'cancelled') ELSE 0 END`],
   assignee: [sql`po.assignee`],
   workingByName: [sql`w.display_name`],
   remark: [sql`po.remark`],
@@ -713,10 +713,10 @@ export async function listPickingOrders(
         po.issue_reason AS "issueReason", po.issue_qty AS "issueQty",
         po.issue_pack_size AS "issuePackSize", po.issue_note AS "issueNote",
         po.issue_reported_at AS "issueReportedAt",
-        COUNT(pi.id)::int AS "itemCount",
-        COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
-        COALESCE(SUM(pi.picked_qty), 0)::int AS "pickedQty",
-        COALESCE(SUM(pi.allocated_qty), 0)::int AS "allocatedQty",
+        COUNT(pi.id) FILTER (WHERE pi.status <> 'cancelled')::int AS "itemCount",
+        COALESCE(SUM(pi.qty) FILTER (WHERE pi.status <> 'cancelled'), 0)::int AS "totalQty",
+        COALESCE(SUM(pi.picked_qty) FILTER (WHERE pi.status <> 'cancelled'), 0)::int AS "pickedQty",
+        COALESCE(SUM(pi.allocated_qty) FILTER (WHERE pi.status <> 'cancelled'), 0)::int AS "allocatedQty",
         (SELECT COUNT(*)::int FROM outdated_scan_warnings osw
          WHERE osw.order_kind = 'picking' AND osw.order_id = po.id AND osw.resolved_at IS NULL) AS "outdatedWarningCount",
         EXISTS (
@@ -829,8 +829,8 @@ export async function listLabelingOrders(
         po.customer_code AS "customerCode", po.ship_to AS "shipTo",
         po.delivery_date AS "deliveryDate",
         pt.assignee,
-        COUNT(pi.id)::int AS "itemCount",
-        COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
+        COUNT(pi.id) FILTER (WHERE pi.status <> 'cancelled')::int AS "itemCount",
+        COALESCE(SUM(pi.qty) FILTER (WHERE pi.status <> 'cancelled'), 0)::int AS "totalQty",
         po.last_update_date AS "lastUpdateDate",
         COUNT(*) OVER ()::int AS "total"
       FROM picking_orders po
@@ -871,8 +871,8 @@ export async function listLabelPrintingOrders(
         po.customer_code AS "customerCode", po.ship_to AS "shipTo",
         po.delivery_date AS "deliveryDate",
         pt.assignee,
-        COUNT(pi.id)::int AS "itemCount",
-        COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
+        COUNT(pi.id) FILTER (WHERE pi.status <> 'cancelled')::int AS "itemCount",
+        COALESCE(SUM(pi.qty) FILTER (WHERE pi.status <> 'cancelled'), 0)::int AS "totalQty",
         po.last_update_date AS "lastUpdateDate",
         COUNT(*) OVER ()::int AS "total"
       FROM picking_orders po
@@ -3489,7 +3489,10 @@ export async function overridePickingOrderStatus(
  * (verify_tasks / shipping_box_items cascade — packages of OTHER orders
  * packed into those boxes are unboxed first so their order keeps them).
  * Items: picked_qty 0 / status pending (allocated_qty untouched — the
- * per-package bumpAllocation already restored the rows). Order → 'pending'
+ * per-package bumpAllocation already restored the rows). Cancelled lines
+ * (cancel-invoice cron) and their packages are left alone — put-back already
+ * credited that stock, reversing it again would double it; a fully-cancelled
+ * order is not re-testable via reset. Order → 'pending'
  * with the work lock, labeling / label-printing stage flags AND done stamps,
  * shipped stamps, and issue columns cleared. 404 picking_order_not_found; 409
  * picking_order_shipped — a shipped order's stock is gone, nothing to restore.
@@ -3505,6 +3508,7 @@ export async function resetPickingOrderProgress(
     );
     if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
     if (order.status === "shipped") throw new HTTPException(409, { message: "picking_order_shipped" });
+    if (order.status === "cancelled") throw new HTTPException(409, { message: "picking_order_cancelled" });
     await assertActor(tx, input.actorId);
 
     const packages = await queryAll<{
@@ -3524,7 +3528,7 @@ export async function resetPickingOrderProgress(
                  pp.source_type AS "sourceType", pp.source_id AS "sourceId", pp.qty,
                  pp.date_code AS "dateCode", pp.lot_code AS "lotCode", pp.coo, pp.cow
           FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
-          WHERE pp.picking_order_id = ${order.id}
+          WHERE pp.picking_order_id = ${order.id} AND pi.status <> 'cancelled'
           ORDER BY pp.created_date, pp.id`
     );
     for (const pkg of packages) {
@@ -3549,7 +3553,7 @@ export async function resetPickingOrderProgress(
     await queryRun(
       tx,
       sql`UPDATE picking_items SET picked_qty = 0, status = 'pending', last_update_date = ${at}
-          WHERE picking_order_id = ${order.id}`
+          WHERE picking_order_id = ${order.id} AND status <> 'cancelled'`
     );
     await queryRun(
       tx,

@@ -1884,6 +1884,7 @@ export default {
       pickingOrders: {
         title: "Picking Orders",
         reorderPriority: "Reorder priority",
+        newVmi: "New VMI",
         searchPlaceholder: "Search order no / customer / PO / ship-to",
         orderNo: "Order No",
         status: "Status",
@@ -1931,6 +1932,12 @@ export default {
         overrideStatus: "Override status",
         overrideStatusSelected: "Set status ({n})",
         confirmAllocation: "Confirm allocation",
+        itemStatus: {
+          created: "Created",
+          pending: "Pending",
+          picked: "Picked",
+          cancelled: "Cancelled"
+        },
         overrideModalTitleSingle: "Override status — {orderNo}",
         overrideModalTitleBatch: "Override status — {n} orders",
         overrideTarget: "New status",
@@ -2067,6 +2074,35 @@ export default {
         move: "Move",
         moveToTop: "Move to top",
         none: "No open picking orders."
+      },
+      vmiUpload: {
+        title: "New VMI Picking Orders",
+        description: "Upload a VMI_Template_*.xlsx — one picking order per VMI Ref.No; rows of the same ref become its items.",
+        pickFile: "Choose Excel file",
+        parsing: "Parsing…",
+        create: "Create {n} orders",
+        creating: "Creating…",
+        cancel: "Cancel",
+        noHeader: "No VMI header row found — the sheet needs VMI Ref.No / Item / Qty / Sub Inventory columns.",
+        partsCheckFailed: "The parts-master check failed — try again.",
+        issuesTitle: "Fix these issues before creating:",
+        summaryTitle: "Preview — {n} orders",
+        ref: "VMI Ref.No",
+        customer: "Customer",
+        location: "Sub Inventory",
+        selectOrg: "Select org…",
+        selectLocation: "Select org + sub-inventory…",
+        applyToAll: "Apply to all orders",
+        lines: "Lines",
+        qty: "Total Qty",
+        issue: {
+          noRef: "A row has no VMI Ref.No.",
+          noItem: "Order {orderNo}: a line has no Item.",
+          invalidQty: "Order {orderNo}: Qty \"{qty}\" is not a positive integer.",
+          unknownPart: "Item \"{partNo}\" is not in the parts master.",
+          noSubInv: "Order {orderNo}: Sub Inventory is blank.",
+          subInvUnknown: "Sub Inventory \"{subInv}\" (order {orderNo}) is not set up for this warehouse."
+        }
       },
       createTestOrder: {
         title: "Create Test Picking Order",

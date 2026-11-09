@@ -135,7 +135,7 @@ const reportError = ref("");
 const reportSubmitting = ref(false);
 const reportDismiss = useOverlayDismiss(() => (reportOpen.value = false));
 
-const totalQty = computed(() => (order.value?.items ?? []).reduce((sum, i) => sum + i.qty, 0));
+const totalQty = computed(() => (order.value?.items ?? []).filter((i) => i.status !== "cancelled").reduce((sum, i) => sum + i.qty, 0));
 
 // Items table view modes: "flat" (one row per order line — the original) and
 // "grouped" (lines sharing the same item no (wclItemNo ?? partNo) merge into
@@ -233,6 +233,12 @@ const itemsColumnDefs = computed<AdminColumnDef<PickingOrderDetail["items"][numb
     size: 110,
   },
   { key: "qty", label: t("admin.pages.pickingOrders.required"), size: 90 },
+  {
+    key: "status",
+    label: t("admin.pages.pickingOrders.status"),
+    accessor: (item) => (item.grouped ? "" : t(`admin.pages.pickingOrders.itemStatus.${item.status ?? ""}`)),
+    size: 90,
+  },
   { key: "allocatedQty", label: t("admin.pages.pickingOrders.allocated"), size: 90 },
   { key: "pickedQty", label: t("admin.pages.pickingOrders.picked"), size: 80 },
   {

@@ -226,6 +226,7 @@ async function loadDemands(dbOrTx: DbOrTx, partKeys?: string[], onlyOrderId?: st
             : sql`(po.status IN ('pending', 'picking')
                    AND (po.working_by IS NULL OR po.working_at IS NULL OR po.working_at < ${workLockExpiry()}))`}
           AND pi.qty > COALESCE(pkg.qty, 0)
+          AND pi.status <> 'cancelled'
           ${partKeys && partKeys.length > 0 ? sql`AND ${inArray(sql`pi.part_no`, partKeys)}` : sql``}
         ORDER BY po.priority_seq, po.delivery_date NULLS LAST, po.order_no, pi.id`
   );
@@ -367,7 +368,7 @@ export async function refreshAllocationStatus(dbOrTx: DbOrTx): Promise<void> {
                ELSE 'unallocated'
              END AS new_status
       FROM picking_orders po2
-      LEFT JOIN picking_items pi ON pi.picking_order_id = po2.id
+      LEFT JOIN picking_items pi ON pi.picking_order_id = po2.id AND pi.status <> 'cancelled'
       LEFT JOIN (
         SELECT picking_item_id, SUM(qty)::int AS qty
         FROM picking_packages GROUP BY picking_item_id

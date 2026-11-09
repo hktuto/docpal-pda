@@ -32,7 +32,7 @@ We are a separate consumer of the same rows.
 2. Outcome lives in **our** table only. Never write back to the cancel tables.
 3. Cancellation creates a **new put-back queue** (`put_back_tasks` + `put_back_task_items`) with real PDA pages — option (a).
 4. No `too_late` outcome and no admin retry: already-shipped orders are a **no-op** (`outcome = 'ignored'`); a later update to the same source row re-runs the logic unchanged (idempotent).
-5. TN line cancel leaves the order open: `picking_items.status = 'cancelled'`, that line's allocations released; order → `cancelled` only when all items are cancelled.
+5. TN line cancel leaves the order open: `picking_items.status = 'cancelled'`, that line's allocations released; order → `cancelled` only when all items are cancelled. Cancelled lines are excluded everywhere demand/coverage is computed (`loadDemands`, `refreshAllocationStatus`, picking-list aggregates) so a later Re-allocate can never re-reserve stock for them, and admin order-reset refuses cancelled orders and skips cancelled lines/packages (the put-back credit must not be reversed twice).
 
 ## Backend
 

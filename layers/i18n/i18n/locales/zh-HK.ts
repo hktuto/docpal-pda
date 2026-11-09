@@ -1882,6 +1882,7 @@ export default {
       pickingOrders: {
         title: "揀貨單",
         reorderPriority: "調整優先級",
+        newVmi: "新增 VMI",
         searchPlaceholder: "搜尋單號 / 客戶 / PO / 收貨地",
         orderNo: "單號",
         status: "狀態",
@@ -1929,6 +1930,12 @@ export default {
         overrideStatus: "覆寫狀態",
         overrideStatusSelected: "設定狀態（{n}）",
         confirmAllocation: "確認分配",
+        itemStatus: {
+          created: "已建立",
+          pending: "待處理",
+          picked: "已揀貨",
+          cancelled: "已取消"
+        },
         overrideModalTitleSingle: "覆寫狀態 — {orderNo}",
         overrideModalTitleBatch: "覆寫狀態 — {n} 張訂單",
         overrideTarget: "新狀態",
@@ -2064,6 +2071,35 @@ export default {
         move: "移動",
         moveToTop: "置頂",
         none: "暫無未完成的揀貨單。"
+      },
+      vmiUpload: {
+        title: "新增 VMI 揀貨單",
+        description: "上傳 VMI_Template_*.xlsx — 每個 VMI Ref.No 產生一張揀貨單,同 ref 的行作為其料項。",
+        pickFile: "選擇 Excel 檔案",
+        parsing: "解析中…",
+        create: "建立 {n} 張揀貨單",
+        creating: "建立中…",
+        cancel: "取消",
+        noHeader: "找不到 VMI 表頭 — 工作表需要 VMI Ref.No / Item / Qty / Sub Inventory 欄。",
+        partsCheckFailed: "零件主檔檢查失敗 — 請重試。",
+        issuesTitle: "建立前請先修正以下問題:",
+        summaryTitle: "預覽 — {n} 張揀貨單",
+        ref: "VMI 編號",
+        customer: "客戶",
+        location: "子庫存",
+        selectOrg: "選擇組織…",
+        selectLocation: "選擇組織 + 子庫存…",
+        applyToAll: "套用到所有訂單",
+        lines: "行數",
+        qty: "總數量",
+        issue: {
+          noRef: "有列缺少 VMI Ref.No。",
+          noItem: "單 {orderNo}:有列缺少型號。",
+          invalidQty: "單 {orderNo}:數量「{qty}」必須為正整數。",
+          unknownPart: "型號「{partNo}」不在零件主檔。",
+          noSubInv: "單 {orderNo}:子庫存為空。",
+          subInvUnknown: "子庫存「{subInv}」(單 {orderNo})未在本倉庫設定。"
+        }
       },
       createTestOrder: {
         title: "建立測試揀貨單",

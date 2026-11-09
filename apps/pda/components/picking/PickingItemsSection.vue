@@ -17,11 +17,12 @@
       :key="group.key"
       :data-item-id="group.items[0].id"
       class="list-row list-row--expandable"
-      :class="{ 'list-row--done': group.pickedQty >= group.qty }"
+      :class="{ 'list-row--done': group.pickedQty >= group.qty, 'list-row--cancelled': group.allCancelled }"
     >
       <button type="button" class="list-row__main list-row__toggle" @click="toggle(group.key)">
         <div class="list-row__line1">
           <span class="list-row__title">{{ group.title || $t('common.noData') }}</span>
+          <span v-if="group.allCancelled" class="badge badge--danger">{{ $t('status.picking.cancelled') }}</span>
           <!-- <span
             class="badge"
             :class="badgeClass(group.pickedQty >= group.qty ? 'finished' : 'picking')"
@@ -50,6 +51,7 @@
             ({{ $t('picking.itemsSection.shipment') }} {{ item.shipmentNumber ?? '—' }})
             · {{ $t('picking.itemsSection.requiredQty') }}: {{ item.qty }}
             · {{ $t('picking.itemsSection.scannedQty') }}: {{ scannedQty(item) }}
+            <span v-if="item.status === 'cancelled'" class="merged-cancelled">· {{ $t('status.picking.cancelled') }}</span>
           </div>
         </template>
         <DetailRow
@@ -287,6 +289,9 @@ interface ItemGroup {
   allocations: MergedAllocation[];
   unboxed: PickingPackage[];
   boxed: PickingPackage[];
+  /** Every line was withdrawn upstream (cancel-invoice cron) — renders the
+   *  row struck-through with a Cancelled chip. */
+  allCancelled: boolean;
 }
 
 function toGroup(key: string, items: PickingItem[]): ItemGroup {
@@ -301,6 +306,7 @@ function toGroup(key: string, items: PickingItem[]): ItemGroup {
     allocations: mergeAllocations(items.flatMap((i) => i.allocations ?? [])),
     unboxed: packages.filter((p) => !p.shippingBoxId),
     boxed: packages.filter((p) => p.shippingBoxId),
+    allCancelled: items.every((i) => i.status === "cancelled"),
   };
 }
 
@@ -353,6 +359,19 @@ function formatLotFields(source: { dateCode: string | null; lotCode: string | nu
 </script>
 
 <style scoped>
+.list-row--cancelled {
+  opacity: 0.55;
+}
+
+.list-row--cancelled .list-row__title {
+  text-decoration: line-through;
+}
+
+.merged-cancelled {
+  color: var(--danger, #dc2626);
+  font-weight: 600;
+}
+
 .section-title {
   display: flex;
   align-items: center;

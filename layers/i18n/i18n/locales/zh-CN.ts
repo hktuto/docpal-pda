@@ -1882,6 +1882,7 @@ export default {
       pickingOrders: {
         title: "拣货单",
         reorderPriority: "调整优先级",
+        newVmi: "新建 VMI",
         searchPlaceholder: "搜索单号 / 客户 / PO / 收货地",
         orderNo: "单号",
         status: "状态",
@@ -1929,6 +1930,12 @@ export default {
         overrideStatus: "覆盖状态",
         overrideStatusSelected: "设置状态（{n}）",
         confirmAllocation: "确认分配",
+        itemStatus: {
+          created: "已创建",
+          pending: "待处理",
+          picked: "已拣货",
+          cancelled: "已取消"
+        },
         overrideModalTitleSingle: "覆盖状态 — {orderNo}",
         overrideModalTitleBatch: "覆盖状态 — {n} 张订单",
         overrideTarget: "新状态",
@@ -2064,6 +2071,35 @@ export default {
         move: "移动",
         moveToTop: "置顶",
         none: "暂无未完成的拣货单。"
+      },
+      vmiUpload: {
+        title: "新建 VMI 拣货单",
+        description: "上传 VMI_Template_*.xlsx — 每个 VMI Ref.No 生成一张拣货单,同 ref 的行作为其料项。",
+        pickFile: "选择 Excel 文件",
+        parsing: "解析中…",
+        create: "创建 {n} 张拣货单",
+        creating: "创建中…",
+        cancel: "取消",
+        noHeader: "找不到 VMI 表头 — 工作表需要 VMI Ref.No / Item / Qty / Sub Inventory 列。",
+        partsCheckFailed: "零件主档检查失败 — 请重试。",
+        issuesTitle: "创建前请先修正以下问题:",
+        summaryTitle: "预览 — {n} 张拣货单",
+        ref: "VMI 编号",
+        customer: "客户",
+        location: "子库存",
+        selectOrg: "选择组织…",
+        selectLocation: "选择组织 + 子库存…",
+        applyToAll: "应用到所有订单",
+        lines: "行数",
+        qty: "总数量",
+        issue: {
+          noRef: "有行缺少 VMI Ref.No。",
+          noItem: "单 {orderNo}:有行缺少型号。",
+          invalidQty: "单 {orderNo}:数量「{qty}」必须为正整数。",
+          unknownPart: "型号「{partNo}」不在零件主档。",
+          noSubInv: "单 {orderNo}:子库存为空。",
+          subInvUnknown: "子库存「{subInv}」(单 {orderNo})未在本仓库配置。"
+        }
       },
       createTestOrder: {
         title: "创建测试拣货单",

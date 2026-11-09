@@ -315,6 +315,66 @@ test("upstream row updated (last_update_date moved) → reprocessed; already-can
   assert.equal(order!.status, "cancelled");
 });
 
+test("cancelled TN line is never re-allocated (allocateAll after a line cancel)", async () => {
+  const pair = await queryGet<{ orgId: number; sub: string }>(
+    client.db,
+    sql`SELECT org_id AS "orgId", sub_inventory_code AS "sub" FROM picking_orders WHERE order_no = 'SO-DEMO-0001' AND org_id IS NOT NULL LIMIT 1`
+  );
+  assert.ok(pair, "seed world should have an order with an org pair");
+  const shelf = await queryGet<{ code: string }>(client.db, sql`SELECT code FROM shelves LIMIT 1`);
+  assert.ok(shelf);
+
+  const orderId = randomUUID();
+  await client.db.execute(
+    sql`INSERT INTO picking_orders (id, order_no, status, org_id, sub_inventory_code, created_date, last_update_date)
+        VALUES (${orderId}, 'TN-REALLOC-01', 'pending', ${pair!.orgId}, ${pair!.sub}, now(), now())`
+  );
+  const itemIds: Record<number, string> = {};
+  for (const lineId of [778001, 778002]) {
+    const id = randomUUID();
+    itemIds[lineId] = id;
+    await client.db.execute(
+      sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, line_id, line_number, status, created_date, last_update_date)
+          VALUES (${id}, ${orderId}, 'ZZZ/REALLOC-PART', 100, ${lineId}, ${lineId}, 'pending', now(), now())`
+    );
+  }
+  await client.db.execute(
+    sql`INSERT INTO inventory_lots (id, part_no, shelf_code, org_id, sub_inventory_code, total_qty, allocated_qty, created_date, last_update_date)
+        VALUES (${randomUUID()}, 'ZZZ/REALLOC-PART', ${shelf!.code}, ${pair!.orgId}, ${pair!.sub}, 500, 0, now(), now())`
+  );
+
+  await allocateAll(client.db);
+  const both = await queryGet<{ c: number }>(
+    client.db,
+    sql`SELECT COUNT(*)::int AS c FROM allocations WHERE picking_item_id IN (${itemIds[778001]}, ${itemIds[778002]}) AND qty > 0`
+  );
+  assert.equal(both!.c, 2, "both lines allocated");
+
+  await insertTnCancel("TN-REALLOC-01", 778001);
+  await runCancelInvoiceSyncOnce(client.db);
+
+  // The next fleet rebuild must NOT put stock back onto the cancelled line.
+  await allocateAll(client.db);
+  const dead = await queryGet<{ c: number }>(
+    client.db,
+    sql`SELECT COUNT(*)::int AS c FROM allocations WHERE picking_item_id = ${itemIds[778001]} AND qty > 0`
+  );
+  assert.equal(dead!.c, 0, "cancelled line must not be re-allocated");
+  const alive = await queryGet<{ allocatedQty: number; status: string }>(
+    client.db,
+    sql`SELECT allocated_qty AS "allocatedQty", status FROM picking_items WHERE id = ${itemIds[778002]}`
+  );
+  assert.equal(alive!.allocatedQty, 100);
+  const order = await queryGet<{ allocationStatus: string; status: string }>(
+    client.db,
+    sql`SELECT allocation_status AS "allocationStatus", status FROM picking_orders WHERE id = ${orderId}`
+  );
+  assert.equal(order!.allocationStatus, "allocated"); // coverage ignores the cancelled line
+  assert.equal(order!.status, "pending");
+
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id = ${orderId}`); // cascades items/lots? lots survive — truncate handles next test
+});
+
 test("missing upstream tables → tolerated (idle cron, no throw)", async () => {
   // Runs last in this file — drops and recreates the externally-managed tables.
   await client.db.execute(sql`DROP TABLE cancel_invoice`);
