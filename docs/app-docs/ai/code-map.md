@@ -36,7 +36,7 @@ Page and component locations mapped to source files.
 | Ad-hoc Put-away | `/ad-hoc-put-away` | `pages/ad-hoc-put-away/index.vue` (supplier selection, scan, review list, location/shelf selection, confirm) |
 | Shelf Exchange | `/shelf-exchange` | `pages/shelf-exchange/index.vue` (step state machine — source shelf → item label → target shelf, confirm via `components/ShelfExchangeConfirmModal.vue`) |
 | Print product label (single-label print test) | `/print-product-label` | `pages/print-product-label.vue` (data `GET /labels-data` in `apps/backend/src/routes/labels.ts`) |
-| Settings (global text size) | `/settings` | `pages/settings.vue` (sizing state `composables/useFontSize.ts`, applied at startup by `plugins/font-size.client.ts`, persisted per-device in `localStorage` key `warehouse-font-size`; all app CSS sizes in `rem` off the `html` base, default 24px — see `assets/css/main.scss`; plus the "Scan all barcode types" scanner toggle — `scanAllSymbologiesEnabled`/`setScanAllSymbologies` in `composables/useScannerConfig.ts`, localStorage `warehouse-scan-all-symbologies`, gates every symbology whitelist) |
+| Settings (global text size) | `/settings` | `pages/settings.vue` (sizing state `composables/useFontSize.ts`, applied at startup by `plugins/font-size.client.ts`, persisted per-device in `localStorage` key `warehouse-font-size`; all app CSS sizes in `rem` off the `html` base, default 24px — see `assets/css/main.scss`) |
 
 ## Layouts and global UI
 

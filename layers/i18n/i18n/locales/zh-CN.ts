@@ -409,6 +409,7 @@ export default {
           colSource: "来源",
           removeRow: "移除",
           ocrCapture: "OCR 拍照",
+          scanAllTypes: "所有条码类型",
           confirm: "确认 ({count})",
           confirming: "提交中…",
           allApplied: "全部扫描已生效",
@@ -967,11 +968,7 @@ export default {
     preview: "预览",
     previewLabel: "示例",
     smaller: "缩小",
-    larger: "放大",
-    scanAllTypes: "扫描所有条码类型",
-    scanAllTypesHint: "允许扫描器读取所有条码类型，而不只限订单供应商的物料标签类型。扫描类型与物料标签不同的箱条码时请开启。适用于所有扫描页面，内容检查不变。",
-    scanAllTypesOn: "开启",
-    scanAllTypesOff: "关闭"
+    larger: "放大"
   },
   languageSwitcher: {
     label: "语言",

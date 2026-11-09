@@ -93,6 +93,15 @@
       />
 
       <footer v-if="actionable" class="unified-footer">
+        <button
+          type="button"
+          class="btn btn--small"
+          :class="{ 'btn--ghost': !scanAllTypes }"
+          :aria-pressed="scanAllTypes"
+          @click="scanAllTypes = !scanAllTypes"
+        >
+          {{ $t('picking.scanSession.scanAllTypes') }}
+        </button>
         <button class="btn btn--small" :disabled="applying || ocrCapturing || !!heldByOther" @click="captureOcr">
           <template v-if="ocrCapturing"><InlineSpinner /> {{ $t('picking.scanSession.ocrCapture') }}</template>
           <template v-else>{{ $t('picking.scanSession.ocrCapture') }}</template>
@@ -289,10 +298,17 @@ function updateBoxSelections(value: Record<string, string>) {
   boxSelections.value = value;
 }
 
+// "All barcode types" footer toggle: on = no decoder restriction, so
+// barcodes of other types reach the app (e.g. a KOA carton's Code128 vs its
+// PDF417 item labels). Rides the scope's empty-brand-list semantic (no
+// restriction) — the label decode below keeps using the real brands.
+const scanAllTypes = ref(false);
+const symbologyScopeBrands = computed(() => (scanAllTypes.value ? [] : session.orderBrands.value));
+
 // Restrict the hardware decoder to the order brands' barcode-type whitelist
 // (e.g. KOA → PDF417) while this page is open; restored on leave. Shelf/box
 // QR labels stay decodable — every scan path on this page matches them.
-useBrandSymbologyScope(session.orderBrands, { withShelfCodes: true });
+useBrandSymbologyScope(symbologyScopeBrands, { withShelfCodes: true });
 
 // Collapsed-row format (spec §5): the new allocations chips by default, the
 // old itemFields-driven meta line when the admin configured "fields".

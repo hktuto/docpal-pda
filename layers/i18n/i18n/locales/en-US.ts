@@ -410,6 +410,7 @@ export default {
           colSource: "Source",
           removeRow: "Remove",
           ocrCapture: "OCR capture",
+          scanAllTypes: "All barcode types",
           confirm: "Confirm ({count})",
           confirming: "Applying…",
           allApplied: "All scans applied",
@@ -968,11 +969,7 @@ export default {
     preview: "Preview",
     previewLabel: "Sample",
     smaller: "Smaller",
-    larger: "Larger",
-    scanAllTypes: "Scan all barcode types",
-    scanAllTypesHint: "Let the scanner read every barcode type, not only the item-label types of the order's suppliers. Turn this on to scan carton barcodes whose type differs from the item labels. Applies to every scan screen; content checks are unchanged.",
-    scanAllTypesOn: "On",
-    scanAllTypesOff: "Off"
+    larger: "Larger"
   },
   languageSwitcher: {
     label: "Language",

@@ -88,31 +88,6 @@ export function withShelfSymbologies(whitelist: string[] | null): string[] | nul
 }
 
 /**
- * Operator opt-out for every symbology whitelist (Settings page): when on,
- * scan screens never restrict the hardware decoder. Needed for barcodes whose
- * type differs from the item-label whitelist — e.g. a KOA carton's Code128
- * barcode vs its PDF417 item labels — which the whitelist would block before
- * the app ever sees the scan. Per-device localStorage, read at apply time
- * (screens apply on mount, so no live re-apply is needed); content checks are
- * unaffected, only the decoder's symbology set widens.
- */
-const SCAN_ALL_SYMBOLOGIES_KEY = "warehouse-scan-all-symbologies";
-
-export function scanAllSymbologiesEnabled(): boolean {
-  try {
-    return localStorage.getItem(SCAN_ALL_SYMBOLOGIES_KEY) === "1";
-  } catch {
-    return false; // no localStorage (SSR/tests) — keep the whitelists
-  }
-}
-
-export function setScanAllSymbologies(on: boolean): void {
-  try {
-    localStorage.setItem(SCAN_ALL_SYMBOLOGIES_KEY, on ? "1" : "0");
-  } catch { /* no localStorage — nothing to persist */ }
-}
-
-/**
  * Union of the barcode-type whitelists of the supplier profiles covering the
  * given brands (parts.brand). Returns null — no restriction — when the brand
  * list is empty or ANY brand has no whitelisted profile (its labels'
@@ -147,14 +122,6 @@ export function useBrandSymbologyScope(brands: Ref<string[]>, opts?: { withShelf
   let disposed = false;
 
   async function applyFor(list: string[]): Promise<void> {
-    // Settings opt-out (scan all barcode types): never restrict the decoder.
-    if (scanAllSymbologiesEnabled()) {
-      if (applied) {
-        applied = false;
-        await ScannerConfig.restoreAll();
-      }
-      return;
-    }
     let whitelist = list.length
       ? brandWhitelistUnion(await getCachedSupplierQrTemplates(warehouse), list)
       : null;
@@ -197,14 +164,6 @@ export function useSupplierSymbologyScope(supplierCode: Ref<string | undefined>,
   let disposed = false;
 
   async function applyFor(code: string | undefined): Promise<void> {
-    // Settings opt-out (scan all barcode types): never restrict the decoder.
-    if (scanAllSymbologiesEnabled()) {
-      if (applied) {
-        applied = false;
-        await ScannerConfig.restoreAll();
-      }
-      return;
-    }
     const templates = await getCachedSupplierQrTemplates(warehouse);
     if (disposed) return; // same unmount race as the brand scope (#14)
     let whitelist = code

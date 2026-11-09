@@ -409,6 +409,7 @@ export default {
           colSource: "來源",
           removeRow: "移除",
           ocrCapture: "OCR 拍攝",
+          scanAllTypes: "所有條碼類型",
           confirm: "確認 ({count})",
           confirming: "提交中…",
           allApplied: "全部掃描已生效",
@@ -967,11 +968,7 @@ export default {
     preview: "預覽",
     previewLabel: "範例",
     smaller: "縮小",
-    larger: "放大",
-    scanAllTypes: "掃描所有條碼類型",
-    scanAllTypesHint: "容許掃描器讀取所有條碼類型，而不只限訂單供應商的物料標籤類型。掃描類型與物料標籤不同的箱條碼時請開啟。適用於所有掃描頁面，內容檢查不變。",
-    scanAllTypesOn: "開啟",
-    scanAllTypesOff: "關閉"
+    larger: "放大"
   },
   languageSwitcher: {
     label: "語言",

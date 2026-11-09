@@ -82,7 +82,7 @@ describe('withShelfSymbologies', () => {
   });
 });
 
-describe('scan-all-symbologies setting gate (Settings page opt-out)', () => {
+describe('useBrandSymbologyScope decoder restriction', () => {
   const setSymbologies = vi.mocked(ScannerConfig.setSymbologies);
   // The scope serializes plugin calls through a microtask chain — one
   // macrotask tick flushes them.
@@ -92,21 +92,15 @@ describe('scan-all-symbologies setting gate (Settings page opt-out)', () => {
     vi.clearAllMocks();
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('never restricts the decoder when the setting is on', async () => {
-    vi.stubGlobal('localStorage', { getItem: () => '1', setItem: () => {} });
-    useBrandSymbologyScope(ref(['KOA']));
-    await flush();
-    expect(setSymbologies).not.toHaveBeenCalled();
-  });
-
-  it('applies the brand-union whitelist when the setting is off', async () => {
-    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} });
+  it('applies the brand-union whitelist for the given brands', async () => {
     useBrandSymbologyScope(ref(['KOA']));
     await flush();
     expect(setSymbologies).toHaveBeenCalledWith({ enabled: ['PDF417'] });
+  });
+
+  it('never restricts on an empty brand list (the picking page all-types toggle state)', async () => {
+    useBrandSymbologyScope(ref([]));
+    await flush();
+    expect(setSymbologies).not.toHaveBeenCalled();
   });
 });
