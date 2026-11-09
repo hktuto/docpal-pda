@@ -133,23 +133,29 @@ useUrlQueryState({
 // overwrite the rows of a newer filter/page change.
 let loadSeq = 0;
 
+function queryParams(pageIndex: number, pageSize: number) {
+  const sort = sorting.value[0];
+  return {
+    status: status.value.length ? status.value : undefined,
+    type: orderTypes.value.length ? orderTypes.value : undefined,
+    search: search.value.trim() || undefined,
+    deliveryDateFrom: deliveryDateFrom.value || undefined,
+    deliveryDateTo: deliveryDateTo.value || undefined,
+    page: pageIndex + 1,
+    pageSize,
+    sort: sort?.id,
+    dir: sort?.desc ? "desc" : "asc",
+  };
+}
+
 async function load() {
   const seq = ++loadSeq;
   loading.value = true;
   error.value = "";
   try {
-    const sort = sorting.value[0];
-    const res = await flow.listPickingOrders({
-      status: status.value.length ? status.value : undefined,
-      type: orderTypes.value.length ? orderTypes.value : undefined,
-      search: search.value.trim() || undefined,
-      deliveryDateFrom: deliveryDateFrom.value || undefined,
-      deliveryDateTo: deliveryDateTo.value || undefined,
-      page: pagination.value.pageIndex + 1,
-      pageSize: pagination.value.pageSize,
-      sort: sort?.id,
-      dir: sort?.desc ? "desc" : "asc",
-    });
+    const res = await flow.listPickingOrders(
+      queryParams(pagination.value.pageIndex, pagination.value.pageSize)
+    );
     if (seq !== loadSeq) return;
     rows.value = res.rows;
     total.value = res.total;
@@ -185,6 +191,24 @@ watch(search, () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(resetPageAndLoad, 300);
 });
+
+// Enter runs the search now; if the query matches exactly one order, open its
+// detail page instead of making the user click it.
+async function searchNow() {
+  clearTimeout(searchTimer);
+  if (!search.value.trim()) return;
+  try {
+    const res = await flow.listPickingOrders(queryParams(0, 2));
+    if (res.total === 1 && res.rows[0]) {
+      navigateTo(`/picking-orders/${res.rows[0].id}`);
+      return;
+    }
+  } catch (e: any) {
+    error.value = e.message;
+    return;
+  }
+  resetPageAndLoad();
+}
 
 onMounted(() => {
   load();
@@ -292,7 +316,12 @@ const {
         <span>{{ $t("admin.pages.pickingOrders.deliveryDateTo") }}</span>
         <input v-model="deliveryDateTo" type="date" />
       </label>
-      <input v-model="search" class="filter-search" :placeholder="$t('admin.pages.pickingOrders.searchPlaceholder')" />
+      <input
+        v-model="search"
+        class="filter-search"
+        :placeholder="$t('admin.pages.pickingOrders.searchPlaceholder')"
+        @keydown.enter="searchNow"
+      />
       <UserScopeFilterButton @saved="load" />
     </div>
 
