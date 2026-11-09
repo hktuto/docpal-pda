@@ -770,9 +770,10 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
 // Parses `raw` through the order's supplier QR template (explicit body fields
 // override parsed ones), matches against the order's items, and auto-applies
 // the partial receipt on a single match (order pending → provisional_received,
-// RECEIVE_TO_DOCK ledger row). A parsed/explicit `serialNo` (S-key) is
-// deduped per part per order via receiving_scan_labels — a repeat of the same
-// part's serial → 409 label_already_scanned. Zero/multiple matches → 409 {message, candidates}.
+// RECEIVE_TO_DOCK ledger row). The full raw QR string is deduped per order via
+// receiving_scan_labels — a repeat of the same label → 409
+// label_already_scanned (manual scans with no raw fall back to the part-scoped
+// serial). Zero/multiple matches → 409 {message, candidates}.
 receivingRoute.post("/receiving-orders/:id/scan", async (c) => {
   const body = await readJson<{
     raw?: string;

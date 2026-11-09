@@ -524,11 +524,11 @@ test("scan: raw QR template parse applies receipt (KOA order)", async () => {
   assert.deepEqual([txn!.qtyDelta, txn!.lotCode, txn!.dateCode], [1500, "L2601A", "2605"]);
 
   // explicit fields override parsed ones (part + qty from the body win; an
-  // explicit serialNo also overrides the parsed one — the raw's 602 was
-  // already scanned above and would be rejected as label_already_scanned)
+  // explicit serialNo also overrides the parsed one). A different physical
+  // label (different lot/serial segment → different raw) so dedup allows it.
   const other = await scanReceivingOrder(client.db, orderId, {
     actorId,
-    raw: ":RK73H1JTTD1002F:S1:152:X:L2601A:602:KOA+RK73H1JTTD1002F",
+    raw: ":RK73H1JTTD1002F:S1:152:X:L2602B:603:KOA+RK73H1JTTD1002F",
     partNo: "RK73H1JTTD2202F",
     qty: 100,
     serialNo: "602-B",
@@ -827,9 +827,9 @@ test("scan: validations — actorId, actor_not_found, order 404, qty", async () 
   assert.equal(badQty.message, "qty_must_be_positive_integer");
 });
 
-// --- S-key scan dedup (receiving_scan_labels) -----------------------------------
+// --- scan-label dedup (receiving_scan_labels) -----------------------------------
 
-test("scan: serial dedup — repeat serial on the same order → 409 label_already_scanned", async () => {
+test("scan: label dedup — repeat raw on the same order → 409 label_already_scanned", async () => {
   await reseed(client);
   const actorId = await actorIdOf("operator");
   const orderId = await orderIdOf("100001"); // KOA order (has a serialNo template)
@@ -849,6 +849,12 @@ test("scan: serial dedup — repeat serial on the same order → 409 label_alrea
   );
   assert.deepEqual(label, { receivingOrderId: orderId, receivingInvoiceItemId: itemId, serialNo: "602", qty: 1500, scannedBy: actorId });
 
+  const stored = await queryGet<{ raw: string }>(
+    client.db,
+    sql`SELECT raw FROM receiving_scan_labels WHERE receiving_order_id = ${orderId}`
+  );
+  assert.equal(stored!.raw, raw);
+
   // repeat scan of the same label: rejected even though it would also exceed
   // the remaining qty — the dedup error wins (pre-check before the qty guard)
   const dup = await catchHttp(scanReceivingOrder(client.db, orderId, { actorId, raw }));
@@ -861,6 +867,43 @@ test("scan: serial dedup — repeat serial on the same order → 409 label_alrea
     sql`SELECT received_qty AS "receivedQty" FROM receiving_invoice_items WHERE id = ${itemId}`
   );
   assert.equal(after!.receivedQty, 1500);
+});
+
+test("scan: same part + serial but a different raw is a different label (KOA reels)", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("operator");
+  const orderId = await orderIdOf("100001"); // KOA order (has a serialNo template)
+
+  // Real KOA reels of one part share the segment-6 S-key across lots (5 such
+  // collisions in the 96-label sample) — the full raw differs in the lot
+  // segment, so both scans must apply.
+  const raw1 = ":RK73H1JTTD1002F:S1:152:X:L2601A:602:KOA+RK73H1JTTD1002F";
+  const raw2 = ":RK73H1JTTD1002F:S1:152:X:L2602B:602:KOA+RK73H1JTTD1002F";
+  await scanReceivingOrder(client.db, orderId, { actorId, raw: raw1, qty: 100 });
+  const second = await scanReceivingOrder(client.db, orderId, { actorId, raw: raw2, qty: 100 });
+  assert.equal(second.receivedQty, 200);
+  assert.equal(second.serialNo, "602");
+
+  // repeating either physical label is still rejected
+  for (const raw of [raw1, raw2]) {
+    const dup = await catchHttp(scanReceivingOrder(client.db, orderId, { actorId, raw, qty: 100 }));
+    assert.equal(dup.status, 409);
+    assert.equal(dup.message, "label_already_scanned");
+  }
+});
+
+test("scan: raw without a serial still dedups (templates with no serialNo group)", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("operator");
+  const orderId = await orderIdOf("100002"); // no supplier QR template
+
+  const raw = "FREE-TEXT-QR-1";
+  await scanReceivingOrder(client.db, orderId, { actorId, raw, partNo: "RK73H1JTTD4702F", qty: 100 });
+  const dup = await catchHttp(
+    scanReceivingOrder(client.db, orderId, { actorId, raw, partNo: "RK73H1JTTD4702F", qty: 100 })
+  );
+  assert.equal(dup.status, 409);
+  assert.equal(dup.message, "label_already_scanned");
 });
 
 test("scan: same serial on a DIFFERENT part of the same order is allowed", async () => {

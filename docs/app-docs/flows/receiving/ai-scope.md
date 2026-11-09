@@ -29,7 +29,7 @@
   `POST /receiving-orders/:id/scan`; on a 409 `{message, candidates}`
   (`no_match` / `multiple_matches`) the review modal lets the operator pick
   a candidate and resend with an explicit `{partNo, qty}` (the raw rides
-  along so serial dedup still applies). Templates without a `wclItemNo`
+  along so label dedup still applies). Templates without a `wclItemNo`
   group derive it as `<brand>/<itemId>` when the order's supplier profile
   covers exactly one brand (e.g. ABLIC → `ABLIC/<mpn>`), and a scanned WCL
   item no that matches any item narrows the match pool to those items
@@ -63,13 +63,15 @@
   (`extractMultiItemRows` in `utils/parseOcrScan.ts`) before posting; 2+
   rows opens the multi-item table modal (per-row part dropdown + qty, row
   remove, per-row ✓/✗ status) and applying loops one explicit
-  `{partNo, qty}` scan per row (raw is not resent, so serial dedup never
+  `{partNo, qty}` scan per row (raw is not resent, so raw dedup never
   trips on the second row; succeeded rows are locked out of retries).
-- S-key serial dedup: a parsed `serialNo` (KOA S-key) is recorded per order +
-  part in `receiving_scan_labels`; a repeat serial of the same part is
-  rejected with `409 label_already_scanned` (KOA reel labels reuse segment-6
-  serial values across parts of one delivery, so the key is part-scoped).
-  Scans without a serial skip dedup.
+- Label dedup: the full scanned raw QR string is the key, recorded per order
+  in `receiving_scan_labels`; a repeat of the same raw is rejected with
+  `409 label_already_scanned` (KOA reels reuse segment-6 serial values across
+  lots/parts, so serial-only keys false-rejected different labels — raw is
+  written for every scan). Manual scans with no raw fall back to the
+  part-scoped `serialNo` (partial unique index, `raw IS NULL` rows only).
+  Scans carrying neither raw nor serial skip dedup.
 - Scanner symbology whitelist: while the detail page is open, the hardware
   decoder is restricted to the supplier profile's `barcode_types` (when set),
   so other symbologies on multi-barcode labels don't decode at all; restored

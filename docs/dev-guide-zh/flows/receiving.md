@@ -42,7 +42,7 @@ flowchart TD
 ## 3. 关键逻辑(改代码前必读)
 
 - **服务端匹配次序**:`supplier_profiles` 模板解码 → `wcl_item_no` 优先 → `part_no`/`wcl_item_no` 联合 → NCC 图号回退(`lookupPartsByDrawingNo`,`wcl_part_drawno`)→ TE 截断 MPN 回退(`lookupPartKeyCandidates`)→ 0/多命中抛 409 带 candidates。body 显式字段**覆盖**解析值 — `db/receiving.ts`。
-- **序列号去重按「订单+料号」**记 `receiving_scan_labels`(KOA 同序列号跨料号复用),在数量守卫之前预检;重扫 409 `label_already_scanned`,超扫 409 `scanned_qty_exceeds_remaining`。
+- **扫码去重按「订单+完整 QR 字符串」**记 `receiving_scan_labels`(KOA 同一序列号会跨批次/料号复用,单用序列号会误判不同标签),在数量守卫之前预检;手工输入无 raw 时退回「订单+料号+序列号」。重扫 409 `label_already_scanned`,超扫 409 `scanned_qty_exceeds_remaining`。
 - **confirm-arrival 是一揽子动作**:行 `received_qty=line_qty`(NULL `line_qty` 行保持不动并计入 `needsAttentionItems`)、按 `receivingSubInventoryRules` first-match-wins 重盖 `sub_inventory_code`(解析结果不在 `org_info` 时跳过不报错)、可选同事务建 `put_away_tasks`、随后 await 分配。
 - **分配失败绝不回滚到货**:route 层 try/catch,响应 `allocation: null`,需求保持陈旧直到 admin Re-allocate。
 - 差异是 item 上的扁平列(`reported_mismatch/mismatch_reason/mismatch_qty/wrong_part_no/...`),**没有独立差异表/审批链**;每次 report/edit/confirm/cancel 写一条 `transaction_logs`(mismatch_reported/updated/confirmed/cancelled)。注意 **confirm 只写日志不清 flag**,cancel 才清空。

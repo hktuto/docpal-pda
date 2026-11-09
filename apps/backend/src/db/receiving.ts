@@ -295,12 +295,12 @@ function toCandidate(it: ScanItemRow): ScanMatchCandidate {
  *   - single match: received_qty += qty (guarded at the remaining qty), order
  *     pending → provisional_received + transition log, and a RECEIVE_TO_DOCK
  *     (qty_type 'dock') ledger row with the batch snapshot
- *   - label dedup: when the effective serial (body `serialNo`, else the
- *     template's `serialNo` group) is present, a receiving_scan_labels row is
- *     inserted in the same tx; a repeat serial on this order is rejected with
- *     409 label_already_scanned (pre-check, before the qty guard so a
- *     double-scan reports the dedup error, not "qty exceeds remaining").
- *     Scans without a serial skip dedup (no row).
+ *   - label dedup: a receiving_scan_labels row (raw + serial) is inserted in
+ *     the same tx; a repeat of the same full raw QR string on this order is
+ *     rejected with 409 label_already_scanned (pre-check, before the qty
+ *     guard so a double-scan reports the dedup error, not "qty exceeds
+ *     remaining"). Manual scans without a raw fall back to the part-scoped
+ *     serial. Scans carrying neither raw nor serial skip dedup (no row).
  *   - zero / multiple matches: 409 with the candidate list for the review dialog
  * The caller schedules the allocation recompute after commit — background, never roll back.
  */
@@ -340,8 +340,9 @@ export async function scanReceivingOrder(
     // 10→99 cycles) from the DB.
     const dateCodePeriods =
       ro.dateCodeEncoding === "koa_month_counter" ? await listDateCodePeriods(tx) : undefined;
-    const parsed = input.raw
-      ? parseQrRaw(input.raw, ro.qrTemplate, ro.qtyEncoding, ro.dateCodeEncoding, dateCodePeriods, dateCodeFormat(), ro.brands)
+    const raw = input.raw?.trim() || null;
+    const parsed = raw
+      ? parseQrRaw(raw, ro.qrTemplate, ro.qtyEncoding, ro.dateCodeEncoding, dateCodePeriods, dateCodeFormat(), ro.brands)
       : {};
     const partNo = input.partNo ?? parsed.partNo ?? null;
     const qty = input.qty ?? parsed.qty ?? null;
@@ -426,18 +427,26 @@ export async function scanReceivingOrder(
 
     const item = matches[0];
 
-    // S-key dedup pre-check: a serial already scanned for this same part on
-    // this order is a double-scan of the same physical label — reject before
-    // the qty guard so the operator gets the specific error (a repeat serial
-    // often also exceeds the remaining qty). Scoped to the part: KOA reel
-    // labels reuse segment-6 values across parts of one delivery, so an
-    // order-wide check false-rejects different physical labels.
-    if (serialNo) {
+    // Label dedup pre-check — reject before the qty guard so the operator
+    // gets the specific error (a repeat label often also exceeds the
+    // remaining qty). The full QR string identifies the physical label; KOA
+    // segment-6 serials repeat across lots of the same part, so serial-only
+    // keys false-reject different labels. Manual scans without a raw fall
+    // back to the part-scoped serial key.
+    if (raw) {
+      const dup = await queryGet<{ id: string }>(
+        tx,
+        sql`SELECT id FROM receiving_scan_labels
+            WHERE receiving_order_id = ${orderId} AND raw = ${raw} LIMIT 1`
+      );
+      if (dup) throw new HTTPException(409, { message: "label_already_scanned" });
+    } else if (serialNo) {
       const dup = await queryGet<{ id: string }>(
         tx,
         sql`SELECT rsl.id FROM receiving_scan_labels rsl
             JOIN receiving_invoice_items rii ON rii.id = rsl.receiving_invoice_item_id
-            WHERE rsl.receiving_order_id = ${orderId} AND rii.part_no = ${item.partNo} AND rsl.serial_no = ${serialNo}
+            WHERE rsl.receiving_order_id = ${orderId} AND rsl.raw IS NULL
+              AND rii.part_no = ${item.partNo} AND rsl.serial_no = ${serialNo}
             LIMIT 1`
       );
       if (dup) throw new HTTPException(409, { message: "label_already_scanned" });
@@ -489,13 +498,15 @@ export async function scanReceivingOrder(
       txnReason: "scan receipt",
       txnAt: at,
     });
-    // Record the label for S-key dedup (only when a serial is present).
-    if (serialNo) {
+    // Record the label for dedup (raw and/or serial — at least one is present
+    // by construction of the pre-check above).
+    if (raw || serialNo) {
       await tx.insert(receivingScanLabels).values({
         id: newId(),
         receivingOrderId: orderId,
         receivingInvoiceItemId: item.id,
         partNo: item.partNo,
+        raw,
         serialNo,
         qty,
         scannedBy: input.actorId,

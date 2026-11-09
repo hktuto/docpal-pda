@@ -72,10 +72,10 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     `koa_month_counter` date-code decoding) → match
     against the order's items; single match auto-applies a partial receipt
     (`received_qty += qty`, order → `provisional_received`, ledger row);
-    zero/multiple matches → 409 `{message, candidates}`. A parsed/explicit
-    `serialNo` (the KOA S-key) is recorded in `receiving_scan_labels`
-    (unique per order + part) — a repeat serial for the same part → 409
-    `label_already_scanned`; scans without a serial skip dedup.
+    zero/multiple matches → 409 `{message, candidates}`. Every scan is
+    recorded in `receiving_scan_labels` with its full raw QR string (unique
+    per order) — a repeat raw → 409 `label_already_scanned`; manual scans
+    with no raw fall back to the part-scoped `serialNo`.
   - `GET|POST|PATCH /receiving-invoice-items/:id/mismatch`,
     `POST /receiving-invoice-items/:id/mismatch/confirm|cancel` — mismatch
     lifecycle on the flat item columns (report/edit/confirm/cancel), with
@@ -455,17 +455,16 @@ arrive via upstream sync / DocPal auth.
   seeded template requires a non-empty subId (`(?<subId>[^:]+)`), which
   rejects every outer label — **fixed** (`(?<subId>[^:]*)` in the seed +
   reseeded DB, covered by a `parseQrRaw` outer-label test).
-- **S-key scan dedup (DONE):** the `ignore2` segment (S613 outer / S611
-  inner) is a serial key, unique for every label in an order. Implemented:
-  the seeded KOA template group is now `(?<serialNo>…)`, `codecs.ts`
-  surfaces `serialNo`, and the `receiving_scan_labels` table (migration
-  0012, recording item/qty/actor/scanned_at; migrations 0036/0037 scope
-  the dedup key to order + part with a nullable `part_no` — KOA reel labels
-  reuse segment-6 serial values across different parts of one delivery,
-  observed 2026-10-21) backs the dedup — `POST /receiving-orders/:id/scan`
-  rejects a repeat serial of the same part with `409 label_already_scanned`;
-  scans without a serial
-  skip dedup. The same table can be reused for put-away scan dedup later.
+- **Scan-label dedup (DONE, raw-keyed since migration 0060):** the full
+  scanned QR string is the physical-label identity and the dedup key per
+  order — `receiving_scan_labels.raw` (unique index on order + raw), a repeat
+  → `409 label_already_scanned`. Serial alone was not unique: the KOA S-key
+  segment (S613 outer / S611 inner) repeats across different lots of the same
+  part (and across parts, observed 2026-10-21 — 5 collisions in the 96-label
+  sample), so the old order+part+serial key false-rejected different reels.
+  Manual scans with no raw still dedup by order + part + serial (partial
+  unique index on `raw IS NULL` rows); `serial_no` is now nullable. The same
+  table can be reused for put-away scan dedup later.
 - **Allocation ids are unstable between scan and boxing:** a recompute
   (manual Re-allocate / confirm-arrival) rebuilds a picking item's allocation
   rows until its packages are boxed (`allocatedQty` appears to "resurrect").

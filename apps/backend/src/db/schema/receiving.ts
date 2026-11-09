@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { pgTable, text, integer, boolean, timestamp, index, uniqueIndex, foreignKey, jsonb } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 import { users, suppliers, subInventories } from "./master.js";
@@ -79,13 +80,14 @@ export const receivingInvoiceItems = pgTable(
   })
 );
 
-// Scanned-label dedup for receiving scans (S-key serial from the supplier QR
-// template): one row per successfully scanned label that carried a serial;
-// the unique index on (receiving_order_id, part_no, serial_no) rejects
-// double-scanning the same physical label of the same part (409
-// label_already_scanned). Serials are compared within a part only — KOA reel
-// labels reuse segment-6 values across different parts of one delivery
-// (observed 2026-10-21), so an order-wide key false-rejects different labels.
+// Scanned-label dedup for receiving scans: one row per successfully scanned
+// label. The full scanned QR string (`raw`) is the unique key per order — a
+// repeat of the same physical label is rejected (409 label_already_scanned).
+// Serial alone is NOT unique for KOA reels: segment-6 S-keys repeat across
+// different lots of the same part (and across parts, observed 2026-10-21), so
+// serial-keyed dedup false-rejected different physical labels. Scans that
+// carry no raw (manual field entry) fall back to the serial key, compared
+// within a part (partial index below, raw IS NULL rows only).
 export const receivingScanLabels = pgTable(
   "receiving_scan_labels",
   {
@@ -98,7 +100,10 @@ export const receivingScanLabels = pgTable(
     // doesn't dedup NULL-part rows (only old code can create them, and its
     // order-wide pre-check still guards those).
     partNo: text("part_no"),
-    serialNo: text("serial_no").notNull(),
+    // Full scanned QR string (trimmed) — the dedup key when present. Nullable:
+    // manual field-entry scans have none.
+    raw: text("raw"),
+    serialNo: text("serial_no"),
     qty: integer("qty").notNull(),
     scannedBy: text("scanned_by").references(() => users.id),
     scannedAt: timestamp("scanned_at", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
@@ -106,6 +111,9 @@ export const receivingScanLabels = pgTable(
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
-    orderPartSerialUq: uniqueIndex("idx_receiving_scan_labels_order_part_serial").on(t.receivingOrderId, t.partNo, t.serialNo),
+    orderRawUq: uniqueIndex("idx_receiving_scan_labels_order_raw").on(t.receivingOrderId, t.raw),
+    orderPartSerialUq: uniqueIndex("idx_receiving_scan_labels_order_part_serial")
+      .on(t.receivingOrderId, t.partNo, t.serialNo)
+      .where(sql`raw IS NULL`),
   })
 );
