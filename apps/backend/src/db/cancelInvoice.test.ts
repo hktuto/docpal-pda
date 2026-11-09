@@ -277,6 +277,8 @@ test("shipped order → ignored, nothing changes", async () => {
   const rec = await cancelRecordOf("cancel_invoice", sourceId);
   assert.equal(rec!.outcome, "ignored");
   assert.match(rec!.message ?? "", /already shipped/);
+  // The matched order is recorded even when nothing is applied (admin link).
+  assert.equal(rec!.picking_order_id, orderId);
 });
 
 test("unknown pi_invoice_num → no_match, no order cancelled, hidden from the admin list", async () => {
@@ -293,6 +295,25 @@ test("unknown pi_invoice_num → no_match, no order cancelled, hidden from the a
   // no_match rows are cron audit only — the admin list never shows them.
   const listed = await listCancelRecords(client.db);
   assert.equal(listed.length, 0);
+});
+
+test("µs-precision upstream stamp is not treated as an update on every pass", async () => {
+  // Upstream timestamps carry microseconds but cancel_records.source_ts is
+  // written from a JS Date (milliseconds) — a raw comparison made every row
+  // look updated forever, re-applying (and overwriting the outcome with
+  // `ignored`) on each cron pass.
+  await allocateAll(client.db);
+  const sourceId = randomUUID();
+  await client.db.execute(
+    sql`INSERT INTO cancel_invoice (id, state, batch_no, pi_deliver_id, pi_invoice_num, organization_id, created_date, last_update_date)
+        VALUES (${sourceId}, 'completed', 'test', 1, 'SO-DEMO-0001', 160,
+                '2026-11-09 03:09:37.963468', '2026-11-09 03:09:37.963468')`
+  );
+  await runCancelInvoiceSyncOnce(client.db);
+  assert.equal((await cancelRecordOf("cancel_invoice", sourceId))!.outcome, "cancelled");
+
+  await runCancelInvoiceSyncOnce(client.db);
+  assert.equal((await cancelRecordOf("cancel_invoice", sourceId))!.outcome, "cancelled");
 });
 
 test("upstream row updated (last_update_date moved) → reprocessed; already-cancelled order → ignored", async () => {

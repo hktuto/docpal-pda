@@ -136,7 +136,9 @@ SELECT c.* FROM cancel_invoice c
 LEFT JOIN cancel_records r ON r.source = 'cancel_invoice' AND r.source_id = c.id
 WHERE greatest(c.created_date, c.last_update_date) >= $1   -- watermark, inclusive
   AND (r.id IS NULL OR r.status = 'error'
-       OR greatest(c.created_date, c.last_update_date) > r.source_ts)  -- new | retry | updated
+       OR date_trunc('milliseconds', greatest(c.created_date, c.last_update_date)) > r.source_ts)  -- new | retry | updated
+-- compare at ms: source_ts is written from a JS Date, so a µs upstream stamp
+-- would otherwise look "updated" on every pass (endless re-apply)
 ORDER BY greatest(c.created_date, c.last_update_date), c.id
 LIMIT 200;
 ```

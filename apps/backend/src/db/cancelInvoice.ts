@@ -66,7 +66,9 @@ export async function fetchCancelRows(
         LEFT JOIN cancel_records r ON r.source = ${source} AND r.source_id = c.id
         WHERE r.id IS NULL
            OR r.status = 'error'
-           OR (r.status = 'done' AND ${SOURCE_TS} > r.source_ts)
+           -- compare at millisecond precision: source_ts is written from a JS
+           -- Date, so a µs upstream stamp would look "updated" on every pass
+           OR (r.status = 'done' AND date_trunc('milliseconds', ${SOURCE_TS}) > r.source_ts)
         ORDER BY ${SOURCE_TS}, c.id
         LIMIT ${limit}`
   );
@@ -122,6 +124,9 @@ async function applyCancel(tx: DbOrTx, source: CancelSource, row: CancelSourceRo
 
   // order_no is NOT unique upstream; every matching order is handled.
   for (const order of orders) {
+    // Record the matched order even when nothing is applied (ignored rows) —
+    // the admin ingest log links the invoice/TN straight to the order detail.
+    firstOrderId = firstOrderId ?? order.id;
     if (order.status === "cancelled" || order.status === "shipped") {
       sawTerminal = true;
       message = message ?? `order ${order.orderNo} already ${order.status}`;
@@ -145,7 +150,6 @@ async function applyCancel(tx: DbOrTx, source: CancelSource, row: CancelSourceRo
       continue;
     }
     const itemIds = items.map((i) => i.id);
-    firstOrderId = firstOrderId ?? order.id;
     firstItemId = firstItemId ?? itemIds[0] ?? null;
     applied = true;
 
