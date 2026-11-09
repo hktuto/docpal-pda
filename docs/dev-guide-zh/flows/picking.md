@@ -14,6 +14,7 @@ aliases: [拣货, Picking]
 ```mermaid
 flowchart TD
   A["上游同步写入 picking_orders(status=pending)<br/>料号需求来自发票/调拨单"] --> B["管理员分配库存<br/>apps/admin/pages/picking-orders<br/>Re-allocate → allocateForPickingOrder<br/>status: pending → allocated"]
+  A2["admin「New VMI」上传 Excel<br/>pages/picking-orders/vmi.vue<br/>POST /admin/picking-orders/vmi-create<br/>每个 VMI Ref.No 一张单(type=vmi)"] --> B
   B --> C["PDA 拣货列表<br/>pages/picking/index.vue<br/>GET /picking-orders(默认过滤 allocated/picking)<br/>按交期分组,分页 50"]
   C --> D["打开统一作业页<br/>pages/picking/unified/[id].vue<br/>POST /picking-orders/:id/work-lock 占用订单<br/>他人打开 = 只读"]
   D --> E["扫码(硬件枪/相机 OCR)<br/>useHardwareScanner / useBrandSymbologyScope<br/>标签→POST /scan/decode;箱/架→PickFromBoxDialog<br/>整箱捷径→claim-shelf-box"]
@@ -43,7 +44,7 @@ flowchart TD
 | 完成 | Finish 按钮 + `LabelPrintPrompt` | `POST /picking-orders/:id/finish` | `transaction_logs`+`inventory_transactions`(同事务) |
 | 报差异 | `PickingIssueReportModal` | `POST /picking-orders/report-issues`、`/resolve-issue` | `issue` 字段 |
 
-Admin 侧:`pages/picking-orders`(Re-allocate、状态覆写、明细)、`pages/task-assignments`(assignee)、`pages/label-print-rules`、`pages/outdated-warnings`。
+Admin 侧:`pages/picking-orders`(Re-allocate、状态覆写、明细)、**New VMI 上传** `pages/picking-orders/vmi`(浏览器解码 VMI_Template_*.xlsx,每个 VMI Ref.No 建一张 `type=vmi` 拣货单,gate 料号主档 + 子库存→org,见 `specs/2026-11-09-vmi-picking-excel-upload-design.md`)、`pages/task-assignments`(assignee)、`pages/label-print-rules`、`pages/outdated-warnings`。
 
 ## 3. 关键逻辑(改代码前必读)
 
@@ -55,7 +56,7 @@ Admin 侧:`pages/picking-orders`(Re-allocate、状态覆写、明细)、`pages/t
 - **先扫货架(flow config `pickingShelfScan`)**:开启时,货架/箱来源的行在设定位置前扫码被拒;纯 dock(收货区)来源不受此限。
 - **一箱一 COO**:加入不同 COO 被拒(无 COO 放行);Add all 例外,混了显示 ⚠ Mixed COO 标记。
 - **两类过期预警别混淆**:① 供应商扫码预警(`outdated_scan_warnings`,扫码成功但**阻止 finish**,需 admin 解除);② 分配库存年龄预警(仅展示,永不阻止)。
-- **列表可见性三段过滤全在服务端**(`src/db/user-scope.ts` + `pickingOrderOrgFilter`):assignee、用户 sub-inventory 范围、`allowedOrgIds` AND 组合;`tn` 调拨单与 `invoice` 单谓词不同(调拨归 org 不归 store;NCI org 143 看全部调拨)。越权明细 = 404。
+- **列表可见性三段过滤全在服务端**(`src/db/user-scope.ts` + `pickingOrderOrgFilter`):assignee、用户 sub-inventory 范围、`allowedOrgIds` AND 组合;`invoice`/`vmi` 走同一谓词(精确 (org, sub) 对),`tn` 调拨单谓词不同(调拨归 org 不归 store;NCI org 143 看全部调拨),type 为 NULL(刚同步/未选类型的测试单)不过滤。越权明细 = 404。
 - **状态机**:`pending → allocated → picking → picking_finished → measuring_finished → shipped`;侧态 `issue`/`skip`。`allocated`=管理员锁定分配(引擎不再动);`skip`=永不参与分配。
 
 ## 4. 关键业务决策(为什么这么设计)
@@ -70,6 +71,7 @@ Admin 侧:`pages/picking-orders`(Re-allocate、状态覆写、明细)、`pages/t
 | 跨订单装箱(scan into box) | 现场一箱可装多单包裹,按箱出运 | `specs/2026-11-01-picking-box-operations-design.md` |
 | assignee 过滤只影响读、不影响写 | 派工可见性,不是权限模型 | `specs/2026-11-01-task-assignee-design.md` |
 | 解码迁到后端 `/scan/decode` | 模板/月码规则曾前后端各一份,PDA 与 admin 漂移 | `specs/2026-11-03-backend-scan-decode-design.md` |
+| VMI 只是又一个订单来源,不建新表/新队列 | 上传落库后与上游同步单完全同构(分配、工作锁、拣货、装箱照旧);类型 `vmi` 走 invoice 可见性分支 | `specs/2026-11-09-vmi-picking-excel-upload-design.md` |
 
 ## 5. 坑(踩过的位置)
 
