@@ -837,7 +837,7 @@ const {
           </div>
         </div>
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.customer") }}</div><div class="dd">{{ order.customerCode ?? "—" }}</div></div>
-        <div><div class="dt">{{ $t("admin.pages.pickingOrders.poNo") }}</div><div class="dd">{{ order.poNo ?? "—" }}</div></div>
+        <!-- <div><div class="dt">{{ $t("admin.pages.pickingOrders.poNo") }}</div><div class="dd">{{ order.poNo ?? "—" }}</div></div> -->
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.type") }}</div><div class="dd">{{ order.pickingOrderType ?? "—" }}</div></div>
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.remark") }}</div><div class="dd">{{ order.remark ?? "—" }}</div></div>
         <div>
