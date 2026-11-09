@@ -124,7 +124,10 @@
   `<lotCode>-<shelf>-<labelDateCode>-<coo>-<cow>` for a lot, or the
   receiving-area label) so the operator knows what/where to scan. A raw scan that matches no
   supplier QR template is treated as a location barcode, with two behaviors:
-  a **receiving carton** (`ctn_no` — `matchCartonAllocations`) auto-queues
+  a **receiving carton** (`ctn_no` — `matchCartonAllocations`, exact match
+  first, then containment so a barcode wrapping the ctn_no in extra wording
+  still hits, e.g. KOA carton `X273` scans as `TCX273`; containment is
+  exact-only for ctn_no values under 4 chars) auto-queues
   everything the order still needs from that carton (`addCartonScan`, one
   row per allocation at its full remaining; re-scan = duplicate), because a
   supplier carton's contents are known and sealed; a **shelf box id or shelf

@@ -418,6 +418,20 @@ describe('usePickingScanQueue', () => {
     expect(q.matchCartonAllocations('BOX-H-20260701-0001')).toEqual([]);
   });
 
+  it('matchCartonAllocations falls back to containment for wrapped carton barcodes', () => {
+    const items = makeItems() as any;
+    items[0].allocations[0].boxId = 'X273';
+    const q = usePickingScanQueue(ref(items as Items));
+    // carton barcode wraps the ctn_no in extra wording (KOA: "TC" prefix)
+    expect(q.matchCartonAllocations('TCX273').map((m) => m.allocation.id)).toEqual(['alloc-1']);
+    expect(q.matchCartonAllocations(' koa TCX273 ').map((m) => m.allocation.id)).toEqual(['alloc-1']);
+    // unrelated text does not match
+    expect(q.matchCartonAllocations('NO MATCH HERE')).toEqual([]);
+    // ctn_no under 4 chars never containment-matches (false-positive guard)
+    items[0].allocations[0].boxId = 'X27';
+    expect(q.matchCartonAllocations('TCX273')).toEqual([]);
+  });
+
   it('addCartonScan queues every matched allocation at its remaining qty', () => {
     const items = makeItems() as any;
     items[0].allocations[0].boxId = 'C1001';

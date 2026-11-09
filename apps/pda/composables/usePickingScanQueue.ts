@@ -335,12 +335,29 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
   /**
    * Receiving-carton lookup (`ctn_no`). A supplier carton's contents are
    * known and sealed, so scanning its barcode queues everything this order
-   * still needs from it in one go — no per-part scans.
+   * still needs from it in one go — no per-part scans. Exact match first;
+   * then containment, because carton barcodes often wrap the ctn_no in extra
+   * wording (e.g. KOA carton X273 scans as "TCX273"). shortcut: ctn_no
+   * values under 4 chars stay exact-only — they would false-positive inside
+   * unrelated scans; raise the guard if real 3-char carton numbers appear.
    */
   function matchCartonAllocations(
     raw: string
   ): { item: OrderItems[number]; allocation: PickingAllocation }[] {
-    return matchBy(raw, (a) => [a.boxId]);
+    const exact = matchBy(raw, (a) => [a.boxId]);
+    if (exact.length > 0) return exact;
+    const wanted = raw.trim().toUpperCase();
+    if (!wanted) return [];
+    const found: { item: OrderItems[number]; allocation: PickingAllocation }[] = [];
+    for (const item of items.value) {
+      for (const allocation of item.allocations ?? []) {
+        if (allocation.qty <= 0) continue;
+        const ctn = allocation.boxId?.trim().toUpperCase();
+        if (!ctn || ctn.length < 4 || !wanted.includes(ctn)) continue;
+        found.push({ item, allocation });
+      }
+    }
+    return found;
   }
 
   /** Remaining qty a specific allocation can still take (net of queued rows). */
