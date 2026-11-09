@@ -4,7 +4,7 @@
  "raisedBy": "Sean",
  "app": "Admin",
  "functionId": "ADM-025",
- "feature": "New VMI picking-order Excel upload — a \"New VMI\" button on the picking order list opens /picking-orders/vmi: the browser decodes a VMI_Template_*.xlsx (one picking order per VMI Ref.No, rows become items with PO Line → line number and Customer Item kept in additional_data), gates it (every Item in the parts master, Sub Inventory known to org_info — multi-org codes resolved per order from an org · sub-inventory dropdown, plus one apply-to-all picker for the usual single-location file), and one click batch-creates the orders (type 'vmi', allocated like any new order) before opening the first order's detail page",
+ "feature": "New VMI picking-order Excel upload — a \"New VMI\" button on the picking order list opens /picking-orders/vmi: the browser decodes a VMI_Template_*.xlsx (one picking order per VMI Ref.No, rows become items with PO Line → line number and Customer Item kept in additional_data), gates it (every Item in the parts master, Sub Inventory known to org_info — multi-org codes resolved per order from an org · sub-inventory dropdown, plus one apply-to-all picker for the usual single-location file), and one click batch-creates the orders (type 'vmi', allocated like any new order) before returning to the picking-order list",
  "reason": "VMI is a new source of picking demand upstream never syncs; operators hold these sheets and needed them in the pipeline without manual re-typing",
  "priority": "Must have",
  "status": "Delivered",

@@ -7,7 +7,7 @@ Date: 2026-11-09 · Status: implemented · Admin function: ADM-025 (picking orde
 A second source of picking orders: the operator uploads a `VMI_Template_*.xlsx`
 (华为 VMI 出货通知) from the admin picking-order list ("New VMI" button). One
 VMI Ref.No = one picking order; its rows become the order's items. After
-creation the admin opens the first new order's detail page.
+creation the admin lands back on the picking-order list with the new rows.
 
 ## Sheet contract (fixed tabular layout)
 
@@ -53,8 +53,8 @@ from every picking list/detail query.
    orders+items in one tx, then per-order scoped allocation exactly like
    test-create. Unlike test-create there is no `[TEST]` remark — these are
    real orders.
-5. Navigate to the first created order's detail page; the list picks the new
-   rows up via the normal reload.
+5. Return to `/picking-orders` (remount reload picks the new rows up; a
+   whole-file batch is one workflow, not a drill into one order).
 
 ## Deliberate limits
 

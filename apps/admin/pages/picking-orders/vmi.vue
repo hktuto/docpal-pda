@@ -172,8 +172,8 @@ async function create() {
         customerItem: item.customerItem || undefined,
       })),
     }));
-    const res = await flow.createVmiPickingOrders(body);
-    await router.push(`/picking-orders/${res.created[0]!.id}`);
+    await flow.createVmiPickingOrders(body);
+    await router.push("/picking-orders");
   } catch (err: any) {
     error.value = err?.message ?? String(err);
     creating.value = false;
