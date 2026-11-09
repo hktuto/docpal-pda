@@ -967,7 +967,11 @@ export default {
     preview: "预览",
     previewLabel: "示例",
     smaller: "缩小",
-    larger: "放大"
+    larger: "放大",
+    scanAllTypes: "扫描所有条码类型",
+    scanAllTypesHint: "允许扫描器读取所有条码类型，而不只限订单供应商的物料标签类型。扫描类型与物料标签不同的箱条码时请开启。适用于所有扫描页面，内容检查不变。",
+    scanAllTypesOn: "开启",
+    scanAllTypesOff: "关闭"
   },
   languageSwitcher: {
     label: "语言",

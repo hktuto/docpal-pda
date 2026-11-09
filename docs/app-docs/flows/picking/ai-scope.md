@@ -116,7 +116,10 @@
   `barcode_types` union (`useBrandSymbologyScope`; any unmapped brand = no
   restriction, full set restored on page leave), but the shelf/box QR
   symbologies always stay enabled so shelf scans and the pick-from-box dialog
-  keep working (`{ withShelfCodes: true }`).
+  keep working (`{ withShelfCodes: true }`). The Settings-page "Scan all
+  barcode types" toggle (`scanAllSymbologiesEnabled`) opts the device out of
+  the whitelist — needed for carton barcodes whose type differs from the
+  item-label types.
   Each progress row covers one part — same-part lines are merged with their
   required/scanned/queued totals, joined line/shipment numbers, and the
   allocation source chips (`allocationChipLabel` in

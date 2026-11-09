@@ -99,6 +99,11 @@ Notes:
   translated to DCS `scanner.setProperties` (`DEC_*` keys), so the
   per-supplier barcode-type whitelist works on Honeywell without the xcheng
   broadcast API.
+- The Settings page's **Scan all barcode types** toggle opts the device out
+  of every per-supplier whitelist (`scanAllSymbologiesEnabled` in
+  `composables/useScannerConfig.ts`, localStorage
+  `warehouse-scan-all-symbologies`) — turn it on when a carton barcode's
+  type differs from the supplier's item-label types.
 - Debugging: `adb logcat -s HoneywellScanner:I ScannerBroadcast:I` — a
   successful startup prints `bind → connect → addListener → claim` and each
   scan prints `barcode event: <data>`.

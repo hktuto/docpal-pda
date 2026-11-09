@@ -37,6 +37,14 @@
     </div>
 
     <div class="card">
+      <h2 class="card__title">{{ t("settings.scanAllTypes") }}</h2>
+      <p class="card__meta">{{ t("settings.scanAllTypesHint") }}</p>
+      <button type="button" class="btn" :aria-pressed="scanAllTypes" @click="toggleScanAllTypes">
+        {{ scanAllTypes ? t("settings.scanAllTypesOn") : t("settings.scanAllTypesOff") }}
+      </button>
+    </div>
+
+    <div class="card">
       <h2 class="card__title">{{ t("settings.preview") }}</h2>
       <div class="detail-row">
         <span class="detail-label">{{ t("settings.previewLabel") }}</span>
@@ -58,6 +66,15 @@ const { t } = useI18n();
 useHead({ title: t("meta.settings") });
 
 const { fontSize, setFontSize } = useFontSize();
+
+// Scan-all-barcode-types opt-out for the scanner symbology whitelists
+// (composables/useScannerConfig.ts reads it on every scan screen's mount).
+const scanAllTypes = ref(scanAllSymbologiesEnabled());
+
+function toggleScanAllTypes() {
+  scanAllTypes.value = !scanAllTypes.value;
+  setScanAllSymbologies(scanAllTypes.value);
+}
 
 function onSliderInput(event: Event) {
   setFontSize((event.target as HTMLInputElement).valueAsNumber);

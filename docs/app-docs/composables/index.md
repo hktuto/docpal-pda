@@ -17,7 +17,7 @@ Composables live in `composables/` and contain reusable Vue logic.
 | `useLabelScanReview.ts` | Review-modal state for label scans. |
 | `useHardwareScanner.ts` | Hardware scan input: fast intent-broadcast path (via `useScannerBroadcast`) plus keyboard-wedge fallback; broadcast scans replace the value of a focused `data-scan-fill` input instead of running the match pipeline; used by receiving/picking detail pages. |
 | `useScannerBroadcast.ts` | Capacitor wrapper for the native `ScannerBroadcast` plugin (no-op in browser); on Honeywell devices the native side feeds it from the DCS claim path instead of the manifest receiver. |
-| `useScannerConfig.ts` | Scanner symbology whitelist (`useSupplierSymbologyScope` / `useBrandSymbologyScope`, auto-branches xcheng vs Honeywell natively) + `getScannerDeviceInfo()` platform detection. |
+| `useScannerConfig.ts` | Scanner symbology whitelist (`useSupplierSymbologyScope` / `useBrandSymbologyScope`, auto-branches xcheng vs Honeywell natively) + `getScannerDeviceInfo()` platform detection. The Settings-page "Scan all barcode types" toggle (`scanAllSymbologiesEnabled`) opts the device out of all whitelists. |
 | `useWarehouse.ts` | Data access entry point — the one memoized `WarehouseService` (backend HTTP adapter) per API base URL. |
 | `useWarehouseEvents.ts` | Server-sent events bus: EventSource singleton; list pages subscribe via `useVisibleReload` topics. |
 | `useFlowSteps.ts` | Resolves the backend flow-step config (`loadFlowSteps` is wired from the default layout); gates home tiles and the flow chain, carries the CN-receiving flag. |

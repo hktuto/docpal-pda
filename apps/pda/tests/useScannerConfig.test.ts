@@ -1,22 +1,40 @@
 import { describe, it, expect, vi } from 'vitest';
 
 // vue is not a direct dependency (comes via nuxt), so mock it like the other
-// composable tests do.
+// composable tests do. watch runs immediate callbacks so the symbology
+// scopes' applyFor actually executes here.
 vi.mock('vue', () => ({
   ref: (value: unknown) => ({ value }),
   computed: (fn: () => unknown) => ({ get value() { return fn(); } }),
-  watch: () => {},
+  watch: (source: { value: unknown }, cb: (v: never) => void, opts?: { immediate?: boolean }) => {
+    if (opts?.immediate) cb(source.value as never);
+  },
   onUnmounted: () => {},
 }));
 
-// useScannerConfig pulls getCachedSupplierQrTemplates from useLabelScan,
-// which imports useFlowSteps (module-level state needs Nuxt auto-imports) —
-// stub it like the other composable tests do.
-vi.mock('~/composables/useFlowSteps', () => ({
-  useFlowSteps: () => ({ dateCodeFormat: { value: 'wwyy' } }),
+// The symbology scopes pull getCachedSupplierQrTemplates (useLabelScan) and
+// useWarehouse — stub both so no service chain loads in tests.
+vi.mock('~/composables/useLabelScan', () => ({
+  getCachedSupplierQrTemplates: async () => [
+    { code: '32', brands: ['KOA'], barcodeTypes: ['PDF417'] },
+  ],
+}));
+vi.mock('~/composables/useWarehouse', () => ({
+  useWarehouse: () => ({}),
 }));
 
-const { brandWhitelistUnion, withShelfSymbologies } = await import('~/composables/useScannerConfig');
+// Plain vi.fn plugin stubs so tests can assert the calls the scopes make.
+vi.mock('@capacitor/core', () => ({
+  registerPlugin: () => ({
+    setSymbologies: vi.fn(async () => {}),
+    restoreAll: vi.fn(async () => {}),
+    getDeviceInfo: vi.fn(async () => ({ brand: '', manufacturer: '', model: '', platform: 'none' })),
+  }),
+}));
+
+const { brandWhitelistUnion, withShelfSymbologies, ScannerConfig, useBrandSymbologyScope } =
+  await import('~/composables/useScannerConfig');
+const { ref } = await import('vue');
 
 const templates = [
   { code: '32', brands: ['KOA'], barcodeTypes: ['PDF417'] },
@@ -61,5 +79,34 @@ describe('withShelfSymbologies', () => {
 
   it('passes null (no restriction) through untouched', () => {
     expect(withShelfSymbologies(null)).toBeNull();
+  });
+});
+
+describe('scan-all-symbologies setting gate (Settings page opt-out)', () => {
+  const setSymbologies = vi.mocked(ScannerConfig.setSymbologies);
+  // The scope serializes plugin calls through a microtask chain — one
+  // macrotask tick flushes them.
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('never restricts the decoder when the setting is on', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => '1', setItem: () => {} });
+    useBrandSymbologyScope(ref(['KOA']));
+    await flush();
+    expect(setSymbologies).not.toHaveBeenCalled();
+  });
+
+  it('applies the brand-union whitelist when the setting is off', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} });
+    useBrandSymbologyScope(ref(['KOA']));
+    await flush();
+    expect(setSymbologies).toHaveBeenCalledWith({ enabled: ['PDF417'] });
   });
 });
