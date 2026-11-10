@@ -54,6 +54,13 @@ async function load() {
   }
 }
 
+/** A breakdown remove changed the world (either engine's rows) — refresh the
+ *  dialog's numbers AND tell the parent detail to reload. */
+async function onAllocationsChanged() {
+  await load();
+  emit("allocated");
+}
+
 watch(
   () => props.open,
   (v) => {
@@ -130,6 +137,7 @@ function pinReceiving(row: PartAvailabilityReceivingRow) {
               <th>{{ $t("internalTransfer.mShelf") }}</th>
               <th>{{ $t("internalTransfer.mBox") }}</th>
               <th>{{ $t("internalTransfer.mDateCode") }}</th>
+              <th class="num">{{ $t("stockSearch.allocatedQty") }}</th>
               <th class="num">{{ $t("internalTransfer.mAvailable") }}</th>
               <th class="num">{{ $t("internalTransfer.colQty") }}</th>
               <th></th>
@@ -140,6 +148,15 @@ function pinReceiving(row: PartAvailabilityReceivingRow) {
               <td>{{ r.shelfDisplayName ?? r.shelfCode ?? "—" }}</td>
               <td>{{ r.boxId ?? "—" }}</td>
               <td>{{ r.dateCode ?? "—" }}</td>
+              <td class="num">
+                <AllocationBreakdown
+                  :part-no="r.partNo"
+                  :wcl-item-no="r.wclItemNo"
+                  :allocated-qty="r.allocatedQty"
+                  :lot-id="r.lotId"
+                  @changed="onAllocationsChanged"
+                />
+              </td>
               <td class="num">{{ r.availableQty }}</td>
               <td class="num">
                 <input
@@ -158,7 +175,7 @@ function pinReceiving(row: PartAvailabilityReceivingRow) {
               </td>
             </tr>
             <tr v-if="stock.length === 0">
-              <td colspan="6" class="muted">{{ $t("internalTransfer.mNone") }}</td>
+              <td colspan="7" class="muted">{{ $t("internalTransfer.mNone") }}</td>
             </tr>
           </tbody>
         </table>
@@ -171,6 +188,7 @@ function pinReceiving(row: PartAvailabilityReceivingRow) {
                 <th>{{ $t("internalTransfer.mBatch") }}</th>
                 <th>{{ $t("internalTransfer.mBox") }}</th>
                 <th>{{ $t("internalTransfer.mDateCode") }}</th>
+                <th class="num">{{ $t("stockSearch.allocatedQty") }}</th>
                 <th class="num">{{ $t("internalTransfer.mAvailable") }}</th>
                 <th class="num">{{ $t("internalTransfer.colQty") }}</th>
                 <th></th>
@@ -181,6 +199,15 @@ function pinReceiving(row: PartAvailabilityReceivingRow) {
                 <td>{{ r.batchNo }} · {{ r.invoiceNo }}</td>
                 <td>{{ r.ctnNo ?? "—" }}</td>
                 <td>{{ r.dateCode ?? "—" }}</td>
+                <td class="num">
+                  <AllocationBreakdown
+                    :part-no="item?.partNo ?? ''"
+                    :wcl-item-no="item?.wclItemNo ?? null"
+                    :allocated-qty="r.allocatedQty"
+                    :receiving-invoice-item-id="r.receivingInvoiceItemId"
+                    @changed="onAllocationsChanged"
+                  />
+                </td>
                 <td class="num">{{ Math.max(0, r.receivedQty - r.pickedQty - r.allocatedQty) }}</td>
                 <td class="num">
                   <input
@@ -204,7 +231,7 @@ function pinReceiving(row: PartAvailabilityReceivingRow) {
                 </td>
               </tr>
               <tr v-if="receiving.length === 0">
-                <td colspan="6" class="muted">{{ $t("internalTransfer.mNone") }}</td>
+                <td colspan="7" class="muted">{{ $t("internalTransfer.mNone") }}</td>
               </tr>
             </tbody>
           </table>

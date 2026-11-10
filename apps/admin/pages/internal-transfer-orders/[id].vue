@@ -305,6 +305,7 @@ function allocSource(alloc: InternalTransferAllocationRow): string {
         :item="modalItem"
         :from-org-id="order.fromOrgId"
         :from-sub-inventory-code="order.fromSubInventoryCode"
+        @close="modalOpen = false"
         @allocated="load"
       />
     </template>
