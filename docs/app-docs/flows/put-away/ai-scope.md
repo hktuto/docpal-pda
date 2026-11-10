@@ -128,6 +128,23 @@
   `GET /admin/countries`, value = ISO code, names localized client-side via
   the `countryLabels` locale map) and default to EMPTY — the operator picks
   explicitly; OCR-parsed values stay as raw extra options.
+- Whole-carton scan (spec
+  `docs/superpowers/specs/2026-11-10-put-away-carton-scan-design.md` — the
+  put-away port of picking's carton scan): a scan that matches no order line
+  as a label is tried against the lines' `ctn_no`
+  (`matchPutAwayCarton` in `utils/putAwayScan.ts` — exact, then containment
+  since carton barcodes wrap the ctn_no, e.g. KOA `TCX273` → `X273`; ctn_no
+  under 4 chars exact-only; order-wide, ignores the armed group). The
+  aggregate's expected items carry `ctnNo`
+  (`rii.ctn_no AS "ctnNo"` in `getPutAwayAggregate`). Standard mode confirms,
+  then writes one `recordPutAwayScan` per carton line at full remaining qty
+  (batch from the receiving declaration, serial null, carton barcode as `raw`
+  on the first line only to respect the per-order raw dedup); pending pieces
+  commit on the next shelf scan as usual. CN mode stages the lines locally —
+  shelf-less allowed (the next shelf scan backfills `shelfCode`; `commitCn`
+  refuses while a staged piece has none). A session `Set` of scanned carton
+  raws rejects repeats (`putAway.carton.duplicate`). Same no-label-check /
+  no-serial trade-off as skip-scan.
 - Skip-scan shelve-without-scanning (flow config `steps["put-away"].skipScan`,
   default false, spec
   `docs/superpowers/specs/2026-11-04-put-away-skip-scan-design.md`): each
@@ -201,7 +218,8 @@
   app header via `composables/usePageHeader.ts`; armed hardware scanner +
   camera OCR scan entry with single-record form / multi-item table review).
 - `utils/putAwayScan.ts` — `findPutAwayTargets` FIFO split of one scan's qty
-  across same-part lines (plus the legacy single-line `findPutAwayTarget`)
+  across same-part lines (plus the legacy single-line `findPutAwayTarget`),
+  `matchPutAwayCarton` whole-carton `ctn_no` matching (exact → containment),
   and `classifyPutAwayScan` shelf/box/item scan routing (tests in
   `tests/putAwayScan.test.ts`).
 - `utils/putAwayGroups.ts` — part-group display model for the detail page:
@@ -293,5 +311,6 @@
 - `docs/superpowers/specs/2026-10-05-put-away-part-grouping-design.md`
 - `docs/superpowers/specs/2026-10-06-put-away-shelf-direct-design.md`
 - `docs/superpowers/specs/2026-11-04-put-away-skip-scan-design.md`
+- `docs/superpowers/specs/2026-11-10-put-away-carton-scan-design.md`
 - `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`
 - `docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`

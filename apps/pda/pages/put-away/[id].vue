@@ -89,7 +89,7 @@ import { useToast } from "~/composables/useToast";
 import { scrollToItem } from "~/utils/scroll";
 import { rawCode } from "~/utils/text";
 import { decodeLabel } from "~/utils/labelDecode";
-import { compareByPoLineThenPartNo, compareNumericAware, findCnPutAwayTargets, findPutAwayTargets } from "~/utils/putAwayScan";
+import { compareByPoLineThenPartNo, compareNumericAware, findCnPutAwayTargets, findPutAwayTargets, matchPutAwayCarton } from "~/utils/putAwayScan";
 import {
   groupPutAwayItems,
   skipScanLines,
@@ -217,6 +217,10 @@ const scans = ref<PutAwayScan[]>([]);
 // CN duplicate-serial guard (the standard path's check is backend-side).
 const cnSeenSerials = ref<Set<string>>(new Set());
 let cnLocalSeq = 0;
+// Session guard against re-scanning the same supplier carton: the standard
+// fan-out carries the carton raw on the first line only (the backend dedups
+// raw per order), so a repeat carton scan would otherwise post again.
+const cartonScannedRaws = new Set<string>();
 
 const scanItem = ref<PutAwayExpectedItem | null>(null);
 // The group card the OCR review was opened from — its member lines ride in
@@ -399,7 +403,7 @@ useHardwareScanner({
           coo: parsed.coo,
           cow: parsed.cow,
           serialNo: parsed.serialNo,
-        });
+        }, value);
       }
       // Item-first (armed) mode: match strictly against the armed part
       // group's lines. One label's qty may span several same-part lines —
@@ -411,6 +415,11 @@ useHardwareScanner({
         parsed.wclItemNo
       );
       if (!portions) {
+        // Whole-carton fallback (supplier carton barcode, e.g. KOA TCX273 →
+        // ctn_no X273): a real label that matched an item always wins; only
+        // an unmatched raw is tried against the lines' carton numbers.
+        const cartonItems = matchPutAwayCarton(matchItems.value, value);
+        if (cartonItems.length > 0) return await handleCartonScan(value, cartonItems);
         showToast(t("errors.scanned_part_does_not_match_item"));
         return false;
       }
@@ -473,8 +482,15 @@ async function selectShelf(code: string) {
   selectedShelf.value = code;
   showToast(t("putAway.shelfSelected", { shelf: code }));
   // CN: pieces carry the shelf they were scanned on and post via the batch
-  // confirm button — no per-shelf commit prompt.
-  if (cnMode.value) return;
+  // confirm button — no per-shelf commit prompt. A whole-carton scan may have
+  // staged pieces before any shelf was scanned: they take the shelf just
+  // scanned.
+  if (cnMode.value) {
+    for (const s of scans.value) {
+      if (!s.shelfCode) s.shelfCode = code;
+    }
+    return;
+  }
   const pendingScans = scans.value.filter((s) => !s.shelfCode);
   if (pendingScans.length === 0) return;
   const total = pendingScans.reduce((sum, s) => sum + s.qty, 0);
@@ -545,6 +561,47 @@ async function shelveSelected(code: string) {
   }
 }
 
+// Whole-carton scan (standard mode): one supplier carton barcode records
+// every order line of that carton at its full remaining qty — one
+// recordPutAwayScan per line, batch fields from the receiving declaration
+// (same source as skip-scan). With a sticky shelf the pieces commit straight
+// onto it; without one they land pending and the next shelf scan commits them
+// via selectShelf's prompt. The carton barcode rides as `raw` on the FIRST
+// line only — the backend dedups raw per order (label_already_scanned).
+async function handleCartonScan(raw: string, cartonItems: PutAwayExpectedItem[]): Promise<boolean> {
+  if (cartonScannedRaws.has(raw)) {
+    showToast(t("putAway.carton.duplicate", { carton: raw }));
+    return false;
+  }
+  const totalQty = cartonItems.reduce((sum, i) => sum + (i.remainingQty ?? 0), 0);
+  const confirmed = window.confirm(
+    t("putAway.carton.confirmPrompt", { carton: raw, count: cartonItems.length, qty: totalQty })
+  );
+  if (!confirmed) return true;
+  for (const [idx, item] of cartonItems.entries()) {
+    await warehouse.recordPutAwayScan(
+      orderId,
+      item.id,
+      item.remainingQty,
+      rawCode(item.dateCode),
+      rawCode(item.lotCode),
+      rawCode(item.coo),
+      rawCode(item.cow),
+      selectedShelf.value,
+      null,
+      idx === 0 ? raw : null
+    );
+  }
+  cartonScannedRaws.add(raw);
+  showToast(t("putAway.carton.recorded", { carton: raw, count: cartonItems.length, qty: totalQty }));
+  const hitGroup = groups.value.find((g) =>
+    g.items.some((i) => i.id === cartonItems[0].id)
+  );
+  scrollTargetGroupKey.value = hitGroup?.key ?? null;
+  await load();
+  return true;
+}
+
 // --- CN put-away (cnReceiving flow) -----------------------------------------
 // The CN world has no per-scan staging endpoint: scanned pieces accumulate in
 // scans[] locally (shelf-first — a shelf must be sticky before item scans)
@@ -580,15 +637,22 @@ function addCnPieces(
 /**
  * Hardware-scan entry point in CN mode: match the parsed label against the
  * (armed) visible items — part keys or the item's carton number — with the
- * standard COO/COW guard, then stage the piece locally.
+ * standard COO/COW guard, then stage the piece locally. `raw` (the verbatim
+ * scan) enables the whole-carton fallback: when the label match fails but the
+ * raw is a carton barcode, every line of that carton is staged at its full
+ * remaining qty — shelf-less when no shelf is sticky yet (the next shelf scan
+ * claims them, see selectShelf).
  */
 async function handleCnItemScan(
   partNo: string,
   wclItemNo: string | undefined,
   qty: number,
-  batch: { dateCode: string; lotCode: string; coo: string; cow: string; serialNo: string | undefined }
+  batch: { dateCode: string; lotCode: string; coo: string; cow: string; serialNo: string | undefined },
+  raw?: string
 ): Promise<boolean> {
+  const cartonItems = raw ? matchPutAwayCarton(matchItems.value, raw) : [];
   if (!selectedShelf.value) {
+    if (cartonItems.length > 0) return handleCnCartonScan(raw!, cartonItems);
     showToast(t("putAway.cn.shelfRequired"));
     return false;
   }
@@ -599,6 +663,7 @@ async function handleCnItemScan(
     wclItemNo
   );
   if (!portions) {
+    if (cartonItems.length > 0) return handleCnCartonScan(raw!, cartonItems);
     showToast(t("errors.scanned_part_does_not_match_item"));
     return false;
   }
@@ -641,6 +706,37 @@ async function handleCnItemScan(
   return true;
 }
 
+/** Stage every line of a scanned supplier carton locally (full remaining qty
+ *  each, batch fields from the receiving declaration). Pieces may be
+ *  shelf-less — the next shelf scan claims them (selectShelf). */
+function handleCnCartonScan(raw: string, cartonItems: PutAwayExpectedItem[]): boolean {
+  if (cartonScannedRaws.has(raw)) {
+    showToast(t("putAway.carton.duplicate", { carton: raw }));
+    return false;
+  }
+  let qty = 0;
+  for (const item of cartonItems) {
+    addCnPieces([{ item, qty: item.remainingQty ?? 0 }], {
+      dateCode: rawCode(item.dateCode),
+      lotCode: rawCode(item.lotCode),
+      coo: rawCode(item.coo),
+      cow: rawCode(item.cow),
+      serialNo: null,
+    });
+    qty += item.remainingQty ?? 0;
+  }
+  cartonScannedRaws.add(raw);
+  showToast(t("putAway.carton.recorded", { carton: raw, count: cartonItems.length, qty }));
+  const hitGroup = groups.value.find((g) =>
+    g.items.some((i) => i.id === cartonItems[0].id)
+  );
+  if (hitGroup) {
+    expandedItems.value = new Set(expandedItems.value).add(hitGroup.key);
+    nextTick().then(() => scrollToItem({ itemId: hitGroup.key }));
+  }
+  return true;
+}
+
 const cnPendingQty = computed(() =>
   scans.value.reduce((sum, s) => sum + s.qty, 0)
 );
@@ -650,6 +746,12 @@ const cnPendingQty = computed(() =>
 // task completes when every item is fully put away.
 async function commitCn() {
   if (!cnMode.value || !taskId || committingAll.value || scans.value.length === 0) return;
+  // Carton-staged pieces may still lack a shelf — scan one first (selectShelf
+  // claims them); the backend requires a shelf per piece.
+  if (scans.value.some((s) => !s.shelfCode)) {
+    showToast(t("putAway.cn.shelfRequired"));
+    return;
+  }
   const confirmed = window.confirm(
     t("putAway.cn.commitPrompt", { count: cnPendingQty.value })
   );

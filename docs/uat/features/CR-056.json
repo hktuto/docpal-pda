@@ -1,0 +1,14 @@
+{
+ "id": "CR-056",
+ "dateRaised": "2026-11-10",
+ "raisedBy": "Sean",
+ "app": "PDA",
+ "functionId": "PDA-010",
+ "feature": "Put-away detail — whole-carton scan: scanning a supplier carton barcode (receiving ctn_no, e.g. KOA TCX273) puts away every order line of that carton at its full remaining qty, then the operator scans the shelf to place them; works in both standard mode (confirm prompt → pending scans → shelf commit) and CN mode (local staging, shelf backfill on the next shelf scan, batch commit)",
+ "reason": "Picking already had carton scan-to-pick-all; put-away operators had to scan every item label of a sealed supplier carton even though the carton's contents are declared on the receiving invoice lines",
+ "priority": "Must have",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Implemented 2026-11-10 — spec `docs/superpowers/specs/2026-11-10-put-away-carton-scan-design.md`; client-side fan-out mirroring picking's matchCartonAllocations/addCartonScan: `matchPutAwayCarton` in `apps/pda/utils/putAwayScan.ts` (exact → containment, ≥4-char guard), carton fallback in `apps/pda/pages/put-away/[id].vue` hardware-scan handler (`handleCartonScan` standard / `handleCnCartonScan` CN), backend projects `rii.ctn_no AS ctnNo` in `getPutAwayAggregate`; tests in `apps/pda/tests/putAwayScan.test.ts` + `apps/backend/src/db/putaway.test.ts`."
+}

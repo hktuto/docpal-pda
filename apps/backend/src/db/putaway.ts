@@ -482,6 +482,9 @@ export interface PutAwayExpectedItemRow {
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
+  /** The invoice item's plain-text carton number (箱号) — the put-away page's
+   *  carton-scan match key (scan the carton barcode to put away all its lines). */
+  ctnNo: string | null;
   /** Advisory shelf/box suggestion (spec 2026-08-12-put-away-shelf-org-suggestion-design.md);
    *  all null when nothing matches or suggestShelf is "off". */
   suggestedShelfCode: string | null;
@@ -563,6 +566,7 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
         (rii.received_qty - rii.picked_qty - rii.put_away_qty
           - COALESCE(alloc.qty, 0) - COALESCE(staged.qty, 0))::int AS "remainingQty",
         rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow,
+        rii.ctn_no AS "ctnNo",
         rii.org_id AS "itemOrgId", rii.sub_inventory_code AS "itemSubInventoryCode"
       FROM receiving_invoice_items rii
       JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id

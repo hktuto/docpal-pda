@@ -870,6 +870,9 @@ test("aggregate: order + lots + staging scans + boxes with items; 404", async ()
   const { orderId, actorId } = await daitoInHand();
   const item1 = await itemIdOf(orderId, "RK73B1JTTD181G"); // qty 5000
   const item2 = await itemIdOf(orderId, "RK73H1JTTD4702F"); // qty 3000
+  // Carton number rides on the expected-item rows (the PDA put-away page's
+  // carton-scan match key).
+  await queryRun(client.db, sql`UPDATE receiving_invoice_items SET ctn_no = 'X273' WHERE id = ${item1}`);
   const assigned = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item1, qty: 2000 });
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item1, qty: 500 });
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item2, qty: 3000 });
@@ -891,11 +894,13 @@ test("aggregate: order + lots + staging scans + boxes with items; 404", async ()
   );
   assert.equal(exp1.dateCode, "2610");
   assert.equal(exp1.coo, "JP");
+  assert.equal(exp1.ctnNo, "X273");
   const exp2 = byPart.get("RK73H1JTTD4702F")!;
   assert.deepEqual(
     [exp2.id, exp2.lineQty, exp2.receivedQty, exp2.putAwayQty, exp2.remainingQty],
     [item2, 3000, 3000, 0, 0] // fully staged
   );
+  assert.equal(exp2.ctnNo, null);
 
   assert.equal(agg.lots.length, 1);
   const lot = agg.lots[0];

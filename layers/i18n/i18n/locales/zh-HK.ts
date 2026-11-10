@@ -616,6 +616,11 @@ export default {
     boxNotOpen: "箱號 {box} 未開啟",
     stagingBoxSelected: "暫存箱 {box} — 掃描將進入暫存區",
     boxScanIgnored: "上架不使用箱子 — 請掃描貨架或貨品標籤",
+    carton: {
+      confirmPrompt: "要上架整箱 {carton} 嗎？共 {count} 項，{qty} 件",
+      recorded: "箱號 {carton}：已記錄 {count} 項，{qty} 件",
+      duplicate: "箱號 {carton} 已掃描過",
+    },
     cn: {
       shelfRequired: "請先掃描貨架 — CN 上架沒有暫存區",
       noTask: "此上架頁面需要任務編號 — 請從上架任務清單進入。",

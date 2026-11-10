@@ -617,6 +617,11 @@ export default {
     boxNotOpen: "Box {box} is not open",
     stagingBoxSelected: "Staging box {box} — scans go to staging",
     boxScanIgnored: "Boxes are not used in put-away — scan a shelf or an item label",
+    carton: {
+      confirmPrompt: "Put away all of carton {carton}? {count} item(s), {qty} pcs",
+      recorded: "Carton {carton}: {count} item(s), {qty} pcs recorded",
+      duplicate: "Carton {carton} already scanned",
+    },
     cn: {
       shelfRequired: "Scan a shelf first — CN put-away has no staging area",
       noTask: "This put-away page needs a task id — open it from the put-away task list.",

@@ -54,6 +54,14 @@ them all at once, using the batch values declared at receiving. Use this only
 when you can see the boxes match the paperwork; there is no label check and
 no serial capture.
 
+**Whole-carton scan:** scanning a **supplier carton barcode** (the carton
+number printed on the shipping carton, e.g. KOA's `TCX273`) offers to put
+away **every order line of that carton** at once — confirm the prompt, then
+scan the shelf to place them (with a shelf already selected they go straight
+onto it). The quantities and batch values come from the receiving
+declaration; no label check and no serial capture, same trade-off as skip
+scanning.
+
 ## 5. Scan the shelf
 
 Scan the barcode of the shelf where the goods belong. If pieces are pending,

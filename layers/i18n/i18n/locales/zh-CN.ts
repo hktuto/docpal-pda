@@ -616,6 +616,11 @@ export default {
     boxNotOpen: "箱号 {box} 未开启",
     stagingBoxSelected: "暂存箱 {box} — 扫描将进入暂存区",
     boxScanIgnored: "上架不使用箱子 — 请扫描货架或货品标签",
+    carton: {
+      confirmPrompt: "要上架整箱 {carton} 吗？共 {count} 项，{qty} 件",
+      recorded: "箱号 {carton}：已记录 {count} 项，{qty} 件",
+      duplicate: "箱号 {carton} 已扫描过",
+    },
     cn: {
       shelfRequired: "请先扫描货架 — CN 上架没有暂存区",
       noTask: "此上架页面需要任务编号 — 请从上架任务列表进入。",

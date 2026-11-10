@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyPutAwayScan, compareByPoLineThenPartNo, compareNumericAware, findCnPutAwayTargets, findPutAwayTarget, findPutAwayTargets } from "../utils/putAwayScan";
+import { classifyPutAwayScan, compareByPoLineThenPartNo, compareNumericAware, findCnPutAwayTargets, findPutAwayTarget, findPutAwayTargets, matchPutAwayCarton } from "../utils/putAwayScan";
 import { groupPutAwayItems, putAwayGroupFieldValue, putAwayGroupSuggestion } from "../utils/putAwayGroups";
 import type { PutAwayExpectedItem } from "../services/types";
 
@@ -108,6 +108,39 @@ describe("findPutAwayTargets", () => {
     ]);
     expect(findPutAwayTargets(items, "", 10)).toBeNull();
     expect(findPutAwayTargets(items, "ABC123", 0)).toBeNull();
+  });
+});
+
+describe("matchPutAwayCarton", () => {
+  function ctnItem(id: string, ctnNo: string | null, remainingQty: number): PutAwayExpectedItem {
+    return { id, partNo: id, ctnNo, remainingQty } as PutAwayExpectedItem;
+  }
+
+  it("matches every line of the carton by exact ctn_no (case-insensitive)", () => {
+    const items = [ctnItem("a", "X273", 100), ctnItem("b", "x273", 50), ctnItem("c", "Y900", 20)];
+    expect(matchPutAwayCarton(items, "X273").map((i) => i.id)).toEqual(["a", "b"]);
+  });
+
+  it("falls back to containment — carton barcodes wrap the ctn_no (TCX273 → X273)", () => {
+    const items = [ctnItem("a", "X273", 100)];
+    expect(matchPutAwayCarton(items, "TCX273").map((i) => i.id)).toEqual(["a"]);
+  });
+
+  it("keeps ctn_no under 4 chars exact-only (containment would false-positive)", () => {
+    const items = [ctnItem("a", "C01", 100)];
+    expect(matchPutAwayCarton(items, "TC01X")).toEqual([]);
+    expect(matchPutAwayCarton(items, "C01").map((i) => i.id)).toEqual(["a"]);
+  });
+
+  it("skips lines with nothing left to put away and items without a ctn_no", () => {
+    const items = [ctnItem("done", "X273", 0), ctnItem("noctn", null, 100), ctnItem("left", "X273", 30)];
+    expect(matchPutAwayCarton(items, "X273").map((i) => i.id)).toEqual(["left"]);
+  });
+
+  it("returns [] for empty/unknown scans", () => {
+    const items = [ctnItem("a", "X273", 100)];
+    expect(matchPutAwayCarton(items, "")).toEqual([]);
+    expect(matchPutAwayCarton(items, "UNKNOWN-999")).toEqual([]);
   });
 });
 

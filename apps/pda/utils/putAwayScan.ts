@@ -98,6 +98,30 @@ export function findPutAwayTargets(
   return null;
 }
 
+/**
+ * Whole-carton lookup (the put-away port of picking's carton scan): a supplier
+ * carton's contents are declared on the invoice lines, so scanning its barcode
+ * puts away every line of that carton in one go. Exact match on `ctnNo`
+ * first; then containment, because carton barcodes often wrap the ctn_no in
+ * extra wording (e.g. KOA carton X273 scans as "TCX273"). ctn_no values under
+ * 4 chars stay exact-only — they would false-positive inside unrelated scans.
+ * Only lines with remaining qty match; done lines are skipped.
+ */
+export function matchPutAwayCarton(
+  items: PutAwayExpectedItem[],
+  raw: string
+): PutAwayExpectedItem[] {
+  const wanted = raw.trim().toUpperCase();
+  if (!wanted) return [];
+  const alive = items.filter((i) => (i.remainingQty ?? 0) > 0 && i.ctnNo);
+  const exact = alive.filter((i) => i.ctnNo!.trim().toUpperCase() === wanted);
+  if (exact.length > 0) return exact;
+  return alive.filter((i) => {
+    const ctn = i.ctnNo!.trim().toUpperCase();
+    return ctn.length >= 4 && wanted.includes(ctn);
+  });
+}
+
 /** Digit-run-aware compare: "9" < "10", "PO2A" < "PO10A" (alpha runs
  * case-insensitive). Empty sorts first. */
 export function compareNumericAware(a: string, b: string): number {

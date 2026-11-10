@@ -848,9 +848,9 @@ export interface PutAwayExpectedItem {
   id: string;
   partNo: string;
   wclItemNo: string | null;
-  /** CN put-away only: the invoice item's plain-text carton number (no box
-   *  entities in the CN world) — an extra scan-match key. Standard backends
-   *  omit the field. */
+  /** The invoice item's plain-text carton number (箱号) — the scan-match key
+   *  for the whole-carton put-away (scan the carton barcode to record every
+   *  line of that carton in one go). */
   ctnNo?: string | null;
   /** CN put-away only: the invoice item's PO no / PO line — the detail list
    *  sorts by po_line, then part_no. Standard backends omit the fields. */
