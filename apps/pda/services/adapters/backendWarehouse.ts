@@ -516,6 +516,12 @@ export function createBackendWarehouseService(
     ): Promise<{ packageIds: string[] }> {
       return client.post(`/internal-transfer-items/${itemId}/scan`, input);
     },
+    async scanInternalTransferLabel(
+      itemId: string,
+      input: { qty: number; dateCode?: string | null; lotCode?: string | null; coo?: string | null; cow?: string | null; shelfCode?: string | null; boxId?: string | null }
+    ): Promise<{ packageIds: string[] }> {
+      return client.post(`/internal-transfer-items/${itemId}/scan-label`, input);
+    },
     async removeInternalTransferPackage(packageId: string): Promise<void> {
       await client.del(`/internal-transfer-packages/${packageId}`);
     },

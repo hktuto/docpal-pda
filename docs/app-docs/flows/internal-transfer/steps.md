@@ -27,10 +27,12 @@
 2. **Pick** — open an order; each item shows its remaining reservations as
    pick guidance (shelf / box / date-code, or receiving batch/ctn). Scan the
    item's QR label (hardware scanner or the camera FAB — decoded through the
-   backend scan authority; the label qty pre-fills the prompt, its batch
-   fields ride along) or tap Pick and enter the qty — capped at the
-   reservation. A shelf scan first sets the pending shelf
-   (pickingShelfScan require-match). Remove (✗) un-picks a package.
+   backend scan authority): **the label's qty is the pick qty, no prompt**
+   — multiple labels of the same part accumulate, spanning reservations when
+   one label crosses two lots (toast confirms each pick). Bare part scans
+   (no qty on the label) fall back to a capped prompt. A shelf scan first
+   sets the pending shelf (pickingShelfScan require-match). Remove (✗)
+   un-picks a package.
 3. **Report issue** — record a shortage (reason + actual qty + note);
    picking continues and a recorded issue satisfies the finish guard.
 4. **Finish** — linked: the picked stock lands unshelved at the delegated

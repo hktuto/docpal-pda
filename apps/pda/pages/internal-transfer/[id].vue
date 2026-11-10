@@ -247,14 +247,13 @@ interface LabelFields {
   cow?: string;
 }
 
-async function pick(item: InternalTransferPickingItem, a: InternalTransferPickingAllocation, label?: LabelFields): Promise<void> {
+/** Guidance-row tap: prompt for qty (capped at the reservation). Label scans
+ *  never come here — their qty is the pick qty. */
+async function pick(item: InternalTransferPickingItem, a: InternalTransferPickingAllocation): Promise<void> {
   const remaining = item.qty - item.pickedQty;
   const max = Math.min(a.qty, remaining);
   if (max <= 0) return;
-  const suggested = label?.qty !== undefined && Number.isInteger(label.qty) && label.qty > 0
-    ? Math.min(label.qty, max)
-    : max;
-  const input = window.prompt(t("internalTransfer.pda.pickQtyPrompt", { max }), String(suggested));
+  const input = window.prompt(t("internalTransfer.pda.pickQtyPrompt", { max }), String(max));
   if (input === null) return;
   const qty = Number(input);
   if (!Number.isInteger(qty) || qty <= 0 || qty > max) {
@@ -264,15 +263,7 @@ async function pick(item: InternalTransferPickingItem, a: InternalTransferPickin
   busy.value = true;
   error.value = null;
   try {
-    await warehouse.scanInternalTransferItem(item.id, {
-      allocationId: a.id,
-      qty,
-      dateCode: label?.dateCode || null,
-      lotCode: label?.lotCode || null,
-      coo: label?.coo || null,
-      cow: label?.cow || null,
-      shelfCode: pickShelf.value,
-    });
+    await warehouse.scanInternalTransferItem(item.id, { allocationId: a.id, qty, shelfCode: pickShelf.value });
     await load();
   } catch (e: unknown) {
     error.value = errorMessage(e);
@@ -330,8 +321,38 @@ async function handlePickScan(raw: string): Promise<boolean> {
   const item = detail.value?.items.find(
     (i) => i.qty > i.pickedQty && keys.includes((i.wclItemNo ?? i.partNo).toUpperCase())
   );
-  if (item && item.allocations.length > 0) {
-    await pick(item, item.allocations[0], label);
+  if (!item) {
+    showToast(t("internalTransfer.pda.noMatch"));
+    return false;
+  }
+  // Label carries its qty — that IS the pick qty (no prompt). Multiple
+  // labels of the same part accumulate server-side (FIFO across the item's
+  // remaining reservations, spanning rows when a label crosses two lots).
+  if (label) {
+    busy.value = true;
+    error.value = null;
+    try {
+      await warehouse.scanInternalTransferLabel(item.id, {
+        qty: label.qty!,
+        dateCode: label.dateCode ?? null,
+        lotCode: label.lotCode ?? null,
+        coo: label.coo ?? null,
+        cow: label.cow ?? null,
+        shelfCode: pickShelf.value,
+      });
+      showToast(t("internalTransfer.pda.pickedToast", { qty: label.qty!, part: item.wclItemNo ?? item.partNo }));
+      await load();
+      return true;
+    } catch (e: unknown) {
+      error.value = errorMessage(e);
+      return true;
+    } finally {
+      busy.value = false;
+    }
+  }
+  // No label qty (bare part scan / decode without qty) — prompt, capped.
+  if (item.allocations.length > 0) {
+    await pick(item, item.allocations[0]);
     return true;
   }
   showToast(t("internalTransfer.pda.noMatch"));

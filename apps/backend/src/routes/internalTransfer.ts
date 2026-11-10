@@ -8,6 +8,7 @@ import {
   acquireInternalTransferWorkLock,
   releaseInternalTransferWorkLock,
   scanInternalTransferItem,
+  scanInternalTransferLabel,
   removeInternalTransferPackage,
   reportInternalTransferIssue,
   finishInternalTransferOrder,
@@ -66,6 +67,35 @@ internalTransferRoute.post("/internal-transfer-items/:id/scan", async (c) => {
   const result = await scanInternalTransferItem(db, c.req.param("id"), {
     actorId: actorFrom(c).id,
     allocationId: body.allocationId,
+    qty: body.qty as number,
+    dateCode: body.dateCode ?? null,
+    lotCode: body.lotCode ?? null,
+    coo: body.coo ?? null,
+    cow: body.cow ?? null,
+    shelfCode: body.shelfCode ?? null,
+    boxId: body.boxId ?? null,
+  });
+  return c.json(result, 201);
+});
+
+// Item-QR-label scan (no prompt — the label's qty IS the pick qty): consumes
+// the item's remaining allocation rows FIFO, SPANNING rows when one label
+// crosses two lots (50000 as two 25000 labels over 30000+20000 rows). Body
+// {qty, dateCode?, lotCode?, coo?, cow?, shelfCode?, boxId?}. Same guards as
+// the guidance-row scan; 409 scanned_qty_exceeds_allocation when the
+// reservations cannot cover the label qty.
+internalTransferRoute.post("/internal-transfer-items/:id/scan-label", async (c) => {
+  const body = await c.req.json<{
+    qty?: number;
+    dateCode?: string;
+    lotCode?: string;
+    coo?: string;
+    cow?: string;
+    shelfCode?: string;
+    boxId?: string;
+  }>();
+  const result = await scanInternalTransferLabel(db, c.req.param("id"), {
+    actorId: actorFrom(c).id,
     qty: body.qty as number,
     dateCode: body.dateCode ?? null,
     lotCode: body.lotCode ?? null,

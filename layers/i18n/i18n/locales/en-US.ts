@@ -2916,6 +2916,7 @@ export default {
       pickQtyInvalid: "Enter a whole qty ≤ {max}",
       noMatch: "No matching item on this order.",
       noShelfMatch: "Unknown shelf.",
+      pickedToast: "Picked {qty} × {part}.",
       shelfSet: "Picking from shelf {shelf}.",
       shelfBanner: "Scans pick from shelf {shelf}.",
       packages: "Picked packages",

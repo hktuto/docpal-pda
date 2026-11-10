@@ -18,6 +18,7 @@ import {
   acquireInternalTransferWorkLock,
   releaseInternalTransferWorkLock,
   scanInternalTransferItem,
+  scanInternalTransferLabel,
   removeInternalTransferPackage,
   reportInternalTransferIssue,
   finishInternalTransferOrder,
@@ -359,6 +360,81 @@ test("work lock: conditional claim, holder wins, confirm steals", async () => {
   await overrideInternalTransferStatus(client.db, { transferOrderId: transferId, status: "allocated", actorId: ACTOR });
   lock = await client.db.execute(sql`SELECT working_by FROM internal_transfer_orders WHERE id = ${transferId}`);
   assert.equal((lock[0] as any).working_by, null);
+});
+
+test("label scan: label qty IS the pick qty — labels accumulate, spanning split reservations", async () => {
+  const transferId = await insertTransfer("ITO-LABEL");
+  const itemId = await insertTransferItem(transferId, "RK73H1JTTD1002F", 500);
+  // two reservations: an older 200-qty lot (FIFO first) + LOT_18 for the rest
+  const oldLot = randomUUID();
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, org_id, sub_inventory_code, shelf_code, date_code, total_qty, allocated_qty, created_date, last_update_date)
+    VALUES (${oldLot}, 'RK73H1JTTD1002F', 2, 'STORE1', 'A0101', '0111', 200, 0, now(), now())`);
+  await allocateForInternalTransferOrder(client.db, transferId);
+  await overrideInternalTransferStatus(client.db, { transferOrderId: transferId, status: "allocated", actorId: ACTOR });
+
+  const rows = await client.db.execute(sql`
+    SELECT ita.qty, ita.inventory_lot_id AS lot FROM internal_transfer_allocations ita
+    WHERE ita.transfer_item_id = ${itemId} ORDER BY ita.created_date, ita.id`);
+  assert.deepEqual(
+    rows.map((r: any) => [r.lot === oldLot ? "old" : "l18", Number(r.qty)]),
+    [
+      ["old", 200],
+      ["l18", 300],
+    ]
+  );
+
+  // first 250 label spans BOTH rows (200 from the old lot + 50 from LOT_18)
+  const r1 = await scanInternalTransferLabel(client.db, itemId, { actorId: ACTOR, qty: 250 });
+  assert.equal(r1.packageIds.length, 2);
+  // second 250 label takes the remaining LOT_18 reservation
+  const r2 = await scanInternalTransferLabel(client.db, itemId, { actorId: ACTOR, qty: 250 });
+  assert.equal(r2.packageIds.length, 1);
+  const item = await client.db.execute(sql`SELECT picked_qty, status FROM internal_transfer_items WHERE id = ${itemId}`);
+  assert.deepEqual(
+    { picked: Number((item[0] as any).picked_qty), status: (item[0] as any).status },
+    { picked: 500, status: "picked" }
+  );
+  const lots = await client.db.execute(sql`
+    SELECT id, total_qty FROM inventory_lots WHERE id IN (${oldLot}, ${LOT_18})`);
+  const byLot = new Map(lots.map((r: any) => [r.id, Number(r.total_qty)]));
+  assert.equal(byLot.get(oldLot), 0);
+  assert.equal(byLot.get(LOT_18), 700);
+
+  // caps: label qty beyond the reservations (partial allocation)
+  const capId = await insertTransfer("ITO-LABEL-CAP");
+  const capItem = await insertTransferItem(capId, "RK73H1JTTD2202F", 800); // LOT_19 stocks only 500
+  await allocateForInternalTransferOrder(client.db, capId);
+  await overrideInternalTransferStatus(client.db, { transferOrderId: capId, status: "allocated", actorId: ACTOR });
+  await rejects(
+    () => scanInternalTransferLabel(client.db, capItem, { actorId: ACTOR, qty: 600 }),
+    "scanned_qty_exceeds_allocation"
+  );
+  // label qty beyond the item qty
+  await rejects(
+    () => scanInternalTransferLabel(client.db, capItem, { actorId: ACTOR, qty: 900 }),
+    "scan_qty_exceeds_required"
+  );
+
+  // shelve regression: the group dateCode is the STORED (canonical) code —
+  // re-canonicalizing it in the filter matched nothing
+  // (no_unshelved_packages_for_part, 2026-11-10 UAT). Two date-code groups
+  // shelve independently; the task completes at the last package.
+  await finishInternalTransferOrder(client.db, transferId, ACTOR);
+  const s1 = await shelveInternalTransferPackages(client.db, transferId, {
+    actorId: ACTOR,
+    partNo: "RK73H1JTTD1002F",
+    dateCode: "0326",
+    shelfCode: "A0101",
+  });
+  assert.deepEqual(s1, { shelved: 300, taskCompleted: false });
+  const s2 = await shelveInternalTransferPackages(client.db, transferId, {
+    actorId: ACTOR,
+    partNo: "RK73H1JTTD1002F",
+    dateCode: "0111",
+    shelfCode: "A0101",
+  });
+  assert.deepEqual(s2, { shelved: 200, taskCompleted: true });
 });
 
 test("PDA detail: items embed allocation guidance + packages", async () => {

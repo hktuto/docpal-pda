@@ -53,19 +53,26 @@ needs its own stock-vs-bookkeeping decision.`
    list, Finish button. Reuse the picking detail's composables
    (`useLabelScan`, `useHardwareScanner`, `useOrderScanNav` wedge plumbing)
    and the label-decode fallback path.
-3. **Pick scan** — `POST /internal-transfer-orders/:id/scan`:
-   - capped at the item's allocation rows exactly like picking (2026-10-20
-     rule): `reduceTransferAllocation` shrinks the
-     `internal_transfer_allocations` row in the same tx; no recompute is
-     scheduled;
-   - writes one `internal_transfer_packages` row (source_type / source_id /
-     qty + lot snapshot date_code / lot_code / coo / cow + scanned fields,
-     `shelf_code` NULL — the destination shelf is stamped at put-away);
-   - ledger mirrors the picking scan pair: `PICK` rows `reserved −qty` and
-     `on_hand −qty` on the `from_` lot, on-hand decremented in the same tx;
-   - `recomputeTransferItem` (picked from packages, `status = picked` at
-     cover), supplier outdated-scan check reused, `transaction_logs`
-     (`entityType: "internal_transfer_order"`), SSE.
+3. **Pick scan** — two contracts over one shared core:
+   - `POST /internal-transfer-items/:id/scan` (guidance-row tap, mirror of
+     picking's `POST /picking-items/:id/scan`): one named allocation row,
+     qty ≤ its remaining qty.
+   - `POST /internal-transfer-items/:id/scan-label` (item QR label): the
+     label's qty IS the pick qty — no prompt. Consumes the item's remaining
+     allocation rows FIFO, **spanning rows** when one label crosses two lots
+     (50000 picked as two 25000 labels over 30000 + 20000 reservations);
+     multiple labels accumulate package-by-package. 409
+     `scanned_qty_exceeds_allocation` when the reservations cannot cover the
+     label qty.
+   - shared mechanics: the allocation rows shrink in the same tx (no
+     recompute — the pick consumed exactly what was reserved), one
+     `internal_transfer_packages` row per source portion (source_type /
+     source_id / qty + lot snapshot date_code / lot_code / coo / cow,
+     `shelf_code` NULL — the destination shelf is stamped at put-away),
+     ledger mirrors the picking scan pair (`PICK` rows `reserved −qty` and
+     `on_hand −qty` on the `from_` lot, on-hand decremented in the same tx),
+     `recomputeTransferItem` (picked from packages, `status = picked` at
+     cover), `transaction_logs` (`entityType: "internal_transfer_order"`).
    - `pickingShelfScan` flow config applies to transfer picking with the
      same modes (`off` | `require-match` — the shelf-presence check
      pattern at `routes/picking.ts:152`).
@@ -118,6 +125,8 @@ lightweight shelving step on the transfer itself**:
   put-away mode: unshelved packages grouped by part + lot snapshot, a part
   scan selects what to shelve, a shelf scan commits.
 - `POST /internal-transfer-orders/:id/shelve {partNo, qty?, dateCode?, shelfCode}`
+  (`dateCode` = the detail payload's STORED canonical code — never
+  re-canonicalized)
   consumes unshelved packages FIFO, merges/creates the lot at
   (to_org, to_sub, **shelfCode**) with the package's snapshot — the
   re-stamping "shelf → shelf" move — writes `PUT_AWAY on_hand +qty` ledger
@@ -138,6 +147,7 @@ or an operator shelves it scan-by-scan.
 | `GET /internal-transfer-orders` / `/:id` | PDA queue (pickable + put-away-pending) + detail (allocations as pick guidance, packages) |
 | `POST`/`DELETE /internal-transfer-orders/:id/work-lock` | 10-min work lock (mirror picking) |
 | `POST /internal-transfer-items/:id/scan` | pick scan (allocation-capped, package + PICK ledger pair) |
+| `POST /internal-transfer-items/:id/scan-label` | item-QR-label scan — label qty is the pick qty, spans allocation rows FIFO |
 | `DELETE /internal-transfer-packages/:packageId` | un-pick one package |
 | `POST /internal-transfer-orders/:id/report-issue` | shortage report (issue_* columns) |
 | `POST /internal-transfer-orders/:id/finish` | branch: materialize at `to_` + delegated re-allocate, or put-away task |

@@ -207,6 +207,13 @@ export interface WarehouseService {
     itemId: string,
     input: { allocationId: string; qty: number; dateCode?: string | null; lotCode?: string | null; coo?: string | null; cow?: string | null; shelfCode?: string | null; boxId?: string | null }
   ): Promise<{ packageIds: string[] }>;
+  /** Item-QR-label scan — the label's qty IS the pick qty (no prompt);
+   *  consumes the item's remaining reservations FIFO, spanning rows when
+   *  one label crosses two lots. */
+  scanInternalTransferLabel(
+    itemId: string,
+    input: { qty: number; dateCode?: string | null; lotCode?: string | null; coo?: string | null; cow?: string | null; shelfCode?: string | null; boxId?: string | null }
+  ): Promise<{ packageIds: string[] }>;
   removeInternalTransferPackage(packageId: string): void;
   reportInternalTransferIssue(id: string, input: { reason: string; qty?: number; note?: string | null }): void;
   finishInternalTransferOrder(id: string): Promise<{ id: string; status: string; allocation: { fullyAllocated: number; demands: number } | null }>;

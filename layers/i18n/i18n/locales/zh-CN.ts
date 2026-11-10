@@ -2912,6 +2912,7 @@ export default {
       pickQtyInvalid: "请输入不大于 {max} 的整数",
       noMatch: "此单没有匹配的料号。",
       noShelfMatch: "未识别的货架。",
+      pickedToast: "已取货 {qty} × {part}。",
       shelfSet: "从货架 {shelf} 取货。",
       shelfBanner: "扫描将从货架 {shelf} 取货。",
       packages: "已取包裹",

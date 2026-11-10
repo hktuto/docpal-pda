@@ -285,48 +285,270 @@ interface LotSourceRow {
   cow: string | null;
 }
 
-function scannedLocationMatches(input: ScanInternalTransferInput, lot: { shelfCode: string | null; boxId: string | null }): boolean {
+function scannedLocationMatches(input: { shelfCode?: string | null; boxId?: string | null }, lot: { shelfCode: string | null; boxId: string | null }): boolean {
   if (input.boxId) return lot.boxId === input.boxId;
   if (input.shelfCode) return lot.shelfCode === input.shelfCode;
   return false;
 }
 
-/** Mirror of scanPickingItem minus box/verify/outdated-warnings: consume the
- *  allocation's source into internal_transfer_packages + a PICK ledger pair,
- *  shrink the allocation (no recompute — the pick consumed exactly what was
- *  reserved). Caps: qty ≤ allocation.qty (409 scanned_qty_exceeds_allocation),
- *  Σ packages ≤ item qty (409 scan_qty_exceeds_required). */
+interface ScanAllocRow {
+  id: string;
+  transferItemId: string;
+  qty: number;
+  inventoryLotId: string | null;
+  receivingInvoiceItemId: string | null;
+  receivingOrderId: string | null;
+}
+
+async function loadScanItem(
+  tx: DbOrTx,
+  transferItemId: string
+): Promise<{ id: string; transferOrderId: string; partNo: string; wclItemNo: string | null; qty: number; packagedQty: number }> {
+  const item = await queryGet<{
+    id: string;
+    transferOrderId: string;
+    partNo: string;
+    wclItemNo: string | null;
+    qty: number;
+    packagedQty: number;
+  }>(
+    tx,
+    sql`SELECT iti.id, iti.transfer_order_id AS "transferOrderId", iti.part_no AS "partNo",
+               iti.wcl_item_no AS "wclItemNo", iti.qty,
+               COALESCE((SELECT SUM(itp.qty)::int FROM internal_transfer_packages itp
+                         WHERE itp.transfer_item_id = iti.id), 0) AS "packagedQty"
+        FROM internal_transfer_items iti WHERE iti.id = ${transferItemId}`
+  );
+  if (!item) throw new HTTPException(404, { message: "transfer_item_not_found" });
+  return item;
+}
+
+/** Consume `take` qty from ONE allocation row's source (lot / invoice item /
+ *  order-level dock FIFO) into scan portions. Shared by the guidance-row
+ *  scan and the label scan. */
+async function consumeAllocationRowSource(
+  tx: DbOrTx,
+  item: { partNo: string },
+  order: TransferOrderState,
+  alloc: Pick<ScanAllocRow, "inventoryLotId" | "receivingInvoiceItemId" | "receivingOrderId">,
+  take: number,
+  input: { shelfCode?: string | null; boxId?: string | null }
+): Promise<ScanPortion[]> {
+  const shelfScanMode = pickingShelfScan();
+  const portions: ScanPortion[] = [];
+  if (alloc.inventoryLotId) {
+    let lot = await queryGet<LotSourceRow>(
+      tx,
+      sql`SELECT id, total_qty AS "totalQty", shelf_code AS "shelfCode", box_id AS "boxId",
+                 date_code AS "dateCode", lot_code AS "lotCode", coo, cow
+          FROM inventory_lots WHERE id = ${alloc.inventoryLotId}`
+    );
+    if (!lot) throw new HTTPException(404, { message: "inventory_lot_not_found" });
+    if (shelfScanMode !== "off" && !input.shelfCode && !input.boxId) {
+      throw new HTTPException(409, { message: "shelf_scan_required" });
+    }
+    if (shelfScanMode !== "off" && !scannedLocationMatches(input, lot)) {
+      // Physical truth wins: the operator scanned a different shelf —
+      // resolve the part's lot there (org/sub from the transfer's from_
+      // pair, the source partition).
+      lot = await queryGet<LotSourceRow>(
+        tx,
+        sql`SELECT il.id, il.total_qty AS "totalQty", il.shelf_code AS "shelfCode", il.box_id AS "boxId",
+                   il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow
+            FROM inventory_lots il
+            WHERE (il.part_no = ${item.partNo} OR il.wcl_item_no = ${item.partNo})
+              AND il.shelf_code = ${input.shelfCode ?? null}
+              ${input.boxId ? sql`AND il.box_id = ${input.boxId}` : sql``}
+              AND (${order.fromOrgId}::int IS NULL OR il.org_id = ${order.fromOrgId})
+              AND il.total_qty - il.allocated_qty >= ${take}
+            ORDER BY il.date_code ASC NULLS LAST, il.id
+            LIMIT 1`
+      );
+      if (!lot) throw new HTTPException(409, { message: "no_stock_at_scanned_shelf" });
+    }
+    if (lot.totalQty < take) throw new HTTPException(409, { message: "insufficient_lot_qty" });
+    // Conditional decrement (audit 2026-11-03 #2): 0 rows = a concurrent
+    // scan drained the lot between the read and this UPDATE.
+    const lotUpd = await queryRun(
+      tx,
+      sql`UPDATE inventory_lots SET total_qty = total_qty - ${take}
+          WHERE id = ${lot.id} AND total_qty >= ${take}`
+    );
+    if (lotUpd.changes === 0) throw new HTTPException(409, { message: "insufficient_lot_qty" });
+    portions.push({
+      sourceType: "inventory_lot",
+      sourceId: lot.id,
+      qty: take,
+      dateCode: lot.dateCode ?? null,
+      lotCode: lot.lotCode ?? null,
+      coo: lot.coo ?? null,
+      cow: lot.cow ?? null,
+      inventoryLotId: lot.id,
+      shelfCode: lot.shelfCode ?? null,
+      boxId: lot.boxId ?? null,
+      receivingInvoiceItemId: null,
+    });
+  } else if (alloc.receivingInvoiceItemId) {
+    const rii = await queryGet<{ id: string; boxId: string | null; dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null }>(
+      tx,
+      sql`SELECT id, ctn_no AS "boxId", date_code AS "dateCode", lot_code AS "lotCode", coo, cow
+          FROM receiving_invoice_items WHERE id = ${alloc.receivingInvoiceItemId}`
+    );
+    if (!rii) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
+    await queryRun(
+      tx,
+      sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty + ${take} WHERE id = ${rii.id}`
+    );
+    portions.push({
+      sourceType: "receiving_invoice_item",
+      sourceId: rii.id,
+      qty: take,
+      dateCode: rii.dateCode ?? null,
+      lotCode: rii.lotCode ?? null,
+      coo: rii.coo ?? null,
+      cow: rii.cow ?? null,
+      inventoryLotId: null,
+      shelfCode: null,
+      boxId: rii.boxId ?? null,
+      receivingInvoiceItemId: rii.id,
+    });
+  } else if (alloc.receivingOrderId) {
+    // Order-level dock source: distribute FIFO across the receiving
+    // order's lines for the part (mirror of scanPickingItem).
+    const lines = await queryAll<{ id: string; boxId: string | null; dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null; remaining: number }>(
+      tx,
+      sql`SELECT rii.id, rii.ctn_no AS "boxId", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
+                 rii.coo, rii.cow,
+                 (rii.received_qty - rii.picked_qty - rii.put_away_qty)::int AS "remaining"
+          FROM receiving_invoice_items rii
+          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          WHERE ri.receiving_order_id = ${alloc.receivingOrderId}
+            AND (rii.part_no = ${item.partNo} OR rii.wcl_item_no = ${item.partNo})
+            AND (rii.received_qty - rii.picked_qty - rii.put_away_qty) > 0
+          ORDER BY rii.date_code ASC NULLS LAST, rii.id`
+    );
+    let left = take;
+    for (const line of lines) {
+      if (left <= 0) break;
+      const lineTake = Math.min(line.remaining, left);
+      await queryRun(
+        tx,
+        sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty + ${lineTake} WHERE id = ${line.id}`
+      );
+      portions.push({
+        sourceType: "receiving_order",
+        sourceId: alloc.receivingOrderId,
+        qty: lineTake,
+        dateCode: line.dateCode ?? null,
+        lotCode: line.lotCode ?? null,
+        coo: line.coo ?? null,
+        cow: line.cow ?? null,
+        inventoryLotId: null,
+        shelfCode: null,
+        boxId: line.boxId ?? null,
+        receivingInvoiceItemId: line.id,
+      });
+      left -= lineTake;
+    }
+    if (left > 0) throw new HTTPException(409, { message: "receiving_source_qty_not_available" });
+  } else {
+    throw new HTTPException(409, { message: "allocation_has_no_source" });
+  }
+  return portions;
+}
+
+/** Packages + PICK ledger pair + status transition + audit + recomputes —
+ *  the shared tail of both scan entry points. */
+async function commitTransferScan(
+  tx: DbOrTx,
+  item: { id: string; transferOrderId: string; partNo: string },
+  order: TransferOrderState,
+  portions: ScanPortion[],
+  input: { actorId: string; dateCode?: string | null; lotCode?: string | null; coo?: string | null; cow?: string | null },
+  allocationIds: string[],
+  scanQty: number
+): Promise<{ packageIds: string[] }> {
+  const at = now();
+  const packageIds: string[] = [];
+  const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
+  for (const p of portions) {
+    const pid = newId();
+    const dateCode = p.dateCode ?? (input.dateCode ? toCanonicalDateCode(input.dateCode, dateCodeFormat()) : null);
+    const lotCode = p.lotCode ?? input.lotCode ?? null;
+    const coo = p.coo ?? input.coo ?? null;
+    const cow = p.cow ?? input.cow ?? null;
+    await queryRun(
+      tx,
+      sql`INSERT INTO internal_transfer_packages (id, transfer_item_id, transfer_order_id, source_type, source_id, qty,
+                                                  date_code, lot_code, coo, cow, created_date, last_update_date)
+          VALUES (${pid}, ${item.id}, ${item.transferOrderId}, ${p.sourceType}, ${p.sourceId}, ${p.qty},
+                  ${dateCode}, ${lotCode}, ${coo}, ${cow}, ${at}, ${at})`
+    );
+    packageIds.push(pid);
+    const base = {
+      inventoryLotId: p.inventoryLotId,
+      partNo: item.partNo,
+      shelfCode: p.shelfCode,
+      boxId: p.boxId,
+      txnType: "PICK",
+      dateCode,
+      lotCode,
+      coo,
+      cow,
+      referenceType: "internal_transfer_item",
+      referenceId: item.id,
+      receivingInvoiceItemId: p.receivingInvoiceItemId,
+      actorId: input.actorId,
+      txnReason: "internal transfer: pick",
+      txnAt: at,
+    };
+    txnRows.push(
+      { ...base, id: newId(), qtyType: "reserved", qtyDelta: -p.qty },
+      { ...base, id: newId(), qtyType: "on_hand", qtyDelta: -p.qty }
+    );
+  }
+  await tx.insert(inventoryTransactions).values(txnRows);
+
+  if (order.status === "allocated" || order.status === "issue") {
+    await queryRun(
+      tx,
+      sql`UPDATE internal_transfer_orders SET status = 'picking', last_update_date = ${at} WHERE id = ${order.id}`
+    );
+    await logTransition(tx, {
+      entityType: "internal_transfer_order",
+      entityId: order.id,
+      fromState: order.status,
+      toState: "picking",
+      actorId: input.actorId,
+    });
+  }
+  await logTransition(tx, {
+    entityType: "internal_transfer_item",
+    entityId: item.id,
+    fromState: "picking",
+    toState: "scanned",
+    actorId: input.actorId,
+    metadata: { qty: scanQty, allocations: allocationIds, partNo: item.partNo },
+  });
+  await recomputeTransferItem(tx, item.id);
+  return { packageIds };
+}
+
+/** Guidance-row scan (the tap/prompt path, mirror of scanPickingItem minus
+ *  box/verify): consume exactly `qty` from ONE named allocation row into
+ *  internal_transfer_packages + a PICK ledger pair, shrink the row in the
+ *  same tx — no recompute. Caps: qty ≤ allocation.qty (409
+ *  scanned_qty_exceeds_allocation), Σ packages ≤ item qty (409
+ *  scan_qty_exceeds_required). */
 export async function scanInternalTransferItem(
   db: AppDb,
   transferItemId: string,
   input: ScanInternalTransferInput
 ): Promise<{ packageIds: string[] }> {
   return db.transaction(async (tx) => {
-    const item = await queryGet<{
-      id: string;
-      transferOrderId: string;
-      partNo: string;
-      wclItemNo: string | null;
-      qty: number;
-      packagedQty: number;
-    }>(
-      tx,
-      sql`SELECT iti.id, iti.transfer_order_id AS "transferOrderId", iti.part_no AS "partNo",
-                 iti.wcl_item_no AS "wclItemNo", iti.qty,
-                 COALESCE((SELECT SUM(itp.qty)::int FROM internal_transfer_packages itp
-                           WHERE itp.transfer_item_id = iti.id), 0) AS "packagedQty"
-          FROM internal_transfer_items iti WHERE iti.id = ${transferItemId}`
-    );
-    if (!item) throw new HTTPException(404, { message: "transfer_item_not_found" });
+    const item = await loadScanItem(tx, transferItemId);
     await assertActor(tx, input.actorId);
-    const alloc = await queryGet<{
-      id: string;
-      transferItemId: string;
-      qty: number;
-      inventoryLotId: string | null;
-      receivingInvoiceItemId: string | null;
-      receivingOrderId: string | null;
-    }>(
+    const alloc = await queryGet<ScanAllocRow>(
       tx,
       sql`SELECT ita.id, ita.transfer_item_id AS "transferItemId", ita.qty,
                  ita.inventory_lot_id AS "inventoryLotId",
@@ -347,126 +569,7 @@ export async function scanInternalTransferItem(
       throw new HTTPException(409, { message: "scan_qty_exceeds_required" });
     }
 
-    const shelfScanMode = pickingShelfScan();
-    const portions: ScanPortion[] = [];
-    if (alloc.inventoryLotId) {
-      let lot = await queryGet<LotSourceRow>(
-        tx,
-        sql`SELECT id, total_qty AS "totalQty", shelf_code AS "shelfCode", box_id AS "boxId",
-                   date_code AS "dateCode", lot_code AS "lotCode", coo, cow
-            FROM inventory_lots WHERE id = ${alloc.inventoryLotId}`
-      );
-      if (!lot) throw new HTTPException(404, { message: "inventory_lot_not_found" });
-      if (shelfScanMode !== "off" && !input.shelfCode && !input.boxId) {
-        throw new HTTPException(409, { message: "shelf_scan_required" });
-      }
-      if (shelfScanMode !== "off" && !scannedLocationMatches(input, lot)) {
-        // Physical truth wins: the operator scanned a different shelf —
-        // resolve the part's lot there (org/sub from the transfer's from_
-        // pair, the source partition).
-        lot = await queryGet<LotSourceRow>(
-          tx,
-          sql`SELECT il.id, il.total_qty AS "totalQty", il.shelf_code AS "shelfCode", il.box_id AS "boxId",
-                     il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow
-              FROM inventory_lots il
-              WHERE (il.part_no = ${item.partNo} OR il.wcl_item_no = ${item.partNo})
-                AND il.shelf_code = ${input.shelfCode ?? null}
-                ${input.boxId ? sql`AND il.box_id = ${input.boxId}` : sql``}
-                AND (${order.fromOrgId}::int IS NULL OR il.org_id = ${order.fromOrgId})
-                AND il.total_qty - il.allocated_qty >= ${input.qty!}
-              ORDER BY il.date_code ASC NULLS LAST, il.id
-              LIMIT 1`
-        );
-        if (!lot) throw new HTTPException(409, { message: "no_stock_at_scanned_shelf" });
-      }
-      if (lot.totalQty < input.qty!) throw new HTTPException(409, { message: "insufficient_lot_qty" });
-      // Conditional decrement (audit 2026-11-03 #2): 0 rows = a concurrent
-      // scan drained the lot between the read and this UPDATE.
-      const lotUpd = await queryRun(
-        tx,
-        sql`UPDATE inventory_lots SET total_qty = total_qty - ${input.qty!}
-            WHERE id = ${lot.id} AND total_qty >= ${input.qty!}`
-      );
-      if (lotUpd.changes === 0) throw new HTTPException(409, { message: "insufficient_lot_qty" });
-      portions.push({
-        sourceType: "inventory_lot",
-        sourceId: lot.id,
-        qty: input.qty!,
-        dateCode: lot.dateCode ?? null,
-        lotCode: lot.lotCode ?? null,
-        coo: lot.coo ?? null,
-        cow: lot.cow ?? null,
-        inventoryLotId: lot.id,
-        shelfCode: lot.shelfCode ?? null,
-        boxId: lot.boxId ?? null,
-        receivingInvoiceItemId: null,
-      });
-    } else if (alloc.receivingInvoiceItemId) {
-      const rii = await queryGet<{ id: string; boxId: string | null; dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null }>(
-        tx,
-        sql`SELECT id, ctn_no AS "boxId", date_code AS "dateCode", lot_code AS "lotCode", coo, cow
-            FROM receiving_invoice_items WHERE id = ${alloc.receivingInvoiceItemId}`
-      );
-      if (!rii) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
-      await queryRun(
-        tx,
-        sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty + ${input.qty!} WHERE id = ${rii.id}`
-      );
-      portions.push({
-        sourceType: "receiving_invoice_item",
-        sourceId: rii.id,
-        qty: input.qty!,
-        dateCode: rii.dateCode ?? null,
-        lotCode: rii.lotCode ?? null,
-        coo: rii.coo ?? null,
-        cow: rii.cow ?? null,
-        inventoryLotId: null,
-        shelfCode: null,
-        boxId: rii.boxId ?? null,
-        receivingInvoiceItemId: rii.id,
-      });
-    } else if (alloc.receivingOrderId) {
-      // Order-level dock source: distribute FIFO across the receiving
-      // order's lines for the part (mirror of scanPickingItem).
-      const lines = await queryAll<{ id: string; boxId: string | null; dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null; remaining: number }>(
-        tx,
-        sql`SELECT rii.id, rii.ctn_no AS "boxId", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
-                   rii.coo, rii.cow,
-                   (rii.received_qty - rii.picked_qty - rii.put_away_qty)::int AS "remaining"
-            FROM receiving_invoice_items rii
-            JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-            WHERE ri.receiving_order_id = ${alloc.receivingOrderId}
-              AND (rii.part_no = ${item.partNo} OR rii.wcl_item_no = ${item.partNo})
-              AND (rii.received_qty - rii.picked_qty - rii.put_away_qty) > 0
-            ORDER BY rii.date_code ASC NULLS LAST, rii.id`
-      );
-      let left = input.qty!;
-      for (const line of lines) {
-        if (left <= 0) break;
-        const take = Math.min(line.remaining, left);
-        await queryRun(
-          tx,
-          sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty + ${take} WHERE id = ${line.id}`
-        );
-        portions.push({
-          sourceType: "receiving_order",
-          sourceId: alloc.receivingOrderId,
-          qty: take,
-          dateCode: line.dateCode ?? null,
-          lotCode: line.lotCode ?? null,
-          coo: line.coo ?? null,
-          cow: line.cow ?? null,
-          inventoryLotId: null,
-          shelfCode: null,
-          boxId: line.boxId ?? null,
-          receivingInvoiceItemId: line.id,
-        });
-        left -= take;
-      }
-      if (left > 0) throw new HTTPException(409, { message: "receiving_source_qty_not_available" });
-    } else {
-      throw new HTTPException(409, { message: "allocation_has_no_source" });
-    }
+    const portions = await consumeAllocationRowSource(tx, item, order, alloc, input.qty!, input);
 
     // Shrink the allocation (conditional — same audit #2 rationale).
     const shrink = await queryRun(
@@ -479,70 +582,79 @@ export async function scanInternalTransferItem(
     // recompute) — refresh it for the shrunk reservation.
     if (alloc.inventoryLotId) await recomputeLot(tx, alloc.inventoryLotId);
 
-    const at = now();
-    const packageIds: string[] = [];
-    const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
-    for (const p of portions) {
-      const pid = newId();
-      const dateCode = p.dateCode ?? (input.dateCode ? toCanonicalDateCode(input.dateCode, dateCodeFormat()) : null);
-      const lotCode = p.lotCode ?? input.lotCode ?? null;
-      const coo = p.coo ?? input.coo ?? null;
-      const cow = p.cow ?? input.cow ?? null;
-      await queryRun(
-        tx,
-        sql`INSERT INTO internal_transfer_packages (id, transfer_item_id, transfer_order_id, source_type, source_id, qty,
-                                                    date_code, lot_code, coo, cow, created_date, last_update_date)
-            VALUES (${pid}, ${item.id}, ${item.transferOrderId}, ${p.sourceType}, ${p.sourceId}, ${p.qty},
-                    ${dateCode}, ${lotCode}, ${coo}, ${cow}, ${at}, ${at})`
-      );
-      packageIds.push(pid);
-      const base = {
-        inventoryLotId: p.inventoryLotId,
-        partNo: item.partNo,
-        shelfCode: p.shelfCode,
-        boxId: p.boxId,
-        txnType: "PICK",
-        dateCode,
-        lotCode,
-        coo,
-        cow,
-        referenceType: "internal_transfer_item",
-        referenceId: item.id,
-        receivingInvoiceItemId: p.receivingInvoiceItemId,
-        actorId: input.actorId,
-        txnReason: "internal transfer: pick",
-        txnAt: at,
-      };
-      txnRows.push(
-        { ...base, id: newId(), qtyType: "reserved", qtyDelta: -p.qty },
-        { ...base, id: newId(), qtyType: "on_hand", qtyDelta: -p.qty }
-      );
-    }
-    await tx.insert(inventoryTransactions).values(txnRows);
+    return commitTransferScan(tx, item, order, portions, input, [alloc.id], input.qty!);
+  });
+}
 
-    if (order.status === "allocated" || order.status === "issue") {
-      await queryRun(
-        tx,
-        sql`UPDATE internal_transfer_orders SET status = 'picking', last_update_date = ${at} WHERE id = ${order.id}`
-      );
-      await logTransition(tx, {
-        entityType: "internal_transfer_order",
-        entityId: order.id,
-        fromState: order.status,
-        toState: "picking",
-        actorId: input.actorId,
-      });
+export interface ScanInternalTransferLabelInput {
+  actorId: string;
+  qty: number;
+  dateCode?: string | null;
+  lotCode?: string | null;
+  coo?: string | null;
+  cow?: string | null;
+  shelfCode?: string | null;
+  boxId?: string | null;
+}
+
+/**
+ * Item-QR-label scan — the label's qty IS the pick qty (no prompt): consume
+ * the item's remaining allocation rows FIFO, SPANNING rows when one label
+ * crosses two lots (e.g. 50000 across 30000 + 20000 reservations, picked as
+ * two 25000 labels). One package per source portion. Caps: Σ remaining
+ * reservations < qty → 409 scanned_qty_exceeds_allocation; Σ packages +
+ * qty > item qty → 409 scan_qty_exceeds_required.
+ */
+export async function scanInternalTransferLabel(
+  db: AppDb,
+  transferItemId: string,
+  input: ScanInternalTransferLabelInput
+): Promise<{ packageIds: string[] }> {
+  return db.transaction(async (tx) => {
+    const item = await loadScanItem(tx, transferItemId);
+    await assertActor(tx, input.actorId);
+    if (!Number.isInteger(input.qty) || input.qty <= 0) {
+      throw new HTTPException(400, { message: "qty_must_be_positive_integer" });
     }
-    await logTransition(tx, {
-      entityType: "internal_transfer_item",
-      entityId: item.id,
-      fromState: "picking",
-      toState: "scanned",
-      actorId: input.actorId,
-      metadata: { qty: input.qty, allocation: alloc.id, partNo: item.partNo },
-    });
-    await recomputeTransferItem(tx, item.id);
-    return { packageIds };
+    const order = await loadTransferForWrite(tx, item.transferOrderId);
+    assertTransferWritable(order);
+    if (item.packagedQty + input.qty > item.qty) {
+      throw new HTTPException(409, { message: "scan_qty_exceeds_required" });
+    }
+    const rows = await queryAll<ScanAllocRow>(
+      tx,
+      sql`SELECT ita.id, ita.transfer_item_id AS "transferItemId", ita.qty,
+                 ita.inventory_lot_id AS "inventoryLotId",
+                 ita.receiving_invoice_item_id AS "receivingInvoiceItemId",
+                 ita.receiving_order_id AS "receivingOrderId"
+          FROM internal_transfer_allocations ita
+          WHERE ita.transfer_item_id = ${item.id} AND ita.qty > 0
+          ORDER BY ita.created_date, ita.id`
+    );
+    const reserved = rows.reduce((s, r) => s + r.qty, 0);
+    if (reserved < input.qty) throw new HTTPException(409, { message: "scanned_qty_exceeds_allocation" });
+
+    const portions: ScanPortion[] = [];
+    const allocationIds: string[] = [];
+    const lotIds = new Set<string>();
+    let left = input.qty;
+    for (const row of rows) {
+      if (left <= 0) break;
+      const take = Math.min(row.qty, left);
+      portions.push(...(await consumeAllocationRowSource(tx, item, order, row, take, input)));
+      const shrink = await queryRun(
+        tx,
+        sql`UPDATE internal_transfer_allocations SET qty = qty - ${take}, last_update_date = ${now()}
+            WHERE id = ${row.id} AND qty >= ${take}`
+      );
+      if (shrink.changes === 0) throw new HTTPException(409, { message: "scanned_qty_exceeds_allocation" });
+      allocationIds.push(row.id);
+      if (row.inventoryLotId) lotIds.add(row.inventoryLotId);
+      left -= take;
+    }
+    for (const lotId of lotIds) await recomputeLot(tx, lotId);
+
+    return commitTransferScan(tx, item, order, portions, input, allocationIds, input.qty);
   });
 }
 
@@ -961,7 +1073,13 @@ export async function shelveInternalTransferPackages(
           WHERE itp.transfer_order_id = ${order.id}
             AND itp.shelf_code IS NULL
             AND (iti.part_no = ${input.partNo} OR iti.wcl_item_no = ${input.partNo})
-            ${input.dateCode ? sql`AND itp.date_code = ${toCanonicalDateCode(input.dateCode, dateCodeFormat())}` : sql``}
+            ${input.dateCode
+              ? // Exact match: the caller passes the detail payload's stored
+                // date_code (already canonical) — re-canonicalizing here
+                // double-converts and matches nothing (the
+                // no_unshelved_packages_for_part bug).
+                sql`AND itp.date_code = ${input.dateCode}`
+              : sql``}
           ORDER BY itp.created_date, itp.id`
     );
     if (candidates.length === 0) throw new HTTPException(409, { message: "no_unshelved_packages_for_part" });
