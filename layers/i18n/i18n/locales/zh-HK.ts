@@ -1260,6 +1260,7 @@ export default {
     time: "時間",
     actor: "操作者",
     type: "類型",
+    shelfBox: "貨架 / 箱",
     target: "去向",
     reason: "原因",
     system: "系統",

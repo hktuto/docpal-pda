@@ -1261,6 +1261,7 @@ export default {
     time: "Time",
     actor: "Actor",
     type: "Type",
+    shelfBox: "Shelf / Box",
     target: "Target",
     reason: "Reason",
     system: "System",

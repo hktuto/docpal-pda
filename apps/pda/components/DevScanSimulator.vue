@@ -1,5 +1,5 @@
 <template>
-  <div class="dev-scan-sim">
+  <div class="dev-scan-sim" v-show="false">
     <button type="button" class="dev-scan-sim__toggle" @click="open = !open">
       DEV SCAN
     </button>
