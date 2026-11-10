@@ -1,0 +1,14 @@
+{
+ "id": "BUG-054",
+ "dateFound": "2026-11-10",
+ "functionId": "PDA-008",
+ "description": "CN receiving scan flag dialog crashes when a shortfall quantity is entered: `flagQty.value.trim()` throws because Vue's v-model on `<input type=\"number\">` auto-casts the value to a number (isNumberInput in vModelText), so `.trim()` is not a function and the flag cannot be submitted",
+ "reproSteps": "CN receiving scan → open a group's 標記 dialog → enter a number in the 短缺數量 field → submit → TypeError: flagQty.value.trim is not a function (apps/pda/pages/receiving-cn-scan/[id].vue:204)",
+ "severity": "Major",
+ "status": "Open",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Found while capturing user-guide screenshots (docs/user-guide/capture-runbook.md). Fix: coerce with String(flagQty.value).trim() or drop .trim() and validate Number(flagQty.value) directly"
+}

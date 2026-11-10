@@ -1,0 +1,14 @@
+{
+ "id": "BUG-055",
+ "dateFound": "2026-11-10",
+ "functionId": "ADM-031",
+ "description": "Admin 收貨問題 (receiving issues) page never shows CN receiving mismatches: listReceivingMismatches (apps/backend/src/db/receiving.ts:774) only reads receiving_invoice_items (HK flow); CN flow flags live in receiving_invoice_items_cn, so CN operators' 標記 records are invisible to admins and stay open forever",
+ "reproSteps": "PDA CN receiving scan → flag a group (missing/damaged/wrong_part) → open Admin → 問題 → 收貨問題 → the CN mismatch does not appear (page shows 暫無未處理的收貨差異 even with 10 open CN mismatch rows)",
+ "severity": "Major",
+ "status": "Open",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Found while capturing user-guide screenshots (docs/user-guide/capture-runbook.md). Fix: union receiving_invoice_items_cn into the admin mismatch list (+ confirm/cancel endpoints), mirroring the CN trio pattern used elsewhere"
+}
