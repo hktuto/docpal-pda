@@ -102,11 +102,13 @@ async function reload() {
 }
 
 function isOwnRow(r: PartAllocationRow): boolean {
-  return !!props.currentOrderId && r.pickingOrderId === props.currentOrderId;
+  // Transfer rows are never "own" — the host dialogs are picking-scoped.
+  return r.demandType === "picking" && !!props.currentOrderId && r.pickingOrderId === props.currentOrderId;
 }
 
 function canTransfer(r: PartAllocationRow): boolean {
-  return !!props.transferTarget && !isOwnRow(r) && !r.locked;
+  // Cross-order transfer is picking-only (no cross-table move).
+  return r.demandType === "picking" && !!props.transferTarget && !isOwnRow(r) && !r.locked;
 }
 
 function canRemove(r: PartAllocationRow): boolean {
@@ -169,7 +171,11 @@ async function remove(r: PartAllocationRow) {
   busy.value = r.allocationId;
   error.value = "";
   try {
-    await flow.removePickingAllocation(r.pickingOrderId, r.pickingItemId, r.allocationId);
+    if (r.demandType === "internal-transfer") {
+      await flow.removeInternalTransferAllocation(r.transferOrderId!, r.transferItemId!, r.allocationId);
+    } else {
+      await flow.removePickingAllocation(r.pickingOrderId!, r.pickingItemId!, r.allocationId);
+    }
     await reload();
     emit("changed");
   } catch (e: any) {
@@ -197,10 +203,16 @@ async function remove(r: PartAllocationRow) {
           <tbody>
             <tr v-for="r in filteredRows" :key="r.allocationId">
               <td class="ab-order">
-                <NuxtLink :to="`/picking-orders/${r.pickingOrderId}`" class="ab-link">{{ r.orderNo }}</NuxtLink>
-                <span v-if="isOwnRow(r)" class="muted"> ({{ $t("admin.pages.pickingOrders.allocBreakdownThisOrder") }})</span>
+                <template v-if="r.demandType === 'internal-transfer'">
+                  <NuxtLink :to="`/internal-transfer-orders/${r.transferOrderId}`" class="ab-link">{{ r.orderNo }}</NuxtLink>
+                  <span class="muted" :title="$t('admin.pages.pickingOrders.allocBreakdownTransferOrder')">IT</span>
+                </template>
+                <template v-else>
+                  <NuxtLink :to="`/picking-orders/${r.pickingOrderId}`" class="ab-link">{{ r.orderNo }}</NuxtLink>
+                  <span v-if="isOwnRow(r)" class="muted"> ({{ $t("admin.pages.pickingOrders.allocBreakdownThisOrder") }})</span>
+                </template>
               </td>
-              <td>{{ $t(`status.picking.${r.orderStatus}`) }}</td>
+              <td>{{ $t(r.demandType === "internal-transfer" ? `internalTransfer.status.${r.orderStatus}` : `status.picking.${r.orderStatus}`) }}</td>
               <td class="num">{{ r.qty }}</td>
               <td class="ab-flags">
                 <span v-if="r.outdated" style="cursor: help;" :title="$t('stockAgeWarning.tooltip')">⚠️</span>

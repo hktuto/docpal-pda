@@ -208,6 +208,8 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | New VMI Excel upload (decode `VMI_Template_*.xlsx` in the browser — one order per VMI Ref.No, type `vmi`; gate: parts-master Item + Sub Inventory→orgs with per-row `org · SUBINV` dropdowns + apply-to-all picker; `POST /admin/picking-orders/vmi-create` batch tx + per-order allocate, lands back on the list; spec `docs/superpowers/specs/2026-11-09-vmi-picking-excel-upload-design.md`) | `/picking-orders/vmi` | `apps/admin/pages/picking-orders/vmi.vue`, `apps/admin/utils/vmiExcel.ts` (+ `apps/admin/tests/vmiExcel.test.ts`, fixture `supporting_doc/vmi/`), backend `apps/backend/src/routes/admin/vmiPickingOrder.ts` |
 | Customer profiles master (accounts + profile-code link manager; profile CrudTable with `customers` multiSelect) | `/customer-profiles`, `/customer-profiles/:partyName`, `/customer-profile-list` | `apps/admin/pages/customer-profiles/index.vue`, `apps/admin/pages/customer-profiles/[partyName].vue`, `apps/admin/pages/customer-profile-list.vue`, `entities.customerProfiles` in `apps/admin/utils/entities.ts`, backend `apps/backend/src/routes/admin/customerProfiles.ts` (`GET|POST|PATCH|DELETE /admin/customer-profiles(/:code)` + `PUT .../:code/customers`) |
 
+| Internal transfer orders (server-paged list + detail with Re-allocate, delegated picking order link, allocation add/remove + availability dialog; 🔗 linked marker) | `/internal-transfer-orders` | `apps/admin/pages/internal-transfer-orders/index.vue`, `apps/admin/pages/internal-transfer-orders/[id].vue`, `apps/admin/components/internal-transfer-orders/TransferAllocateModal.vue`, `flow.*InternalTransfer*` in `apps/admin/utils/flowApi.ts` |
+
 ## Warehouse backend (apps/backend)
 
 Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
@@ -288,6 +290,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Stock search | `apps/backend/src/db/stocksearch.ts` |
 | Outdated date-code scan warnings (check / record / resolve / list; canonical YYWW rank helpers) | `apps/backend/src/db/outdated.ts` (+ `apps/backend/src/db/dateCode.ts`) |
 | Allocation engine (`allocateAll`, `allocateForReceivingOrder`, `allocateForPickingOrder`) | `apps/backend/src/db/allocate.ts` |
+| Internal transfer allocation (order-scoped Re-allocate + manual pin add/remove over `internal_transfer_allocations`; delegated picking order assignment; both-tables availability netting) | `apps/backend/src/db/internalTransferAllocate.ts`, `apps/backend/src/db/internalTransfer.ts`, routes `apps/backend/src/routes/admin/internalTransferOrders.ts` |
 | UAT allocation snapshot/restore (capture/restore + global `allocated_qty` reconciliation; opt-in daily cron via `UAT_ALLOCATION_RECOVERY=on`, `ALLOCATE_BACKUP`/`ALLOCATE_RECOVER` (`HH:mm:ss±HHmm`, defaults 17:45/08:00 +0800)) | `apps/backend/src/db/allocationSnapshot.ts` + `apps/backend/src/jobs/allocationSnapshot.ts` (tables in `apps/backend/src/db/schema/allocationSnapshot.ts`) |
 | Demo seed (+ generated real-data artifacts) | `apps/backend/src/db/seed.ts` (+ `seed-parts-data.json`, `seed-subinventories-data.ts`, `seed-net-weight-data.ts`, `seed-order-210726.ts`; generator `scripts/gen-seed-real-data.mjs`) |
 

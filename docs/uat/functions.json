@@ -735,5 +735,16 @@
     "result": "",
     "bugIds": "",
     "remarks": "Spec docs/superpowers/specs/2026-11-07-cancel-invoice-putback-design.md"
+  },
+  {
+    "id": "ADM-040",
+    "app": "Admin",
+    "module": "Internal transfer",
+    "name": "Internal transfers — upstream-synced order list + detail, per-order Re-allocate, delegated picking order link (org-validated), manual allocation add/remove",
+    "tester": "",
+    "testDate": "",
+    "result": "",
+    "bugIds": "",
+    "remarks": "List/detail commit d2985538; allocate/assign commit <this>; spec docs/superpowers/specs/2026-11-10-internal-transfer-admin-allocate-design.md"
   }
 ]

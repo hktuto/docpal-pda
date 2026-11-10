@@ -142,11 +142,17 @@ export async function recomputePickingItem(tx: DbOrTx, pickingItemId: string): P
   );
 }
 
-/** inventory_lots.allocated_qty = Σ allocations (available_qty is generated). */
+/** inventory_lots.allocated_qty = Σ allocations + Σ internal_transfer_allocations
+ *  (both engines reserve the same lots — shared-pool invariant, spec
+ *  2026-11-10-internal-transfer-admin-allocate; available_qty is generated). */
 export async function recomputeLot(tx: DbOrTx, lotId: string): Promise<void> {
   const alloc = await queryGet<{ s: number }>(
     tx,
-    sql`SELECT COALESCE(SUM(qty), 0)::int AS s FROM allocations WHERE inventory_lot_id = ${lotId}`
+    sql`SELECT COALESCE(SUM(qty), 0)::int AS s FROM (
+          SELECT qty FROM allocations WHERE inventory_lot_id = ${lotId}
+          UNION ALL
+          SELECT qty FROM internal_transfer_allocations WHERE inventory_lot_id = ${lotId}
+        ) u`
   );
   await queryRun(tx, sql`UPDATE inventory_lots SET allocated_qty = ${alloc?.s ?? 0} WHERE id = ${lotId}`);
 }

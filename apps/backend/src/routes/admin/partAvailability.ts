@@ -249,8 +249,15 @@ adminPartAvailabilityRoute.get("/part-availability", async (c) => {
             rii.put_away_qty AS "putAwayQty",
             rii.picked_qty AS "pickedQty",
             COALESCE((
-              SELECT SUM(a.qty) FROM allocations a
-              WHERE a.receiving_invoice_item_id = rii.id
+              -- Shared-pool invariant: both engines' rows reserve the same
+              -- dock stock — net picking and transfer allocations together.
+              SELECT SUM(qty) FROM (
+                SELECT a.qty FROM allocations a
+                WHERE a.receiving_invoice_item_id = rii.id
+                UNION ALL
+                SELECT ita.qty FROM internal_transfer_allocations ita
+                WHERE ita.receiving_invoice_item_id = rii.id
+              ) u
             ), 0)::int AS "allocatedQty",
             rii.org_id AS "orgId",
             rii.sub_inventory_code AS "subInventoryCode",
@@ -271,10 +278,15 @@ adminPartAvailabilityRoute.get("/part-availability", async (c) => {
 
 interface AllocationBreakdownRow {
   allocationId: string;
-  pickingOrderId: string;
+  /** Which demand world holds the row — picking order or internal transfer
+   *  (spec 2026-11-10-internal-transfer-admin-allocate §Visibility). */
+  demandType: "picking" | "internal-transfer";
+  pickingOrderId: string | null;
+  transferOrderId: string | null;
   orderNo: string;
   orderStatus: string;
-  pickingItemId: string;
+  pickingItemId: string | null;
+  transferItemId: string | null;
   partNo: string;
   wclItemNo: string | null;
   qty: number;
@@ -307,21 +319,26 @@ interface AllocationBreakdownRow {
 // the availability dialogs' "allocated" counter lists WHICH orders hold the
 // stock, so an admin can transfer or remove a specific row in place. Same part
 // matching as part-availability; all picking orders and statuses are included;
-// `locked`/`workingByName` reuse the part-demand work-lock rule.
+// `locked`/`workingByName` reuse the part-demand work-lock rule. Internal
+// transfer rows join the list (demandType "internal-transfer") so transfer
+// reservations are never invisible — the shared pool books the same stock.
 adminPartAvailabilityRoute.get("/part-allocations", async (c) => {
   const partNo = c.req.query("partNo")?.trim() ?? "";
   if (partNo === "") throw new HTTPException(400, { message: "part_no_required" });
   const wclItemNo = c.req.query("wclItemNo")?.trim() ?? "";
 
-  const allocations = await queryAll<AllocationBreakdownRow>(
+  const picking = await queryAll<AllocationBreakdownRow>(
     db,
     sql`
       SELECT
         a.id AS "allocationId",
+        'picking' AS "demandType",
         po.id AS "pickingOrderId",
+        NULL AS "transferOrderId",
         po.order_no AS "orderNo",
         po.status AS "orderStatus",
         pi.id AS "pickingItemId",
+        NULL AS "transferItemId",
         COALESCE(il.part_no, rii.part_no, pi.part_no) AS "partNo",
         COALESCE(il.wcl_item_no, rii.wcl_item_no) AS "wclItemNo",
         a.qty,
@@ -365,6 +382,64 @@ adminPartAvailabilityRoute.get("/part-allocations", async (c) => {
       ORDER BY po.priority_seq, po.order_no, a.created_date
     `
   );
+
+  const transfers = await queryAll<AllocationBreakdownRow>(
+    db,
+    sql`
+      SELECT
+        ita.id AS "allocationId",
+        'internal-transfer' AS "demandType",
+        NULL AS "pickingOrderId",
+        ito.id AS "transferOrderId",
+        ito.order_no AS "orderNo",
+        ito.status AS "orderStatus",
+        NULL AS "pickingItemId",
+        iti.id AS "transferItemId",
+        COALESCE(il.part_no, rii.part_no, iti.part_no) AS "partNo",
+        COALESCE(il.wcl_item_no, rii.wcl_item_no) AS "wclItemNo",
+        ita.qty,
+        ita.manual,
+        CASE
+          WHEN ita.inventory_lot_id IS NOT NULL THEN 'lot'
+          WHEN ita.receiving_invoice_item_id IS NOT NULL THEN 'receiving-item'
+          ELSE 'receiving-order'
+        END AS "sourceType",
+        ita.inventory_lot_id AS "inventoryLotId",
+        ita.receiving_invoice_item_id AS "receivingInvoiceItemId",
+        ita.receiving_order_id AS "receivingOrderId",
+        COALESCE(il.org_id, rii.org_id,
+          (SELECT rii2.org_id FROM receiving_invoice_items rii2
+           JOIN receiving_invoices ri2 ON ri2.id = rii2.receiving_invoice_id
+           WHERE ri2.receiving_order_id = ita.receiving_order_id
+           ORDER BY rii2.created_date LIMIT 1)) AS "orgId",
+        COALESCE(il.sub_inventory_code, rii.sub_inventory_code,
+          (SELECT rii2.sub_inventory_code FROM receiving_invoice_items rii2
+           JOIN receiving_invoices ri2 ON ri2.id = rii2.receiving_invoice_id
+           WHERE ri2.receiving_order_id = ita.receiving_order_id
+           ORDER BY rii2.created_date LIMIT 1)) AS "subInventoryCode",
+        il.shelf_code AS "shelfCode",
+        s.display_name AS "shelfDisplayName",
+        COALESCE(il.box_id, rii.ctn_no) AS "boxId",
+        COALESCE(il.date_code, rii.date_code) AS "dateCode",
+        il.date_code AS "lotDateCode",
+        rii.date_code AS "recvDateCode",
+        COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
+        (ito.working_by IS NOT NULL AND ito.working_at >= ${workLockExpiry()}) AS "locked",
+        u.display_name AS "workingByName"
+      FROM internal_transfer_allocations ita
+      JOIN internal_transfer_items iti ON iti.id = ita.transfer_item_id
+      JOIN internal_transfer_orders ito ON ito.id = iti.transfer_order_id
+      LEFT JOIN users u ON u.id = ito.working_by
+      LEFT JOIN inventory_lots il ON il.id = ita.inventory_lot_id
+      LEFT JOIN shelves s ON s.code = il.shelf_code
+      LEFT JOIN receiving_invoice_items rii ON rii.id = ita.receiving_invoice_item_id
+      WHERE COALESCE(il.part_no, rii.part_no, iti.part_no) = ${partNo}
+         OR (${wclItemNo} <> '' AND COALESCE(il.wcl_item_no, rii.wcl_item_no) = ${wclItemNo})
+      ORDER BY ito.priority_seq, ito.order_no, ita.created_date
+    `
+  );
+
+  const allocations = [...picking, ...transfers];
 
   const outdatedRank = outdatedThresholdRank(outdatedStockYears());
   const dcFmt = dateCodeFormat();

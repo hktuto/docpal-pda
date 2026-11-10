@@ -15,6 +15,7 @@ The app supports these warehouse flows. Each flow has an overview, a step-by-ste
 | [Stock Search](./stock-search/overview.md) | Search inventory by supplier or item and see locations. | `/stock-search` | [Overview](./stock-search/overview.md) | [Scope](./stock-search/ai-scope.md) |
 | [Ad-hoc Put-away](./ad-hoc-put-away/overview.md) | Put away items with no receiving order (old store stock, write-out returns). | `/ad-hoc-put-away` | [Steps](./ad-hoc-put-away/steps.md) | [Scope](./ad-hoc-put-away/ai-scope.md) |
 | [Shelf Exchange](./shelf-exchange/overview.md) | Move stock between shelves (preview-first; allocated qty is immovable). | `/shelf-exchange` | [Steps](./shelf-exchange/steps.md) | [Scope](./shelf-exchange/ai-scope.md) |
+| [Internal Transfer](./internal-transfer/overview.md) | Admin view of upstream-synced intra-warehouse stock moves — allocate them and link a delegated picking order (PDA picking is stage 2). | `/internal-transfer-orders` (admin) | [Steps](./internal-transfer/steps.md) | [Scope](./internal-transfer/ai-scope.md) |
 
 Two more PDA queues ship without an operator guide yet — **Put-back**
 (`/put-back`, cancelled-invoice stock returns, spec

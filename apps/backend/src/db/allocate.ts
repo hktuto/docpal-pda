@@ -159,7 +159,7 @@ export interface DemandRow {
   fromSubinventory: string | null;
 }
 
-interface LotRow {
+export interface LotRow {
   lotId: string;
   dateCode: string | null;
   available: number;
@@ -258,7 +258,7 @@ export function resolveDemandLocation(d: DemandRow): DemandRow {
   };
 }
 
-async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
+export async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
   return queryAll<LotRow>(
     dbOrTx,
     sql`SELECT il.id AS "lotId",
@@ -293,6 +293,12 @@ async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
  *     every OTHER order's row survives, so ALL remaining allocation rows
  *     are subtracted — without this the single-order run would double-book
  *     dock stock other orders hold.
+ * Shared-pool invariant (spec 2026-11-10-internal-transfer-admin-allocate):
+ * internal_transfer_allocations rows reserve the same dock stock, so both
+ * netting subqueries UNION them with the same per-scope rule (manual / live
+ * work lock for part-key scope, everything for order-only scope). Lot
+ * sources need no equivalent — lot availability is counter-based and both
+ * engines maintain inventory_lots.allocated_qty.
  */
 async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow, netAllRemaining = false): Promise<ReceivingRow[]> {
   const expiry = workLockExpiry();
@@ -311,26 +317,46 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow, netAllRemainin
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
         LEFT JOIN (
-          SELECT a.receiving_invoice_item_id AS rii_id, SUM(a.qty)::int AS qty
-          FROM allocations a
-          JOIN picking_items pi ON pi.id = a.picking_item_id
-          JOIN picking_orders po ON po.id = pi.picking_order_id
-          WHERE a.receiving_invoice_item_id IS NOT NULL
-            ${netAllRemaining
-              ? sql``
-              : sql`AND (a.manual OR (po.working_by IS NOT NULL AND po.working_at >= ${expiry}))`}
-          GROUP BY a.receiving_invoice_item_id
+          SELECT rii_id, SUM(qty)::int AS qty FROM (
+            SELECT a.receiving_invoice_item_id AS rii_id, a.qty
+            FROM allocations a
+            JOIN picking_items pi ON pi.id = a.picking_item_id
+            JOIN picking_orders po ON po.id = pi.picking_order_id
+            WHERE a.receiving_invoice_item_id IS NOT NULL
+              ${netAllRemaining
+                ? sql``
+                : sql`AND (a.manual OR (po.working_by IS NOT NULL AND po.working_at >= ${expiry}))`}
+            UNION ALL
+            SELECT ita.receiving_invoice_item_id, ita.qty
+            FROM internal_transfer_allocations ita
+            JOIN internal_transfer_items iti ON iti.id = ita.transfer_item_id
+            JOIN internal_transfer_orders ito ON ito.id = iti.transfer_order_id
+            WHERE ita.receiving_invoice_item_id IS NOT NULL
+              ${netAllRemaining
+                ? sql``
+                : sql`AND (ita.manual OR (ito.working_by IS NOT NULL AND ito.working_at >= ${expiry}))`}
+          ) u GROUP BY rii_id
         ) locked_ii ON locked_ii.rii_id = rii.id
         LEFT JOIN (
-          SELECT a.receiving_order_id AS ro_id, SUM(a.qty)::int AS qty
-          FROM allocations a
-          JOIN picking_items pi ON pi.id = a.picking_item_id
-          JOIN picking_orders po ON po.id = pi.picking_order_id
-          WHERE a.receiving_order_id IS NOT NULL AND pi.part_no = ${d.partNo}
-            ${netAllRemaining
-              ? sql``
-              : sql`AND (a.manual OR (po.working_by IS NOT NULL AND po.working_at >= ${expiry}))`}
-          GROUP BY a.receiving_order_id
+          SELECT ro_id, SUM(qty)::int AS qty FROM (
+            SELECT a.receiving_order_id AS ro_id, a.qty
+            FROM allocations a
+            JOIN picking_items pi ON pi.id = a.picking_item_id
+            JOIN picking_orders po ON po.id = pi.picking_order_id
+            WHERE a.receiving_order_id IS NOT NULL AND pi.part_no = ${d.partNo}
+              ${netAllRemaining
+                ? sql``
+                : sql`AND (a.manual OR (po.working_by IS NOT NULL AND po.working_at >= ${expiry}))`}
+            UNION ALL
+            SELECT ita.receiving_order_id, ita.qty
+            FROM internal_transfer_allocations ita
+            JOIN internal_transfer_items iti ON iti.id = ita.transfer_item_id
+            JOIN internal_transfer_orders ito ON ito.id = iti.transfer_order_id
+            WHERE ita.receiving_order_id IS NOT NULL AND iti.part_no = ${d.partNo}
+              ${netAllRemaining
+                ? sql``
+                : sql`AND (ita.manual OR (ito.working_by IS NOT NULL AND ito.working_at >= ${expiry}))`}
+          ) u GROUP BY ro_id
         ) locked_ro ON locked_ro.ro_id = ro.id
         WHERE (rii.part_no = ${d.partNo} OR rii.wcl_item_no = ${d.partNo})
           AND ro.status IN ('in_hand', 'provisional_received')
@@ -1201,10 +1227,17 @@ export async function addManualPickingAllocation(
                    (rii.received_qty - rii.picked_qty - COALESCE(alloc.qty, 0)) AS "available"
             FROM receiving_invoice_items rii
             LEFT JOIN (
-              SELECT receiving_invoice_item_id, SUM(qty)::int AS qty
-              FROM allocations WHERE receiving_invoice_item_id IS NOT NULL
-              GROUP BY receiving_invoice_item_id
-            ) alloc ON alloc.receiving_invoice_item_id = rii.id
+              -- Shared-pool invariant: BOTH engines' rows reserve the same dock
+              -- stock — net picking and transfer allocations together.
+              SELECT rii_id, SUM(qty)::int AS qty FROM (
+                SELECT receiving_invoice_item_id AS rii_id, qty
+                FROM allocations WHERE receiving_invoice_item_id IS NOT NULL
+                UNION ALL
+                SELECT ita.receiving_invoice_item_id, ita.qty
+                FROM internal_transfer_allocations ita
+                WHERE ita.receiving_invoice_item_id IS NOT NULL
+              ) u GROUP BY rii_id
+            ) alloc ON alloc.rii_id = rii.id
             WHERE rii.id = ${input.receivingInvoiceItemId!}`
       );
       if (!recv) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });

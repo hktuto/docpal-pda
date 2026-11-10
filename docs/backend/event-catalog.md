@@ -263,3 +263,14 @@ The confirm gate (2026-11-09) reuses both cancel types: `PATCH
 released task plus a final `cancel_record.processed` with
 `outcome: "putback_confirmed"` — the PDA list reloads on the former, the admin
 page on either.
+
+Internal transfer admin actions (spec
+`docs/superpowers/specs/2026-11-10-internal-transfer-admin-allocate-design.md`):
+`POST /admin/internal-transfer-orders/:id/reallocate` emits the usual
+`allocation.computed` (change-gated) and `allocation.finished` on the
+`/internal-transfer-orders` topic (summary payload, `changed` flag), the
+manual allocation add/remove emit `allocation.computed` with
+`scope: "internal-transfer-order-item"`, and the delegated picking order
+assignment emits one `internal-transfer.updated`
+(`{transferOrderId, pickingOrderId, pickingOrderNo}`) on the same topic — the
+admin list/detail pages reload on these; nothing PDA-side consumes them yet.

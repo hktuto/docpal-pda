@@ -614,6 +614,8 @@ export interface InternalTransferOrderRow {
   toSubInventoryCode: string | null;
   status: string; // pending | allocated | picking | issue | finished
   allocationStatus: string; // unallocated | partial | allocated
+  /** A delegated picking order is linked (spec 2026-11-10 stage 1). */
+  linked: boolean;
   customerName: string | null;
   remark: string | null;
   createdDate: string;
@@ -624,11 +626,48 @@ export interface InternalTransferOrderRow {
   allocatedQty: number;
 }
 
+/** One allocation row embedded on a transfer item line (detail payload). */
+export interface InternalTransferAllocationRow {
+  id: string;
+  transferItemId: string;
+  qty: number;
+  manual: boolean;
+  sourceType: "lot" | "receiving-item" | "receiving-order";
+  inventoryLotId: string | null;
+  shelfCode: string | null;
+  shelfDisplayName: string | null;
+  boxId: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  receivingInvoiceItemId: string | null;
+  ctnNo: string | null;
+  receivingBatchNo: string | null;
+  receivingInvoiceNo: string | null;
+}
+
+/** POST /admin/internal-transfer-orders/:id/reallocate summary. */
+export interface TransferAllocateSummary {
+  demands: number;
+  fullyAllocated: number;
+  partiallyAllocated: number;
+  allocationsCreated: number;
+  allocationsRemoved: number;
+  skippedReceivingSources: number;
+  changed: boolean;
+  durationMs: number;
+}
+
 /** GET /admin/internal-transfer-orders/:id order header (no aggregates). */
 export interface InternalTransferOrderDetailRow
   extends Omit<InternalTransferOrderRow, "itemCount" | "totalQty" | "pickedQty" | "allocatedQty"> {
   prioritySeq: number;
   pickingOrderId: string | null;
+  /** Delegated picking order summary (joined server-side, null when unassigned). */
+  pickingOrderNo: string | null;
+  pickingOrderStatus: string | null;
+  pickingOrderOrgId: number | null;
+  pickingOrderSubInventoryCode: string | null;
+  pickingOrderCustomerCode: string | null;
   issueReason: string | null;
   issueQty: number | null;
   issueNote: string | null;
@@ -650,6 +689,7 @@ export interface InternalTransferItemRow {
   lineId: number | null;
   lineNumber: number | null;
   additionalData: Record<string, unknown> | null;
+  allocations: InternalTransferAllocationRow[];
   createdDate: string;
   lastUpdateDate: string;
 }
@@ -740,10 +780,14 @@ export interface PartDemand {
 
 export interface PartAllocationRow {
   allocationId: string;
-  pickingOrderId: string;
+  /** Which demand world holds the row — picking or internal transfer. */
+  demandType: "picking" | "internal-transfer";
+  pickingOrderId: string | null;
+  transferOrderId: string | null;
   orderNo: string;
   orderStatus: string;
-  pickingItemId: string;
+  pickingItemId: string | null;
+  transferItemId: string | null;
   partNo: string;
   wclItemNo: string | null;
   qty: number;
@@ -1595,6 +1639,33 @@ export function useFlowApi() {
     getInternalTransferOrder: (id: string) =>
       api.get<{ order: InternalTransferOrderDetailRow; items: InternalTransferItemRow[] }>(
         `/admin/internal-transfer-orders/${encodeURIComponent(id)}`
+      ),
+    // Internal transfer stage-1 mutations (spec
+    // 2026-11-10-internal-transfer-admin-allocate-design.md): per-order
+    // Re-allocate (from_-partition scoped), delegated picking order
+    // assignment (org-validated), manual pin add/remove.
+    reallocateInternalTransferOrder: (id: string) =>
+      api.post<{ allocation: TransferAllocateSummary }>(
+        `/admin/internal-transfer-orders/${encodeURIComponent(id)}/reallocate`,
+        {}
+      ),
+    assignInternalTransferPickingOrder: (id: string, pickingOrderId: string | null) =>
+      api.put<{ pickingOrderId: string | null; pickingOrderNo: string | null }>(
+        `/admin/internal-transfer-orders/${encodeURIComponent(id)}/picking-order`,
+        { pickingOrderId }
+      ),
+    addInternalTransferAllocation: (
+      id: string,
+      itemId: string,
+      input: { qty: number; inventoryLotId?: string; receivingInvoiceItemId?: string }
+    ) =>
+      api.post<{ allocationId: string; qty: number }>(
+        `/admin/internal-transfer-orders/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/allocations`,
+        input
+      ),
+    removeInternalTransferAllocation: (id: string, itemId: string, allocationId: string) =>
+      api.del<{ removed: number; qty: number }>(
+        `/admin/internal-transfer-orders/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/allocations/${encodeURIComponent(allocationId)}`
       ),
 
     // Flow config (warehouse_config row "flow"; applies at runtime on save

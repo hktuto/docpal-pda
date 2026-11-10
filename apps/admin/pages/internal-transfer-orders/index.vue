@@ -2,10 +2,11 @@
 import type { InternalTransferOrderRow } from "~/utils/flowApi";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
-// Internal transfer orders — read-only view of the upstream-synced
-// internal_transfer_orders table (flow not built yet, spec
-// 2026-09-28-internal-transfer-order-design.md). The sync service writes SQL
-// directly (no SSE events), so this page refreshes on mount / manual refresh.
+// Internal transfer orders — admin list of the upstream-synced
+// internal_transfer_orders table (stage 1 spec
+// 2026-11-10-internal-transfer-admin-allocate-design.md: the detail page
+// allocates + assigns delegated picking orders). The sync service writes SQL
+// directly, so this page refreshes on mount / manual refresh.
 const flow = useFlowApi();
 const { t } = useI18n();
 
@@ -113,6 +114,7 @@ function fmtLoc(orgId: number | null, code: string | null): string {
           <tr v-for="row in rows" :key="row.id">
             <td>
               <NuxtLink :to="`/internal-transfer-orders/${row.id}`">{{ row.orderNo }}</NuxtLink>
+              <span v-if="row.linked" :title="$t('internalTransfer.assignTitle')"> 🔗</span>
             </td>
             <td>{{ fmtLoc(row.fromOrgId, row.fromSubInventoryCode) }}</td>
             <td>{{ fmtLoc(row.toOrgId, row.toSubInventoryCode) }}</td>
