@@ -8,6 +8,7 @@ import TransferAllocateModal from "~/components/internal-transfer-orders/Transfe
 // allocation add/remove. PDA picking + the finish branches are stage 2.
 const flow = useFlowApi();
 const { t } = useI18n();
+const { formatLabel: formatDcLabel } = useDateCodeDisplay();
 const route = useRoute();
 
 const order = ref<InternalTransferOrderDetailRow | null>(null);
@@ -158,11 +159,18 @@ async function removeAllocation(item: InternalTransferItemRow, alloc: InternalTr
   }
 }
 
-function allocSource(alloc: InternalTransferAllocationRow): string {
-  if (alloc.sourceType === "lot") {
-    return [alloc.shelfDisplayName ?? alloc.shelfCode, alloc.boxId, alloc.dateCode, alloc.lotCode].filter(Boolean).join(" · ") || "—";
-  }
-  return [alloc.receivingBatchNo, alloc.receivingInvoiceNo, alloc.ctnNo, alloc.dateCode].filter(Boolean).join(" · ") || "—";
+function allocationSource(a: InternalTransferAllocationRow): string {
+  // Same label style as the picking detail's allocation rows.
+  if (a.lot)
+    return t("admin.pages.pickingOrders.allocLot", {
+      shelf: a.lot.shelfCode ?? "",
+      box: a.lot.boxId ? ` / ${a.lot.boxId}` : "",
+      dc: formatDcLabel(a.lot) || "—",
+    });
+  if (a.receivingInvoiceItemId) return t("admin.pages.pickingOrders.allocReceivingBox", { box: a.boxId ?? "" });
+  if (a.receivingOrderId)
+    return t("admin.pages.pickingOrders.allocReceivingOrder") + (a.orderLevelBatchNo ? ` ${a.orderLevelBatchNo}` : "");
+  return "—";
 }
 </script>
 
@@ -253,46 +261,60 @@ function allocSource(alloc: InternalTransferAllocationRow): string {
               <th class="num">{{ $t("internalTransfer.colQty") }}</th>
               <th class="num">{{ $t("internalTransfer.colPickedQty") }}</th>
               <th class="num">{{ $t("internalTransfer.colAllocatedQty") }}</th>
+              <th>{{ $t("internalTransfer.colAllocations") }}</th>
               <th>{{ $t("internalTransfer.colItemStatus") }}</th>
               <th>{{ $t("internalTransfer.colPoNo") }}</th>
               <th>{{ $t("internalTransfer.colActions") }}</th>
             </tr>
           </thead>
           <tbody>
-            <template v-for="item in items" :key="item.id">
-              <tr>
-                <td>{{ item.lineNumber ?? "—" }}</td>
-                <td>{{ item.partNo }}</td>
-                <td>{{ item.wclItemNo ?? "—" }}</td>
-                <td class="num">{{ item.qty }}</td>
-                <td class="num">{{ item.pickedQty }}</td>
-                <td class="num">{{ item.allocatedQty }}</td>
-                <td>{{ item.status }}</td>
-                <td>{{ item.poNo ?? "—" }}</td>
-                <td>
-                  <button type="button" class="btn btn-small" :title="$t('internalTransfer.allocateBtn')" @click="openModal(item)">🔍</button>
-                </td>
-              </tr>
-              <tr v-for="alloc in item.allocations" :key="alloc.id" class="alloc-row">
-                <td colspan="8">
-                  <span class="muted">{{ $t("internalTransfer.allocSource") }}:</span> {{ allocSource(alloc) }}
-                  <span class="num">× {{ alloc.qty }}</span>
-                  <span v-if="alloc.manual" class="pin" :title="$t('internalTransfer.manualPin')">📌</span>
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    class="btn btn-small"
-                    :disabled="removeBusy === alloc.id"
-                    @click="removeAllocation(item, alloc)"
+            <tr v-for="item in items" :key="item.id">
+              <td>{{ item.lineNumber ?? "—" }}</td>
+              <td>{{ item.partNo }}</td>
+              <td>{{ item.wclItemNo ?? "—" }}</td>
+              <td class="num">{{ item.qty }}</td>
+              <td class="num">{{ item.pickedQty }}</td>
+              <td class="num">{{ item.allocatedQty }}</td>
+              <td>
+                <template v-for="a in item.allocations" :key="a.id">
+                  <AllocationsStockAllocationRow
+                    v-if="a.lot"
+                    :qty="a.qty"
+                    :removing="removeBusy === a.id"
+                    :remove-title="$t('internalTransfer.removeAlloc')"
+                    @remove="removeAllocation(item, a)"
                   >
-                    {{ $t("internalTransfer.removeAlloc") }}
-                  </button>
-                </td>
-              </tr>
-            </template>
+                    {{ allocationSource(a) }}<span v-if="a.manual" :title="$t('internalTransfer.manualPin')"> 📌</span>
+                    <span v-if="a.lot.shelfWarning" class="shelf-warning" :title="a.lot.shelfWarning">⚠️</span>
+                    <span v-if="a.outdated" class="shelf-warning" :title="$t('stockAgeWarning.tooltip')">⚠️</span>
+                    <template #tooltip>
+                      <AllocationsAllocationDetail :a="a" />
+                    </template>
+                  </AllocationsStockAllocationRow>
+                  <AllocationsReceivingAllocationRow
+                    v-else
+                    :qty="a.qty"
+                    :removing="removeBusy === a.id"
+                    :remove-title="$t('internalTransfer.removeAlloc')"
+                    @remove="removeAllocation(item, a)"
+                  >
+                    {{ allocationSource(a) }}<span v-if="a.manual" :title="$t('internalTransfer.manualPin')"> 📌</span>
+                    <span v-if="a.outdated" class="shelf-warning" :title="$t('stockAgeWarning.tooltip')">⚠️</span>
+                    <template v-if="a.receiving" #tooltip>
+                      <AllocationsAllocationDetail :a="a" />
+                    </template>
+                  </AllocationsReceivingAllocationRow>
+                </template>
+                <span v-if="item.allocations.length === 0" class="muted">—</span>
+              </td>
+              <td>{{ item.status }}</td>
+              <td>{{ item.poNo ?? "—" }}</td>
+              <td>
+                <button type="button" class="btn btn-small" :title="$t('internalTransfer.allocateBtn')" @click="openModal(item)">🔍</button>
+              </td>
+            </tr>
             <tr v-if="items.length === 0">
-              <td :colspan="9" class="muted">{{ $t("internalTransfer.noneItems") }}</td>
+              <td :colspan="10" class="muted">{{ $t("internalTransfer.noneItems") }}</td>
             </tr>
           </tbody>
         </table>
@@ -353,13 +375,7 @@ function allocSource(alloc: InternalTransferAllocationRow): string {
   font-weight: 600;
   color: var(--brand-teal-dark);
 }
-.alloc-row td {
-  padding-top: 0;
-  font-size: 0.8125rem;
-  color: #52606d;
-  border-top: none;
-}
-.pin {
-  margin-left: 0.25rem;
+.shelf-warning {
+  cursor: help;
 }
 </style>

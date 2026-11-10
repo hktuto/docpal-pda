@@ -5,6 +5,8 @@ import { queryAll, queryGet, type DbOrTx } from "./query.js";
 import { logTransition } from "./picking.js";
 import { emitEvent } from "./events.js";
 import { now } from "./now.js";
+import { dateCodeFormat, outdatedStockYears } from "../config.js";
+import { dateCodeRank, isOutdatedRank, outdatedThresholdRank, toCanonicalDateCode } from "./dateCode.js";
 
 // ---------------------------------------------------------------------------
 // Internal transfer orders — admin console view + the stage-1 mutations
@@ -93,17 +95,60 @@ export async function getInternalTransferOrder(
         WHERE transfer_order_id = ${id}
         ORDER BY line_number NULLS LAST, part_no`
   );
-  const allocations = await queryAll<Record<string, unknown>>(
+  // Allocation rows shaped like the picking detail's (lot / receiving embeds
+  // + outdated flag) so the admin items table reuses the same
+  // Allocations*Row / AllocationDetail components verbatim.
+  interface AllocQueryRow {
+    id: string;
+    transferItemId: string;
+    qty: number;
+    manual: boolean;
+    sourceType: "lot" | "receiving-item" | "receiving-order";
+    inventoryLotId: string | null;
+    receivingInvoiceItemId: string | null;
+    receivingOrderId: string | null;
+    boxId: string | null;
+    lotId: string | null;
+    lotShelfCode: string | null;
+    lotShelfDisplayName: string | null;
+    lotShelfWarning: string | null;
+    lotBoxId: string | null;
+    lotDateCode: string | null;
+    lotLotCode: string | null;
+    lotCoo: string | null;
+    lotCow: string | null;
+    lotTotalQty: number;
+    lotAllocatedQty: number;
+    lotAvailableQty: number;
+    recvOrderId: string | null;
+    recvBatchNo: string | null;
+    recvInvoiceNo: string | null;
+    recvPartNo: string | null;
+    recvPoNo: string | null;
+    recvReceivedQty: number | null;
+    recvDateCode: string | null;
+    orderLevelBatchNo: string | null;
+  }
+  const allocations = await queryAll<AllocQueryRow>(
     db,
     sql`SELECT ita.id, ita.transfer_item_id AS "transferItemId", ita.qty, ita.manual,
                CASE WHEN ita.inventory_lot_id IS NOT NULL THEN 'lot'
                     WHEN ita.receiving_invoice_item_id IS NOT NULL THEN 'receiving-item'
                     ELSE 'receiving-order' END AS "sourceType",
                ita.inventory_lot_id AS "inventoryLotId",
-               il.shelf_code AS "shelfCode", s.display_name AS "shelfDisplayName",
-               il.box_id AS "boxId", il.date_code AS "dateCode", il.lot_code AS "lotCode",
                ita.receiving_invoice_item_id AS "receivingInvoiceItemId",
-               rii.ctn_no AS "ctnNo", ro.batch_no AS "receivingBatchNo", ri.invoice_no AS "receivingInvoiceNo"
+               ita.receiving_order_id AS "receivingOrderId",
+               rii.ctn_no AS "boxId",
+               il.id AS "lotId", il.shelf_code AS "lotShelfCode",
+               s.display_name AS "lotShelfDisplayName", s.warning AS "lotShelfWarning",
+               il.box_id AS "lotBoxId", il.date_code AS "lotDateCode", il.lot_code AS "lotLotCode",
+               il.coo AS "lotCoo", il.cow AS "lotCow",
+               il.total_qty AS "lotTotalQty", il.allocated_qty AS "lotAllocatedQty",
+               il.available_qty AS "lotAvailableQty",
+               ro.id AS "recvOrderId", ro.batch_no AS "recvBatchNo", ri.invoice_no AS "recvInvoiceNo",
+               rii.part_no AS "recvPartNo", rii.po_no AS "recvPoNo",
+               rii.received_qty AS "recvReceivedQty", rii.date_code AS "recvDateCode",
+               ro2.batch_no AS "orderLevelBatchNo"
         FROM internal_transfer_allocations ita
         JOIN internal_transfer_items iti ON iti.id = ita.transfer_item_id
         LEFT JOIN inventory_lots il ON il.id = ita.inventory_lot_id
@@ -111,15 +156,59 @@ export async function getInternalTransferOrder(
         LEFT JOIN receiving_invoice_items rii ON rii.id = ita.receiving_invoice_item_id
         LEFT JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         LEFT JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
+        LEFT JOIN receiving_orders ro2 ON ro2.id = ita.receiving_order_id
         WHERE iti.transfer_order_id = ${id}
         ORDER BY ita.created_date, ita.id`
   );
+  const outdatedRank = outdatedThresholdRank(outdatedStockYears());
+  const dcFmt = dateCodeFormat();
   const byItem = new Map<string, Record<string, unknown>[]>();
   for (const a of allocations) {
-    const itemId = a.transferItemId as string;
-    const list = byItem.get(itemId) ?? [];
-    list.push(a);
-    byItem.set(itemId, list);
+    const shaped = {
+      id: a.id,
+      transferItemId: a.transferItemId,
+      qty: a.qty,
+      manual: a.manual,
+      sourceType: a.sourceType,
+      inventoryLotId: a.inventoryLotId,
+      receivingInvoiceItemId: a.receivingInvoiceItemId,
+      receivingOrderId: a.receivingOrderId,
+      boxId: a.boxId,
+      lot: a.lotId
+        ? {
+            id: a.lotId,
+            shelfCode: a.lotShelfCode,
+            shelfDisplayName: a.lotShelfDisplayName,
+            shelfWarning: a.lotShelfWarning,
+            boxId: a.lotBoxId,
+            dateCode: a.lotDateCode,
+            lotCode: a.lotLotCode,
+            coo: a.lotCoo,
+            cow: a.lotCow,
+            totalQty: a.lotTotalQty,
+            allocatedQty: a.lotAllocatedQty,
+            availableQty: a.lotAvailableQty,
+          }
+        : null,
+      receiving: a.receivingInvoiceItemId && a.recvOrderId
+        ? {
+            orderId: a.recvOrderId,
+            batchNo: a.recvBatchNo,
+            invoiceNo: a.recvInvoiceNo,
+            partNo: a.recvPartNo,
+            poNo: a.recvPoNo,
+            receivedQty: a.recvReceivedQty,
+            dateCode: a.recvDateCode,
+          }
+        : null,
+      // Order-level dock rows carry no invoice line — surface the batch no
+      // for the source label (the tooltip stays empty, same as picking).
+      orderLevelBatchNo: a.orderLevelBatchNo,
+      outdated: isOutdatedRank(dateCodeRank(a.lotDateCode ?? toCanonicalDateCode(a.recvDateCode, dcFmt)), outdatedRank),
+    };
+    const list = byItem.get(a.transferItemId) ?? [];
+    list.push(shaped);
+    byItem.set(a.transferItemId, list);
   }
   for (const item of items) item.allocations = byItem.get(item.id as string) ?? [];
   return { order, items };

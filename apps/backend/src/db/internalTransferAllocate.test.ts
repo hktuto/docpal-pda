@@ -387,6 +387,13 @@ test("detail payload embeds item allocations and the assigned picking order", as
   const items = detail.items as any[];
   assert.equal(items.length, 1);
   assert.equal(items[0].allocations.length, 1);
-  assert.equal(items[0].allocations[0].qty, 100);
-  assert.equal(items[0].allocations[0].sourceType, "lot");
+  const a = items[0].allocations[0];
+  assert.equal(a.qty, 100);
+  assert.equal(a.sourceType, "lot");
+  // picking-shaped embeds: the items table reuses the shared Allocations*Row
+  // + AllocationDetail components on these fields
+  assert.equal(a.lot.totalQty, 1000);
+  assert.equal(a.lot.shelfCode, "A0101");
+  assert.equal(a.receiving, null);
+  assert.equal(a.outdated, true); // LOT_18's dc 0326 is far past the 2-year threshold
 });

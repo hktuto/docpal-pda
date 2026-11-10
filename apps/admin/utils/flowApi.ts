@@ -626,7 +626,9 @@ export interface InternalTransferOrderRow {
   allocatedQty: number;
 }
 
-/** One allocation row embedded on a transfer item line (detail payload). */
+/** One allocation row embedded on a transfer item line (detail payload) —
+ *  shaped like PickingItemRow's allocations so the items table reuses the
+ *  shared Allocations*Row / AllocationDetail components. */
 export interface InternalTransferAllocationRow {
   id: string;
   transferItemId: string;
@@ -634,15 +636,38 @@ export interface InternalTransferAllocationRow {
   manual: boolean;
   sourceType: "lot" | "receiving-item" | "receiving-order";
   inventoryLotId: string | null;
-  shelfCode: string | null;
-  shelfDisplayName: string | null;
-  boxId: string | null;
-  dateCode: string | null;
-  lotCode: string | null;
   receivingInvoiceItemId: string | null;
-  ctnNo: string | null;
-  receivingBatchNo: string | null;
-  receivingInvoiceNo: string | null;
+  receivingOrderId: string | null;
+  /** Receiving ctn no (box-level dock sources). */
+  boxId: string | null;
+  lot: {
+    id: string;
+    shelfCode: string | null;
+    shelfDisplayName?: string | null;
+    shelfWarning: string | null;
+    boxId: string | null;
+    dateCode: string | null;
+    lotCode: string | null;
+    coo: string | null;
+    cow: string | null;
+    totalQty: number;
+    allocatedQty: number;
+    availableQty: number;
+  } | null;
+  receiving: {
+    orderId: string;
+    batchNo: string;
+    invoiceNo: string | null;
+    partNo: string | null;
+    poNo: string | null;
+    receivedQty: number | null;
+    dateCode: string | null;
+  } | null;
+  /** Batch no for order-level dock rows (no invoice line to embed). */
+  orderLevelBatchNo: string | null;
+  /** Source date code (canonical YYWW) older than the outdatedStockYears
+   *  threshold (spec 2026-10-20). */
+  outdated: boolean;
 }
 
 /** POST /admin/internal-transfer-orders/:id/reallocate summary. */
