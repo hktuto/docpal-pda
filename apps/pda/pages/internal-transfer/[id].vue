@@ -15,6 +15,7 @@
       </div>
 
       <p v-if="heldByOther" class="banner banner--warn">{{ $t('internalTransfer.pda.lockHeld', { name: heldByOther }) }}</p>
+      <p v-if="pickShelf && isPickMode" class="banner banner--ok">{{ $t('internalTransfer.pda.shelfBanner', { shelf: pickShelf }) }}</p>
       <p v-if="order.issueReason" class="banner banner--warn">
         {{ $t('internalTransfer.pda.issueBanner', { reason: $t(`internalTransfer.pda.issueReason.${order.issueReason}`), qty: order.issueQty ?? '—', note: order.issueNote ?? '' }) }}
       </p>
@@ -116,6 +117,8 @@
 
       <!-- Done: finished with nothing left to do here -->
       <p v-else class="empty">{{ $t('internalTransfer.pda.finishedNothing') }}</p>
+
+      <ScanFab v-if="isPickMode || isPutAwayMode" :loading="cameraScanning" @click="scanByCamera" />
     </template>
 
     <p v-else class="empty">{{ $t('internalTransfer.pda.notFound') }}</p>
@@ -127,6 +130,7 @@ import { useErrorMessage } from "~/composables/errorMessage";
 import { useToast } from "~/composables/useToast";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
+import { captureLabel, captureRawLabelValue, ocrResultToInput, useLabelScan } from "~/composables/useLabelScan";
 import { badgeClass } from "~/composables/useStatusBadge";
 import type { InternalTransferPackageRow, InternalTransferPickingAllocation, InternalTransferPickingDetail, InternalTransferPickingItem } from "~/services/types";
 
@@ -232,11 +236,25 @@ onUnmounted(releaseLock);
 
 // --- picking ---
 
-async function pick(item: InternalTransferPickingItem, a: InternalTransferPickingAllocation): Promise<void> {
+/** Label fields from a decoded QR scan (backend /scan/decode authority with
+ *  the local-OCR fallback) — qty becomes the pick prompt's default, the
+ *  batch fields ride into the package snapshot. */
+interface LabelFields {
+  qty?: number;
+  dateCode?: string;
+  lotCode?: string;
+  coo?: string;
+  cow?: string;
+}
+
+async function pick(item: InternalTransferPickingItem, a: InternalTransferPickingAllocation, label?: LabelFields): Promise<void> {
   const remaining = item.qty - item.pickedQty;
   const max = Math.min(a.qty, remaining);
   if (max <= 0) return;
-  const input = window.prompt(t("internalTransfer.pda.pickQtyPrompt", { max }), String(max));
+  const suggested = label?.qty !== undefined && Number.isInteger(label.qty) && label.qty > 0
+    ? Math.min(label.qty, max)
+    : max;
+  const input = window.prompt(t("internalTransfer.pda.pickQtyPrompt", { max }), String(suggested));
   if (input === null) return;
   const qty = Number(input);
   if (!Number.isInteger(qty) || qty <= 0 || qty > max) {
@@ -246,13 +264,78 @@ async function pick(item: InternalTransferPickingItem, a: InternalTransferPickin
   busy.value = true;
   error.value = null;
   try {
-    await warehouse.scanInternalTransferItem(item.id, { allocationId: a.id, qty });
+    await warehouse.scanInternalTransferItem(item.id, {
+      allocationId: a.id,
+      qty,
+      dateCode: label?.dateCode || null,
+      lotCode: label?.lotCode || null,
+      coo: label?.coo || null,
+      cow: label?.cow || null,
+      shelfCode: pickShelf.value,
+    });
     await load();
   } catch (e: unknown) {
     error.value = errorMessage(e);
   } finally {
     busy.value = false;
   }
+}
+
+/** One raw scan value (hardware wedge/broadcast or camera capture), pick
+ *  mode: a shelf scan stashes the pending target (pickingShelfScan
+ *  require-match — the backend 409 is the safety net, no client pre-check);
+ *  an item QR label (backend decode; bare part numbers pass through) picks
+ *  from the matched item's first remaining allocation with the label's qty +
+ *  batch fields. */
+const pickShelf = ref<string | null>(null);
+
+async function handlePickScan(raw: string): Promise<boolean> {
+  if (heldByOther.value !== null) return false;
+  // Shelf QR first: it becomes the pending shelf for the next item scans.
+  const value = raw.trim().toUpperCase();
+  if (shelves.value.length === 0) {
+    try {
+      shelves.value = await warehouse.getShelves();
+    } catch {
+      // shelf list unavailable — fall through to the item match
+    }
+  }
+  const shelfHit = shelves.value.find((s) => s.code.toUpperCase() === value);
+  if (shelfHit) {
+    pickShelf.value = shelfHit.code;
+    showToast(t("internalTransfer.pda.shelfSet", { shelf: shelfHit.code }));
+    return true;
+  }
+  let label: LabelFields | undefined;
+  let keys = [value];
+  try {
+    const parsedResult = await labelScan.parseRawValue(raw);
+    const parsed = ocrResultToInput(parsedResult.parsed);
+    const partKey = (parsed.wclItemNo || parsed.partNo || "").trim().toUpperCase();
+    if (partKey) keys = [partKey, ...keys];
+    const qty = Number(parsed.qty);
+    if (parsed.qty !== "" && Number.isInteger(qty) && qty > 0) {
+      label = {
+        qty,
+        dateCode: parsed.dateCode || undefined,
+        lotCode: parsed.lotCode || undefined,
+        coo: parsed.coo || undefined,
+        cow: parsed.cow || undefined,
+      };
+    }
+  } catch (e: unknown) {
+    // decode network failure: the bare-value match below is the last resort
+    error.value = errorMessage(e);
+  }
+  const item = detail.value?.items.find(
+    (i) => i.qty > i.pickedQty && keys.includes((i.wclItemNo ?? i.partNo).toUpperCase())
+  );
+  if (item && item.allocations.length > 0) {
+    await pick(item, item.allocations[0], label);
+    return true;
+  }
+  showToast(t("internalTransfer.pda.noMatch"));
+  return false;
 }
 
 async function removePackage(p: InternalTransferPackageRow): Promise<void> {
@@ -329,14 +412,17 @@ async function shelve(g: { partNo: string; dateCode: string | null }): Promise<v
 }
 
 // Hardware scanner: in put-away mode a shelf scan sets the target shelf; in
-// pick mode a part scan picks fully from that item's first allocation.
+// pick mode an item QR label (or bare part number) picks from the matched
+// item's first remaining allocation.
 const shelves = ref<{ code: string }[]>([]);
+const labelScan = useLabelScan();
+const cameraScanning = ref(false);
 
 useHardwareScanner({
   enabled: () => !!detail.value,
   onScan: async (raw) => {
-    const value = raw.trim().toUpperCase();
     if (isPutAwayMode.value) {
+      const value = raw.trim().toUpperCase();
       if (shelves.value.length === 0) shelves.value = await warehouse.getShelves();
       const hit = shelves.value.find((s) => s.code.toUpperCase() === value);
       if (hit) {
@@ -345,17 +431,41 @@ useHardwareScanner({
       }
       return false;
     }
-    if (!isPickMode.value || heldByOther.value !== null) return false;
-    const item = detail.value?.items.find(
-      (i) => i.qty > i.pickedQty && value === (i.wclItemNo ?? i.partNo).toUpperCase()
-    );
-    if (item && item.allocations.length > 0) {
-      await pick(item, item.allocations[0]);
-      return true;
-    }
-    return false;
+    if (!isPickMode.value) return false;
+    return handlePickScan(raw);
   },
 });
+
+// Camera capture (ScanFab): the same decode+match path as the hardware scan.
+async function scanByCamera(): Promise<void> {
+  if (cameraScanning.value) return;
+  cameraScanning.value = true;
+  try {
+    const capture = await captureLabel();
+    if (!capture) return;
+    if (isPutAwayMode.value) {
+      await handleShelfScanRaw(captureRawLabelValue(capture));
+    } else if (isPickMode.value) {
+      await handlePickScan(captureRawLabelValue(capture));
+    }
+  } catch (e: unknown) {
+    error.value = errorMessage(e);
+  } finally {
+    cameraScanning.value = false;
+  }
+}
+
+async function handleShelfScanRaw(raw: string): Promise<boolean> {
+  const value = raw.trim().toUpperCase();
+  if (shelves.value.length === 0) shelves.value = await warehouse.getShelves();
+  const hit = shelves.value.find((s) => s.code.toUpperCase() === value);
+  if (hit) {
+    targetShelf.value = hit.code;
+    return true;
+  }
+  showToast(t("internalTransfer.pda.noShelfMatch"));
+  return false;
+}
 
 useVisibleReload(load);
 </script>

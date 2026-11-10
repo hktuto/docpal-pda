@@ -25,9 +25,12 @@
 1. **Queue** — Internal Transfer tile; confirmed orders (allocated/picking/
    issue) plus finished unlinked orders that still need shelving.
 2. **Pick** — open an order; each item shows its remaining reservations as
-   pick guidance (shelf / box / date-code, or receiving batch/ctn). Tap Pick
-   (or scan the part label) and enter the qty — capped at the reservation.
-   Remove (✗) un-picks a package.
+   pick guidance (shelf / box / date-code, or receiving batch/ctn). Scan the
+   item's QR label (hardware scanner or the camera FAB — decoded through the
+   backend scan authority; the label qty pre-fills the prompt, its batch
+   fields ride along) or tap Pick and enter the qty — capped at the
+   reservation. A shelf scan first sets the pending shelf
+   (pickingShelfScan require-match). Remove (✗) un-picks a package.
 3. **Report issue** — record a shortage (reason + actual qty + note);
    picking continues and a recorded issue satisfies the finish guard.
 4. **Finish** — linked: the picked stock lands unshelved at the delegated
