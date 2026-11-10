@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { checkCnDraft, cnDraftToEntry, fillMergedCells, parseCnReceivingAoa, type AoaMergeRange, type CnDraftIssue, type CnReceivingDraft } from "~/utils/cnReceivingExcel";
+import { checkCnDraft, cnDraftToEntry, fillMergedCells, parseCnManifestAoa, parseCnReceivingAoa, type AoaMergeRange, type CnDraftIssue, type CnReceivingDraft, type CnReceivingParseResult } from "~/utils/cnReceivingExcel";
 import { submitCnExcelUpload, submitCnPdfUpload } from "~/utils/flowApi";
 
 const { t } = useI18n();
@@ -86,7 +86,7 @@ async function acceptFiles(picked: File[]) {
   parsing.value = true;
   try {
     const added: CnReceivingDraft[] = [];
-    for (const f of excels) added.push(await addExcelDraft(f));
+    for (const f of excels) added.push(...(await addExcelDraft(f)));
     await gateAndAutoCreate(added);
   } catch (e: any) {
     error.value = e?.message ?? String(e);
@@ -95,50 +95,62 @@ async function acceptFiles(picked: File[]) {
   }
 }
 
-async function addExcelDraft(picked: File) {
+async function addExcelDraft(picked: File): Promise<CnReceivingDraft[]> {
   const XLSX = await import("xlsx");
   const buf = await picked.arrayBuffer();
   const wb = XLSX.read(buf);
   // Some workbooks lead with an empty cover sheet (e.g. 入数) and multi-tab
   // sheets mirror subsets of the master — scan every sheet and use the first
-  // one whose item table actually decodes.
-  let result: ReturnType<typeof parseCnReceivingAoa> | null = null;
+  // one whose item table actually decodes. Truck manifests (車單) carry MANY
+  // supplier invoices per file: the confirmation parse finds nothing, so fall
+  // back to the manifest decoder → one draft (one pending order) per INVOICE
+  // NO (spec docs/superpowers/specs/2026-11-10-receiving-cn-truck-manifest-
+  // upload-design.md).
+  let results: CnReceivingParseResult[] | null = null;
   for (const name of wb.SheetNames) {
     const ws = wb.Sheets[name];
     if (!ws) continue;
     const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
     if (aoa.length === 0) continue;
     const merged = fillMergedCells(aoa as unknown[][], (ws["!merges"] as AoaMergeRange[] | undefined) ?? []);
-    const parsed = parseCnReceivingAoa(merged.aoa, merged.filled);
-    if (parsed.items.length > 0) {
-      result = parsed;
+    const single = parseCnReceivingAoa(merged.aoa, merged.filled);
+    const sheetResults = single.items.length > 0 ? [single] : parseCnManifestAoa(merged.aoa);
+    if (sheetResults.length > 0) {
+      results = sheetResults;
       break;
     }
-    result ??= parsed; // keep the first decode for the error path below
+    results ??= [single]; // keep the first decode for the error path below
   }
-  if (!result || result.items.length === 0) {
+  const decoded = (results ?? []).filter((r) => r.items.length > 0);
+  if (decoded.length === 0) {
     throw new Error(`${picked.name}: ${t("admin.pages.receivingCn.noItems")}`);
   }
-  drafts.value = [
-    ...drafts.value,
-    {
-      uid: nextUid++,
-      filename: picked.name,
-      brand: "",
-      header: {
-        receivedOffice: result.receivedOffice,
-        supplier: result.supplier,
-        receiptNo: result.receiptNo,
-        invoiceNo: result.invoiceNo,
-        receivedDate: result.receivedDate,
+  const created: CnReceivingDraft[] = [];
+  for (const result of decoded) {
+    drafts.value = [
+      ...drafts.value,
+      {
+        uid: nextUid++,
+        // Multi-invoice manifest split — tag the source filename so the N
+        // tracking rows stay traceable to their invoice.
+        filename: decoded.length > 1 ? `${picked.name} (${result.invoiceNo})` : picked.name,
+        brand: "",
+        header: {
+          receivedOffice: result.receivedOffice,
+          supplier: result.supplier,
+          receiptNo: result.receiptNo,
+          invoiceNo: result.invoiceNo,
+          receivedDate: result.receivedDate,
+        },
+        items: result.items.map((item) => ({ ...item, uid: nextUid++ })),
+        totals: result.totals,
+        sheetTotals: result.sheetTotals,
       },
-      items: result.items.map((item) => ({ ...item, uid: nextUid++ })),
-      totals: result.totals,
-      sheetTotals: result.sheetTotals,
-    },
-  ];
-  // Return the REACTIVE entry (raw-object writes skip the editor's inputs).
-  return drafts.value[drafts.value.length - 1]!;
+    ];
+    // Return the REACTIVE entries (raw-object writes skip the editor's inputs).
+    created.push(drafts.value[drafts.value.length - 1]!);
+  }
+  return created;
 }
 
 // Decode→create gate: batch-check every 型號 once, prefill the brand from

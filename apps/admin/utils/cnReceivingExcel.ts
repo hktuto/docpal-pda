@@ -10,6 +10,13 @@
  * table (訂單號 | 箱號 | 箱数 | 型號 | 摘要(D/C) | 數量(PCS) | 重量（KG) | 辦事處 | 发货项 |
  * 備註 — column subsets and simplified spellings tolerated) terminated by a
  * 合计 row, then footer/notice rows.
+ *
+ * Truck manifests (車單 — spec 2026-11-10-receiving-cn-truck-manifest-upload-
+ * design.md) carry MANY supplier invoices per file in an English-headed table
+ * (C/No. | Size | G.W | INVOICE NO | OFFICE NAME | PO NO | Our P/No. |
+ * Quantity | 產品 | Description | 產地); `parseCnManifestAoa` decodes those
+ * into one payload per INVOICE NO so the existing N-drafts wizard creates one
+ * pending order per invoice, each on its own brand.
  */
 
 export interface CnReceivingItem {
@@ -311,6 +318,150 @@ export function parseCnReceivingAoa(aoa: unknown[][], filledCells?: Set<string>)
   };
 
   return { ...header, receivedDate: header.receivedDate, items, totals, sheetTotals };
+}
+
+// --- truck manifest (車單) format ---------------------------------------------
+
+/** Manifest item-table column labels (normHeader + uppercased) → item fields.
+ *  `INVOICE NO` is the grouping key, handled separately. Size / 產品 /
+ *  Description / 產地 (coo) have no home on the CN upload wire → dropped,
+ *  same call as the 2026-07-27 210726 seed spec. */
+const MANIFEST_COLUMNS: Record<string, keyof Pick<CnReceivingItem, "ctnNo" | "weight" | "office" | "orderNo" | "partNo" | "qty" | "remark">> = {
+  "C/NO.": "ctnNo",
+  "G.W": "weight",
+  OFFICENAME: "office",
+  PONO: "orderNo", // customer PO — ships as wire poNo via the standard swap
+  "OURP/NO.": "partNo",
+  QUANTITY: "qty",
+  REMARK: "remark",
+  "備註": "remark",
+};
+
+/**
+ * Decode a truck-manifest sheet into one payload per INVOICE NO (multi-brand
+ * truck: each invoice group is single-brand, so numbering brands derive from
+ * the parts master per draft). Continuation rows carry a blank C/No. and
+ * belong to the carton above (carried down). Rows without an INVOICE NO —
+ * the NIL/reserved-carton rows and the trailing 紙板/合成板/膠板 packing
+ * summaries — are not items and are skipped.
+ */
+export function parseCnManifestAoa(aoa: unknown[][]): CnReceivingParseResult[] {
+  const rows = (aoa ?? []).filter((r) => Array.isArray(r));
+
+  // ---- item table header row: col 0 "C/No." + an "INVOICE NO" column ----
+  let headerIdx = -1;
+  let invoiceIdx = -1;
+  for (let i = 0; i < rows.length; i++) {
+    if (normHeader(rows[i][0]).toUpperCase() !== "C/NO.") continue;
+    const ii = rows[i].findIndex((h) => normHeader(h).toUpperCase() === "INVOICENO");
+    if (ii >= 0) {
+      headerIdx = i;
+      invoiceIdx = ii;
+      break;
+    }
+  }
+  if (headerIdx < 0) return [];
+
+  // ---- Date :/Ref : label rows above the item table ----
+  let receivedDate = "";
+  let receiptNo = "";
+  for (let r = 0; r < headerIdx; r++) {
+    const row = rows[r];
+    for (let c = 0; c < row.length; c++) {
+      const label = normLabel(row[c]).toUpperCase();
+      if (label !== "DATE" && label !== "REF") continue;
+      for (let v = c + 1; v < row.length; v++) {
+        const value = row[v];
+        if (text(value) === "") continue;
+        if (label === "DATE") receivedDate ||= toDateString(value);
+        else receiptNo ||= text(value);
+        break;
+      }
+    }
+  }
+
+  // Manifest columns are string fields only — index/cartonMerged can never
+  // appear, so the item-field writes below stay type-safe.
+  const colMap = rows[headerIdx].map(
+    (h) => MANIFEST_COLUMNS[normHeader(h).toUpperCase()] ?? null
+  );
+  // Trailing remarks ship with an EMPTY header cell (帶GR / 補回資料) — take
+  // the first unlabeled column past the mapped headers that has row data.
+  let remarkIdx = colMap.indexOf("remark");
+  if (remarkIdx < 0) {
+    const width = rows.reduce((w, r) => Math.max(w, r.length), 0);
+    for (let c = invoiceIdx + 1; c < width; c++) {
+      if (colMap[c] || text(rows[headerIdx][c] ?? "") !== "") continue;
+      if (rows.slice(headerIdx + 1).some((r) => text(r[c] ?? "") !== "")) {
+        remarkIdx = c;
+        break;
+      }
+    }
+  }
+
+  interface Group {
+    office: string;
+    cartons: Set<string>;
+    items: CnReceivingItem[];
+  }
+  const groups = new Map<string, Group>();
+  let carriedCtn = "";
+  for (let r = headerIdx + 1; r < rows.length; r++) {
+    const row = rows[r];
+    const invoiceNo = text(row[invoiceIdx]);
+    if (invoiceNo === "" || isBlankRow(row)) continue;
+    const ctnIdx = colMap.indexOf("ctnNo");
+    const ctnCell = ctnIdx >= 0 ? text(row[ctnIdx]) : "";
+    if (ctnCell !== "") carriedCtn = ctnCell;
+
+    const item: CnReceivingItem = {
+      index: 0, orderNo: "", ctnNo: carriedCtn, cartonNo: "", partNo: "",
+      dateCode: "", qty: "", weight: "", office: "", poNo: "",
+      remark: remarkIdx >= 0 ? text(row[remarkIdx]) : "",
+    };
+    for (let c = 0; c < colMap.length; c++) {
+      const field = colMap[c];
+      if (!field || field === "ctnNo" || field === "remark") continue;
+      // String() on purpose (same as the confirmation parser): qty/carton
+      // stringify on the wire and long PO numbers must not lose precision.
+      item[field] = String(row[c] ?? "").trim();
+    }
+
+    let g = groups.get(invoiceNo);
+    if (!g) {
+      g = { office: item.office, cartons: new Set<string>(), items: [] };
+      groups.set(invoiceNo, g);
+    }
+    // Carton count per invoice group: each distinct C/No. counts once, the
+    // continuation rows sharing it are merge-marked (Σ totals stay right).
+    // shortcut: a physical carton spanning two invoices counts on BOTH
+    // groups; upgrade if a consumer needs truck-unique carton sums.
+    item.cartonNo = "1";
+    if (item.ctnNo !== "") {
+      if (g.cartons.has(item.ctnNo)) item.cartonMerged = true;
+      else g.cartons.add(item.ctnNo);
+    }
+    if (g.office === "") g.office = item.office;
+    g.items.push(item);
+  }
+
+  return [...groups.entries()].map(([invoiceNo, g]) => {
+    const items = g.items.map((item, i) => ({ ...item, index: i + 1 }));
+    return {
+      receivedOffice: g.office,
+      supplier: "",
+      receiptNo,
+      invoiceNo,
+      receivedDate,
+      items,
+      totals: {
+        carton: items.reduce((s, i) => s + (i.cartonMerged ? 0 : (toNumber(i.cartonNo) ?? 0)), 0),
+        qty: items.reduce((s, i) => s + (toNumber(i.qty) ?? 0), 0),
+      },
+      sheetTotals: null, // manifests print no 合计 row — the editor falls
+      // back to the parse-time totals for its cross-check.
+    };
+  });
 }
 
 // --- upload wizard drafts -----------------------------------------------------

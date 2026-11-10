@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { checkCnDraft, cnDraftToEntry, fillMergedCells, parseCnReceivingAoa, type CnReceivingDraft } from "~/utils/cnReceivingExcel";
+import { checkCnDraft, cnDraftToEntry, fillMergedCells, parseCnManifestAoa, parseCnReceivingAoa, type CnReceivingDraft } from "~/utils/cnReceivingExcel";
 
 const require = createRequire(import.meta.url);
 
@@ -419,5 +419,110 @@ describe("checkCnDraft", () => {
     expect(issues.filter((i) => i.code === "unknownPart")).toEqual([
       { code: "unknownPart", row: 9, partNo: "P-Z" },
     ]);
+  });
+});
+
+// --- truck manifest (車單) format ----------------------------------------------
+
+const MANIFEST_FIXTURE = path.resolve(
+  fileURLToPath(import.meta.url),
+  "../../../../supporting_doc/cn_receiving/CSZ00-manifest-20261102.xls"
+);
+
+function manifestAoa(): unknown[][] {
+  const XLSX = require("xlsx");
+  const wb = XLSX.read(readFileSync(MANIFEST_FIXTURE));
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+}
+
+describe("parseCnManifestAoa — CSZ00-manifest-20261102.xls", () => {
+  const results = parseCnManifestAoa(manifestAoa());
+
+  it("splits the truck into one payload per INVOICE NO (multi-brand)", () => {
+    expect(results).toHaveLength(34);
+    expect(new Set(results.map((r) => r.invoiceNo)).size).toBe(34);
+    // Date :/Ref : label rows → header fields on every group.
+    expect(results[0]!.receivedDate).toBe("2026-11-02"); // serial 46328
+    expect(results[0]!.receiptNo).toBe("202611021");
+    // The trailing packing-material rows (9紙板/1合成板/6膠板) and the
+    // invoice-less "34-36 NIL" reserved-carton row are not items.
+    const items = results.flatMap((r) => r.items);
+    expect(items).toHaveLength(257);
+    expect(items.every((i) => i.qty !== "0")).toBe(true);
+    expect(items.some((i) => i.partNo === "NIL")).toBe(false);
+    // Σ qty matches the raw sheet column; Σ carton is 181 numbered cartons
+    // + carton 25 counted in BOTH invoices it physically spans (documented
+    // shortcut).
+    expect(results.reduce((s, r) => s + r.totals.qty, 0)).toBe(5078080);
+    expect(results.reduce((s, r) => s + r.totals.carton, 0)).toBe(182);
+    expect(results.every((r) => r.sheetTotals === null)).toBe(true);
+  });
+
+  it("maps the first item row to the standard fields", () => {
+    const bj = results[0]!;
+    expect(bj.invoiceNo).toBe("BJ-26100009");
+    expect(bj.receivedOffice).toBe("北京办");
+    expect(bj.items).toHaveLength(1);
+    expect(bj.items[0]).toEqual({
+      index: 1,
+      orderNo: "349022359", // customer PO — ships as wire poNo via the swap
+      ctnNo: "1",
+      cartonNo: "1",
+      partNo: "ABLIC/S-1170B25UC-OTKTFU",
+      dateCode: "",
+      qty: "34000",
+      weight: "6.5",
+      office: "北京办",
+      poNo: "",
+      remark: "",
+    });
+  });
+
+  it("carries a blank C/No. down and merge-marks the continuation rows", () => {
+    const koa = results.find((r) => r.invoiceNo === "SZ-26100274")!;
+    expect(koa.items).toHaveLength(7); // carton 5: 1 numbered row + 6 blank-C/No. rows
+    expect(koa.items.map((i) => i.ctnNo)).toEqual(Array(7).fill("5"));
+    expect(koa.items[0]!.cartonMerged).toBeUndefined();
+    expect(koa.items.slice(1).every((i) => i.cartonMerged === true)).toBe(true);
+    expect(koa.totals).toEqual({ carton: 1, qty: 260000 });
+    // 12 sample rows (invoice MS0-4647) share carton 38 with PO SZ-ELLA.
+    const samples = results.find((r) => r.invoiceNo === "MS0-4647")!;
+    expect(samples.items).toHaveLength(12);
+    expect(samples.totals.carton).toBe(1);
+    expect(samples.items.every((i) => i.orderNo === "SZ-ELLA")).toBe(true);
+  });
+
+  it("takes the unlabeled trailing column as remark", () => {
+    const ncc = results.find((r) => r.invoiceNo === "GZ-26100258")!;
+    expect(ncc.receivedOffice).toBe("广州意堡");
+    expect(ncc.items).toHaveLength(5);
+    expect(ncc.items.every((i) => i.remark === "帶GR")).toBe(true);
+  });
+
+  it("passes the upload gate when every part is known", () => {
+    for (const r of results) {
+      const draft: CnReceivingDraft = {
+        uid: 1,
+        filename: "m.xls",
+        brand: "",
+        header: {
+          receivedOffice: r.receivedOffice,
+          supplier: r.supplier,
+          receiptNo: r.receiptNo,
+          invoiceNo: r.invoiceNo,
+          receivedDate: r.receivedDate,
+        },
+        items: r.items.map((i, n) => ({ ...i, uid: n })),
+        totals: r.totals,
+        sheetTotals: r.sheetTotals,
+      };
+      expect(checkCnDraft(draft, () => true)).toEqual([]);
+    }
+  });
+
+  it("leaves the confirmation parsers cold on a manifest sheet", () => {
+    expect(parseCnReceivingAoa(manifestAoa()).items).toHaveLength(0);
+    expect(parseCnManifestAoa(fixtureAoa())).toHaveLength(0);
   });
 });

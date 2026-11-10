@@ -1,0 +1,14 @@
+{
+ "id": "CR-057",
+ "dateRaised": "2026-11-10",
+ "raisedBy": "Sean",
+ "app": "Admin",
+ "functionId": "ADM-023",
+ "feature": "CN receiving upload — truck-manifest Excel format (車單, e.g. CSZ00 per-truck lists): auto-detected on upload and split client-side into one draft (one pending order) per INVOICE NO, multi-brand; carries blank C/No. continuation rows down to their carton, counts cartons once per invoice, maps PO NO/Our P/No./Quantity/G.W/OFFICE NAME/trailing remark onto the existing decode→verify→create flow",
+ "reason": "Customers ship per-truck manifests with many supplier invoices per file (34 invoices / 257 rows / 181 cartons in the reference file) next to the single-invoice 收貨確認書; the existing decoder found no 訂單號 header and rejected the file",
+ "priority": "Must have",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Implemented 2026-11-10 — spec `docs/superpowers/specs/2026-11-10-receiving-cn-truck-manifest-upload-design.md`; backend contract unchanged (N payload entries = N orders already supported). `parseCnManifestAoa` in `apps/admin/utils/cnReceivingExcel.ts`, detection order in `apps/admin/pages/receiving-cn/new.vue`; fixture + tests in `apps/admin/tests/cnReceivingExcel.test.ts` (`supporting_doc/cn_receiving/CSZ00-manifest-20261102.xls`)."
+}
