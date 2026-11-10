@@ -1674,6 +1674,13 @@ export function useFlowApi() {
         `/admin/internal-transfer-orders/${encodeURIComponent(id)}/reallocate`,
         {}
       ),
+    // Admin Confirm/Unconfirm (pending ↔ allocated, work-lock steal on
+    // confirm — spec 2026-11-10-internal-transfer-pda-picking §lifecycle).
+    setInternalTransferStatus: (id: string, status: "pending" | "allocated") =>
+      api.patch<{ id: string; status: string }>(
+        `/admin/internal-transfer-orders/${encodeURIComponent(id)}/status`,
+        { status }
+      ),
     assignInternalTransferPickingOrder: (id: string, pickingOrderId: string | null) =>
       api.put<{ pickingOrderId: string | null; pickingOrderNo: string | null }>(
         `/admin/internal-transfer-orders/${encodeURIComponent(id)}/picking-order`,

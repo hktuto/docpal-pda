@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { db } from "../../db.js";
 import { listInternalTransferOrders, getInternalTransferOrder, assignTransferPickingOrder } from "../../db/internalTransfer.js";
 import {
@@ -6,6 +7,7 @@ import {
   addManualInternalTransferAllocation,
   removeInternalTransferAllocation,
 } from "../../db/internalTransferAllocate.js";
+import { overrideInternalTransferStatus } from "../../db/internalTransferPicking.js";
 import { awaitAllocationTask } from "../../db/allocate.js";
 import { actorFrom } from "../../auth/middleware.js";
 
@@ -34,6 +36,24 @@ adminInternalTransferRoute.get("/internal-transfer-orders", async (c) => {
 adminInternalTransferRoute.get("/internal-transfer-orders/:id", async (c) => {
   const detail = await getInternalTransferOrder(db, c.req.param("id"));
   return detail ? c.json(detail, 200) : c.json({ error: "internal transfer order not found" }, 404);
+});
+
+// Admin status override, deliberately narrow (spec
+// 2026-11-10-internal-transfer-pda-picking §lifecycle): `pending` ↔
+// `allocated` (Confirm / Unconfirm) with work-lock steal on confirm —
+// `finished` is a physical-world fact recorded by the PDA finish, never an
+// admin keystroke. Body {status: "pending" | "allocated"}.
+adminInternalTransferRoute.patch("/internal-transfer-orders/:id/status", async (c) => {
+  const body = await c.req.json<{ status?: string }>();
+  if (body.status !== "pending" && body.status !== "allocated") {
+    throw new HTTPException(400, { message: "invalid_status" });
+  }
+  const result = await overrideInternalTransferStatus(db, {
+    transferOrderId: c.req.param("id"),
+    status: body.status,
+    actorId: actorFrom(c).id,
+  });
+  return c.json(result);
 });
 
 // "Re-allocate" on the transfer detail — strictly single-order scope, the

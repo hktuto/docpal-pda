@@ -274,3 +274,13 @@ manual allocation add/remove emit `allocation.computed` with
 assignment emits one `internal-transfer.updated`
 (`{transferOrderId, pickingOrderId, pickingOrderNo}`) on the same topic — the
 admin list/detail pages reload on these; nothing PDA-side consumes them yet.
+
+Stage 2 (spec 2026-11-10-internal-transfer-pda-picking-design.md) extends the
+same topic: the PDA finish emits `internal-transfer.updated`
+(`{transferOrderId, status: "finished"}`) — and, on the linked branch, the
+awaited delegated re-allocation emits its usual `allocation.computed` /
+`allocation.finished` on `/picking-orders` — the native shelving step emits
+`internal-transfer.updated` with `{action: "shelve", shelved, taskCompleted}`,
+and the admin Confirm/Unconfirm emits it with the new status. Pick scans and
+package removals emit nothing (the PDA detail refetches from the scan
+response, same as picking).

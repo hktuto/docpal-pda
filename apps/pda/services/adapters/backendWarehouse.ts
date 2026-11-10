@@ -497,6 +497,40 @@ export function createBackendWarehouseService(
     async completePutBackTask(id: string, shelfCode?: string | null): Promise<{ id: string; itemsCredited: number; totalQty: number }> {
       return client.post(`/put-back-tasks/${id}/complete`, { shelfCode });
     },
+    // Internal transfer PDA flow (spec 2026-11-10 stage 2)
+    async listInternalTransferQueue(): Promise<InternalTransferQueueRow[]> {
+      return client.get("/internal-transfer-orders");
+    },
+    async getInternalTransferPickingDetail(id: string): Promise<InternalTransferPickingDetail> {
+      return client.get(`/internal-transfer-orders/${id}`);
+    },
+    async acquireInternalTransferWorkLock(id: string): Promise<{ orderId: string; workingBy: string }> {
+      return client.post(`/internal-transfer-orders/${id}/work-lock`, {});
+    },
+    async releaseInternalTransferWorkLock(id: string): Promise<void> {
+      await client.del(`/internal-transfer-orders/${id}/work-lock`);
+    },
+    async scanInternalTransferItem(
+      itemId: string,
+      input: { allocationId: string; qty: number; dateCode?: string | null; lotCode?: string | null; coo?: string | null; cow?: string | null; shelfCode?: string | null; boxId?: string | null }
+    ): Promise<{ packageIds: string[] }> {
+      return client.post(`/internal-transfer-items/${itemId}/scan`, input);
+    },
+    async removeInternalTransferPackage(packageId: string): Promise<void> {
+      await client.del(`/internal-transfer-packages/${packageId}`);
+    },
+    async reportInternalTransferIssue(id: string, input: { reason: string; qty?: number; note?: string | null }): Promise<void> {
+      await client.post(`/internal-transfer-orders/${id}/report-issue`, input);
+    },
+    async finishInternalTransferOrder(id: string): Promise<{ id: string; status: string; allocation: { fullyAllocated: number; demands: number } | null }> {
+      return client.post(`/internal-transfer-orders/${id}/finish`, {});
+    },
+    async shelveInternalTransferPackages(
+      id: string,
+      input: { partNo: string; qty?: number; dateCode?: string | null; shelfCode: string }
+    ): Promise<{ shelved: number; taskCompleted: boolean }> {
+      return client.post(`/internal-transfer-orders/${id}/shelve`, input);
+    },
     // The admin CRUD read doubles as the PDA shelf list. Cached in-memory
     // for the app session — shelf layouts change rarely.
     async getShelves(): Promise<Shelf[]> {

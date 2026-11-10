@@ -17,7 +17,23 @@
    availability dialog (stock + dock rows at the `from_` partition) to pin
    qty against a specific lot/receiving line; ✗ removes a row (transient —
    the next Re-allocate may re-create it).
+6. **Confirm** (pending → allocated) — the PDA queue gate. Unconfirm returns
+   the order to admin-only.
 
-Stage 2 (not built): PDA transfer queue + shelf picking; finish moves the
-picked stock to `to_` (feed the linked picking order) or creates a put-away
-task.
+## PDA steps (stage 2)
+
+1. **Queue** — Internal Transfer tile; confirmed orders (allocated/picking/
+   issue) plus finished unlinked orders that still need shelving.
+2. **Pick** — open an order; each item shows its remaining reservations as
+   pick guidance (shelf / box / date-code, or receiving batch/ctn). Tap Pick
+   (or scan the part label) and enter the qty — capped at the reservation.
+   Remove (✗) un-picks a package.
+3. **Report issue** — record a shortage (reason + actual qty + note);
+   picking continues and a recorded issue satisfies the finish guard.
+4. **Finish** — linked: the picked stock lands unshelved at the delegated
+   order's location and its allocation re-runs immediately (cross-dock; the
+   page links to the delegated order). Unlinked: the stock waits as packages.
+5. **Shelve** (unlinked, after finish) — the finished order re-enters the
+   queue as put-away pending; scan a shelf, then Shelve each part group —
+   packages merge onto the destination shelf lot-by-lot until the task
+   completes.

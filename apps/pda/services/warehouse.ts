@@ -33,6 +33,8 @@ import type {
   PutAwayTaskListRow,
   PutBackTaskDetail,
   PutBackTaskListRow,
+  InternalTransferQueueRow,
+  InternalTransferPickingDetail,
   PutAwayScanResult,
   CnPutAwayCompleteItem,
   CnManualReceiptOrder,
@@ -193,6 +195,25 @@ export interface WarehouseService {
   listPutBackTasks(status?: string): Promise<PutBackTaskListRow[]>;
   getPutBackTaskDetail(id: string): Promise<PutBackTaskDetail>;
   completePutBackTask(id: string, shelfCode?: string | null): Promise<{ id: string; itemsCredited: number; totalQty: number }>;
+
+  // Internal transfer PDA flow (spec 2026-11-10 stage 2): queue + detail,
+  // work lock, allocation-capped pick scans, package removal, issue report,
+  // finish branches, native shelving for the unlinked branch.
+  listInternalTransferQueue(): Promise<InternalTransferQueueRow[]>;
+  getInternalTransferPickingDetail(id: string): Promise<InternalTransferPickingDetail>;
+  acquireInternalTransferWorkLock(id: string): Promise<{ orderId: string; workingBy: string }>;
+  releaseInternalTransferWorkLock(id: string): Promise<void>;
+  scanInternalTransferItem(
+    itemId: string,
+    input: { allocationId: string; qty: number; dateCode?: string | null; lotCode?: string | null; coo?: string | null; cow?: string | null; shelfCode?: string | null; boxId?: string | null }
+  ): Promise<{ packageIds: string[] }>;
+  removeInternalTransferPackage(packageId: string): void;
+  reportInternalTransferIssue(id: string, input: { reason: string; qty?: number; note?: string | null }): void;
+  finishInternalTransferOrder(id: string): Promise<{ id: string; status: string; allocation: { fullyAllocated: number; demands: number } | null }>;
+  shelveInternalTransferPackages(
+    id: string,
+    input: { partNo: string; qty?: number; dateCode?: string | null; shelfCode: string }
+  ): Promise<{ shelved: number; taskCompleted: boolean }>;
   getShelves(): Promise<Shelf[]>;
   // Scans with a shelfCode commit straight onto that shelf in the same tx
   // (the order's invisible box there is found-or-created backend-side — spec

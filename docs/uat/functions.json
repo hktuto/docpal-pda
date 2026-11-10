@@ -745,6 +745,17 @@
     "testDate": "",
     "result": "",
     "bugIds": "",
-    "remarks": "List/detail commit d2985538; allocate/assign commit <this>; spec docs/superpowers/specs/2026-11-10-internal-transfer-admin-allocate-design.md"
+    "remarks": "List/detail commit d2985538; allocate/assign spec docs/superpowers/specs/2026-11-10-internal-transfer-admin-allocate-design.md"
+  },
+  {
+    "id": "PDA-029",
+    "app": "PDA",
+    "module": "Internal transfer",
+    "name": "Internal transfers — PDA queue (confirmed orders + put-away pending), allocation-guided picking with package removal and issue reporting, finish (feed the delegated picking order / create put-away task), native shelving onto a scanned shelf",
+    "tester": "",
+    "testDate": "",
+    "result": "",
+    "bugIds": "",
+    "remarks": "Spec docs/superpowers/specs/2026-11-10-internal-transfer-pda-picking-design.md; admin Confirm/Unconfirm gate on ADM-040"
   }
 ]

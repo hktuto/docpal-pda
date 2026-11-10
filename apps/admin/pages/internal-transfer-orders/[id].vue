@@ -77,6 +77,25 @@ async function reallocate() {
   }
 }
 
+// --- admin confirm / unconfirm (the PDA queue gate) ---
+
+async function setStatus(status: "pending" | "allocated") {
+  if (!order.value || reallocating.value) return;
+  if (status === "pending" && !window.confirm(t("internalTransfer.unconfirmConfirm"))) return;
+  reallocating.value = true;
+  reallocErr.value = "";
+  reallocMsg.value = "";
+  try {
+    await flow.setInternalTransferStatus(order.value.id, status);
+    reallocMsg.value = t(status === "allocated" ? "internalTransfer.confirmed" : "internalTransfer.unconfirmed");
+    await load();
+  } catch (e: any) {
+    reallocErr.value = describeError(e);
+  } finally {
+    reallocating.value = false;
+  }
+}
+
 // --- delegated picking order assignment (org-validated, open orders only) ---
 
 const ASSIGNABLE_STATUSES = ["pending", "allocated", "picking", "issue"];
@@ -179,6 +198,22 @@ function allocationSource(a: InternalTransferAllocationRow): string {
     <div class="page-head">
       <h1>{{ order?.orderNo ?? $t("internalTransfer.title") }}</h1>
       <div class="head-actions">
+        <button
+          v-if="order?.status === 'pending'"
+          class="btn btn-primary"
+          :disabled="reallocating"
+          @click="setStatus('allocated')"
+        >
+          {{ $t("internalTransfer.confirm") }}
+        </button>
+        <button
+          v-if="order?.status === 'allocated'"
+          class="btn"
+          :disabled="reallocating"
+          @click="setStatus('pending')"
+        >
+          {{ $t("internalTransfer.unconfirm") }}
+        </button>
         <button
           v-if="canReallocate"
           class="btn btn-primary"

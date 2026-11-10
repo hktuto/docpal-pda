@@ -73,6 +73,18 @@
         <p class="menu-card__title">{{ $t('home.menu.picking.title') }}</p>
       </NuxtLink>
 
+      <NuxtLink v-if="flowSteps['internal-transfer']" to="/internal-transfer" class="menu-card">
+        <div class="menu-card__icon menu-card__icon--internal-transfer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3 4 7l4 4"/>
+            <path d="M4 7h16"/>
+            <path d="m16 21 4-4-4-4"/>
+            <path d="M20 17H4"/>
+          </svg>
+        </div>
+        <p class="menu-card__title">{{ $t('home.menu.internalTransfer.title') }}</p>
+      </NuxtLink>
+
       <NuxtLink v-if="flowSteps['label-printing']" to="/label-printing" class="menu-card">
         <div class="menu-card__icon menu-card__icon--label-printing">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -266,6 +278,7 @@ const { flowSteps, cnReceiving } = useFlowSteps();
 
 .menu-card__icon--receiving { background: linear-gradient(135deg, #00bfa5, #00a693); }
 .menu-card__icon--picking { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.menu-card__icon--internal-transfer { background: linear-gradient(135deg, #6366f1, #4f46e5); }
 .menu-card__icon--labeling { background: linear-gradient(135deg, #f43f5e, #e11d48); }
 .menu-card__icon--label-printing { background: linear-gradient(135deg, #fb7185, #f43f5e); }
 .menu-card__icon--product-label { background: linear-gradient(135deg, #38bdf8, #0ea5e9); }

@@ -841,6 +841,96 @@ export interface PutBackTaskDetail extends PutBackTaskListRow {
   items: PutBackTaskItem[];
 }
 
+// ---- internal transfer PDA flow (spec 2026-11-10 stage 2) ----
+
+/** GET /internal-transfer-orders row — the PDA queue: pickable orders
+ *  (allocated/picking/issue) plus finished unlinked orders with unshelved
+ *  packages (put-away pending). */
+export interface InternalTransferQueueRow {
+  id: string;
+  orderNo: string;
+  status: string; // allocated | picking | issue | finished
+  allocationStatus: string;
+  pickingOrderId: string | null;
+  fromOrgId: number | null;
+  fromSubInventoryCode: string | null;
+  toOrgId: number | null;
+  toSubInventoryCode: string | null;
+  issueReason: string | null;
+  itemCount: number;
+  totalQty: number;
+  pickedQty: number;
+  unshelvedQty: number;
+  workingBy: string | null;
+  workingByName: string | null;
+}
+
+/** Pick guidance: one remaining reservation of an item (shelf/box/date-code
+ *  or receiving batch/ctn — where to take the goods from). */
+export interface InternalTransferPickingAllocation {
+  id: string;
+  transferItemId: string;
+  qty: number;
+  sourceType: "lot" | "receiving-item" | "receiving-order";
+  inventoryLotId: string | null;
+  shelfCode: string | null;
+  boxId: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  receivingInvoiceItemId: string | null;
+  ctnNo: string | null;
+  receivingBatchNo: string | null;
+}
+
+export interface InternalTransferPickingItem {
+  id: string;
+  partNo: string;
+  wclItemNo: string | null;
+  qty: number;
+  pickedQty: number;
+  allocatedQty: number;
+  status: string; // pending | picked
+  lineNumber: number | null;
+  poNo: string | null;
+  allocations: InternalTransferPickingAllocation[];
+}
+
+export interface InternalTransferPackageRow {
+  id: string;
+  transferItemId: string;
+  partNo: string;
+  qty: number;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  shelfCode: string | null;
+  sourceType: string;
+  createdDate: string;
+}
+
+export interface InternalTransferPickingDetail {
+  order: {
+    id: string;
+    orderNo: string;
+    status: string;
+    allocationStatus: string;
+    pickingOrderId: string | null;
+    fromOrgId: number | null;
+    fromSubInventoryCode: string | null;
+    toOrgId: number | null;
+    toSubInventoryCode: string | null;
+    issueReason: string | null;
+    issueQty: number | null;
+    issueNote: string | null;
+    workingBy: string | null;
+    workingByName: string | null;
+    createdDate: string;
+  };
+  items: InternalTransferPickingItem[];
+  packages: InternalTransferPackageRow[];
+}
+
 /** Expected (receivable) invoice item; remainingQty = received − picked −
  *  putAway − allocated − staged. */
 export interface PutAwayExpectedItem {
@@ -1349,7 +1439,8 @@ export type FlowStep =
   | "put-back"
   | "stock-search"
   | "ad-hoc-put-away"
-  | "shelf-exchange";
+  | "shelf-exchange"
+  | "internal-transfer";
 
 export interface FlowConfig {
   flowSteps: Record<FlowStep, boolean>;

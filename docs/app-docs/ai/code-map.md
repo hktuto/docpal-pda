@@ -31,6 +31,8 @@ Page and component locations mapped to source files.
 | Goods verify queue | `/goods-verify` | `pages/goods-verify/index.vue` |
 | Put-back queue (returned stock of upstream-cancelled orders) | `/put-back` | `pages/put-back/index.vue` |
 | Put-back detail (item cards with source shelf; hardware shelf-scan sets the fallback; Complete credits all pending items) | `/put-back/:id` | `pages/put-back/[id].vue` |
+| Internal transfer queue (confirmed orders to pick + finished unlinked orders to shelve) | `/internal-transfer` | `pages/internal-transfer/index.vue` |
+| Internal transfer detail (pick mode: allocation-guided picks, package removal, issue report, finish; put-away mode: shelf-scan + shelve per part group; work lock + hardware scanner) | `/internal-transfer/:id` | `pages/internal-transfer/[id].vue` |
 | Goods verify detail | `/goods-verify/:id` | `pages/goods-verify/[id].vue` |
 | Stock Search | `/stock-search` | `pages/stock-search/index.vue` (filters via `components/FilterChipGroup.vue` chip multi-selects) |
 | Ad-hoc Put-away | `/ad-hoc-put-away` | `pages/ad-hoc-put-away/index.vue` (supplier selection, scan, review list, location/shelf selection, confirm) |
@@ -291,6 +293,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Outdated date-code scan warnings (check / record / resolve / list; canonical YYWW rank helpers) | `apps/backend/src/db/outdated.ts` (+ `apps/backend/src/db/dateCode.ts`) |
 | Allocation engine (`allocateAll`, `allocateForReceivingOrder`, `allocateForPickingOrder`) | `apps/backend/src/db/allocate.ts` |
 | Internal transfer allocation (order-scoped Re-allocate + manual pin add/remove over `internal_transfer_allocations`; delegated picking order assignment; both-tables availability netting) | `apps/backend/src/db/internalTransferAllocate.ts`, `apps/backend/src/db/internalTransfer.ts`, routes `apps/backend/src/routes/admin/internalTransferOrders.ts` |
+| Internal transfer PDA flow (queue + work lock + allocation-capped pick scans + package removal + issue report + finish branches + native shelving + admin confirm) | `apps/backend/src/db/internalTransferPicking.ts`, routes `apps/backend/src/routes/internalTransfer.ts` |
 | UAT allocation snapshot/restore (capture/restore + global `allocated_qty` reconciliation; opt-in daily cron via `UAT_ALLOCATION_RECOVERY=on`, `ALLOCATE_BACKUP`/`ALLOCATE_RECOVER` (`HH:mm:ss±HHmm`, defaults 17:45/08:00 +0800)) | `apps/backend/src/db/allocationSnapshot.ts` + `apps/backend/src/jobs/allocationSnapshot.ts` (tables in `apps/backend/src/db/schema/allocationSnapshot.ts`) |
 | Demo seed (+ generated real-data artifacts) | `apps/backend/src/db/seed.ts` (+ `seed-parts-data.json`, `seed-subinventories-data.ts`, `seed-net-weight-data.ts`, `seed-order-210726.ts`; generator `scripts/gen-seed-real-data.mjs`) |
 

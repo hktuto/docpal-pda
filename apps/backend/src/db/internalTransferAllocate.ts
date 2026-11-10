@@ -181,14 +181,22 @@ export async function refreshTransferAllocationStatus(dbOrTx: DbOrTx): Promise<v
   `);
 }
 
-/** internal_transfer_items.allocated_qty = Σ internal_transfer_allocations. */
+/** internal_transfer_items: allocated_qty = Σ internal_transfer_allocations,
+ *  picked_qty = Σ internal_transfer_packages (no boxing concept), status =
+ *  'picked' once picked_qty covers qty. Mirrors recomputePickingItem. */
 export async function recomputeTransferItem(tx: DbOrTx, transferItemId: string): Promise<void> {
   const alloc = await queryGet<{ s: number }>(
     tx,
     sql`SELECT COALESCE(SUM(qty), 0)::int AS s FROM internal_transfer_allocations WHERE transfer_item_id = ${transferItemId}`
   );
+  const picked = await queryGet<{ s: number }>(
+    tx,
+    sql`SELECT COALESCE(SUM(qty), 0)::int AS s FROM internal_transfer_packages WHERE transfer_item_id = ${transferItemId}`
+  );
   await tx.execute(
-    sql`UPDATE internal_transfer_items SET allocated_qty = ${alloc?.s ?? 0}, last_update_date = ${now()}
+    sql`UPDATE internal_transfer_items SET allocated_qty = ${alloc?.s ?? 0}, picked_qty = ${picked?.s ?? 0},
+           status = CASE WHEN ${picked?.s ?? 0} >= qty THEN 'picked' ELSE 'pending' END,
+           last_update_date = ${now()}
         WHERE id = ${transferItemId}`
   );
 }
