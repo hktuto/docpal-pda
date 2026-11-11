@@ -30,23 +30,31 @@ const deliveryDate = ref("");
 const savingDate = ref(false);
 const dateMsg = ref("");
 
-// Per-item / batch detail editing (date code, lot code, COO, COW, ctn no).
+// Per-item / batch detail editing (date code, lot code, COO, COW, ctn no,
+// drawing no). Drawing no has no top-level key on the row — it lives in
+// additional_data, so the modal targets get it mapped on.
 const selected = ref<Set<string>>(new Set());
-const editItems = ref<ReceivingItemRow[] | null>(null);
+type EditTarget = ReceivingItemRow & { drawingNo: string | null };
+const editItems = ref<EditTarget[] | null>(null);
 const savingEdit = ref(false);
 
 const allItems = computed(() => (order.value?.invoices ?? []).flatMap((inv) => inv.items));
 const selectedItems = computed(() => allItems.value.filter((it) => selected.value.has(it.id)));
 
+const asEditTarget = (it: ReceivingItemRow): EditTarget => ({
+  ...it,
+  drawingNo: typeof it.additionalData?.drawing_no === "string" ? it.additionalData.drawing_no : null,
+});
+
 function openEdit(item: ReceivingItemRow) {
-  editItems.value = [item];
+  editItems.value = [asEditTarget(item)];
 }
 
 function openBatchEdit() {
-  if (selectedItems.value.length > 0) editItems.value = selectedItems.value;
+  if (selectedItems.value.length > 0) editItems.value = selectedItems.value.map(asEditTarget);
 }
 
-async function saveEdit(fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo", string | null>>) {
+async function saveEdit(fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "drawingNo", string | null>>) {
   const items = editItems.value;
   if (!items || Object.keys(fields).length === 0) {
     editItems.value = null;
@@ -985,6 +993,7 @@ const {
       v-if="editItems"
       :items="editItems"
       :saving="savingEdit"
+      :with-drawing-no="true"
       @close="editItems = null"
       @save="saveEdit"
     />

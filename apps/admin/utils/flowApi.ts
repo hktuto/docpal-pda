@@ -1579,7 +1579,7 @@ export function useFlowApi() {
       ),
     updateReceivingItem: (
       id: string,
-      fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo", string | null>>
+      fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "drawingNo", string | null>>
     ) => api.patch(`/admin/receiving-invoice-items/${id}`, fields),
 
     // Customer receiving (CN) workflow upload tracking (admin only).

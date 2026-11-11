@@ -200,9 +200,11 @@
 - The admin console's receiving detail (`apps/admin/pages/receiving/[id].vue`)
   can confirm arrival itself (Confirm In-hand button while `pending` /
   `provisional_received`, same `confirm-arrival` endpoint), edit item batch
-  details (date code / lot code / COO / COW / ctn no via
-  `PATCH /admin/receiving-invoice-items/:id` — per-row edit modal or
-  multi-select batch edit where blank fields keep each item's current value;
+  details (date code / lot code / COO / COW / ctn no / drawing no via
+  `PATCH /admin/receiving-invoice-items/:id` — drawing no persists in
+  `additional_data.drawing_no`; per-row edit modal or
+  multi-select batch edit where blank fields keep each item's current value
+  and each field's Clear checkbox batch-clears that value;
   per-group header checkboxes select one invoice/group, and a Select-all
   toggle next to the group-by selector selects every visible invoice's items
   at once;

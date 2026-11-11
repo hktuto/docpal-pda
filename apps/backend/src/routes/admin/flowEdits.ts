@@ -157,8 +157,9 @@ adminFlowEditsRoute.patch("/receiving-orders/:id", async (c) => {
 });
 
 // Change editable fields on one receiving invoice item (date code, lot code,
-// COO, COW, CTN no). `null` or "" clears a field; absent keys stay unchanged.
-const RECEIVING_ITEM_EDITABLE = ["dateCode", "lotCode", "coo", "cow", "ctnNo"] as const;
+// COO, COW, CTN no, drawing no — the latter persisted in additional_data).
+// `null` or "" clears a field; absent keys stay unchanged.
+const RECEIVING_ITEM_EDITABLE = ["dateCode", "lotCode", "coo", "cow", "ctnNo", "drawingNo"] as const;
 
 adminFlowEditsRoute.patch("/receiving-invoice-items/:id", async (c) => {
   const body = await readJson(c);

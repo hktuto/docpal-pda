@@ -1,0 +1,14 @@
+{
+  "id": "CR-059",
+  "dateRaised": "2026-11-11",
+  "raisedBy": "Sean",
+  "app": "Admin",
+  "functionId": "ADM-022",
+  "feature": "Receiving detail item edit (single + batch) gains an editable Drawing No field (persisted in additional_data.drawing_no via PATCH /admin/receiving-invoice-items/:id), and batch edit gains a per-field Clear checkbox so a field's value can be batch-erased on all selected items (blank alone still means keep unchanged)",
+  "reason": "Operators need to fix drawing numbers on received items without re-sync, and batch-clearing a wrong batch field (e.g. a mis-scanned lot code across many lines) previously required editing every row one by one",
+  "priority": "Must have",
+  "status": "Delivered",
+  "owner": "dev",
+  "targetDate": "",
+  "remarks": "Implemented 2026-11-11 — backend `src/db/adminedits.ts` updateReceivingItemFields (drawingNo read-modify-write on additional_data jsonb, clear = key removal; audit field drawing_no) + `src/routes/admin/flowEdits.ts` editable list; admin `components/receiving/ItemEditModal.vue` (withDrawingNo prop, per-field Clear checkboxes in batch mode incl. the CN sub-inventory/shelf dropdowns) + `pages/receiving/[id].vue` (maps additionalData.drawing_no into edit targets). Tests: `src/db/adminedits.test.ts` drawing-no set/clear + audit."
+}

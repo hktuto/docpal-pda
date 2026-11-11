@@ -2,8 +2,9 @@
 // Edit modal for receiving invoice items (standard + CN receiving). One item
 // = single edit (all fields submitted, so blanks clear); multiple items =
 // batch edit (only non-blank fields are applied, blanks leave the existing
-// values unchanged). The item type is the structural subset the modal
-// actually reads — both ReceivingItemRow and the CN order item satisfy it.
+// values unchanged — tick a field's "Clear" box to batch-clear its value).
+// The item type is the structural subset the modal actually reads — both
+// ReceivingItemRow and the CN order item satisfy it.
 export interface ItemEditTarget {
   id: string;
   partNo: string;
@@ -17,6 +18,7 @@ export interface ItemEditTarget {
   coo?: string | null;
   cow?: string | null;
   ctnNo?: string | null;
+  drawingNo?: string | null;
   subInventoryCode?: string | null;
   suggestedShelf?: string | null;
   mismatch?: { reason: string | null; mismatchQty: number | null; wrongPartNo: string | null; note: string | null } | null;
@@ -25,6 +27,9 @@ export interface ItemEditTarget {
 const props = defineProps<{
   items: ItemEditTarget[];
   saving: boolean;
+  /** When true, the drawing-number field joins the form (standard receiving —
+   *  persisted in additional_data.drawing_no). */
+  withDrawingNo?: boolean;
   /** When provided, a sub-inventory dropdown joins the form (CN receiving).
    *  Callers without options (standard receiving) get the plain text fields. */
   subInventoryOptions?: { value: string; label: string }[];
@@ -34,7 +39,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
   save: [
-    fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "subInventory" | "suggestedShelf", string | null>>,
+    fields: Partial<
+      Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "drawingNo" | "subInventory" | "suggestedShelf", string | null>
+    >,
   ];
 }>();
 
@@ -49,8 +56,13 @@ const lotCode = ref("");
 const coo = ref("");
 const cow = ref("");
 const ctnNo = ref("");
+const drawingNo = ref("");
 const subInventory = ref("");
 const suggestedShelf = ref("");
+
+// Batch mode: ticked fields are force-cleared (submitted as null) instead of
+// the blank-means-unchanged default.
+const cleared = ref<Record<string, boolean>>({});
 
 watch(
   () => props.items,
@@ -61,8 +73,10 @@ watch(
     coo.value = it?.coo ?? "";
     cow.value = it?.cow ?? "";
     ctnNo.value = it?.ctnNo ?? "";
+    drawingNo.value = it?.drawingNo ?? "";
     subInventory.value = it?.subInventoryCode ?? "";
     suggestedShelf.value = it?.suggestedShelf ?? "";
+    cleared.value = {};
   },
   { immediate: true }
 );
@@ -75,22 +89,31 @@ function submit() {
     ["cow", cow.value],
     ["ctnNo", ctnNo.value],
   ];
+  if (props.withDrawingNo) entries.push(["drawingNo", drawingNo.value]);
   const fields: Record<string, string | null> = {};
   for (const [k, v] of entries) {
+    // Batch mode skips blanks (keep unchanged) unless the field's Clear box
+    // is ticked; single mode sends null to clear.
+    if (batch.value && cleared.value[k]) {
+      fields[k] = null;
+      continue;
+    }
     const trimmed = v.trim();
-    // Batch mode skips blanks (keep unchanged); single mode sends null to clear.
     if (batch.value && trimmed === "") continue;
     fields[k] = trimmed === "" ? null : trimmed;
   }
   // Sub-inventory / suggested shelf (dropdowns, only rendered when their
   // options are provided): single mode sends the selection — empty clears;
-  // batch mode only sends a chosen value (empty = leave unchanged).
+  // batch mode only sends a chosen value (empty = leave unchanged) unless
+  // the field's Clear box is ticked.
   if (props.subInventoryOptions) {
-    if (!batch.value) fields.subInventory = subInventory.value === "" ? null : subInventory.value;
+    if (batch.value && cleared.value.subInventory) fields.subInventory = null;
+    else if (!batch.value) fields.subInventory = subInventory.value === "" ? null : subInventory.value;
     else if (subInventory.value !== "") fields.subInventory = subInventory.value;
   }
   if (props.shelfOptions) {
-    if (!batch.value) fields.suggestedShelf = suggestedShelf.value === "" ? null : suggestedShelf.value;
+    if (batch.value && cleared.value.suggestedShelf) fields.suggestedShelf = null;
+    else if (!batch.value) fields.suggestedShelf = suggestedShelf.value === "" ? null : suggestedShelf.value;
     else if (suggestedShelf.value !== "") fields.suggestedShelf = suggestedShelf.value;
   }
   emit("save", fields);
@@ -132,52 +155,80 @@ function applyDateCode(offsetWeeks: number) {
         <div class="form-row">
           <label for="ie-dc">{{ $t("admin.pages.receiving.dateCode") }}</label>
           <div class="dc-row">
-            <input id="ie-dc" v-model="dateCode" type="text" />
-            <button type="button" class="btn btn-small" @click="applyDateCode(0)">
+            <input id="ie-dc" v-model="dateCode" type="text" :disabled="batch && cleared.dateCode" />
+            <button type="button" class="btn btn-small" :disabled="batch && cleared.dateCode" @click="applyDateCode(0)">
               {{ $t("common.today") }}
             </button>
-            <button type="button" class="btn btn-small" @click="applyDateCode(1)">
+            <button type="button" class="btn btn-small" :disabled="batch && cleared.dateCode" @click="applyDateCode(1)">
               {{ $t("common.nextWeek") }}
             </button>
+            <label v-if="batch" class="clear-check"><input v-model="cleared.dateCode" type="checkbox" /> {{ $t("admin.pages.receiving.clearField") }}</label>
           </div>
         </div>
         <div class="form-row">
           <label for="ie-lot">{{ $t("admin.pages.receiving.lotCode") }}</label>
-          <input id="ie-lot" v-model="lotCode" type="text" />
+          <div class="field-row">
+            <input id="ie-lot" v-model="lotCode" type="text" :disabled="batch && cleared.lotCode" />
+            <label v-if="batch" class="clear-check"><input v-model="cleared.lotCode" type="checkbox" /> {{ $t("admin.pages.receiving.clearField") }}</label>
+          </div>
         </div>
         <div class="form-row">
           <label for="ie-coo">{{ $t("admin.pages.receiving.coo") }}</label>
-          <input id="ie-coo" v-model="coo" type="text" />
+          <div class="field-row">
+            <input id="ie-coo" v-model="coo" type="text" :disabled="batch && cleared.coo" />
+            <label v-if="batch" class="clear-check"><input v-model="cleared.coo" type="checkbox" /> {{ $t("admin.pages.receiving.clearField") }}</label>
+          </div>
         </div>
         <div class="form-row">
           <label for="ie-cow">{{ $t("admin.pages.receiving.cow") }}</label>
-          <input id="ie-cow" v-model="cow" type="text" />
+          <div class="field-row">
+            <input id="ie-cow" v-model="cow" type="text" :disabled="batch && cleared.cow" />
+            <label v-if="batch" class="clear-check"><input v-model="cleared.cow" type="checkbox" /> {{ $t("admin.pages.receiving.clearField") }}</label>
+          </div>
         </div>
         <div class="form-row">
           <label for="ie-ctn">{{ $t("admin.pages.receiving.ctnNo") }}</label>
-          <input id="ie-ctn" v-model="ctnNo" type="text" />
+          <div class="field-row">
+            <input id="ie-ctn" v-model="ctnNo" type="text" :disabled="batch && cleared.ctnNo" />
+            <label v-if="batch" class="clear-check"><input v-model="cleared.ctnNo" type="checkbox" /> {{ $t("admin.pages.receiving.clearField") }}</label>
+          </div>
+        </div>
+        <div v-if="withDrawingNo" class="form-row">
+          <label for="ie-draw">{{ $t("admin.pages.receiving.drawingNo") }}</label>
+          <div class="field-row">
+            <input id="ie-draw" v-model="drawingNo" type="text" :disabled="batch && cleared.drawingNo" />
+            <label v-if="batch" class="clear-check"><input v-model="cleared.drawingNo" type="checkbox" /> {{ $t("admin.pages.receiving.clearField") }}</label>
+          </div>
         </div>
         <div v-if="subInventoryOptions" class="form-row">
           <label>{{ $t("admin.pages.receivingCn.itemsTable.subInventory") }}</label>
-          <SearchableSelect
-            v-model="subInventory"
-            :options="subInventoryOptions"
-            :all-label="$t('admin.pages.receivingCn.itemsTable.subInventory')"
-            :aria-label="$t('admin.pages.receivingCn.itemsTable.subInventory')"
-            :multiple="false"
-            :show-all="false"
-          />
+          <div class="field-row">
+            <SearchableSelect
+              v-model="subInventory"
+              :options="subInventoryOptions"
+              :all-label="$t('admin.pages.receivingCn.itemsTable.subInventory')"
+              :aria-label="$t('admin.pages.receivingCn.itemsTable.subInventory')"
+              :multiple="false"
+              :show-all="false"
+              :disabled="batch && cleared.subInventory"
+            />
+            <label v-if="batch" class="clear-check"><input v-model="cleared.subInventory" type="checkbox" /> {{ $t("admin.pages.receiving.clearField") }}</label>
+          </div>
         </div>
         <div v-if="shelfOptions" class="form-row">
           <label>{{ $t("admin.pages.receivingCn.itemsTable.suggestedShelf") }}</label>
-          <SearchableSelect
-            v-model="suggestedShelf"
-            :options="shelfOptions"
-            :all-label="$t('admin.pages.receivingCn.itemsTable.suggestedShelf')"
-            :aria-label="$t('admin.pages.receivingCn.itemsTable.suggestedShelf')"
-            :multiple="false"
-            :show-all="false"
-          />
+          <div class="field-row">
+            <SearchableSelect
+              v-model="suggestedShelf"
+              :options="shelfOptions"
+              :all-label="$t('admin.pages.receivingCn.itemsTable.suggestedShelf')"
+              :aria-label="$t('admin.pages.receivingCn.itemsTable.suggestedShelf')"
+              :multiple="false"
+              :show-all="false"
+              :disabled="batch && cleared.suggestedShelf"
+            />
+            <label v-if="batch" class="clear-check"><input v-model="cleared.suggestedShelf" type="checkbox" /> {{ $t("admin.pages.receiving.clearField") }}</label>
+          </div>
         </div>
         <div class="dialog-actions">
           <button type="button" class="btn" @click="emit('close')">{{ $t("admin.common.cancel") }}</button>
@@ -191,13 +242,23 @@ function applyDateCode(offsetWeeks: number) {
 </template>
 
 <style scoped>
-.dc-row {
+.dc-row,
+.field-row {
   display: flex;
   gap: 0.5rem;
   align-items: center;
 }
-.dc-row input {
+.dc-row input,
+.field-row input,
+.field-row :deep(.ssel) {
   flex: 1;
+}
+.clear-check {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  white-space: nowrap;
 }
 .summary {
   font-size: 0.8125rem;

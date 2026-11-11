@@ -149,7 +149,7 @@ export async function updateReceivingDeliveryDate(
   return { id: input.orderId, deliveryDate: input.deliveryDate };
 }
 
-/** Editable fields on a receiving invoice item (camelCase → column). */
+/** Editable column fields on a receiving invoice item (camelCase → column). */
 const RECEIVING_ITEM_FIELDS = {
   dateCode: "date_code",
   lotCode: "lot_code",
@@ -158,35 +158,56 @@ const RECEIVING_ITEM_FIELDS = {
   ctnNo: "ctn_no",
 } as const;
 
-export type ReceivingItemField = keyof typeof RECEIVING_ITEM_FIELDS;
+/** drawingNo has no column — it lives in the additional_data jsonb passthrough. */
+const RECEIVING_ITEM_JSONB_FIELDS = { drawingNo: "drawing_no" } as const;
+
+export type ReceivingItemField = keyof typeof RECEIVING_ITEM_FIELDS | keyof typeof RECEIVING_ITEM_JSONB_FIELDS;
 
 /** Set (or clear with null) editable fields on one receiving invoice item. */
 export async function updateReceivingItemFields(
   db: AppDb,
   input: { itemId: string; fields: Partial<Record<ReceivingItemField, string | null>>; actorId: string | null }
 ): Promise<{ id: string }> {
-  const keys = (Object.keys(RECEIVING_ITEM_FIELDS) as ReceivingItemField[]).filter((k) => k in input.fields);
-  if (keys.length === 0) throw new HTTPException(400, { message: "no_fields" });
+  const columnKeys = (Object.keys(RECEIVING_ITEM_FIELDS) as (keyof typeof RECEIVING_ITEM_FIELDS)[]).filter(
+    (k) => k in input.fields
+  );
+  const jsonbKeys = (Object.keys(RECEIVING_ITEM_JSONB_FIELDS) as (keyof typeof RECEIVING_ITEM_JSONB_FIELDS)[]).filter(
+    (k) => k in input.fields
+  );
+  if (columnKeys.length === 0 && jsonbKeys.length === 0) throw new HTTPException(400, { message: "no_fields" });
   const existing = await queryGet<Record<string, string | null>>(
     db,
-    sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo", date_code AS "dateCode", lot_code AS "lotCode", coo, cow, ctn_no AS "ctnNo" FROM receiving_invoice_items WHERE id = ${input.itemId}`
+    sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo", date_code AS "dateCode", lot_code AS "lotCode", coo, cow, ctn_no AS "ctnNo", additional_data->>'drawing_no' AS "drawingNo" FROM receiving_invoice_items WHERE id = ${input.itemId}`
   );
   if (!existing) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
   const itemMeta: Record<string, unknown> = { partNo: existing.partNo };
   if (existing.wclItemNo) itemMeta.wclItemNo = existing.wclItemNo;
+  const sets: SQL[] = columnKeys.map(
+    (k) => sql`${sql.raw(RECEIVING_ITEM_FIELDS[k])} = ${input.fields[k] ?? null}`
+  );
+  for (const k of jsonbKeys) {
+    const jsonKey = RECEIVING_ITEM_JSONB_FIELDS[k];
+    const v = input.fields[k] ?? null;
+    sets.push(
+      v === null
+        ? sql`additional_data = additional_data - ${jsonKey}`
+        : sql`additional_data = jsonb_set(COALESCE(additional_data, '{}'::jsonb), ARRAY[${jsonKey}], to_jsonb(${v}::text))`
+    );
+  }
   await queryRun(
     db,
-    sql`UPDATE receiving_invoice_items SET ${sql.join(
-      keys.map((k) => sql`${sql.raw(RECEIVING_ITEM_FIELDS[k])} = ${input.fields[k] ?? null}`),
-      sql`, `
-    )}, last_update_date = ${now()} WHERE id = ${input.itemId}`
+    sql`UPDATE receiving_invoice_items SET ${sql.join(sets, sql`, `)}, last_update_date = ${now()} WHERE id = ${input.itemId}`
   );
-  for (const k of keys) {
+  for (const k of [...columnKeys, ...jsonbKeys] as ReceivingItemField[]) {
     const to = input.fields[k] ?? null;
     if (existing[k] === to) continue;
+    const field =
+      k in RECEIVING_ITEM_FIELDS
+        ? RECEIVING_ITEM_FIELDS[k as keyof typeof RECEIVING_ITEM_FIELDS]
+        : RECEIVING_ITEM_JSONB_FIELDS[k as keyof typeof RECEIVING_ITEM_JSONB_FIELDS];
     await audit(db, "receiving_invoice_item", input.itemId, input.actorId, {
       ...itemMeta,
-      field: RECEIVING_ITEM_FIELDS[k],
+      field,
       from: existing[k],
       to,
     });

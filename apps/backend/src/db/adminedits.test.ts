@@ -137,6 +137,40 @@ test("admin edits: set and clear receiving invoice item date code + audit row", 
   assert.equal(missing.status, 404);
 });
 
+test("admin edits: set and clear receiving invoice item drawing no (additional_data jsonb)", async () => {
+  await reseed(client);
+  const itemId = (await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT rii.id FROM receiving_invoice_items rii
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
+        WHERE ro.batch_no = '100001' LIMIT 1`
+  ))!.id;
+  const actorId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'admin'`))!.id;
+
+  await updateReceivingItemFields(client.db, { itemId, fields: { drawingNo: "DWG-123" }, actorId });
+  const row = await queryGet<{ d: string | null }>(
+    client.db,
+    sql`SELECT additional_data->>'drawing_no' AS d FROM receiving_invoice_items WHERE id = ${itemId}`
+  );
+  assert.equal(row!.d, "DWG-123");
+  const log = await queryGet<{ metadata: { field: string; to: string } }>(
+    client.db,
+    sql`SELECT metadata FROM transaction_logs
+        WHERE entity_type = 'receiving_invoice_item' AND entity_id = ${itemId}
+          AND metadata->>'field' = 'drawing_no'
+        ORDER BY created_date DESC LIMIT 1`
+  );
+  assert.equal(log!.metadata.to, "DWG-123");
+
+  await updateReceivingItemFields(client.db, { itemId, fields: { drawingNo: null }, actorId });
+  const clearedRow = await queryGet<{ d: string | null }>(
+    client.db,
+    sql`SELECT additional_data->>'drawing_no' AS d FROM receiving_invoice_items WHERE id = ${itemId}`
+  );
+  assert.equal(clearedRow!.d, null);
+});
+
 test("admin edits: picking order ship-to + location pair + audit rows", async () => {
   await reseed(client);
   const orderId = (await queryGet<{ id: string }>(
