@@ -10,7 +10,7 @@ import { pickingShelfScan, dateCodeFormat } from "../config.js";
 import { toCanonicalDateCode } from "./dateCode.js";
 import { logTransition, recomputeLot } from "./picking.js";
 import { workLockExpiry, allocateForPickingOrder } from "./allocate.js";
-import { recomputeTransferItem } from "./internalTransferAllocate.js";
+import { recomputeTransferItem, transferFromScope } from "./internalTransferAllocate.js";
 
 // ---------------------------------------------------------------------------
 // Internal transfer PDA flow (spec
@@ -43,8 +43,10 @@ function lockHeldResponse(holderId: string, holderName: string | null): HTTPExce
 interface TransferOrderState {
   id: string;
   status: string;
+  orderNo: string;
   fromOrgId: number | null;
   fromSubInventoryCode: string | null;
+  poNo: string | null;
   toOrgId: number | null;
   toSubInventoryCode: string | null;
   pickingOrderId: string | null;
@@ -54,8 +56,9 @@ interface TransferOrderState {
 async function loadTransferForWrite(tx: DbOrTx, transferOrderId: string): Promise<TransferOrderState> {
   const order = await queryGet<TransferOrderState>(
     tx,
-    sql`SELECT ito.id, ito.status,
+    sql`SELECT ito.id, ito.status, ito.order_no AS "orderNo",
                ito.from_org_id AS "fromOrgId", ito.from_sub_inventory_code AS "fromSubInventoryCode",
+               ito.additional_data ->> 'po_no' AS "poNo",
                ito.to_org_id AS "toOrgId", ito.to_sub_inventory_code AS "toSubInventoryCode",
                ito.picking_order_id AS "pickingOrderId", ito.issue_reason AS "issueReason"
         FROM internal_transfer_orders ito WHERE ito.id = ${transferOrderId}`
@@ -349,8 +352,10 @@ async function consumeAllocationRowSource(
     }
     if (shelfScanMode !== "off" && !scannedLocationMatches(input, lot)) {
       // Physical truth wins: the operator scanned a different shelf —
-      // resolve the part's lot there (org/sub from the transfer's from_
-      // pair, the source partition).
+      // resolve the part's lot there, scoped to the transfer's tn-converted
+      // source partition (transferFromScope — same scope the allocator used,
+      // so a foreign from_org_id still finds the local stock).
+      const fromScope = transferFromScope(order);
       lot = await queryGet<LotSourceRow>(
         tx,
         sql`SELECT il.id, il.total_qty AS "totalQty", il.shelf_code AS "shelfCode", il.box_id AS "boxId",
@@ -359,7 +364,13 @@ async function consumeAllocationRowSource(
             WHERE (il.part_no = ${item.partNo} OR il.wcl_item_no = ${item.partNo})
               AND il.shelf_code = ${input.shelfCode ?? null}
               ${input.boxId ? sql`AND il.box_id = ${input.boxId}` : sql``}
-              AND (${order.fromOrgId}::int IS NULL OR il.org_id = ${order.fromOrgId})
+              AND (${fromScope.orgId}::int IS NULL OR il.org_id = ${fromScope.orgId})
+              AND (${fromScope.subInventoryCode}::text IS NULL
+                   OR upper(il.sub_inventory_code) = upper(${fromScope.subInventoryCode})
+                   OR EXISTS (SELECT 1 FROM sub_inventory_share_members sm_d
+                              JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
+                              WHERE sm_d.org_id = ${fromScope.orgId} AND upper(sm_d.code) = upper(${fromScope.subInventoryCode})
+                                AND sm_s.org_id = il.org_id AND upper(sm_s.code) = upper(il.sub_inventory_code)))
               AND il.total_qty - il.allocated_qty >= ${take}
             ORDER BY il.date_code ASC NULLS LAST, il.id
             LIMIT 1`

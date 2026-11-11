@@ -8,7 +8,7 @@ import { emitEvent } from "./events.js";
 import { now } from "./now.js";
 import { allowDockStock } from "../config.js";
 import { logTransition, recomputeLot } from "./picking.js";
-import { loadLotSources, workLockExpiry, type DemandRow } from "./allocate.js";
+import { loadLotSources, workLockExpiry, resolveFromSubinventoryLocation, type DemandRow } from "./allocate.js";
 
 // ---------------------------------------------------------------------------
 // Internal transfer allocation engine (spec
@@ -17,9 +17,12 @@ import { loadLotSources, workLockExpiry, type DemandRow } from "./allocate.js";
 // An internal transfer order is a DEMAND exactly like a picking order: admin
 // presses per-order Re-allocate, sources are restricted to the order's from_
 // (org_id, sub_inventory_code) pair (share-group widened, NULL pair =
-// org-agnostic — the same rule as the picking engine, applied to the transfer's
-// OWN from_ columns; resolveDemandLocation is deliberately NOT used, it is
-// the picking-side transfer-item conversion).
+// org-agnostic — the same rule as the picking engine). The pair goes through
+// the tn conversion first (transferFromScope — from_subinventory → Org rule,
+// spec 2026-09-03): upstream syncs foreign ERP offices as from_org_id
+// (e.g. 143/STORE1 while the stock physically sits in another org's
+// partition), so a group listing the code re-scopes to that group's org with
+// the sub resolved by the receiving rules; already-local pairs stay raw.
 //
 // Mirrors allocateAll/allocateForPickingOrder's wipe/rebuild mechanics on
 // purpose — keep them in sync when the allocation rules change (same note as
@@ -51,6 +54,33 @@ export interface TransferAllocateResult {
   skippedReceivingSources: number;
   changed: boolean;
   durationMs: number;
+}
+
+/** Source scope for a transfer order's stock/dock lookups — tn parity (spec
+ *  2026-09-03-picking-from-subinventory-orgs, resolveDemandLocation on the
+ *  picking side). Upstream syncs the ERP office into from_org_id, which is
+ *  often NOT the local partition holding the stock (e.g. 143/STORE1 while
+ *  stock sits in org 2's STORE1): when a pickingFromSubinventoryOrgs group
+ *  lists from_sub_inventory_code AND its org differs from the synced one,
+ *  re-scope to that group's org with the sub resolved by the receiving rules
+ *  over the order's own order_no / additional_data po_no. An already-local
+ *  pair (group org == from_org_id, e.g. HK's own 2/STORE1) stays raw — the
+ *  order's pair is physically correct there. Used by the allocation engine,
+ *  the PDA scanned-shelf fallback, and the admin availability dialog. */
+export function transferFromScope(order: {
+  fromOrgId: number | null;
+  fromSubInventoryCode: string | null;
+  orderNo?: string | null;
+  poNo?: string | null;
+}): { orgId: number | null; subInventoryCode: string | null } {
+  const converted = resolveFromSubinventoryLocation(
+    order.fromSubInventoryCode,
+    order.orderNo?.trim() || order.poNo?.trim() || null
+  );
+  if (!converted || converted.orgId === order.fromOrgId) {
+    return { orgId: order.fromOrgId, subInventoryCode: order.fromSubInventoryCode };
+  }
+  return converted;
 }
 
 /** Open demands of ONE transfer order — no item status clause (explicit
@@ -218,15 +248,18 @@ export async function allocateForInternalTransferOrder(db: AppDb, transferOrderI
     const order = await queryGet<{
       id: string;
       status: string;
+      orderNo: string;
       fromOrgId: number | null;
       fromSubInventoryCode: string | null;
+      poNo: string | null;
       workingBy: string | null;
       workingAt: Date | null;
       holderName: string | null;
     }>(
       tx,
-      sql`SELECT ito.id, ito.status, ito.from_org_id AS "fromOrgId",
+      sql`SELECT ito.id, ito.status, ito.order_no AS "orderNo", ito.from_org_id AS "fromOrgId",
                  ito.from_sub_inventory_code AS "fromSubInventoryCode",
+                 ito.additional_data ->> 'po_no' AS "poNo",
                  ito.working_by AS "workingBy", ito.working_at AS "workingAt",
                  u.display_name AS "holderName"
           FROM internal_transfer_orders ito
@@ -366,14 +399,14 @@ export async function allocateForInternalTransferOrder(db: AppDb, transferOrderI
     }
     lotDelta.clear();
 
-    const from = { orgId: order.fromOrgId, subInventoryCode: order.fromSubInventoryCode };
+    const from = transferFromScope(order);
     const lotUsed = new Map<string, number>();
     const recvUsed = new Map<string, number>();
 
     for (const d of demands) {
-      // Synthesized picking DemandRow carrying the transfer's OWN from_ pair —
-      // resolveDemandLocation is never applied (that is the picking-side
-      // transfer-item conversion, not ours).
+      // Synthesized picking DemandRow carrying the transfer's resolved source
+      // scope (transferFromScope — the tn conversion, foreign from_org_id →
+      // this warehouse's partition when the rules list the code).
       const lotDemand: DemandRow = {
         pickingItemId: d.transferItemId,
         partNo: d.partNo,

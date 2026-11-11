@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // Manual-allocation dialog for ONE internal transfer item line (spec
 // 2026-11-10-internal-transfer-admin-allocate-design.md): lists the part's
-// allocatable stock at the order's from_ partition (the availability
-// endpoint's `matched` rows use the same org/sub-inventory + share-group
-// rule as the engine) and pins manual allocations, qty capped by the source
+// allocatable stock at the order's tn-converted source partition (the
+// availability endpoint resolves transferItemId → transferFromScope server-
+// side; `matched` rows use the same org/sub-inventory + share-group rule as
+// the engine) and pins manual allocations, qty capped by the source
 // availability (net of BOTH engines' reservations) and the item's open qty.
 // The picking modal (PartAvailabilityModal) is deliberately not reused — its
 // final-state allocate-form and group modes are picking-specific; this is
@@ -15,8 +16,6 @@ const props = defineProps<{
   orderId: string;
   orderNo: string;
   item: InternalTransferItemRow | null;
-  fromOrgId: number | null;
-  fromSubInventoryCode: string | null;
 }>();
 
 const emit = defineEmits<{ close: []; allocated: [] }>();
@@ -31,6 +30,9 @@ const stock = ref<PartAvailabilityStockRow[]>([]);
 const receiving = ref<PartAvailabilityReceivingRow[]>([]);
 const dockAllowed = ref(true);
 const qtyByKey = ref<Record<string, string>>({});
+// The tn-converted source partition the server resolved for this item —
+// shown in the header so the admin sees which partition was really searched.
+const resolvedCtx = ref<{ orgId: number | null; subInventoryCode: string | null } | null>(null);
 
 // stage 1: pickedQty is always 0 (packages arrive with the PDA stage)
 const remaining = computed(() => Math.max(0, (props.item?.qty ?? 0) - (props.item?.allocatedQty ?? 0)));
@@ -41,9 +43,9 @@ async function load() {
   error.value = "";
   try {
     const res = await flow.getPartAvailability(props.item.partNo, props.item.wclItemNo, {
-      orgId: props.fromOrgId,
-      subInventoryCode: props.fromSubInventoryCode,
+      transferItemIds: [props.item.id],
     });
+    resolvedCtx.value = res.context;
     stock.value = res.stock.filter((r) => r.matched && r.availableQty > 0);
     receiving.value = res.receiving.filter((r) => r.matched);
     dockAllowed.value = res.dockStockAllowed;
@@ -127,7 +129,7 @@ function pinReceiving(row: PartAvailabilityReceivingRow) {
       <template v-else>
         <p class="hint">
           {{ $t("internalTransfer.mRemaining", { qty: remaining }) }}
-          <span v-if="fromOrgId !== null"> · {{ $t("internalTransfer.mAt", { org: fromOrgId, sub: fromSubInventoryCode ?? "—" }) }}</span>
+          <span v-if="resolvedCtx"> · {{ $t("internalTransfer.mAt", { org: resolvedCtx.orgId ?? "—", sub: resolvedCtx.subInventoryCode ?? "—" }) }}</span>
         </p>
 
         <h3>{{ $t("internalTransfer.mStock") }}</h3>

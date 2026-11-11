@@ -19,6 +19,11 @@ import {
 import { assignTransferPickingOrder } from "./internalTransfer.js";
 import { allocateForPickingOrder, removePickingAllocation } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
+import {
+  _setPickingFromSubinventoryOrgsForTests,
+  _setReceivingSubInventoryRulesForTests,
+  _resetFlowConfigForTests,
+} from "../config.js";
 
 let client: TestDb;
 let ACTOR: string;
@@ -396,4 +401,58 @@ test("detail payload embeds item allocations and the assigned picking order", as
   assert.equal(a.lot.shelfCode, "A0101");
   assert.equal(a.receiving, null);
   assert.equal(a.outdated, true); // LOT_18's dc 0326 is far past the 2-year threshold
+});
+
+test("source scope: a foreign from_org_id converts via the from_subinventory → Org rule (tn parity)", async () => {
+  // The synced pair (7, SZHK2) holds no stock; SZHK2 is listed under the
+  // org-143 group and org 143's receiving rule defaults to STORE1 — the
+  // demand must search (143, STORE1), mirroring the picking-side tn lines
+  // (resolveDemandLocation).
+  _setPickingFromSubinventoryOrgsForTests([{ orgId: 143, fromSubinventories: ["SZHK2"] }]);
+  _setReceivingSubInventoryRulesForTests([{ orgIds: [143], patterns: [], default: "STORE1" }]);
+  try {
+    await client.db.execute(sql`
+      INSERT INTO org_info (id, org_id, secondary_inventory_name, creation_date, last_update_date)
+      VALUES ('ORGINFO-7-SZHK2', 7, 'SZHK2', now(), now()),
+             ('ORGINFO-143-STORE1', 143, 'STORE1', now(), now())
+      ON CONFLICT (org_id, secondary_inventory_name) DO NOTHING`);
+    const srcLot = randomUUID();
+    await client.db.execute(sql`
+      INSERT INTO inventory_lots (id, part_no, org_id, sub_inventory_code, date_code, total_qty, allocated_qty, created_date, last_update_date)
+      VALUES (${srcLot}, 'RK73H1JTTD1002F', 143, 'STORE1', '0326', 400, 0, now(), now())`);
+    const rawLot = randomUUID();
+    await client.db.execute(sql`
+      INSERT INTO inventory_lots (id, part_no, org_id, sub_inventory_code, date_code, total_qty, allocated_qty, created_date, last_update_date)
+      VALUES (${rawLot}, 'RK73H1JTTD1002F', 7, 'SZHK2', '0111', 400, 0, now(), now())`);
+    const transferId = await insertTransfer("ITO-SCOPE", { fromOrgId: 7, fromSub: "SZHK2" });
+    const itemId = await insertTransferItem(transferId, "RK73H1JTTD1002F", 300);
+
+    const res = await allocateForInternalTransferOrder(client.db, transferId);
+    assert.equal(res.allocationsCreated, 1);
+    const rows = await client.db.execute(sql`
+      SELECT inventory_lot_id AS lot FROM internal_transfer_allocations WHERE transfer_item_id = ${itemId}`);
+    assert.equal((rows[0] as any).lot, srcLot); // converted partition, not the raw synced pair
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
+test("source scope: a pair already at the rule's own org stays raw (local orders unaffected)", async () => {
+  // (2, STORE1) is HK's own partition and STORE1 is listed under the org-2
+  // group — the org matches, so the pair must stay raw even though the
+  // receiving rule would say DEFAULT (the tn conversion applies to foreign
+  // offices only; local synced orders keep working with zero config care).
+  _setPickingFromSubinventoryOrgsForTests([{ orgId: 2, fromSubinventories: ["STORE1"] }]);
+  _setReceivingSubInventoryRulesForTests([{ orgIds: [2], patterns: [], default: "DEFAULT" }]);
+  try {
+    const transferId = await insertTransfer("ITO-LOCAL", { fromOrgId: 2, fromSub: "STORE1" });
+    const itemId = await insertTransferItem(transferId, "RK73H1JTTD1002F", 300);
+    const res = await allocateForInternalTransferOrder(client.db, transferId);
+    assert.equal(res.allocationsCreated, 1);
+    const rows = await client.db.execute(sql`
+      SELECT inventory_lot_id AS lot FROM internal_transfer_allocations WHERE transfer_item_id = ${itemId}`);
+    assert.equal((rows[0] as any).lot, LOT_18);
+  } finally {
+    _resetFlowConfigForTests();
+  }
 });

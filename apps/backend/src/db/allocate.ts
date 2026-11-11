@@ -233,6 +233,29 @@ async function loadDemands(dbOrTx: DbOrTx, partKeys?: string[], onlyOrderId?: st
 }
 
 /**
+ * The tn transfer conversion core: a from_subinventory code listed in a
+ * pickingFromSubinventoryOrgs group matches stock in that group's orgId, with
+ * the sub-inventory resolved by the receivingSubInventoryRules over ruleRef
+ * (same matcher as receiving confirm-arrival); when no receiving rule matches,
+ * the from_subinventory code itself is used. Returns null when the code is
+ * unset or no group lists it — callers keep their own pair. Shared by
+ * resolveDemandLocation (picking items) and transferFromScope
+ * (internal_transfer_orders — internalTransferAllocate.ts).
+ */
+export function resolveFromSubinventoryLocation(
+  fromSubinventory: string | null | undefined,
+  ruleRef: string | null
+): { orgId: number; subInventoryCode: string } | null {
+  if (!fromSubinventory) return null;
+  const group = pickingFromSubinventoryOrgs().find((g) => g.fromSubinventories.includes(fromSubinventory));
+  if (!group) return null;
+  return {
+    orgId: group.orgId,
+    subInventoryCode: matchSubInventoryRule(group.orgId, ruleRef, receivingSubInventoryRules()) ?? fromSubinventory,
+  };
+}
+
+/**
  * Transfer-order location conversion (FLOW_CONFIG pickingFromSubinventoryOrgs).
  * An item with additional_data.from_subinventory is a transfer: the order's
  * (org_id, sub_inventory_code) is the destination. When a group lists the
@@ -245,17 +268,11 @@ async function loadDemands(dbOrTx: DbOrTx, partKeys?: string[], onlyOrderId?: st
  * or whose code no group lists, keep the order's pair unchanged.
  */
 export function resolveDemandLocation(d: DemandRow): DemandRow {
-  if (!d.fromSubinventory) return d;
-  const groups = pickingFromSubinventoryOrgs();
-  if (groups.length === 0) return d;
-  const group = groups.find((g) => g.fromSubinventories.includes(d.fromSubinventory!));
-  if (!group) return d;
-  const ruleRef = d.orderNo?.trim() || d.itemPoNo?.trim() || null;
-  return {
-    ...d,
-    orgId: group.orgId,
-    subInventoryCode: matchSubInventoryRule(group.orgId, ruleRef, receivingSubInventoryRules()) ?? d.fromSubinventory,
-  };
+  const loc = resolveFromSubinventoryLocation(
+    d.fromSubinventory,
+    d.orderNo?.trim() || d.itemPoNo?.trim() || null
+  );
+  return loc ? { ...d, orgId: loc.orgId, subInventoryCode: loc.subInventoryCode } : d;
 }
 
 export async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {

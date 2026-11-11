@@ -5,6 +5,7 @@ import { db } from "../../db.js";
 import { queryAll } from "../../db/query.js";
 import { allowDockStock, outdatedStockYears, dateCodeFormat } from "../../config.js";
 import { resolveDemandLocation, workLockExpiry, type DemandRow as AllocateDemandRow } from "../../db/allocate.js";
+import { transferFromScope } from "../../db/internalTransferAllocate.js";
 import { dateCodeRank, isOutdatedRank, outdatedThresholdRank, toCanonicalDateCode } from "../../db/dateCode.js";
 import { locationMatches, type LocationMatchContext } from "../../db/locationMatch.js";
 
@@ -18,11 +19,13 @@ import { locationMatches, type LocationMatchContext } from "../../db/locationMat
 // same sub-inventory or a sibling in the same `sub_inventory_share_members`
 // group), so the dialogs can hide non-applicable rows while the exact-match
 // highlight still tells the two cases apart.
-// `/part-availability` additionally accepts repeated `pickingItemId` params:
-// the context is then resolved server-side per item via the engine's
-// transfer conversion (resolveDemandLocation — a tn line searches its
-// from_subinventory source partition, not the order's destination pair) and
-// echoed back as `context` for the dialog's highlight/display.
+// `/part-availability` additionally accepts repeated `pickingItemId` /
+// `transferItemId` params: the context is then resolved server-side per item
+// via the engine's transfer conversion (resolveDemandLocation — a tn line
+// searches its from_subinventory source partition, not the order's destination
+// pair; transferFromScope — an internal transfer order searches its
+// tn-converted source partition, not the synced foreign from_ pair) and echoed
+// back as `context` for the dialog's highlight/display.
 
 interface StockRow {
   lotId: string;
@@ -136,6 +139,34 @@ async function resolvePickingItemContext(pickingItemIds: string[]): Promise<Loca
   return same ? { orgId: first.orgId, subInventoryCode: first.subInventoryCode } : null;
 }
 
+// Same server-side context resolution for internal transfer items — the
+// dialog passes transferItemId and the order's from_ pair goes through
+// transferFromScope (tn conversion), so the highlighted rows are exactly the
+// rows allocateForInternalTransferOrder can source.
+async function resolveTransferItemContext(transferItemIds: string[]): Promise<LocationMatchContext | null> {
+  if (transferItemIds.length === 0) return null;
+  const rows = await queryAll<{
+    fromOrgId: number | null;
+    fromSubInventoryCode: string | null;
+    orderNo: string;
+    poNo: string | null;
+  }>(
+    db,
+    sql`SELECT o.from_org_id AS "fromOrgId", o.from_sub_inventory_code AS "fromSubInventoryCode",
+               o.order_no AS "orderNo", o.additional_data ->> 'po_no' AS "poNo"
+        FROM internal_transfer_items i
+        JOIN internal_transfer_orders o ON o.id = i.transfer_order_id
+        WHERE ${inArray(sql`i.id`, transferItemIds)}`
+  );
+  if (rows.length === 0) return null;
+  const scopes = rows.map(transferFromScope);
+  const first = scopes[0];
+  const same = scopes.every(
+    (s) => s.orgId === first.orgId && s.subInventoryCode === first.subInventoryCode
+  );
+  return same ? { orgId: first.orgId, subInventoryCode: first.subInventoryCode } : null;
+}
+
 // Reverse lookup for the receiving-detail Allocate modal: open picking items
 // (pending/picking orders) needing a part, with the remaining uncovered qty.
 adminPartAvailabilityRoute.get("/part-demand", async (c) => {
@@ -199,8 +230,10 @@ adminPartAvailabilityRoute.get("/part-availability", async (c) => {
   if (partNo === "") throw new HTTPException(400, { message: "part_no_required" });
   const wclItemNo = c.req.query("wclItemNo")?.trim() ?? "";
   const itemIds = (c.req.queries("pickingItemId") ?? []).map((s) => s.trim()).filter(Boolean);
+  const transferIds = (c.req.queries("transferItemId") ?? []).map((s) => s.trim()).filter(Boolean);
   const itemCtx = await resolvePickingItemContext(itemIds);
-  const ctx = itemCtx ?? readMatchContext(c);
+  const transferCtx = itemCtx === null ? await resolveTransferItemContext(transferIds) : null;
+  const ctx = itemCtx ?? transferCtx ?? readMatchContext(c);
 
   const stock = await queryAll<StockRow>(
     db,
@@ -273,7 +306,7 @@ adminPartAvailabilityRoute.get("/part-availability", async (c) => {
       )
     : [];
 
-  return c.json({ stock, receiving, dockStockAllowed: dockStock, context: itemCtx });
+  return c.json({ stock, receiving, dockStockAllowed: dockStock, context: itemCtx ?? transferCtx });
 });
 
 interface AllocationBreakdownRow {

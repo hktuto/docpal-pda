@@ -69,12 +69,17 @@ New domain module `apps/backend/src/db/internalTransferAllocate.ts`, mirroring
   Part key = `internal_transfer_items.part_no`, matched against source
   `part_no` OR `wcl_item_no` — same rule as the picking engine.
 - **Location:** sources restricted to the order's `from_org_id` +
-  `from_sub_inventory_code` pair. Reuses the engine's matching semantics:
-  case-insensitive code compare, `sub_inventory_share_members` widening, and
-  NULL pair = org-agnostic. **Not** `resolveDemandLocation` — that conversion
-  is for *picking* transfer items (`additional_data.from_subinventory`); an
-  internal transfer carries its own `from_` columns. A NULL `from_` pair is
-  impossible in current data (0/10,412) but the org-agnostic rule covers it.
+  `from_sub_inventory_code` pair, run through the tn conversion first via
+  `transferFromScope` (2026-11-11 amendment — upstream syncs foreign ERP
+  offices into `from_org_id`, e.g. 143/STORE1 while the stock physically sits
+  in another org's partition): when a `pickingFromSubinventoryOrgs` group
+  lists `from_sub_inventory_code` AND that group's org differs from the
+  synced one, re-scope to the group's org with the sub resolved by the
+  receiving rules over the order's `order_no` / `additional_data.po_no`
+  (same `resolveFromSubinventoryLocation` core the picking side uses).
+  An already-local pair (group org == `from_org_id`) and unlisted codes stay
+  raw. Matching semantics unchanged: case-insensitive code compare,
+  `sub_inventory_share_members` widening, NULL pair = org-agnostic.
 - **Sources, in order:** shelf lots FIFO by date code (reuse `loadLotSources`,
   exported from `allocate.ts`, with a synthesized `DemandRow` carrying the
   `from_` pair), then dock stock FIFO when `allowDockStock()` — via a
@@ -241,6 +246,10 @@ header + items — 102 lines):
   `addManualInternalTransferAllocation`; context pair = the order's `from_`;
   the modal gets a target-mode prop if its shape allows, else a thin
   `TransferAvailabilityModal` variant reusing its tables).
+  2026-11-11 amendment: delivered as `TransferAllocateModal.vue`; it passes
+  `transferItemId` to `GET /admin/part-availability` (like the picking modal's
+  `pickingItemId`), so the dialog context is the tn-CONVERTED source partition
+  resolved server-side and the header shows that resolved pair.
 - `flowApi.ts` types + methods; i18n keys ×3 locales; list page gains the
   `linked` badge (one column, no new filters).
 

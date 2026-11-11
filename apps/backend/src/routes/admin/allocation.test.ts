@@ -110,12 +110,13 @@ test("reallocate: 404 for an unknown picking order", async () => {
   assert.equal(res.status, 404);
 });
 
-test("reallocate: rebuilds the order's part scope (same-part orders too, other parts untouched)", async () => {
+test("reallocate: strictly single-order (same-part orders keep their rows, netted out of availability)", async () => {
   await reseed(client);
   const { orderA, orderB, orderC } = await seedScenario();
 
   // Baseline: no lots for REALLOC-P1 — both orders draw on the receiving ctn.
   assert.ok((await allocRows(orderA)).every((a) => a.receivingItemId !== null));
+  const orderBBefore = (await allocRows(orderB)).map((a) => a.id).sort();
   const orderCBefore = (await allocRows(orderC)).map((a) => a.id).sort();
 
   // New shelf stock arrives (lot, FIFO before receiving sources) — nobody has
@@ -131,16 +132,17 @@ test("reallocate: rebuilds the order's part scope (same-part orders too, other p
   assert.ok(body.allocation.durationMs >= 0);
   assert.deepEqual(body.allocation.partKeys, ["REALLOC-P1"]);
 
-  // Order A (priority first) now holds 600 from the new lot.
+  // Order A (the selected order) is wiped/rebuilt: now holds 600 from the lot.
   const a = await allocRows(orderA);
   assert.deepEqual(a.map((r) => [r.lotId, r.qty]), [["LOT-REALLOC-1", 600]]);
 
-  // Same-part order B was rebuilt too: 100 lot remainder + 300 receiving ctn.
+  // Strictly single-order scope (spec 2026-11-05-picking-reallocate-single-order):
+  // same-part order B is NOT rebuilt — its baseline dock rows survive untouched,
+  // and B's lot remainder (700 − 600 − 0) stays unallocated (netting only
+  // removes B's dock 400 from the pool, it never pins new rows for B).
   const b = await allocRows(orderB);
-  assert.equal(b.length, 2);
-  assert.deepEqual(b[0], { id: b[0]!.id, lotId: null, receivingItemId: b[0]!.receivingItemId, receivingOrderId: null, qty: 300 });
-  assert.equal(b[1]!.lotId, "LOT-REALLOC-1");
-  assert.equal(b[1]!.qty, 100);
+  assert.deepEqual(b.map((r) => r.id).sort(), orderBBefore);
+  assert.ok(b.every((r) => r.receivingItemId !== null && r.lotId === null));
 
   // Order C (different part) was not in scope — allocation rows untouched.
   const orderCAfter = (await allocRows(orderC)).map((x) => x.id).sort();
@@ -816,6 +818,43 @@ test("part-availability: pickingItemId resolves a tn line's source partition (fr
     assert.equal(explicitByLot["LOT-TN-SRC"], false);
   } finally {
     _resetFlowConfigForTests();
+  }
+});
+
+test("part-availability: transferItemId resolves an internal transfer item's converted source partition", async () => {
+  await reseed(client);
+  await client.db.execute(sql`
+    INSERT INTO org_info (id, org_id, secondary_inventory_name, creation_date, last_update_date)
+    VALUES ('ORGINFO-TF-143S1', 143, 'STORE1', now(), now()),
+           ('ORGINFO-TF-7SZHK2', 7, 'SZHK2', now(), now())
+    ON CONFLICT (org_id, secondary_inventory_name) DO NOTHING`);
+  await client.db.execute(sql`
+    INSERT INTO internal_transfer_orders (id, order_no, from_org_id, from_sub_inventory_code, to_org_id, status, priority_seq, created_date, last_update_date)
+    VALUES ('ITO-AVAIL', 'ITO-TN1', 7, 'SZHK2', 2, 'pending', 1, now(), now())`);
+  await client.db.execute(sql`
+    INSERT INTO internal_transfer_items (id, transfer_order_id, part_no, qty, line_number, created_date, last_update_date)
+    VALUES ('ITI-AVAIL', 'ITO-AVAIL', 'REALLOC-P1', 5, 1, now(), now())`);
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-TF-SRC', 'REALLOC-P1', '2001', 'A0405', 'TFSRCBOX', 143, 'STORE1', 10, now(), now()),
+           ('LOT-TF-RAW', 'REALLOC-P1', '2001', 'A0405', 'TFRAWBOX', 7, 'SZHK2', 10, now(), now())`);
+  _setPickingFromSubinventoryOrgsForTests([{ orgId: 143, fromSubinventories: ["SZHK2"] }]);
+  _setReceivingSubInventoryRulesForTests([{ orgIds: [143], patterns: [], default: "STORE1" }]);
+  try {
+    const body = await (await req(`/admin/part-availability?partNo=REALLOC-P1&transferItemId=ITI-AVAIL`)).json();
+    // The dialog context is the tn-converted SOURCE partition (same rule the
+    // transfer engine applies), not the order's synced foreign pair.
+    assert.deepEqual(body.context, { orgId: 143, subInventoryCode: "STORE1" });
+    const byLot = Object.fromEntries(body.stock.map((s: any) => [s.lotId, s.matched]));
+    assert.equal(byLot["LOT-TF-SRC"], true);
+    assert.equal(byLot["LOT-TF-RAW"], false);
+  } finally {
+    _resetFlowConfigForTests();
+    // internal_transfer_* are outside the reseed wipe — clean explicitly
+    await client.db.execute(sql`DELETE FROM internal_transfer_allocations WHERE transfer_item_id = 'ITI-AVAIL'`);
+    await client.db.execute(sql`DELETE FROM internal_transfer_items WHERE id = 'ITI-AVAIL'`);
+    await client.db.execute(sql`DELETE FROM internal_transfer_orders WHERE id = 'ITO-AVAIL'`);
+    await client.db.execute(sql`DELETE FROM inventory_lots WHERE id IN ('LOT-TF-SRC', 'LOT-TF-RAW')`);
   }
 });
 

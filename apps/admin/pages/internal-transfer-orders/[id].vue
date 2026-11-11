@@ -360,8 +360,6 @@ function allocationSource(a: InternalTransferAllocationRow): string {
         :order-id="order.id"
         :order-no="order.orderNo"
         :item="modalItem"
-        :from-org-id="order.fromOrgId"
-        :from-sub-inventory-code="order.fromSubInventoryCode"
         @close="modalOpen = false"
         @allocated="load"
       />

@@ -818,8 +818,9 @@ export interface PartAvailability {
   /** Empty when the warehouse config disallows allocation from receiving dock stock. */
   receiving: PartAvailabilityReceivingRow[];
   dockStockAllowed: boolean;
-  /** Server-resolved dialog context when `pickingItemIds` were passed: the
-   *  transfer-source partition for tn lines, the order pair otherwise. Null
+  /** Server-resolved dialog context when `pickingItemIds` / `transferItemIds`
+   *  were passed: the transfer-source partition for tn lines, the tn-converted
+   *  from_ pair for internal transfer items, the order pair otherwise. Null
    *  when the caller-passed context applies. */
   context: { orgId: number | null; subInventoryCode: string | null } | null;
 }
@@ -1781,8 +1782,9 @@ export function useFlowApi() {
     // a sibling in the same share group) so the modal can hide the rest.
     // `pickingItemIds` lets the backend resolve the context itself — a
     // transfer (tn) line searches its additional_data.from_subinventory
-    // source partition, not the order's destination pair — and the response
-    // echoes the resolved pair as `context`.
+    // source partition, not the order's destination pair; `transferItemIds`
+    // does the same for internal transfer items (tn-converted from_ pair) —
+    // and the response echoes the resolved pair as `context`.
     getPartAvailability: (
       partNo: string,
       wclItemNo?: string | null,
@@ -1790,6 +1792,7 @@ export function useFlowApi() {
         orgId?: number | null;
         subInventoryCode?: string | null;
         pickingItemIds?: string[] | null;
+        transferItemIds?: string[] | null;
       }
     ) => {
       const qs = new URLSearchParams();
@@ -1798,6 +1801,7 @@ export function useFlowApi() {
       if (ctx?.orgId != null) qs.set("orgId", String(ctx.orgId));
       if (ctx?.subInventoryCode) qs.set("subInventoryCode", ctx.subInventoryCode);
       for (const id of ctx?.pickingItemIds ?? []) qs.append("pickingItemId", id);
+      for (const id of ctx?.transferItemIds ?? []) qs.append("transferItemId", id);
       return api.get<PartAvailability>(`/admin/part-availability?${qs}`);
     },
     // Open picking-order demand for a part (uncovered remaining qty > 0).
