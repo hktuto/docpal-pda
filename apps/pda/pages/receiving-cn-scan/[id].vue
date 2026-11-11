@@ -201,7 +201,9 @@ async function submitFlag() {
   };
   // Optional partial flag (CR-047): distribute the declared shortfall over
   // the group's open lines FIFO; empty = flag every open line whole.
-  const qtyText = flagQty.value.trim();
+  // flagQty is bound to a type=number input — Vue casts it to number, so
+  // normalize back to string before validating (BUG-054).
+  const qtyText = String(flagQty.value ?? "").trim();
   let left: number | null = null;
   if (qtyText !== "") {
     const qty = Number(qtyText);

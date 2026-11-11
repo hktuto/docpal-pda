@@ -2426,6 +2426,7 @@ export default {
         pickingTitle: "拣货单问题",
         pickingExplainer:
           "因操作员上报问题而被冻结的单据。请先修正根本原因，再按“解决”将单据恢复为待处理并重新执行分配。",
+        source: "来源",
         batchNo: "批次号",
         invoiceNo: "发票号",
         partNo: "零件编号",

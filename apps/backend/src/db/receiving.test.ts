@@ -1131,6 +1131,7 @@ test("mismatch list: items across two orders returned with order/invoice joins",
     mismatchQty: 100,
     wrongPartNo: null,
     note: "short",
+    source: "hk",
   });
   assert.deepEqual(byItem.get(koaItemId), {
     itemId: koaItemId,
@@ -1145,6 +1146,7 @@ test("mismatch list: items across two orders returned with order/invoice joins",
     mismatchQty: null,
     wrongPartNo: "RK73H1JTTD9999F",
     note: null,
+    source: "hk",
   });
 
   // cancelling drops the item from the open list

@@ -786,3 +786,67 @@ test("flag/reset on a non-scanning order → 409 order_not_scanning", async () =
   assert.equal(flag.status, 409);
   assert.match(await flag.text(), /order_not_scanning/);
 });
+
+// BUG-055: the admin issues page unions CN mismatches; confirm/cancel reach the
+// CN tables via ?source=cn on the shared mismatch lifecycle routes.
+test("admin issues: CN flagged item appears in the mismatch list (source=cn) and confirm/cancel work via ?source=cn", async () => {
+  await reseed(client);
+  const token = await login("operator", "DocPal2026!");
+  const adminToken = await login("admin", "DocPalAdmin2026!");
+  const { orderId, itemIds } = await seedScanningOrder("CN-SCAN-MM1", [
+    { partNo: "PART-MM", lineQty: 100, wclItemNo: "WCL-MM" },
+  ]);
+  const flag = await call(token, "POST", `/receiving-cn/scan-tasks/${orderId}/items/${itemIds[0]}/flag`, {
+    reason: "damaged",
+    note: "crushed carton",
+  });
+  assert.equal(flag.status, 200);
+
+  const list = await call(adminToken, "GET", "/admin/receiving-mismatches");
+  assert.equal(list.status, 200);
+  const rows = (await list.json()) as {
+    itemId: string;
+    source: string;
+    batchNo: string;
+    invoiceNo: string;
+    supplierCode: string | null;
+    reason: string | null;
+    note: string | null;
+  }[];
+  const row = rows.find((r) => r.itemId === itemIds[0]);
+  assert.ok(row, "CN flagged item must appear in the admin mismatch list");
+  assert.equal(row.source, "cn");
+  assert.equal(row.batchNo, "CN-SCAN-MM1");
+  assert.equal(row.invoiceNo, "INV-CN-SCAN-MM1");
+  assert.equal(row.supplierCode, null);
+  assert.equal(row.reason, "damaged");
+  assert.equal(row.note, "crushed carton");
+
+  // default (hk) source cannot see the CN item
+  const wrongSource = await call(adminToken, "POST", `/receiving-invoice-items/${itemIds[0]}/mismatch/confirm`);
+  assert.equal(wrongSource.status, 404);
+  assert.match(await wrongSource.text(), /receiving_invoice_item_not_found/);
+
+  const confirm = await call(adminToken, "POST", `/receiving-invoice-items/${itemIds[0]}/mismatch/confirm?source=cn`);
+  assert.equal(confirm.status, 200);
+
+  const cancel = await call(adminToken, "POST", `/receiving-invoice-items/${itemIds[0]}/mismatch/cancel?source=cn`);
+  assert.equal(cancel.status, 200);
+
+  const after = await call(adminToken, "GET", "/admin/receiving-mismatches");
+  const afterRows = (await after.json()) as { itemId: string }[];
+  assert.ok(!afterRows.some((r) => r.itemId === itemIds[0]), "cancel drops the CN row from the list");
+  const dbRow = await queryGet<{ reportedMismatch: boolean; mismatchReason: string | null }>(
+    client.db,
+    sql`SELECT reported_mismatch AS "reportedMismatch", mismatch_reason AS "mismatchReason"
+        FROM receiving_invoice_items_cn WHERE id = ${itemIds[0]}`
+  );
+  assert.equal(dbRow!.reportedMismatch, false);
+  assert.equal(dbRow!.mismatchReason, null);
+  // scan_status stays 'error' — full reset is the PDA operator's job
+  const scanRow = await queryGet<{ scanStatus: string }>(
+    client.db,
+    sql`SELECT scan_status AS "scanStatus" FROM receiving_invoice_items_cn WHERE id = ${itemIds[0]}`
+  );
+  assert.equal(scanRow!.scanStatus, "error");
+});

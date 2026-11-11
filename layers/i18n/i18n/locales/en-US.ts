@@ -2430,6 +2430,7 @@ export default {
         pickingTitle: "Picking Order Issues",
         pickingExplainer:
           "Orders blocked by an operator-reported issue. Fix the underlying cause first, then Resolve to return the order to pending and re-run allocation.",
+        source: "Source",
         batchNo: "Batch No",
         invoiceNo: "Invoice No",
         partNo: "Part No",

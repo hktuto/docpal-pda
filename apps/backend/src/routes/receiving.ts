@@ -803,10 +803,15 @@ receivingRoute.post("/receiving-orders/:id/scan", async (c) => {
 
 // ------------------------------------------------------------------
 // Mismatch lifecycle on receiving_invoice_items flat columns
+// (?source=cn switches to the CN trio tables — admin issues page)
 // ------------------------------------------------------------------
 
+function mismatchSource(c: { req: { query: (name: string) => string | undefined } }): "hk" | "cn" {
+  return c.req.query("source") === "cn" ? "cn" : "hk";
+}
+
 receivingRoute.get("/receiving-invoice-items/:id/mismatch", async (c) => {
-  return c.json(await getReceivingItemMismatch(db, c.req.param("id")), 200);
+  return c.json(await getReceivingItemMismatch(db, c.req.param("id"), mismatchSource(c)), 200);
 });
 
 interface MismatchBody {
@@ -837,22 +842,27 @@ receivingRoute.post("/receiving-invoice-items/:id/mismatch", async (c) => {
     ...body,
     actorId: actorFrom(c).id,
     reason: body.reason,
+    source: mismatchSource(c),
   });
   return c.json(row, 200);
 });
 
 receivingRoute.patch("/receiving-invoice-items/:id/mismatch", async (c) => {
   const body = parseMismatchBody(await readJson<MismatchBody>(c));
-  const row = await editReceivingItemMismatch(db, c.req.param("id"), { ...body, actorId: actorFrom(c).id });
+  const row = await editReceivingItemMismatch(db, c.req.param("id"), {
+    ...body,
+    actorId: actorFrom(c).id,
+    source: mismatchSource(c),
+  });
   return c.json(row, 200);
 });
 
 receivingRoute.post("/receiving-invoice-items/:id/mismatch/confirm", async (c) => {
-  const row = await confirmReceivingItemMismatch(db, c.req.param("id"), actorFrom(c).id);
+  const row = await confirmReceivingItemMismatch(db, c.req.param("id"), actorFrom(c).id, mismatchSource(c));
   return c.json(row, 200);
 });
 
 receivingRoute.post("/receiving-invoice-items/:id/mismatch/cancel", async (c) => {
-  const row = await cancelReceivingItemMismatch(db, c.req.param("id"), actorFrom(c).id);
+  const row = await cancelReceivingItemMismatch(db, c.req.param("id"), actorFrom(c).id, mismatchSource(c));
   return c.json(row, 200);
 });

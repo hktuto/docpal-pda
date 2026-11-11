@@ -2426,6 +2426,7 @@ export default {
         pickingTitle: "揀貨單問題",
         pickingExplainer:
           "因操作員上報問題而被凍結的單據。請先修正根本原因，再按「解決」將單據恢復為待處理並重新執行分配。",
+        source: "來源",
         batchNo: "批次號",
         invoiceNo: "發票號",
         partNo: "零件編號",

@@ -13,6 +13,7 @@ const acting = ref<Record<string, string>>({});
 
 // accessors resolve the derived display values used for sorting.
 const columnDefs = computed<AdminColumnDef<MismatchListRow>[]>(() => [
+  { key: "source", label: t("admin.pages.issues.source"), size: 80 },
   { key: "batchNo", label: t("admin.pages.issues.batchNo"), size: 140 },
   { key: "invoiceNo", label: t("admin.pages.issues.invoiceNo"), size: 130 },
   {
@@ -68,8 +69,8 @@ async function act(row: MismatchListRow, action: "confirm" | "cancel") {
   acting.value[row.itemId] = action;
   error.value = "";
   try {
-    if (action === "confirm") await flow.confirmReceivingMismatch(row.itemId);
-    else await flow.cancelReceivingMismatch(row.itemId);
+    if (action === "confirm") await flow.confirmReceivingMismatch(row.itemId, row.source);
+    else await flow.cancelReceivingMismatch(row.itemId, row.source);
     await load();
   } catch (e: any) {
     error.value = e.message;
@@ -117,8 +118,9 @@ const {
       :table="table"
       :empty-text="$t('admin.pages.issues.noReceivingIssues')"
       :on-reset-columns="resetColumnState"
-      @row-click="(r) => navigateTo(`/receiving/${r.receivingOrderId}`)"
+      @row-click="(r) => navigateTo(r.source === 'cn' ? `/receiving-cn/${r.batchNo}` : `/receiving/${r.receivingOrderId}`)"
     >
+      <template #cell-source="{ row }">{{ row.source.toUpperCase() }}</template>
       <template #cell-partNo="{ row }">{{ row.wclItemNo ?? row.partNo }}</template>
       <template #cell-supplier="{ row }">{{ row.supplierCode ?? "—" }}</template>
       <template #cell-reason="{ row }">{{ row.reason ?? "—" }}</template>

@@ -538,8 +538,28 @@ export interface MismatchInfo {
   note: string | null;
 }
 
+/** Which receiving table the mismatch lives on: HK (`receiving_invoice_items`)
+ *  or CN (`receiving_invoice_items_cn`, flagged from the CN scan flow). */
+export type MismatchSource = "hk" | "cn";
+
+const MISMATCH_TABLE: Record<MismatchSource, string> = {
+  hk: "receiving_invoice_items",
+  cn: "receiving_invoice_items_cn",
+};
+
+const MISMATCH_ENTITY: Record<MismatchSource, string> = {
+  hk: "receiving_invoice_item",
+  cn: "receiving_invoice_item_cn",
+};
+
+const MISMATCH_TOPICS: Record<MismatchSource, string[]> = {
+  hk: ["/receiving-orders"],
+  cn: ["/receiving-orders", "/admin/receiving-cn"],
+};
+
 export interface MismatchInput {
   actorId: string;
+  source?: MismatchSource;
   reason?: string;
   mismatchQty?: number | null;
   wrongPartNo?: string | null;
@@ -559,13 +579,13 @@ interface MismatchItemRow {
   mismatchNote: string | null;
 }
 
-async function loadMismatchItem(tx: DbOrTx, itemId: string): Promise<MismatchItemRow> {
+async function loadMismatchItem(tx: DbOrTx, itemId: string, source: MismatchSource = "hk"): Promise<MismatchItemRow> {
   const item = await queryGet<MismatchItemRow>(
     tx,
     sql`SELECT id, part_no AS "partNo", wcl_item_no AS "wclItemNo", po_no AS "poNo", po_line AS "poLine",
                reported_mismatch AS "reportedMismatch", mismatch_reason AS "mismatchReason",
                mismatch_qty AS "mismatchQty", wrong_part_no AS "wrongPartNo", mismatch_note AS "mismatchNote"
-        FROM receiving_invoice_items WHERE id = ${itemId}`
+        FROM ${sql.raw(MISMATCH_TABLE[source])} WHERE id = ${itemId}`
   );
   if (!item) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
   return item;
@@ -599,11 +619,12 @@ async function logMismatch(
   item: MismatchItemRow,
   toState: string,
   actorId: string,
-  metadata: Record<string, unknown>
+  metadata: Record<string, unknown>,
+  source: MismatchSource = "hk"
 ): Promise<void> {
   await tx.insert(transactionLogs).values({
     id: newId(),
-    entityType: "receiving_invoice_item",
+    entityType: MISMATCH_ENTITY[source],
     entityId: item.id,
     fromState: toState === "mismatch_reported" ? null : "mismatch_reported",
     toState,
@@ -614,8 +635,12 @@ async function logMismatch(
 }
 
 /** The active mismatch for an item, or null when none is reported. */
-export async function getReceivingItemMismatch(db: AppDb, itemId: string): Promise<MismatchInfo | null> {
-  const item = await loadMismatchItem(db, itemId);
+export async function getReceivingItemMismatch(
+  db: AppDb,
+  itemId: string,
+  source: MismatchSource = "hk"
+): Promise<MismatchInfo | null> {
+  const item = await loadMismatchItem(db, itemId, source);
   return item.reportedMismatch ? toMismatchInfo(item) : null;
 }
 
@@ -625,8 +650,9 @@ export async function reportReceivingItemMismatch(
   itemId: string,
   input: MismatchInput & { reason: string }
 ): Promise<MismatchInfo> {
+  const source = input.source ?? "hk";
   return db.transaction(async (tx) => {
-    const item = await loadMismatchItem(tx, itemId);
+    const item = await loadMismatchItem(tx, itemId, source);
     await assertActor(tx, input.actorId);
     if (item.reportedMismatch) throw new HTTPException(409, { message: "mismatch_already_reported" });
 
@@ -635,7 +661,7 @@ export async function reportReceivingItemMismatch(
     const mismatchQty = input.mismatchQty ?? null;
     await queryRun(
       tx,
-      sql`UPDATE receiving_invoice_items SET
+      sql`UPDATE ${sql.raw(MISMATCH_TABLE[source])} SET
             reported_mismatch = true,
             mismatch_reason = ${input.reason},
             mismatch_qty = ${mismatchQty},
@@ -648,13 +674,13 @@ export async function reportReceivingItemMismatch(
       mismatchQty,
       wrongPartNo,
       note,
-    });
+    }, source);
     await emitEvent(tx, {
       type: "receiving.mismatch_reported",
-      topics: ["/receiving-orders"],
+      topics: MISMATCH_TOPICS[source],
       data: { itemId: item.id, reason: input.reason, actorId: input.actorId },
     });
-    return toMismatchInfo(await loadMismatchItem(tx, item.id));
+    return toMismatchInfo(await loadMismatchItem(tx, item.id, source));
   });
 }
 
@@ -664,8 +690,9 @@ export async function editReceivingItemMismatch(
   itemId: string,
   input: MismatchInput
 ): Promise<MismatchInfo> {
+  const source = input.source ?? "hk";
   return db.transaction(async (tx) => {
-    const item = await loadMismatchItem(tx, itemId);
+    const item = await loadMismatchItem(tx, itemId, source);
     await assertActor(tx, input.actorId);
     if (!item.reportedMismatch) throw new HTTPException(404, { message: "mismatch_not_found" });
 
@@ -675,20 +702,20 @@ export async function editReceivingItemMismatch(
     const note = input.note !== undefined ? input.note?.trim() || null : item.mismatchNote;
     await queryRun(
       tx,
-      sql`UPDATE receiving_invoice_items SET
+      sql`UPDATE ${sql.raw(MISMATCH_TABLE[source])} SET
             mismatch_reason = ${reason},
             mismatch_qty = ${mismatchQty},
             wrong_part_no = ${wrongPartNo},
             mismatch_note = ${note}
           WHERE id = ${item.id}`
     );
-    await logMismatch(tx, item, "mismatch_updated", input.actorId, { reason, mismatchQty, wrongPartNo, note });
+    await logMismatch(tx, item, "mismatch_updated", input.actorId, { reason, mismatchQty, wrongPartNo, note }, source);
     await emitEvent(tx, {
       type: "receiving.mismatch_updated",
-      topics: ["/receiving-orders"],
+      topics: MISMATCH_TOPICS[source],
       data: { itemId: item.id, actorId: input.actorId },
     });
-    return toMismatchInfo(await loadMismatchItem(tx, item.id));
+    return toMismatchInfo(await loadMismatchItem(tx, item.id, source));
   });
 }
 
@@ -700,10 +727,11 @@ export async function editReceivingItemMismatch(
 export async function confirmReceivingItemMismatch(
   db: AppDb,
   itemId: string,
-  actorId: string
+  actorId: string,
+  source: MismatchSource = "hk"
 ): Promise<MismatchInfo> {
   return db.transaction(async (tx) => {
-    const item = await loadMismatchItem(tx, itemId);
+    const item = await loadMismatchItem(tx, itemId, source);
     await assertActor(tx, actorId);
     if (!item.reportedMismatch) throw new HTTPException(404, { message: "mismatch_not_found" });
 
@@ -712,10 +740,10 @@ export async function confirmReceivingItemMismatch(
       mismatchQty: item.mismatchQty,
       wrongPartNo: item.wrongPartNo,
       note: item.mismatchNote,
-    });
+    }, source);
     await emitEvent(tx, {
       type: "receiving.mismatch_confirmed",
-      topics: ["/receiving-orders"],
+      topics: MISMATCH_TOPICS[source],
       data: { itemId: item.id, actorId },
     });
     return toMismatchInfo(item);
@@ -726,16 +754,17 @@ export async function confirmReceivingItemMismatch(
 export async function cancelReceivingItemMismatch(
   db: AppDb,
   itemId: string,
-  actorId: string
+  actorId: string,
+  source: MismatchSource = "hk"
 ): Promise<null> {
   return db.transaction(async (tx) => {
-    const item = await loadMismatchItem(tx, itemId);
+    const item = await loadMismatchItem(tx, itemId, source);
     await assertActor(tx, actorId);
     if (!item.reportedMismatch) throw new HTTPException(404, { message: "mismatch_not_found" });
 
     await queryRun(
       tx,
-      sql`UPDATE receiving_invoice_items SET
+      sql`UPDATE ${sql.raw(MISMATCH_TABLE[source])} SET
             reported_mismatch = false,
             mismatch_reason = NULL,
             mismatch_qty = NULL,
@@ -743,10 +772,10 @@ export async function cancelReceivingItemMismatch(
             mismatch_note = NULL
           WHERE id = ${item.id}`
     );
-    await logMismatch(tx, item, "mismatch_cancelled", actorId, {});
+    await logMismatch(tx, item, "mismatch_cancelled", actorId, {}, source);
     await emitEvent(tx, {
       type: "receiving.mismatch_cancelled",
-      topics: ["/receiving-orders"],
+      topics: MISMATCH_TOPICS[source],
       data: { itemId: item.id, actorId },
     });
     return null;
@@ -766,31 +795,55 @@ export interface ReceivingMismatchRow {
   mismatchQty: number | null;
   wrongPartNo: string | null;
   note: string | null;
+  source: MismatchSource;
 }
 
 /** Cross-order list of open mismatches (admin issues page): items with
  *  reported_mismatch = true joined to their order + invoice, newest first
- *  (items carry no timestamp, so order by the order/invoice creation). */
+ *  (items carry no timestamp, so order by the order/invoice creation).
+ *  Unions the HK trio with the CN trio (source = 'hk' | 'cn'); CN rows have
+ *  no supplier column, so supplierCode is always null for them. */
 export async function listReceivingMismatches(db: AppDb): Promise<ReceivingMismatchRow[]> {
   return queryAll<ReceivingMismatchRow>(
     db,
-    sql`SELECT rii.id AS "itemId",
-               ro.id AS "receivingOrderId",
-               ro.batch_no AS "batchNo",
-               ri.id AS "invoiceId",
-               ri.invoice_no AS "invoiceNo",
-               rii.part_no AS "partNo",
-               rii.wcl_item_no AS "wclItemNo",
-               COALESCE(ri.supplier_code, ro.supplier_code) AS "supplierCode",
-               rii.mismatch_reason AS "reason",
-               rii.mismatch_qty AS "mismatchQty",
-               rii.wrong_part_no AS "wrongPartNo",
-               rii.mismatch_note AS "note"
-        FROM receiving_invoice_items rii
-        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-        JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-        WHERE rii.reported_mismatch = true
-        ORDER BY ro.created_date DESC, ri.created_date DESC, rii.id DESC`
+    sql`SELECT * FROM (
+          SELECT rii.id AS "itemId",
+                 ro.id AS "receivingOrderId",
+                 ro.batch_no AS "batchNo",
+                 ri.id AS "invoiceId",
+                 ri.invoice_no AS "invoiceNo",
+                 rii.part_no AS "partNo",
+                 rii.wcl_item_no AS "wclItemNo",
+                 COALESCE(ri.supplier_code, ro.supplier_code) AS "supplierCode",
+                 rii.mismatch_reason AS "reason",
+                 rii.mismatch_qty AS "mismatchQty",
+                 rii.wrong_part_no AS "wrongPartNo",
+                 rii.mismatch_note AS "note",
+                 'hk' AS "source"
+          FROM receiving_invoice_items rii
+          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
+          WHERE rii.reported_mismatch = true
+          UNION ALL
+          SELECT rii.id AS "itemId",
+                 ro.id AS "receivingOrderId",
+                 ro.batch_no AS "batchNo",
+                 ri.id AS "invoiceId",
+                 ri.invoice_no AS "invoiceNo",
+                 rii.part_no AS "partNo",
+                 rii.wcl_item_no AS "wclItemNo",
+                 NULL AS "supplierCode",
+                 rii.mismatch_reason AS "reason",
+                 rii.mismatch_qty AS "mismatchQty",
+                 rii.wrong_part_no AS "wrongPartNo",
+                 rii.mismatch_note AS "note",
+                 'cn' AS "source"
+          FROM receiving_invoice_items_cn rii
+          JOIN receiving_invoices_cn ri ON ri.id = rii.receiving_invoice_id
+          JOIN receiving_orders_cn ro ON ro.id = ri.receiving_order_id
+          WHERE rii.reported_mismatch = true
+        ) u
+        ORDER BY u."itemId" DESC`
   );
 }
 

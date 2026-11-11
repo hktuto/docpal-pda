@@ -460,6 +460,13 @@ export async function flagCnItem(
     );
     await itemAudit(tx, item, "scan_error", actor.id, { reason: input.reason, note, wrongPartNo, qty: qty ?? null }, at);
     await emitItemUpdated(tx, orderId, item.id);
+    // Mirrors into the mismatch columns → also notify the admin issues page
+    // (it change-notices on receiving.mismatch_* types).
+    await emitEvent(tx, {
+      type: "receiving.mismatch_reported",
+      topics: ["/receiving-cn-scan-tasks", "/admin/receiving-cn"],
+      data: { itemId: item.id, reason: input.reason, actorId: actor.id },
+    });
   });
   return reloadItem(db, itemId);
 }

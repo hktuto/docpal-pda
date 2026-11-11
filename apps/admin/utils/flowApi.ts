@@ -512,6 +512,7 @@ export interface MismatchListRow {
   mismatchQty: number | null;
   wrongPartNo: string | null;
   note: string | null;
+  source: "hk" | "cn";
 }
 
 // ---- outdated date-code scan warnings (spec 2026-10-07) ----
@@ -1582,10 +1583,10 @@ export function useFlowApi() {
 
     // Issues (actor comes from the JWT — the backend ignores any body actorId)
     listReceivingMismatches: () => api.get<MismatchListRow[]>("/admin/receiving-mismatches"),
-    confirmReceivingMismatch: (itemId: string) =>
-      api.post(`/receiving-invoice-items/${itemId}/mismatch/confirm`, {}),
-    cancelReceivingMismatch: (itemId: string) =>
-      api.post(`/receiving-invoice-items/${itemId}/mismatch/cancel`, {}),
+    confirmReceivingMismatch: (itemId: string, source?: "hk" | "cn") =>
+      api.post(`/receiving-invoice-items/${itemId}/mismatch/confirm${source === "cn" ? "?source=cn" : ""}`, {}),
+    cancelReceivingMismatch: (itemId: string, source?: "hk" | "cn") =>
+      api.post(`/receiving-invoice-items/${itemId}/mismatch/cancel${source === "cn" ? "?source=cn" : ""}`, {}),
     resolvePickingIssue: (orderId: string, resolutionNote?: string) => {
       const note = (resolutionNote ?? "").trim();
       return api.post(`/picking-orders/${orderId}/resolve-issue`, note ? { resolutionNote: note } : {});
