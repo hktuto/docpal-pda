@@ -2824,7 +2824,11 @@ export default {
         description: "上传标签数据的 CSV，由浏览器解析后发送到打印机打印。",
         chooseFile: "CSV 文件",
         selected: "已选择：{name}（{size}）",
-        comingSoon: "解析与打印功能尚未接入。"
+        parsed: "已解析 {count} 行标签数据。",
+        preview: "预览 — 前 {limit} 行（左右滚动可看全部列）。",
+        rowCountError: "第 {line} 行：{actual} 个单元格，表头有 {expected} 个 — 已跳过该行。",
+        emptyError: "文件没有数据行。",
+        comingSoon: "打印功能尚未接入。"
       },
       labelPrintRules: {
         activate: "启用",

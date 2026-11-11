@@ -2828,7 +2828,11 @@ export default {
         description: "Upload a CSV of label data; the browser parses it and sends the labels to the printer.",
         chooseFile: "CSV file",
         selected: "Selected: {name} ({size})",
-        comingSoon: "Parsing and printing are not wired up yet."
+        parsed: "Parsed {count} label row(s).",
+        preview: "Preview — first {limit} rows (scroll sideways for all columns).",
+        rowCountError: "Row {line}: {actual} cells but the header has {expected} — row skipped.",
+        emptyError: "The file has no data rows.",
+        comingSoon: "Printing is not wired up yet."
       },
       labelPrintRules: {
         activate: "Activate",

@@ -2824,7 +2824,11 @@ export default {
         description: "上傳標籤資料的 CSV，由瀏覽器解析後送至印表機列印。",
         chooseFile: "CSV 檔案",
         selected: "已選擇：{name}（{size}）",
-        comingSoon: "解析與列印功能尚未接上。"
+        parsed: "已解析 {count} 列標籤資料。",
+        preview: "預覽 — 前 {limit} 列（左右捲動可看全部欄位）。",
+        rowCountError: "第 {line} 行：{actual} 個欄位，表頭有 {expected} 個 — 已跳過此行。",
+        emptyError: "檔案沒有資料列。",
+        comingSoon: "列印功能尚未接上。"
       },
       labelPrintRules: {
         activate: "啟用",
