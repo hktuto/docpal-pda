@@ -139,6 +139,18 @@
         <p class="menu-card__title">{{ $t('home.menu.verify.title') }}</p>
       </NuxtLink>
 
+      <NuxtLink v-if="flowSteps.packaging" to="/packaging" class="menu-card">
+        <div class="menu-card__icon menu-card__icon--packaging">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+            <path d="m3.3 7 8.7 5 8.7-5"/>
+            <path d="M12 22V12"/>
+            <path d="M8.5 5.5 15.5 10.5"/>
+          </svg>
+        </div>
+        <p class="menu-card__title">{{ $t('home.menu.packaging.title') }}</p>
+      </NuxtLink>
+
 
       <NuxtLink v-if="flowSteps['goods-verify']" to="/goods-verify" class="menu-card">
         <div class="menu-card__icon menu-card__icon--verify">
@@ -186,7 +198,7 @@
         <p class="menu-card__title">{{ $t('home.menu.shelfExchange.title') }}</p>
       </NuxtLink>
 
-      <NuxtLink to="/latency-test" class="menu-card">
+      <!-- <NuxtLink to="/latency-test" class="menu-card">
         <div class="menu-card__icon menu-card__icon--latency">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="13" r="8"/>
@@ -195,7 +207,7 @@
           </svg>
         </div>
         <p class="menu-card__title">{{ $t('home.menu.latencyTest.title') }}</p>
-      </NuxtLink>
+      </NuxtLink> -->
 
     </div>
   </div>
@@ -287,6 +299,7 @@ const { flowSteps, cnReceiving } = useFlowSteps();
 .menu-card__icon--verify { background: linear-gradient(135deg, #10b981, #059669); }
 .menu-card__icon--measuring { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
 .menu-card__icon--verify2 { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+.menu-card__icon--packaging { background: linear-gradient(135deg, #a16207, #ca8a04); }
 .menu-card__icon--stock-search { background: linear-gradient(135deg, #ec4899, #db2777); }
 .menu-card__icon--adhoc-putaway { background: linear-gradient(135deg, #f97316, #ea580c); }
 .menu-card__icon--shelf-exchange { background: linear-gradient(135deg, #0d9488, #0f766e); }
