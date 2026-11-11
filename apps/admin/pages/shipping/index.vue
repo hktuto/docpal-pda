@@ -41,6 +41,11 @@ const columnDefs = computed<AdminColumnDef<ShippingBoxRow>[]>(() => [
     accessor: (r) => r.netWeight ?? "",
   },
   { key: "packageCount", label: t("admin.pages.shipping.packages") },
+  {
+    key: "packaged",
+    label: t("admin.pages.shipping.packaged"),
+    accessor: (r) => (r.packaged ? 1 : 0),
+  },
   { key: "closedAt", label: t("admin.pages.shipping.closedAt") },
 ]);
 
@@ -118,7 +123,7 @@ const {
   justUpdated: changeUpdated,
   refreshNow,
   dismiss,
-} = useChangeNotice(["shipping_box.shipped", "picking_order.updated"], load, { busy: changeBusy });
+} = useChangeNotice(["shipping_box.shipped", "picking_order.updated", "picking.packaged"], load, { busy: changeBusy });
 </script>
 
 <template>
@@ -173,6 +178,7 @@ const {
         <span class="clickable" @click="navigateTo(`/shipping/${row.boxId}`)">{{ row.boxId }}</span>
       </template>
       <template #cell-netGross="{ row }">{{ row.netWeight ?? "—" }} / {{ row.grossWeight ?? "—" }}</template>
+      <template #cell-packaged="{ row }">{{ row.packaged ? "✓" : "—" }}</template>
       <template #cell-closedAt="{ row }">{{ formatDateTime(row.closedAt) }}</template>
     </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />

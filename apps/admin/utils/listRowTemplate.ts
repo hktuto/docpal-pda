@@ -16,7 +16,7 @@ export type PdaListKey =
  *  stock-search (spec 2026-10-04-pda-app-rewrite-design.md), labeling
  *  (spec 2026-10-28; never had a legacy pdaListTemplates entry) and
  *  label-printing (spec 2026-11-02). */
-export type PdaViewListKey = PdaListKey | "labeling" | "label-printing" | "stock-search";
+export type PdaViewListKey = PdaListKey | "labeling" | "label-printing" | "stock-search" | "packaging";
 
 export const PDA_LIST_KEYS: PdaListKey[] = [
   "receiving",
@@ -148,6 +148,16 @@ export const PDA_LIST_FIELDS: Record<PdaViewListKey, Record<string, PdaListField
     description: { field: "description" },
     on_hand_qty: { field: "onHandQty" },
   },
+  // Packaging list (spec 2026-11-10): the order-keyed post-verify queue.
+  packaging: {
+    order_no: { field: "orderNo" },
+    customer_code: { field: "customerCode" },
+    po_no: { field: "poNo" },
+    ship_to: { field: "shipTo" },
+    box_count: { field: "boxCount" },
+    package_count: { field: "packageCount" },
+    assignee: { field: "assignee" },
+  },
 };
 
 export type PdaListRow = Record<string, unknown>;
@@ -199,6 +209,8 @@ export function primaryListRowId(listKey: PdaViewListKey, fields: PdaListRow): s
     case "labeling":
       return String(fields.orderNo ?? "");
     case "label-printing":
+      return String(fields.orderNo ?? "");
+    case "packaging":
       return String(fields.orderNo ?? "");
     case "stock-search":
       return String(fields.wclItemNo ?? fields.partNo ?? "");

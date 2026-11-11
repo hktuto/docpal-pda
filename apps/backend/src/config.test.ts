@@ -8,7 +8,8 @@ import { FLOW_STEPS, parseFlowConfig, mergeFlowConfigJson, applyFlowConfig, cnRe
 test("parseFlowConfig: unset → defaults (all steps enabled, dock stock allowed)", () => {
   const cfg = parseFlowConfig(undefined);
   for (const step of FLOW_STEPS) {
-    if (step === "receiving-cn") continue; // opt-in CN receiving flow — default disabled
+    // Opt-in flows default disabled: CN receiving + the packaging stage.
+    if (step === "receiving-cn" || step === "packaging") continue;
     assert.equal(cfg.steps[step].enabled, true, step);
   }
   assert.equal(cfg.pickingAllocation.allowDockStock, true);
@@ -30,6 +31,13 @@ test("parseFlowConfig: empty object → defaults", () => {
   const cfg = parseFlowConfig("{}");
   assert.equal(cfg.steps.picking.enabled, true);
   assert.equal(cfg.pickingAllocation.allowDockStock, true);
+});
+
+test("parseFlowConfig: packaging opt-in default-off; shipping default-on", () => {
+  assert.equal(parseFlowConfig(undefined).steps.packaging.enabled, false);
+  assert.equal(parseFlowConfig(undefined).steps.shipping.enabled, true);
+  const cfg = parseFlowConfig('{"steps":{"packaging":{"enabled":true}}}');
+  assert.equal(cfg.steps.packaging.enabled, true);
 });
 
 test("parseFlowConfig: partial JSON merges over defaults", () => {

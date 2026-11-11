@@ -222,6 +222,8 @@ export const FLOW_STEPS = [
   "goods-verify",
   "measuring",
   "verify",
+  "packaging",
+  "shipping",
   "put-back",
   "stock-search",
   "ad-hoc-put-away",
@@ -368,9 +370,10 @@ export function defaultPdaListTemplates(): PdaListTemplates {
 /** PDA list pages addressable by pdaViewConfig.lists — the six pdaListTemplates
  *  lists plus stock-search (spec 2026-10-04-pda-app-rewrite-design.md) and the
  *  labeling queue (spec 2026-10-28-picking-labeling-step-design.md; labeling
- *  never had a legacy pdaListTemplates entry) and the label-printing queue
- *  (spec 2026-11-02-label-printing-step-design.md). */
-export const PDA_VIEW_LIST_KEYS = [...PDA_LIST_KEYS, "stock-search", "label-printing", "labeling"] as const;
+ *  never had a legacy pdaListTemplates entry), the label-printing queue
+ *  (spec 2026-11-02-label-printing-step-design.md) and the packaging queue
+ *  (spec 2026-11-10-packaging-shipping-steps-design.md). */
+export const PDA_VIEW_LIST_KEYS = [...PDA_LIST_KEYS, "stock-search", "label-printing", "labeling", "packaging"] as const;
 export type PdaViewListKey = (typeof PDA_VIEW_LIST_KEYS)[number];
 
 /** Fully-resolved view config for one PDA list row. meta holds 1–2 templates. */
@@ -427,6 +430,7 @@ export const PDA_LIST_CHIP_FIELDS: Record<PdaViewListKey, readonly string[]> = {
   "stock-search": ["none"],
   "label-printing": ["status", "allocation_status", "working_by_name", "labelCount", "none"],
   labeling: ["status", "allocation_status", "working_by_name", "labelCount", "none"],
+  packaging: ["none", "boxCount", "packageCount"],
 };
 
 /** Item/expanded field allow-lists per detail page. */
@@ -461,6 +465,7 @@ export function defaultPdaViewConfig(): PdaViewConfig {
   lists["stock-search"] = { title: "[wcl_item_no]", meta: ["[part_no]"], chip: "none" };
   lists["label-printing"] = { title: "[order_no]", meta: ["[customer_code] · [ship_to]"], chip: "labelCount" };
   lists["labeling"] = { title: "[order_no]", meta: ["[customer_code] · [ship_to]"], chip: "labelCount" };
+  lists["packaging"] = { title: "[order_no]", meta: ["[customer_code] · [ship_to]"], chip: "boxCount" };
   return {
     lists,
     receivingDetail: {
@@ -487,8 +492,13 @@ function defaultFlowConfig(): FlowConfig {
   const steps = Object.fromEntries(FLOW_STEPS.map((s) => [s, { enabled: true }])) as FlowConfig["steps"];
   // CN receiving (spec 2026-10-16-customer-receiving-upload-design.md) is the
   // alternative receiving flow: off unless a warehouse enables the step
-  // (disabling standard `receiving`). Every other step defaults to enabled.
+  // (disabling standard `receiving`). The packaging stage (打包, spec
+  // 2026-11-10-packaging-shipping-steps-design.md) is likewise opt-in — off by
+  // default, each warehouse flips it on via /admin/flow-config. `shipping`
+  // (寄出) gates the admin /shipping nav link only and stays default-on
+  // (today's ship feed unchanged). Every other step defaults to enabled.
   steps["receiving-cn"] = { enabled: false };
+  steps["packaging"] = { enabled: false };
   return {
     steps,
     pickingAllocation: { allowDockStock: true },
@@ -1102,6 +1112,12 @@ export function _setDateCodeFormatForTests(format: DateCodeFormat): void {
 /** Test-only override for the CN receiving flow flag. */
 export function _setCnReceivingForTests(value: boolean): void {
   flowConfig.steps["receiving-cn"].enabled = value;
+}
+
+/** Test-only override for one opt-in step (packaging etc. — default-off steps
+ *  need an enable path; `_setFlowStepsDisabledForTests` only disables). */
+export function _setStepEnabledForTests(step: FlowStep, value: boolean): void {
+  flowConfig.steps[step].enabled = value;
 }
 
 /** Test-only override for the receiving sub-inventory defaulting rules. */

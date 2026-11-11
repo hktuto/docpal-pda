@@ -190,6 +190,7 @@ business-level, and is the contract for the sync service.
 | `picking.reordered` | `/picking-orders` | `db/picking.ts` |
 | `picking.labeling_finished` | `/picking-orders`, `/labeling-orders` | `db/picking.ts` |
 | `picking.label_printing_finished` | `/picking-orders`, `/labeling-orders`, `/label-printing-orders` | `db/picking.ts` |
+| `picking.packaged` | `/packaging-orders`, `/picking-orders`, `/shipping-orders` | `db/packaging.ts` |
 | `picking_order.issue_reported` | `/picking-orders` | `db/picking.ts` |
 | `picking_order.updated` | `/picking-orders` | `db/picking.ts`, `db/cancelInvoice.ts` |
 | `receiving.mismatch_reported` / `receiving.mismatch_updated` / `receiving.mismatch_confirmed` / `receiving.mismatch_cancelled` | `/receiving-orders` | `db/receiving.ts` |
@@ -246,6 +247,15 @@ The picking label-printing stage (spec
 `label_printing_pending`, topics `["/picking-orders", "/label-printing-orders",
 "/labeling-orders"]`, so the PDA label-printing queue, labeling queue (the
 order may have just entered it), and picking pages converge.
+
+The packaging stage (spec
+`docs/superpowers/specs/2026-11-10-packaging-shipping-steps-design.md`):
+`picking.packaged` — emitted by `POST /packaging-orders/:orderId/confirm` after
+it stamps the order's `packaged_at`/packed numbers, data `{orderId, weight,
+boxCount, palletCount, actorId}`, topics
+`["/packaging-orders", "/picking-orders", "/shipping-orders"]` — the packaging
+queues (PDA + admin) drain and the shipping feed converges (packaging-gated
+while the step is on).
 
 The cancel-invoice ingest (spec
 `docs/superpowers/specs/2026-11-07-cancel-invoice-putback-design.md`) adds three

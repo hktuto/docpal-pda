@@ -5,6 +5,7 @@ import { newId } from "./id.js";
 import { now } from "./now.js";
 import { queryAll, queryGet, queryRun } from "./query.js";
 import { transactionLogs } from "./schema/index.js";
+import { packagingPendingWhere } from "./packaging.js";
 
 // ---------------------------------------------------------------------------
 // Admin task-assignment API (spec 2026-11-01-task-assignee-design.md): one
@@ -23,6 +24,7 @@ export const TASK_ASSIGNMENT_FLOWS = [
   "put-away-cn",
   "measuring",
   "verify",
+  "packaging",
   "put-back",
 ] as const;
 export type TaskAssignmentFlow = (typeof TASK_ASSIGNMENT_FLOWS)[number];
@@ -152,6 +154,16 @@ export async function listTaskAssignments(
             WHERE vt.status = 'pending'
             ORDER BY vt.shipping_box_id, vt.id`
       );
+    case "packaging":
+      // The exact set the packaging queue shows (see db/packaging.ts).
+      return queryAll<TaskAssignmentRow>(
+        db,
+        sql`SELECT po.id, po.order_no AS "label", po.order_no AS "orderNo", po.status, pt.assignee
+             FROM picking_orders po
+             LEFT JOIN picking_tasks pt ON pt.picking_order_id = po.id AND pt.step = 'packaging'
+             WHERE ${packagingPendingWhere()}
+             ORDER BY po.order_no, po.id`
+      );
   }
 }
 
@@ -169,6 +181,7 @@ const FLOW_TABLES: Record<TaskAssignmentFlow, { table: SQL; entityType: string; 
   "put-away-cn": { table: sql`put_away_tasks_cn`, entityType: "put_away_task_cn" },
   measuring: { table: sql`shipping_boxes`, entityType: "shipping_box" },
   verify: { table: sql`verify_tasks`, entityType: "verify_task" },
+  packaging: { table: sql`picking_orders`, entityType: "picking_order", step: "packaging" },
   "put-back": { table: sql`put_back_tasks`, entityType: "put_back_task" },
 };
 

@@ -74,8 +74,9 @@
     - detail receiving order ( edit item details — date code / lot code / COO / COW / ctn no, single or batch, download shipper / finished shipper, and delivery order list ) 7.2, 7.3
   - Customer Receiving Upload (CN) — upload the customer receiving Excel (收貨確認及付款通知書); the app decodes it in-browser for verify/edit, submits the original file + verified JSON to a DocPal workflow, and tracks workflow status per upload. The /receiving-cn page lists the synced CN receiving orders (with still-processing uploads merged on top as pending rows), drill into an order for invoices/items/put-away task status; the upload wizard lives at /receiving-cn/new.
 - Shipping Management
-  - list shipping order with filter and sort, multiple select to download shipper 7.3
-    - detail shipping order
+  - Packaging (打包, flow step `packaging` — opt-in, CN) — /packaging lists verified orders awaiting the weight + box/pallet confirm; detail records total weight, auto box count (server-recomputed) or pallet count, one confirm; packaged orders read back the numbers. Same queue the PDA /packaging page works.
+  - list shipping order with filter and sort, multiple select to download shipper 7.3; `packaged` column (packaging step)
+    - detail shipping order — packaged orders' weight / boxes / pallets + copy summary block for the delivery provider form
 - Issues
   - receiving issues, picking issues
   - Outdated warnings — supplier date-code scan warnings from picking / put-away scans, whole-order resolution with note; pending-count badge in nav; warning chip links from the picking / receiving order detail pages
@@ -83,7 +84,7 @@
 - Ad-hoc Put-Aways
   - read-only list of ad-hoc put-away batches (supplier, shelf, date range filters) with detail view showing full item list
 - Settings
-  - flow config, display config (date-code display template, receiving order name template), PDA view config (per-page PDA list/detail view editor), app download, user badges, user scope, task assignments (per-flow PDA task assignee picker: receiving-cn / picking / labeling / put-away / put-away-cn / measuring / verify; also editable on the picking-order and receiving-cn detail pages)
+  - flow config, display config (date-code display template, receiving order name template), PDA view config (per-page PDA list/detail view editor), app download, user badges, user scope, task assignments (per-flow PDA task assignee picker: receiving-cn / picking / labeling / put-away / put-away-cn / measuring / verify / packaging; also editable on the picking-order and receiving-cn detail pages)
 - Dropdown & Policy
   - Net Weight Formulas (was under Warehouse)
   - Box Sizes (was under Warehouse)

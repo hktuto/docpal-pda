@@ -25,6 +25,8 @@ const steps = ref<Record<FlowStep, boolean>>({
   "goods-verify": true,
   measuring: true,
   verify: true,
+  packaging: false, // opt-in CN packaging stage (spec 2026-11-10) — backend default disabled
+  shipping: true,
   "put-back": true,
   "stock-search": true,
   "ad-hoc-put-away": true,

@@ -186,6 +186,10 @@ test("detail: box + packages (part identity) + orders involved; 404", async () =
       shipTo: "ACME Electronics (HK)",
       customerCode: "ACME",
       poNo: "CUST-PO-9001",
+      packagedAt: null,
+      packedWeight: null,
+      packedBoxCount: null,
+      packedPalletCount: null,
     },
   ]);
 

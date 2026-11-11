@@ -11,6 +11,7 @@ The app supports these warehouse flows. Each flow has an overview, a step-by-ste
 | [Put-away](./put-away/overview.md) | Move received goods from receiving area onto shelves. | `/put-away` | [Steps](./put-away/steps.md) | [Scope](./put-away/ai-scope.md) |
 | [Measuring](./measuring/overview.md) | Verify and measure open shipping boxes, then close them. | `/measuring` | [Steps](./measuring/steps.md) | [Scope](./measuring/ai-scope.md) |
 | [Verify](./verify/overview.md) | Second re-scan check of closed shipping boxes before shipping. | `/verify` | [Steps](./verify/steps.md) | [Scope](./verify/ai-scope.md) |
+| [Packaging](./packaging/overview.md) | Record weight + box/pallet count on verified orders before shipping (opt-in 打包 stage). | `/packaging` | [Steps](./packaging/steps.md) | [Scope](./packaging/ai-scope.md) |
 | [Goods Verify](./goods-verify/overview.md) | Verify goods at appropriate process points. | `/goods-verify` | [Steps](./goods-verify/steps.md) | [Scope](./goods-verify/ai-scope.md) |
 | [Stock Search](./stock-search/overview.md) | Search inventory by supplier or item and see locations. | `/stock-search` | [Overview](./stock-search/overview.md) | [Scope](./stock-search/ai-scope.md) |
 | [Ad-hoc Put-away](./ad-hoc-put-away/overview.md) | Put away items with no receiving order (old store stock, write-out returns). | `/ad-hoc-put-away` | [Steps](./ad-hoc-put-away/steps.md) | [Scope](./ad-hoc-put-away/ai-scope.md) |

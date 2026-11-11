@@ -364,6 +364,9 @@ export interface ShippingBoxRow {
   grossWeight: number | null;
   netWeight: number | null;
   packageCount: number;
+  /** Packaging step: every non-cancelled order in the box is packaged
+   *  (spec 2026-11-10-packaging-shipping-steps-design.md). */
+  packaged: boolean;
   closedAt: string;
 }
 
@@ -381,7 +384,52 @@ export interface ShippingBoxDetail {
     createdDate: string;
   };
   packages: { id: string; qty: number; dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null; verified: boolean; partNo: string; wclItemNo: string | null }[];
-  orders: { id: string; orderNo: string; status: string; shipTo: string | null; customerCode: string | null; poNo: string | null }[];
+  orders: {
+    id: string;
+    orderNo: string;
+    status: string;
+    shipTo: string | null;
+    customerCode: string | null;
+    poNo: string | null;
+    packagedAt: string | null;
+    packedWeight: number | null;
+    packedBoxCount: number | null;
+    packedPalletCount: number | null;
+  }[];
+}
+
+// ---- packaging (打包: order-keyed queue after verify, spec
+// 2026-11-10-packaging-shipping-steps-design.md) ----
+
+export interface PackagingOrderRow {
+  id: string;
+  orderNo: string;
+  customerCode: string | null;
+  shipTo: string | null;
+  poNo: string | null;
+  boxCount: number;
+  packageCount: number;
+  grossWeightHint: number | null;
+  assignee: string | null;
+  packagedAt: string | null;
+  packagedBy: string | null;
+  packedWeight: number | null;
+  packedBoxCount: number | null;
+  packedPalletCount: number | null;
+  lastUpdateDate: string;
+}
+
+export interface PackagingOrderDetail extends PackagingOrderRow {
+  boxes: {
+    id: string;
+    status: string;
+    grossWeight: number | null;
+    netWeight: number | null;
+    boxSize: string | null;
+    destinationCountry: string | null;
+    packageCount: number;
+    closedAt: string;
+  }[];
 }
 
 // ---- stock search ----
@@ -558,6 +606,7 @@ export type TaskAssignmentFlow =
   | "put-away-cn"
   | "measuring"
   | "verify"
+  | "packaging"
   | "put-back";
 
 /** GET /admin/task-assignments?flow= row — id/label/status/assignee are
@@ -1831,6 +1880,16 @@ export function useFlowApi() {
         throw err;
       }
     },
+
+    // Packaging (打包 — order-keyed queue after verify; the confirm recomputes
+    // the box count server-side; 409 packaging_not_ready covers double-confirm)
+    listPackagingOrders: (status: "pending" | "completed") =>
+      api.get<PackagingOrderRow[]>(`/packaging-orders?status=${status}`),
+    getPackagingOrder: (orderId: string) =>
+      api.get<PackagingOrderDetail>(`/packaging-orders/${orderId}`),
+    confirmPackagingOrder: (orderId: string, weight: number, palletCount: number | null) =>
+      api.post<{ id: string; boxCount: number }>(`/packaging-orders/${orderId}/confirm`, { weight, palletCount }),
+
     // Batch status override on the picking order list: one PATCH per id (same
     // shipShippingBoxes contract — attempts every id, throws with `failed`
     // listing the per-order failures on partial failure).

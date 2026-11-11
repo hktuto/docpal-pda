@@ -723,6 +723,35 @@ requires the box's pending verify task).
 | `POST /verify-tasks/:id/scan-label` | `{raw}` — label-mode verify: carton print rows match first (stamp `carton_label_verified`), then item/item_box rows (mark the package `label_verified`, return its expectations for the server-side hard compare); 404 `label_print_not_found`, 400 `raw_required` (spec 2026-10-30-label-source-and-label-verify-design.md). |
 | `POST /verify-tasks/:id/complete` | `{}` — 404 `verify_task_not_found`, 409 `verify_task_not_pending`, 409 `shipping_box_not_closed` (only when the measuring step is enabled — with measuring off the open box is closed by the completion), 409 `packages_not_all_rescanned` until every package is fully re-scanned (`rescanned_qty >= qty`), 409 `labels_not_all_verified` when label-mode rows exist without their label scans (see `docs/backend/verify-measuring.md`). |
 
+## Packaging (打包 — opt-in stage after verify)
+
+Implemented: `GET /packaging-orders`, `GET /packaging-orders/:orderId`,
+`POST /packaging-orders/:orderId/confirm` (see
+`apps/backend/src/routes/packaging.ts` + `src/db/packaging.ts`; spec
+`docs/superpowers/specs/2026-11-10-packaging-shipping-steps-design.md`).
+The `packaging` flow step (default off — opt-in like `receiving-cn`, flipped on
+per warehouse via `PUT /admin/flow-config`) inserts an ORDER-keyed stage after
+verify. The queue is fully derived (no task table, no `*_pending` flag): an
+order is ready when it is picking-complete (`picking_finished`/
+`measuring_finished`), has no labeling stages pending, every package is boxed,
+every box holding its packages is closed (+ its verify task `completed` when
+the verify step is on) and `packaged_at IS NULL`. The confirm records the
+total weight (kg, ≤3 dp) + optional pallet count, recomputes the box count
+server-side (auto count), stamps `packaged_at`/`packaged_by`, writes a
+`transaction_logs` row (`packaging_pending → packaged`) and emits
+`picking.packaged`. No stock movement; the order status is untouched (stays
+`measuring_finished` until the per-box ship derives `shipped`). While the step
+is on, the shipping feed additionally requires every non-cancelled order with
+packages in the box to be packaged. Queue assignee rides the `picking_tasks`
+side rows (`step = 'packaging'`, the labeling/CR-048 pattern) — managed via
+`/admin/task-assignments?flow=packaging`.
+
+| Endpoint | Description |
+|---|---|
+| `GET /packaging-orders?status=pending\|completed` | Queue rows `{id, orderNo, customerCode, shipTo, poNo, boxCount, packageCount, grossWeightHint, assignee, packagedAt, packagedBy, packedWeight, packedBoxCount, packedPalletCount, lastUpdateDate}[]` — `completed` lists the packaged history (packaged orders included even after shipping). Org/user scope + assignee filtering like the labeling queue. |
+| `GET /packaging-orders/:orderId` | Detail: the row + `boxes[{id, status, grossWeight, netWeight, boxSize, destinationCountry, packageCount, closedAt}]` (404 `packaging_order_not_found` — also when assigned to another user). |
+| `POST /packaging-orders/:orderId/confirm` | `{weight, palletCount?}` → `{id, boxCount}` (the recomputed auto count). 404 `packaging_order_not_found`, 409 `packaging_not_ready` when off the queue (covers double-confirm), 400 `invalid_weight` / `invalid_pallet_count` / `weight_required`, 400 `actor_not_found`. |
+
 ## Flow-step config + shipping feed
 
 Implemented: `GET /config`, `GET /shipping-orders`,
@@ -733,10 +762,11 @@ Implemented: `GET /config`, `GET /shipping-orders`,
 `warehouse_config` row key `"flow"` (JSON merged over defaults and validated
 at boot; the `FLOW_CONFIG` env var overrides the row when set; legacy
 `FLOW_STEPS_DISABLED` comma-separated step keys still map onto step
-enablement on top, deprecated) toggles the 13 flow steps (`receiving`,
+enablement on top, deprecated) toggles the 16 flow steps (`receiving`,
 `receiving-cn`, `put-away`, `picking`, `label-printing`, `labeling`,
-`goods-verify`, `measuring`, `verify`, `put-back`, `stock-search`,
-`ad-hoc-put-away`, `shelf-exchange` — `FLOW_STEPS` in `src/config.ts`) and
+`goods-verify`, `measuring`, `verify`, `packaging`, `shipping`, `put-back`,
+`stock-search`, `ad-hoc-put-away`, `shelf-exchange`, `internal-transfer` —
+`FLOW_STEPS` in `src/config.ts`) and
 carries behavior
 flags; `GET /config` → `{flowSteps, pickingAllocation, putAway}` exposes the
 result to clients (the PDA hides disabled home tiles; changes need a backend
@@ -748,8 +778,10 @@ gated on completed verify tasks), `goods-verify` makes task generation
 for allocation, and `steps.put-away.autoCreateTasks`/`suggestShelf` switch
 put-away to task mode with shelf suggestions; `receiving-cn` gates the CN
 receiving + `/put-away-cn/*` routes (§CN), `label-printing`/`labeling` gate
-the post-finish label stages (§Picking), and `measuring` and the remaining
-steps only toggle PDA home tiles (there is no measuring task to gate).
+the post-finish label stages (§Picking), `packaging` gates the post-verify
+packaging stage + the shipping readiness on packaged orders (§Packaging), and
+`measuring`, `shipping` (admin nav link only) and the remaining steps only
+toggle their tiles/links (there is no measuring task to gate).
 The top-level `allowedOrgIds: number[]` key (spec
 `2026-09-01-flow-config-allowed-org-ids-design.md`; [] = all orgs) scopes
 PDA-facing queries to the listed org partitions: the picking/receiving order
@@ -824,7 +856,9 @@ Validated at boot, admin-editable on the flow-config page via
 `GET/PUT /admin/flow-config`, served on `GET /config`.
 The shipping feed is per-box: the list reads closed, unshipped boxes — gated
 on the box's completed verify task when the verify step is enabled
-("measured" ≡ closed). Shipping is a pure workflow transition (stock already
+("measured" ≡ closed) and, while the packaging step is on, on every
+non-cancelled order holding packages in the box being packaged
+(`packaged_at` set). Shipping is a pure workflow transition (stock already
 left inventory at pick-scan time): `POST /shipping-orders/:boxId/ship` stamps
 the box `shipped_at`/`shipped_by` + transition log and then derives order
 `shipped` for every order in the box (source orders are in
@@ -837,8 +871,8 @@ Shipped boxes drop out of the feed; shipped orders stay visible via
 | Endpoint | Description |
 |---|---|
 | `GET /config` | `{flowSteps: Record<FlowStep, boolean>, pickingAllocation: {allowDockStock: boolean}, putAway: {autoCreateTasks: boolean, suggestShelf: "existing-stock"\|"off", skipScan: boolean}, allowedOrgIds: number[], cnReceiving: boolean, pickingShelfScan: "off"\|"require-match"\|"require-any", dateCodeFormat: "wwyy"\|"yyww", listTemplates: Record<PdaListKey, {title, meta}>, viewConfig: PdaViewConfig, warehouseCode: string}` — the resolved flow config (`warehouse_config` row `"flow"`, `FLOW_CONFIG` env override; legacy `FLOW_STEPS_DISABLED` maps onto `flowSteps` on top, deprecated). `pickingAllocation.allowDockStock=false` = put-away is a hard gate for allocation; `putAway` drives the put-away task mode + shelf suggestions; `allowedOrgIds` ([] = all orgs) scopes picking/receiving/stock/put-away/goods-verify queries to the listed org partitions server-side; `cnReceiving` (spec `2026-10-16-customer-receiving-upload-design.md`, default false) switches the PDA put-away flow to the dedicated CN tables (the `/put-away-cn/*` routes 404 while off); `pickingShelfScan` is the picking shelf-scan mode (spec `2026-10-02-picking-shelf-scan-config-design.md`); `listTemplates` (spec `2026-09-21-pda-list-row-templates-design.md`, deprecated) carries the per-PDA-list row display templates applied client-side; `viewConfig` (spec `2026-10-04-pda-app-rewrite-design.md`) is the fully-resolved PDA view config (`lists` incl. stock-search `{title, meta[1–2], chip}` + receiving/picking/put-away detail field lists and receiving `defaultGrouping`; legacy `pdaListTemplates` customizations migrate in for lists without a `pdaViewConfig.lists` entry); `warehouseCode` is the instance's `WAREHOUSE_CODE` env selector lower-cased (`""` when unset) — the admin console picks warehouse-specific layouts from it. |
-| `GET /shipping-orders` | Box rows: `{boxId, orderNos[], shipTos[], destinationCountry, boxSize, grossWeight, netWeight, packageCount, closedAt}` — closed, unshipped boxes (verify-gated when the verify step is on). |
-| `GET /shipping-orders/:boxId` | Box detail: `{box{..., shippedAt, shippedBy}, packages[{..., partNo, wclItemNo, verified}], orders[{id, orderNo, status, shipTo, customerCode, poNo}]}` (404 `shipping_box_not_found`). |
+| `GET /shipping-orders` | Box rows: `{boxId, orderNos[], shipTos[], destinationCountry, boxSize, grossWeight, netWeight, packageCount, packaged, closedAt}` — closed, unshipped boxes (verify-gated when the verify step is on, packaging-gated when the packaging step is on; `packaged` = every non-cancelled order in the box packaged). |
+| `GET /shipping-orders/:boxId` | Box detail: `{box{..., shippedAt, shippedBy}, packages[{..., partNo, wclItemNo, verified}], orders[{id, orderNo, status, shipTo, customerCode, poNo, packagedAt, packedWeight, packedBoxCount, packedPalletCount}]}` (404 `shipping_box_not_found`) — the packaged fields feed the admin packaging-review block for the delivery provider. |
 | `POST /shipping-orders/:boxId/ship` | `{}` → `{id, status, shippedOrderIds}`. Re-checks the feed predicate (closed, unshipped, verify-gated; 409 `box_not_ready_to_ship` otherwise, including already-shipped boxes), stamps the box, derives order `shipped`, emits `shipping_box.shipped`. |
 
 ## Goods verify (task-based, concept 7)

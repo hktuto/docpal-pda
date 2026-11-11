@@ -41,6 +41,7 @@ const PDA_LIST_PAGE_I18N: Record<PdaViewListKey, string> = {
   verify: "verify",
   measuring: "measuring",
   "stock-search": "stockSearch",
+  packaging: "packaging",
 };
 const PDA_DETAIL_PAGE_I18N: Record<PdaDetailPageKey, string> = {
   receivingDetail: "receivingDetail",
@@ -145,6 +146,14 @@ const PDA_SAMPLE_FULL: Record<PdaViewListKey, Record<string, unknown>> = {
     totalQty: 120,
     labelCount: 2,
   },
+  packaging: {
+    orderNo: "SO-100234",
+    customerCode: "CUST-01",
+    poNo: "PO-556677",
+    shipTo: "Hong Kong",
+    boxCount: 2,
+    packageCount: 12,
+  },
 };
 
 const PDA_SAMPLE_PARTIAL: Record<PdaViewListKey, Record<string, unknown>> = {
@@ -157,6 +166,7 @@ const PDA_SAMPLE_PARTIAL: Record<PdaViewListKey, Record<string, unknown>> = {
   labeling: { orderNo: "SO-100234" },
   "label-printing": { orderNo: "SO-100234" },
   "stock-search": { partNo: "PN-001" },
+  packaging: { orderNo: "SO-100234" },
 };
 
 // Detail-page preview samples: one item per page covering the whole catalog.

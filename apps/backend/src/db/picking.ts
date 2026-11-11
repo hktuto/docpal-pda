@@ -44,7 +44,10 @@ const TN_ORG_ID = 143;
 const unwrappedPartCol = (col: SQL) =>
   sql`regexp_replace(upper(regexp_replace(${col}, '\\s', '', 'g')), '^(TE-)?AMP\\((.+)\\)$', '\\2')`;
 
-function pickingOrderOrgFilter(orgCol: SQL, subCol: SQL, typeCol: SQL, scope?: UserScopeEntry[] | null): SQL {
+/** Order-partition + user-scope predicate for picking-order queues
+ *  (invoice AND vmi orders get allowedOrgIds + the exact user scope — see
+ *  user-scope.test.ts). Shared with the packaging queue (db/packaging.ts). */
+export function pickingOrderOrgFilter(orgCol: SQL, subCol: SQL, typeCol: SQL, scope?: UserScopeEntry[] | null): SQL {
   const invoiceConds = [allowedOrgCondition(orgCol), userScopeCondition(orgCol, subCol, scope)]
     .filter((c): c is SQL => c !== undefined);
   const locScoped = sql`${typeCol} = ANY(ARRAY['invoice', 'vmi'])`;
@@ -3105,6 +3108,9 @@ export async function reopenShippingBox(db: AppDb, input: { shippingBoxId: strin
       sql`SELECT status FROM verify_tasks WHERE shipping_box_id = ${box.id}`
     );
     if (!task || task.status !== "pending") throw new HTTPException(409, { message: "verify_task_not_pending" });
+    // Packaging note: no extra guard needed — a packaged order only exists
+    // once its boxes' verify tasks are 'completed', and reopen above already
+    // 409s without a pending task (spec 2026-11-10-packaging-shipping-steps-design.md).
 
     await queryRun(
       tx,
@@ -3576,6 +3582,11 @@ export async function resetPickingOrderProgress(
               label_printing_pending = false,
               label_printing_done_at = NULL,
               label_printing_done_by = NULL,
+              packaged_at = NULL,
+              packaged_by = NULL,
+              packed_weight = NULL,
+              packed_box_count = NULL,
+              packed_pallet_count = NULL,
               shipped_at = NULL,
               shipped_by = NULL,
               issue_reason = NULL,

@@ -1,0 +1,14 @@
+{
+ "id": "CR-058",
+ "dateRaised": "2026-11-10",
+ "raisedBy": "Sean",
+ "app": "PDA",
+ "functionId": "PDA-030",
+ "feature": "Packaging + Shipping steps for CN (打包/寄出) — opt-in `packaging` flow step inserts an order-keyed stage after verify: PDA + admin queue shows verified orders awaiting total weight + box count (auto, recomputed server-side at confirm) or pallet count, one simple confirm; the `shipping` step (default-on, admin nav gate) surfaces it on the shipping pages — feed `packaged` column and box-detail packaged panel with a copyable summary (order/customer/ship-to/weight/boxes/pallets) for pasting into the delivery provider's form; shipping per-box feed additionally requires every non-cancelled order in a box to be packaged while the step is on",
+ "reason": "CN warehouse outbound needs the packed-shipment figures (weight, boxes vs pallets) recorded once per order after verify and reviewed/copied before handing to the carrier",
+ "priority": "Must have",
+ "status": "Delivered",
+ "owner": "dev",
+ "targetDate": "",
+ "remarks": "Implemented 2026-11-10/11 — spec `docs/superpowers/specs/2026-11-10-packaging-shipping-steps-design.md`, plan `docs/superpowers/plans/2026-11-10-packaging-shipping-steps.md`. Backend `src/db/packaging.ts` + `src/routes/packaging.ts` (migration 0063: picking_orders packaged_* columns, picking_tasks step check + 'packaging'), ship gate in `src/db/shipping.ts`, task-assignments flow 'packaging' (picking_tasks side rows, CR-048 pattern), default-off step in `src/config.ts` (operator enables via /admin/flow-config — no seed change). PDA `apps/pda/pages/packaging/` + `utils/packaging.ts`; admin `apps/admin/pages/packaging/` + shipping review in `apps/admin/pages/shipping/`. Tests: `src/db/packaging.test.ts` (9), `apps/pda/tests/packaging.test.ts`. Admin twin + 寄出 review on ADM-041."
+}

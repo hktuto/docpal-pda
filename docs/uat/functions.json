@@ -757,5 +757,27 @@
     "result": "",
     "bugIds": "",
     "remarks": "Spec docs/superpowers/specs/2026-11-10-internal-transfer-pda-picking-design.md; admin Confirm/Unconfirm gate on ADM-040"
+  },
+  {
+    "id": "PDA-030",
+    "app": "PDA",
+    "module": "Measure & verify",
+    "name": "Packaging queue/detail (打包, opt-in `packaging` step) — derived post-verify order queue, total weight + auto box count or pallet count, one confirm",
+    "tester": "",
+    "testDate": "",
+    "result": "",
+    "bugIds": "",
+    "remarks": "Spec docs/superpowers/specs/2026-11-10-packaging-shipping-steps-design.md; admin twin + 寄出 review on ADM-041"
+  },
+  {
+    "id": "ADM-041",
+    "app": "Admin",
+    "module": "Shipping",
+    "name": "Packaging pages (打包) — pending queue + weight/box/pallet confirm form (same endpoint as PDA); shipping list `packaged` column; shipping detail packaged orders panel + copy summary for the delivery provider; task-assignment packaging flow",
+    "tester": "",
+    "testDate": "",
+    "result": "",
+    "bugIds": "",
+    "remarks": "Spec docs/superpowers/specs/2026-11-10-packaging-shipping-steps-design.md; `shipping` flow step gates the /shipping nav link"
   }
 ]

@@ -1360,6 +1360,53 @@ export interface VerifyTaskListRow {
   assignee?: string | null;
 }
 
+// ------------------------------------------------------------------
+// Packaging stage (打包, spec docs/superpowers/specs/2026-11-10-packaging-
+// shipping-steps-design.md) — order-keyed queue after verify: total weight +
+// auto box count (server-recomputed at confirm) or pallet count, one confirm.
+// GET /packaging-orders*
+// ------------------------------------------------------------------
+
+/** GET /packaging-orders?status= row. */
+export interface PackagingOrderRow {
+  id: string;
+  orderNo: string;
+  customerCode: string | null;
+  shipTo: string | null;
+  poNo: string | null;
+  boxCount: number;
+  packageCount: number;
+  /** Σ gross_weight of the order's boxes — display hint only. */
+  grossWeightHint: number | null;
+  assignee: string | null;
+  packagedAt: string | null;
+  packagedBy: string | null;
+  packedWeight: number | null;
+  packedBoxCount: number | null;
+  packedPalletCount: number | null;
+  lastUpdateDate: string;
+}
+
+/** GET /packaging-orders/:orderId — row + the order's boxes. */
+export interface PackagingOrderDetail extends PackagingOrderRow {
+  boxes: {
+    id: string;
+    status: string;
+    grossWeight: number | null;
+    netWeight: number | null;
+    boxSize: string | null;
+    destinationCountry: string | null;
+    packageCount: number;
+    closedAt: string;
+  }[];
+}
+
+/** POST /packaging-orders/:orderId/confirm result. */
+export interface ConfirmPackagingResult {
+  id: string;
+  boxCount: number;
+}
+
 /** GET /verify-tasks/:id — task + box + packages. */
 export interface VerifyTaskDetail {
   task: {
@@ -1436,6 +1483,8 @@ export type FlowStep =
   | "goods-verify"
   | "measuring"
   | "verify"
+  | "packaging"
+  | "shipping"
   | "put-back"
   | "stock-search"
   | "ad-hoc-put-away"

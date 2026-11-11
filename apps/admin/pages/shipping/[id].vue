@@ -24,6 +24,8 @@ const orderColumnDefs = computed<AdminColumnDef<OrderRow>[]>(() => [
   { key: "shipTo", label: t("admin.pages.shipping.shipTo"), accessor: (o) => o.shipTo ?? "", size: 160 },
   { key: "customerCode", label: t("admin.pages.shipping.customer"), accessor: (o) => o.customerCode ?? "", size: 110 },
   { key: "poNo", label: t("admin.pages.shipping.poNo"), accessor: (o) => o.poNo ?? "", size: 140 },
+  // Packaging stage (spec 2026-11-10): recorded weight / box / pallet counts.
+  { key: "packaged", label: t("admin.pages.shipping.packaged"), accessor: (o) => (o.packagedAt ? 1 : 0), size: 160 },
 ]);
 
 const packageColumnDefs = computed<AdminColumnDef<PackageRow>[]>(() => [
@@ -74,6 +76,41 @@ async function shipBox() {
   }
 }
 
+// Packaging review (spec 2026-11-10-packaging-shipping-steps-design.md): the
+// packaged orders' recorded numbers as one copyable block for the delivery
+// provider's form.
+const summaryText = computed(() => {
+  const d = detail.value;
+  if (!d) return "";
+  return d.orders
+    .filter((o) => o.packagedAt)
+    .map((o) =>
+      [
+        o.orderNo,
+        o.customerCode ?? "",
+        o.shipTo ?? "",
+        `${o.packedWeight ?? ""} kg`,
+        t("admin.pages.shipping.summaryBoxes", { count: o.packedBoxCount ?? 0 }),
+        ...(o.packedPalletCount != null ? [t("admin.pages.shipping.summaryPallets", { count: o.packedPalletCount })] : []),
+      ].filter(Boolean).join(" | ")
+    )
+    .join("\n");
+});
+
+const summaryEl = ref<HTMLTextAreaElement | null>(null);
+const copied = ref(false);
+async function copySummary() {
+  try {
+    await navigator.clipboard.writeText(summaryText.value);
+  } catch {
+    // Insecure-origin fallback (plain http LAN admin hosts): select the block
+    // so Ctrl-C copies it.
+    summaryEl.value?.select();
+  }
+  copied.value = true;
+  setTimeout(() => (copied.value = false), 1500);
+}
+
 async function load() {
   loading.value = true;
   error.value = "";
@@ -94,7 +131,7 @@ const {
   justUpdated: changeUpdated,
   refreshNow,
   dismiss,
-} = useChangeNotice(["shipping_box.shipped", "picking_order.updated"], load);
+} = useChangeNotice(["shipping_box.shipped", "picking_order.updated", "picking.packaged"], load);
 </script>
 
 <template>
@@ -141,7 +178,24 @@ const {
         <template #cell-shipTo="{ row }">{{ row.shipTo ?? "—" }}</template>
         <template #cell-customerCode="{ row }">{{ row.customerCode ?? "—" }}</template>
         <template #cell-poNo="{ row }">{{ row.poNo ?? "—" }}</template>
+        <template #cell-packaged="{ row }">
+          <template v-if="row.packagedAt">
+            {{ row.packedWeight }} kg · {{ row.packedBoxCount }}
+            <template v-if="row.packedPalletCount != null"> · {{ $t("admin.pages.shipping.summaryPallets", { count: row.packedPalletCount }) }}</template>
+          </template>
+          <template v-else>—</template>
+        </template>
       </DataTable>
+
+      <template v-if="summaryText">
+        <h2 class="section-title">
+          {{ $t("admin.pages.shipping.packagingSummary") }}
+          <button class="btn copy-btn" @click="copySummary">
+            {{ copied ? $t("admin.pages.shipping.copied") : $t("admin.pages.shipping.copy") }}
+          </button>
+        </h2>
+        <textarea ref="summaryEl" class="summary-block" rows="4" readonly>{{ summaryText }}</textarea>
+      </template>
 
       <h2 class="section-title">{{ $t("admin.pages.shipping.packages") }}</h2>
       <DataTable
@@ -172,5 +226,20 @@ const {
 .clickable {
   cursor: pointer;
   color: #0b5cab;
+}
+.copy-btn {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+}
+.summary-block {
+  width: 100%;
+  max-width: 40rem;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid #b6c2cd;
+  border-radius: 0.25rem;
+  resize: vertical;
 }
 </style>

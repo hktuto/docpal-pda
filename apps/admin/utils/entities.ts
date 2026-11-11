@@ -372,7 +372,10 @@ export const navSections: { title: string; links: { route: string; title: string
   },
   {
     title: "admin.nav.shipping",
-    links: [{ route: "/shipping", title: "admin.navLinks.shippingOrders" }],
+    links: [
+      { route: "/packaging", title: "admin.navLinks.packaging" },
+      { route: "/shipping", title: "admin.navLinks.shippingOrders" },
+    ],
   },
   {
     title: "admin.nav.adHocPutAway",

@@ -120,6 +120,7 @@ Postgres:业务表 + transaction_logs/inventory_transactions(账本,必须同事
 | 自訂列印標籤 | ⧗ [flows/custom-print-label.md](./flows/custom-print-label.md)(交接中:只有佔位頁) | — | `pages/custom-print-label.vue` |
 | 称重量方 Measuring | ✅ [flows/measuring.md](./flows/measuring.md) | `/measuring` | `pages/shipping` |
 | 复核 Verify | ✅ [flows/verify.md](./flows/verify.md) | `/verify` | — |
+| 打包 Packaging(可选) | ✅ [flows/packaging.md](./flows/packaging.md) | `/packaging` | — |
 | 货物校验 Goods verify | ✅ [flows/goods-verify.md](./flows/goods-verify.md)(注意:该流 2026-10 已重设计为货架盘点摘要) | `/goods-verify` | — |
 | 库存查询 Stock search | ✅ [flows/stock-search.md](./flows/stock-search.md) | `/stock-search` | `pages/stock-search.vue` |
 | 无单上架 Ad-hoc put-away | ✅ [flows/ad-hoc-put-away.md](./flows/ad-hoc-put-away.md) | `/ad-hoc-put-away` | — |

@@ -6,7 +6,13 @@ import type { ApiClient } from "~/utils/api";
 // receiving-cn off — the CN receiving nav link (route "/receiving-cn") and the
 // standard receiving link (route "/receiving") are gated on these, plus the
 // internal-transfer link (route "/internal-transfer-orders", default on).
-const steps = ref<Record<string, boolean>>({ receiving: true, "receiving-cn": false, "internal-transfer": true });
+const steps = ref<Record<string, boolean>>({
+  receiving: true,
+  "receiving-cn": false,
+  "internal-transfer": true,
+  packaging: false,
+  shipping: true,
+});
 
 /** GET /config and mirror its flat `flowSteps` boolean record. */
 export async function loadFlowSteps(api: ApiClient): Promise<void> {

@@ -54,6 +54,9 @@ import type {
   MeasuringBoxDetail,
   MeasuringOrderGroup,
   VerifyTaskListRow,
+  PackagingOrderRow,
+  PackagingOrderDetail,
+  ConfirmPackagingResult,
   VerifyTaskDetail,
   VerifyLabelLookup,
   ScanVerifyTaskLabelResult,
@@ -311,6 +314,13 @@ export interface WarehouseService {
   scanVerifyTaskLabel(taskId: string, raw: string): Promise<ScanVerifyTaskLabelResult | null>;
   completeVerifyTask(id: string): Promise<void>;
   reopenShippingBox(boxId: string): Promise<void>;
+
+  // Packaging stage (打包, spec 2026-11-10): order-keyed queue after verify;
+  // confirm stores the total weight (+ optional pallet count) and the
+  // server-recomputed box count. 409 packaging_not_ready covers double-confirm.
+  getPackagingOrders(status?: string): Promise<PackagingOrderRow[]>;
+  getPackagingOrder(orderId: string): Promise<PackagingOrderDetail>;
+  confirmPackaging(orderId: string, weight: number, palletCount: number | null): Promise<ConfirmPackagingResult>;
 
   // Flow config (GET /config) — which home tiles the backend's flow config
   // (warehouse_config row "flow") disables, plus the picking allocation

@@ -23,7 +23,7 @@ async function readJson(c: Context): Promise<Record<string, unknown>> {
 export const adminTaskAssignmentsRoute = new Hono();
 
 // Open tasks of one flow for the picker UI (?flow=receiving-cn|picking|
-// labeling|put-away|put-away-cn|measuring|verify) — includes every assignee.
+// labeling|put-away|put-away-cn|measuring|verify|packaging) — includes every assignee.
 adminTaskAssignmentsRoute.get("/task-assignments", async (c) => {
   const flow = parseTaskAssignmentFlow(c.req.query("flow"));
   return c.json(await listTaskAssignments(db, flow), 200);

@@ -53,6 +53,18 @@ export const pickingOrders = pgTable(
     labelPrintingPending: boolean("label_printing_pending").notNull().default(false),
     labelPrintingDoneAt: timestamp("label_printing_done_at", { mode: "date" }),
     labelPrintingDoneBy: text("label_printing_done_by"),
+    // Packaging stage (打包, spec 2026-11-10-packaging-shipping-steps-design.md):
+    // confirmed per order once every box holding its packages is closed (+ its
+    // verify task completed when the verify step is on). packaged_at IS the
+    // packaged truth (status stays 'measuring_finished' until shipped);
+    // packed_box_count is recomputed server-side at confirm; packed_pallet_count
+    // non-NULL = pallet mode (boxes still counted). Weights in kg, ≤3 dp like
+    // shipping_boxes.gross_weight. No status-column changes.
+    packagedAt: timestamp("packaged_at", { mode: "date" }),
+    packagedBy: text("packaged_by").references(() => users.id),
+    packedWeight: real("packed_weight"),
+    packedBoxCount: integer("packed_box_count"),
+    packedPalletCount: integer("packed_pallet_count"),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
@@ -62,9 +74,10 @@ export const pickingOrders = pgTable(
   })
 );
 
-// Per-step assignee side table for the labeling / label-printing queues
-// (CR-048, plan 2026-11-06-uat-open-items.md): picking_orders is upstream-
-// synced, so these two queue steps can't get a column — their assignee lives
+// Per-step assignee side table for the labeling / label-printing / packaging
+// queues (CR-048, plan 2026-11-06-uat-open-items.md; packaging per spec
+// 2026-11-10-packaging-shipping-steps-design.md): picking_orders is upstream-
+// synced, so these queue steps can't get a column — their assignee lives
 // here, keyed by (order, step). Absent row = unassigned = visible to everyone
 // (same convention as the queue assignees). The picking step keeps using
 // picking_orders.assignee.
@@ -73,14 +86,14 @@ export const pickingTasks = pgTable(
   {
     id: text("id").primaryKey(),
     pickingOrderId: text("picking_order_id").notNull().references(() => pickingOrders.id, { onDelete: "cascade" }),
-    step: text("step").notNull(), // labeling | label-printing
+    step: text("step").notNull(), // labeling | label-printing | packaging
     assignee: text("assignee"), // optional assignee username, no FK — NULL = visible to everyone
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     orderStepUq: uniqueIndex("idx_picking_tasks_order_step").on(t.pickingOrderId, t.step),
-    stepCheck: check("chk_picking_tasks_step", sql`step IN ('labeling', 'label-printing')`),
+    stepCheck: check("chk_picking_tasks_step", sql`step IN ('labeling', 'label-printing', 'packaging')`),
   })
 );
 

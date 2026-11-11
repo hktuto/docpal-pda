@@ -27,15 +27,34 @@ export interface ShippingOrderRow {
   grossWeight: number | null;
   netWeight: number | null;
   packageCount: number;
+  /** Packaging step: every non-cancelled order holding packages in this box
+   *  has been packaged (spec 2026-11-10-packaging-shipping-steps-design.md). */
+  packaged: boolean;
   closedAt: Date;
 }
 
-/** SQL predicate shared by the feed and shipShippingBox's readiness re-check. */
+/** SQL predicate shared by the feed and shipShippingBox's readiness re-check.
+ *  While the packaging step is on, every non-cancelled order holding packages
+ *  in the box must be packaged first (spec
+ *  2026-11-10-packaging-shipping-steps-design.md). */
 function readyToShipWhere() {
   return sql`sb.status = 'closed' AND sb.shipped_at IS NULL
     AND (${!isStepEnabled("verify")} OR EXISTS (
-      SELECT 1 FROM verify_tasks vt WHERE vt.shipping_box_id = sb.id AND vt.status = 'completed'))`;
+      SELECT 1 FROM verify_tasks vt WHERE vt.shipping_box_id = sb.id AND vt.status = 'completed'))
+    AND (${!isStepEnabled("packaging")} OR NOT EXISTS (
+      SELECT 1 FROM picking_packages px
+      JOIN picking_items ix ON ix.id = px.picking_item_id
+      JOIN picking_orders ox ON ox.id = ix.picking_order_id
+      WHERE px.shipping_box_id = sb.id AND ox.packaged_at IS NULL AND ox.status <> 'cancelled'))`;
 }
+
+/** Box-level "every order in it packaged" flag (feed column; data-truth
+ *  regardless of step enablement). */
+const PACKAGED_FLAG = sql`NOT EXISTS (
+  SELECT 1 FROM picking_packages px
+  JOIN picking_items ix ON ix.id = px.picking_item_id
+  JOIN picking_orders ox ON ox.id = ix.picking_order_id
+  WHERE px.shipping_box_id = sb.id AND ox.packaged_at IS NULL AND ox.status <> 'cancelled')`;
 
 /** Shipping feed: closed, unshipped boxes (verify-gated when the step is on). */
 export async function listShippingOrders(db: AppDb): Promise<ShippingOrderRow[]> {
@@ -49,6 +68,7 @@ export async function listShippingOrders(db: AppDb): Promise<ShippingOrderRow[]>
         sb.destination_country AS "destinationCountry",
         sb.box_size AS "boxSize", sb.gross_weight AS "grossWeight", sb.net_weight AS "netWeight",
         COUNT(pp.id)::int AS "packageCount",
+        ${PACKAGED_FLAG} AS "packaged",
         sb.last_update_date AS "closedAt"
       FROM shipping_boxes sb
       LEFT JOIN picking_packages pp ON pp.shipping_box_id = sb.id
@@ -93,6 +113,10 @@ export interface ShippingOrderDetailOrderRow {
   shipTo: string | null;
   customerCode: string | null;
   poNo: string | null;
+  packagedAt: Date | null;
+  packedWeight: number | null;
+  packedBoxCount: number | null;
+  packedPalletCount: number | null;
 }
 
 export interface ShippingOrderDetail {
@@ -133,7 +157,9 @@ export async function getShippingOrderDetail(db: AppDb, boxId: string): Promise<
     sql`
       SELECT DISTINCT
         po.id, po.order_no AS "orderNo", po.status, po.ship_to AS "shipTo",
-        po.customer_code AS "customerCode", po.po_no AS "poNo"
+        po.customer_code AS "customerCode", po.po_no AS "poNo",
+        po.packaged_at AS "packagedAt", po.packed_weight AS "packedWeight",
+        po.packed_box_count AS "packedBoxCount", po.packed_pallet_count AS "packedPalletCount"
       FROM picking_orders po
       JOIN picking_packages pp ON pp.picking_order_id = po.id
       WHERE pp.shipping_box_id = ${boxId}

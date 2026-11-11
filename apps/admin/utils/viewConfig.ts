@@ -13,7 +13,7 @@ import {
   type PdaViewListKey,
 } from "./listRowTemplate";
 
-export const PDA_VIEW_LIST_KEYS: PdaViewListKey[] = [...PDA_LIST_KEYS, "stock-search", "label-printing", "labeling"];
+export const PDA_VIEW_LIST_KEYS: PdaViewListKey[] = [...PDA_LIST_KEYS, "stock-search", "label-printing", "labeling", "packaging"];
 
 export interface PdaListViewConfig {
   title: string;
@@ -65,6 +65,8 @@ export const PDA_LIST_CHIP_FIELDS: Record<PdaViewListKey, string[]> = {
   verify: ["box_status", "package_count", "verify_verified_count", "none"],
   measuring: ["status", "package_count", "verified_count", "none"],
   "stock-search": ["none"],
+  // Packaging list (spec 2026-11-10): the auto box / package count chips.
+  packaging: ["none", "boxCount", "packageCount"],
 };
 
 export type PdaDetailPageKey = "receivingDetail" | "pickingDetail" | "putAwayDetail";
@@ -102,6 +104,7 @@ export const DEFAULT_PDA_VIEW_CONFIG: PdaViewConfig = {
     verify: { title: "[shipping_box_id]", meta: ["[order_nos] · [destination_country]"], chip: "box_status" },
     measuring: { title: "[box_id]", meta: ["[order_nos]"], chip: "status" },
     "stock-search": { title: "[wcl_item_no]", meta: ["[part_no]"], chip: "none" },
+    packaging: { title: "[order_no]", meta: ["[customer_code] · [ship_to]"], chip: "boxCount" },
   },
   receivingDetail: {
     defaultGrouping: "invoice",

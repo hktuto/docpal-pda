@@ -38,6 +38,9 @@ import type {
   MeasuringBoxDetail,
   MeasuringOrderGroup,
   VerifyTaskListRow,
+  PackagingOrderRow,
+  PackagingOrderDetail,
+  ConfirmPackagingResult,
   VerifyTaskDetail,
   VerifyLabelLookup,
   ScanVerifyTaskLabelResult,
@@ -755,6 +758,22 @@ export function createBackendWarehouseService(
     },
     async reopenShippingBox(boxId: string): Promise<void> {
       await client.post(`/shipping-boxes/${boxId}/reopen`, {});
+    },
+
+    // Packaging queue (打包, spec 2026-11-10): the derived post-verify queue;
+    // the confirm recomputes the box count server-side (auto count).
+    async getPackagingOrders(status?: string): Promise<PackagingOrderRow[]> {
+      return client.get("/packaging-orders", { status });
+    },
+    async getPackagingOrder(orderId: string): Promise<PackagingOrderDetail> {
+      return client.get(`/packaging-orders/${orderId}`);
+    },
+    async confirmPackaging(
+      orderId: string,
+      weight: number,
+      palletCount: number | null
+    ): Promise<ConfirmPackagingResult> {
+      return client.post(`/packaging-orders/${orderId}/confirm`, { weight, palletCount });
     },
 
     // Flow-step config (GET /config) — env-driven, read once after login.

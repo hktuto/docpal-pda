@@ -23,8 +23,9 @@ Start with [Concepts → Overview](./concepts/overview.md) and the [User Menu](.
 4. [Put-away](./flows/put-away/overview.md)
 5. [Measuring](./flows/measuring/overview.md)
 6. [Verify](./flows/verify/overview.md)
-7. [Goods verify](./flows/goods-verify/overview.md)
-8. [Stock Search](./flows/stock-search/overview.md)
+7. [Packaging](./flows/packaging/overview.md) (opt-in 打包 stage)
+8. [Goods verify](./flows/goods-verify/overview.md)
+9. [Stock Search](./flows/stock-search/overview.md)
 
 ## For AI agents
 

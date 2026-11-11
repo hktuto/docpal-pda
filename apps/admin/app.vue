@@ -67,12 +67,15 @@ onMounted(ensureFlowSteps);
 
 // Nav links gated by flow steps: the standard receiving list follows the
 // `receiving` step, the CN upload follows `receiving-cn`, internal transfer
-// orders follows `internal-transfer` (all served flat on GET /config as
+// orders follows `internal-transfer`, the packaging queue follows `packaging`
+// and the shipping feed follows `shipping` (all served flat on GET /config as
 // `flowSteps`). Routes not listed are always visible.
 const NAV_STEP_GATES: Record<string, string> = {
   "/receiving": "receiving",
   "/receiving-cn": "receiving-cn",
   "/internal-transfer-orders": "internal-transfer",
+  "/packaging": "packaging",
+  "/shipping": "shipping",
 };
 
 function navLinkVisible(linkRoute: string): boolean {

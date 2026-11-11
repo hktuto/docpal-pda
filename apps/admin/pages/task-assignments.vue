@@ -19,6 +19,7 @@ const FLOWS: TaskAssignmentFlow[] = [
   "put-away-cn",
   "measuring",
   "verify",
+  "packaging",
   "put-back",
 ];
 
