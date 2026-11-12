@@ -222,7 +222,6 @@ async function submit() {
                 min="1"
                 :max="Math.min(r.availableQty, remaining)"
                 :disabled="remaining <= 0 || saving"
-                :placeholder="String(Math.min(r.availableQty, remaining))"
               />
             </td>
           </tr>
@@ -268,7 +267,6 @@ async function submit() {
                   min="1"
                   :max="Math.min(dockAvailable(r), remaining)"
                   :disabled="remaining <= 0 || saving"
-                  :placeholder="String(Math.min(dockAvailable(r), remaining))"
                 />
               </td>
             </tr>
@@ -310,5 +308,13 @@ async function submit() {
   overflow-y: auto;
   flex: 1;
   min-height: 0;
+}
+.transfer-alloc-dialog .hint {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--el-bg-color, #fff);
+  margin: 0 0 0.5rem;
+  padding: 0.25rem 0;
 }
 </style>
