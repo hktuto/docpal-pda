@@ -223,7 +223,7 @@ const sizeLabel = computed(() =>
       </template>
       <div v-if="confirmError" class="error-banner">{{ confirmError }}</div>
       <div class="form-bottom">
-        <button type="button" class="btn btn-small bug-btn" @click="cancel" >Cancel</button>
+        <button type="button" class="btn btn-small bug-btn" @click="cancel">{{ t("admin.common.cancel") }}</button>
         <button type="button" class="btn btn-small bug-btn" :disabled="preparing" @click="confirm">
           {{ preparing ? t("admin.pages.customPrintLabel.preparing") : t("admin.pages.customPrintLabel.confirm") }}
         </button>
