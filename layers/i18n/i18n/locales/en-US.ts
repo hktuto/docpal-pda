@@ -2833,7 +2833,13 @@ export default {
         preview: "Preview — first {limit} rows (scroll sideways for all columns).",
         rowCountError: "Row {line}: {actual} cells but the header has {expected} — row skipped.",
         emptyError: "The file has no data rows.",
-        comingSoon: "Printing is not wired up yet."
+        confirm: "Confirm",
+        preparing: "Preparing…",
+        confirmTitle: "Confirm print",
+        confirmSummary: "{boxes} box(es), {labels} small label(s) — {total} label(s) in {pages} A4 page(s) will be printed with template a4-lwxy-3-4.",
+        job: "Job {n}/{total}",
+        printing: "Printing… {progress}",
+        printSuccess: "Sent {count} label(s) ({pages} page(s)) to the printer."
       },
       labelPrintRules: {
         activate: "Activate",

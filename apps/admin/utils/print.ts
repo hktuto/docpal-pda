@@ -509,6 +509,48 @@ export async function printFile(file: Blob, filename: string, opts: PrintFileOpt
 }
 
 
+export interface DynamicPrintOptions {
+  templateId: string;
+  printingParams: Record<string, unknown>[];
+  serviceId?: string;
+  deviceKey?: string;
+  copies?: number;
+  mode?: string;
+  orientation?: string;
+}
+
+export interface DynamicPrintResult {
+  templateId?: string;
+  templateName?: string;
+  templateType?: string;
+  totalPages?: number;
+  jobs: PrintJob[];
+}
+
+/** POST /print/dynamic — template-based print (upstream
+ *  /api/v1/templates/service-dynamic-print). When a printer is picked,
+ *  deviceKey doubles as printerName (same convention as the backend's
+ *  printOrderLabel). */
+export async function printDynamic(opts: DynamicPrintOptions): Promise<DynamicPrintResult> {
+  const res = await fetch(`${apiBaseUrl()}/print/dynamic`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({
+      templateId: opts.templateId,
+      printingParams: opts.printingParams,
+      copies: opts.copies ?? 1,
+      mode: opts.mode ?? "auto",
+      orientation: opts.orientation ?? "portrait",
+      ...(opts.serviceId && opts.deviceKey
+        ? { serviceId: opts.serviceId, deviceKey: opts.deviceKey, printerName: opts.deviceKey }
+        : {}),
+    }),
+  });
+  await throwOnError(res);
+  const data = (await res.json()) as Omit<DynamicPrintResult, "jobs"> & { jobs?: PrintJob[] };
+  return { ...data, jobs: data.jobs ?? [] };
+}
+
 /** GET /print/jobs/{jobId} — current status of one print job. */
 export async function getPrintJob(jobId: string): Promise<PrintJob> {
   const res = await fetch(`${apiBaseUrl()}/print/jobs/${encodeURIComponent(jobId)}`, {

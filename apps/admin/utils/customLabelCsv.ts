@@ -85,6 +85,8 @@ export interface CustItemLookupResult {
   itemDescription: string | null;
   /** MOQ number parsed from the description's `MOQ=xxx` text; null when absent. */
   moq: number | null;
+  /** picking_orders.delivery_date as YYYY-MM-DD; null when the order row misses. */
+  deliveryDate: string | null;
 }
 
 /** Batch CUST_ITEM_NUMBER + part-description lookup (POST
@@ -121,70 +123,93 @@ export async function convertToPrintData(csvData: Record<string, string>[]) {
   // get order CUST_ITEM_NUMBER form mapping
   const api = useApi();
   const custItems = await lookupCustItemNumbers(csvData);
-  const {count} = await api.post('/admin/sequences/next', {
+  const { start } = await api.post('/admin/sequences/next', {
     "key": "custom_label_weekly_serial",
+    count: 1
   })
+  const weekly_count = String(start).padStart(6, '0')
+
   const VENDER_CODE = 71279
   // first step loop all row and group largeLabel
   let currentBoxCount = 0;
-  const deliverDay = 'yyyymmdd'
+
   const result = csvData.reduce((f, c) => {
     // check if item new box
     const custItem = custItems.find(cu => cu.wclItemNo === c.物料號 && cu.orderNo === c.單號)
+     const deliverDay = custItem.deliveryDate.replaceAll('-','').replaceAll('/','')
+    // return if MOD is null
+    if (!custItem.moq || custItem.moq > Number(c.數量)) {
+      console.log('no moq item', custItem)
+      return f
+    }
     // update currentBoxCount
     if (Number(c.物品序列) === 1) {
       currentBoxCount++
     }
-    //
-    //
-    // {
-    //   "barcode1": "",
-    //   "dateCode": "",
-    //   "dateCode2": "",
-    //   "deliverDay": "",
-    //   "description": "",
-    //   "description2": "",
-    //   "invNo": "",
-    //   "lotNo": "",
-    //   "lotNo2": "",
-    //   "partNo": "",
-    //   "qrcode": "",
-    //   "qrcode2": "",
-    //   "qty": "",
-    //   "qty2": "",
-    //   "reelno": "",
-    //   "supplier": "",
-    //   "vendorCode": ""
-    // }
-    f.smalllabel.push({
-      "barcode1": custItem.custItemNumber,
-      "dateCode": c.DATECODE,
-      "dateCode2": c.DATECODE,
-      "deliverDay": deliverDay,
-      "description": custItem.partNo,
-      "description2": custItem.itemDescription,
-      "invNo": c.單號,
-      "lotNo": c.LOTNO,
-      "lotNo2": c.LOTNO,
-      "partNo": custItem.partNo,
-      "qrcode": VENDER_CODE+deliverDay+count,
-      "qrcode2": "",
-      "qty": "",
-      "qty2": "",
-      "reelno": "",
-      "supplier": "",
-      "vendorCode": VENDER_CODE
-    })
+    const smallLabel = {
+      barcode1: custItem.custItemNumber,
+      dateCode: c.DATECODE,
+      dateCode2: c.DATECODE,
+      deliverDay: deliverDay,
+      description: custItem.partNo,
+      description2: custItem.itemDescription,
+      invNo: c.單號,
+      lotNo: c.LOTNO,
+      lotNo2: c.LOTNO,
+      partNo: custItem.partNo,
+      qrcode: `${custItem.custItemNumber}*${c.LOTNO}*${c.DATECODE}*${VENDER_CODE}*${custItem.moq}*${VENDER_CODE}${deliverDay}${weekly_count}`,
+      qrcode2: `${custItem.orderNo};${custItem.partNo};${custItem.moq};${c.LOTNO};${c.DATECODE}`,
+      qty: custItem.moq,
+      qty2: custItem.moq,
+      reelno: VENDER_CODE+deliverDay+weekly_count,
+      vendorCode: VENDER_CODE,
+      boxId:currentBoxCount
+    }
+    const timeToPrint = new Array(Number(c.數量) / custItem.moq).fill(null)
+    f.smalllabel.push(...timeToPrint.map(() => smallLabel))
     // insert to small label
-
+    // time to group large label
+    // check if same currentBoxCount + partNo + lotCode in largeLabel
+    const existLargeLabel = f.largeLabel
+      .filter((l) => l.boxId === currentBoxCount)
+      .find((l) => l.partNo === custItem.partNo && l.lotNo === c.LOTNO)
+    if (existLargeLabel) {
+      const qty = Number(c.數量)
+      const newQty = existLargeLabel.qty + qty
+      existLargeLabel.qty = newQty
+      existLargeLabel.qty2 = newQty
+      existLargeLabel.qrcode = `${custItem.custItemNumber}*${c.LOTNO}*${c.DATECODE}*${VENDER_CODE}*${newQty}*${VENDER_CODE}${deliverDay}${weekly_count}`,
+      existLargeLabel.qrcode2 = `${custItem.orderNo};${custItem.partNo};${newQty};${c.LOTNO};${c.DATECODE}`
+    } else {
+      f.largeLabel.push({
+        boxId: currentBoxCount,
+        barcode1: custItem.custItemNumber,
+        dateCode: c.DATECODE,
+        dateCode2: c.DATECODE,
+        deliverDay: deliverDay,
+        description: custItem.partNo,
+        description2: custItem.itemDescription,
+        invNo: c.單號,
+        lotNo: c.LOTNO,
+        lotNo2: c.LOTNO,
+        partNo: custItem.partNo,
+        qrcode: `${custItem.custItemNumber}*${c.LOTNO}*${c.DATECODE}*${VENDER_CODE}*${custItem.moq}*${VENDER_CODE}${deliverDay}${weekly_count}`,
+        qrcode2: `${custItem.orderNo};${custItem.partNo};${custItem.moq};${c.LOTNO};${c.DATECODE}`,
+        qty: Number(c.數量),
+        qty2: Number(c.數量),
+        reelno: VENDER_CODE+deliverDay+start,
+        vendorCode: VENDER_CODE,
+      })
+    }
     // update
     return f
   }, {
     smalllabel: [],
     largeLabel: []
   })
-  console.log("custItems", result)
+  return result;
 }
+
 export function parseCustomLabelCsv(text: string): CustomLabelCsvResult {
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // BOM would poison the first header name
   const records = splitRecords(text).filter((r) => r.cells.some((c) => c.trim() !== ""));

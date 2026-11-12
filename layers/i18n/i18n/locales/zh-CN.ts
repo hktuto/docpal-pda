@@ -2829,7 +2829,13 @@ export default {
         preview: "预览 — 前 {limit} 行（左右滚动可看全部列）。",
         rowCountError: "第 {line} 行：{actual} 个单元格，表头有 {expected} 个 — 已跳过该行。",
         emptyError: "文件没有数据行。",
-        comingSoon: "打印功能尚未接入。"
+        confirm: "确认",
+        preparing: "准备中…",
+        confirmTitle: "确认打印",
+        confirmSummary: "共 {boxes} 箱、{labels} 张小标签 — 将使用模板 a4-lwxy-3-4 打印 {total} 张标签（{pages} 页 A4）。",
+        job: "任务 {n}/{total}",
+        printing: "打印中… {progress}",
+        printSuccess: "已发送 {count} 张标签（{pages} 页）到打印机。"
       },
       labelPrintRules: {
         activate: "启用",

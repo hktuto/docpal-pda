@@ -10,5 +10,5 @@
   "status": "Delivered",
   "owner": "dev",
   "targetDate": "",
-  "remarks": "Implemented 2026-11-11 — backend `src/db/adminedits.ts` updateReceivingItemFields (drawingNo read-modify-write on additional_data jsonb, clear = key removal; audit field drawing_no) + `src/routes/admin/flowEdits.ts` editable list; admin `components/receiving/ItemEditModal.vue` (withDrawingNo prop, per-field Clear checkboxes in batch mode incl. the CN sub-inventory/shelf dropdowns) + `pages/receiving/[id].vue` (maps additionalData.drawing_no into edit targets). Tests: `src/db/adminedits.test.ts` drawing-no set/clear + audit."
+  "remarks": "Implemented 2026-11-11 — commit 53e61f66. Backend `src/db/adminedits.ts` updateReceivingItemFields (drawingNo read-modify-write on additional_data jsonb, clear = key removal; audit field drawing_no) + `src/routes/admin/flowEdits.ts` editable list; admin `components/receiving/ItemEditModal.vue` (withDrawingNo prop, per-field Clear checkboxes in batch mode incl. the CN sub-inventory/shelf dropdowns) + `pages/receiving/[id].vue` (maps additionalData.drawing_no into edit targets). Tests: `src/db/adminedits.test.ts` drawing-no set/clear + audit."
 }

@@ -2829,7 +2829,13 @@ export default {
         preview: "預覽 — 前 {limit} 列（左右捲動可看全部欄位）。",
         rowCountError: "第 {line} 行：{actual} 個欄位，表頭有 {expected} 個 — 已跳過此行。",
         emptyError: "檔案沒有資料列。",
-        comingSoon: "列印功能尚未接上。"
+        confirm: "確認",
+        preparing: "準備中…",
+        confirmTitle: "確認列印",
+        confirmSummary: "共 {boxes} 箱、{labels} 張小標籤 — 將以模板 a4-lwxy-3-4 列印 {total} 張標籤（{pages} 頁 A4）。",
+        job: "工作 {n}/{total}",
+        printing: "列印中… {progress}",
+        printSuccess: "已送出 {count} 張標籤（{pages} 頁）到打印機。"
       },
       labelPrintRules: {
         activate: "啟用",

@@ -10,8 +10,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const { sql, db } = createDb();
 
-// Migrations are applied automatically on server startup.
-await migrate(db, { migrationsFolder: path.join(__dirname, "../drizzle") });
+// Migrations are applied automatically on server startup; DB_MIGRATE=off skips
+// them when the schema is provisioned externally (e.g. warehouse_DB's per-
+// warehouse schemas — the migration SQL hardcodes "public" FK targets and is
+// not schema-agnostic).
+if (process.env.DB_MIGRATE !== "off") {
+  await migrate(db, { migrationsFolder: path.join(__dirname, "../drizzle") });
+}
 
 export { sql, db };
 export type AppDb = typeof db;
