@@ -31,7 +31,7 @@ flowchart TD
 
 | 步骤 | 前端入口 | API | 关键表/模块 |
 |------|----------|-----|-------------|
-| 列表 | `pages/verify/index.vue` | `GET /verify-tasks?status=pending` | `db/verify.ts` `listVerifyTasks` |
+| 列表 | `pages/verify/index.vue`(按拣货单分组+发票号搜索框,均客户端计算) | `GET /verify-tasks?status=pending` | `db/verify.ts` `listVerifyTasks` |
 | 标签进入 | 同上(`useHardwareScanner`,标签匹配**先于**箱号) | `GET /verify-tasks/lookup-by-label?raw=` | `label_prints`;路由注册顺序敏感(在 `/:id` 之前) |
 | 箱子页 | `pages/verify/[boxId].vue`(box-keyed,内部重取任务) | `GET /verify-tasks/:id` | `getVerifyTaskDetail`(批次锚=COALESCE(扫值,存量)) |
 | 重扫 | `MeasureBox.vue`(mode=verify)+ `utils/verifyDisplayGroups.ts` | `POST /packages/:id/verify {qty, partNo?...}` | `verifyPackage` in `db/picking.ts` |

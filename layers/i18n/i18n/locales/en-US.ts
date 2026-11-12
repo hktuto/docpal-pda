@@ -827,6 +827,7 @@ export default {
     title: "Measuring",
     hint: "Boxes of picking-completed orders, grouped by picking order.",
     orderGroup: "Picking order {orderNo}",
+    searchPlaceholder: "Search invoice no.",
     boxNotFound: "No box in the list matches \"{id}\".",
     measureBox: {
       title: "Measure Box",
@@ -853,6 +854,8 @@ export default {
   verify: {
     title: "Verify",
     hint: "Closed boxes ready for the verify pass.",
+    orderGroup: "Picking order {orderNo}",
+    searchPlaceholder: "Search invoice no.",
     boxNotFound: "No box in the list matches \"{id}\".",
     cartonLabelVerified: "Carton label verified",
     labelScanned: "Label verified: {part}",

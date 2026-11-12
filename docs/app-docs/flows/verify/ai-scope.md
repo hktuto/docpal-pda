@@ -115,7 +115,9 @@
 
 ## Key files
 
-- `pages/verify/index.vue` — box list (pending verify tasks).
+- `pages/verify/index.vue` — box list (pending verify tasks), grouped
+  client-side by picking order (a box's `orderNos[]`) with an invoice-no
+  search box filtering the tasks client-side.
 - `pages/verify/[boxId].vue` — the box page: resolves the box's pending
   task, wraps `components/MeasureBox.vue` (`mode="verify"`), and adds the
   reopen + complete actions.

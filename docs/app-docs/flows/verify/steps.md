@@ -2,7 +2,7 @@
 
 ## 1. Open the verify list
 
-From the home screen, tap **Verify**. The list shows the boxes with a pending verify task (one task per box, created when the box was closed — or at picking finish, when the measuring step is turned off). When measuring is off, finishing a picking order also jumps straight to this list.
+From the home screen, tap **Verify**. The list shows the boxes with a pending verify task (one task per box, created when the box was closed — or at picking finish, when the measuring step is turned off), grouped by picking order (invoice no.); use the search box to filter by invoice no. When measuring is off, finishing a picking order also jumps straight to this list.
 
 ![Verify list](./assets/verify-list.png)
 

@@ -826,6 +826,7 @@ export default {
     title: "測量",
     hint: "按揀貨單分組的待測量箱號（揀貨已完成）。",
     orderGroup: "揀貨單 {orderNo}",
+    searchPlaceholder: "搜尋發票號碼",
     boxNotFound: "列表中找不到與「{id}」相符的箱號。",
     measureBox: {
       title: "測量箱號",
@@ -852,6 +853,8 @@ export default {
   verify: {
     title: "覆核",
     hint: "待覆核的已關閉箱號。",
+    orderGroup: "揀貨單 {orderNo}",
+    searchPlaceholder: "搜尋發票號碼",
     boxNotFound: "列表中找不到與「{id}」相符的箱號。",
     cartonLabelVerified: "箱標籤已核實",
     labelScanned: "標籤已核實：{part}",

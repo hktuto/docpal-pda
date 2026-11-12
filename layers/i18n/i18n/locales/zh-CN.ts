@@ -826,6 +826,7 @@ export default {
     title: "测量",
     hint: "按拣货单分组的待测量箱子（拣货已完成）。",
     orderGroup: "拣货单 {orderNo}",
+    searchPlaceholder: "搜索发票号码",
     boxNotFound: "列表中没有匹配“{id}”的箱子。",
     measureBox: {
       title: "测量箱子",
@@ -852,6 +853,8 @@ export default {
   verify: {
     title: "复核",
     hint: "待复核的已关闭箱子。",
+    orderGroup: "拣货单 {orderNo}",
+    searchPlaceholder: "搜索发票号码",
     boxNotFound: "列表中没有匹配“{id}”的箱子。",
     cartonLabelVerified: "箱标签已核验",
     labelScanned: "标签已核验：{part}",

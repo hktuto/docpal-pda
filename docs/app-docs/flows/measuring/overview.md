@@ -8,7 +8,7 @@ Use the Measuring flow once picking has packed items into shipping boxes **and t
 
 ## Concept
 
-1. The operator opens the Measuring list.
+1. The operator opens the Measuring list — grouped by picking order (invoice no.), with a search box to filter by invoice no.
 
    ![Measuring list](./assets/measuring-list.png)
    *Measuring list — open boxes of picking-completed orders, grouped by picking order (empty state when none are ready)*

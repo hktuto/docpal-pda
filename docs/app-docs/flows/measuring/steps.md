@@ -2,7 +2,7 @@
 
 ## 1. Open the measuring list
 
-From the home screen, tap **Measuring**. The list shows the open shipping boxes that contain packages — a box may hold packages from several picking orders.
+From the home screen, tap **Measuring**. The list shows the open shipping boxes that contain packages, grouped by picking order (invoice no.) — a box may hold packages from several picking orders (such a box heads its own combined-order group). Use the search box to filter by invoice no.
 
 ![Measuring list](./assets/measuring-list.png)
 
