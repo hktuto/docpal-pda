@@ -15,6 +15,7 @@ import {
   countryList,
   boxSizeList,
   dateCodeCounterPeriods,
+  seqCounters,
   netWeightFormula,
   customerProfiles,
   subInventories,
@@ -125,6 +126,7 @@ export const ALL_TABLES = [
   "box_size_list",
   "country_list",
   "date_code_counter_periods",
+  "seq_counters",
   "parts",
   "supplier_profiles",
   "suppliers",
@@ -234,6 +236,15 @@ const KOA_COUNTER_PERIODS = [
 
 function seedKoaCounterPeriods(db: AppDb): void | Promise<unknown> {
   return db.insert(dateCodeCounterPeriods).values(KOA_COUNTER_PERIODS.map((p) => ({ id: newId(), ...p })));
+}
+
+// Keyed sequence counters (plan docs/superpowers/plans/2026-11-12-seq-counters.md):
+// custom_label_weekly_serial — REEL NO serial for the admin custom-label CSV
+// converter, resets every Monday (weekly, interval 1 = Mon).
+function seedSeqCounters(db: AppDb): void | Promise<unknown> {
+  return db.insert(seqCounters).values([
+    { id: newId(), key: "custom_label_weekly_serial", resetSchedule: "weekly", resetInterval: 1 },
+  ]);
 }
 
 // Demo warehouse shelf layout (used by seedAll — the demo scenario's shelf
@@ -414,6 +425,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
   await db.insert(boxSizeList).values(BOX_SIZES.map((code, i) => ({ id: uid(140 + i), code })));
 
   await seedKoaCounterPeriods(db);
+  await seedSeqCounters(db);
 
   await db.insert(customerProfiles).values([
     { id: uid(180), code: "ACME", label: "ACME Electronics (HK)", remark: "requires segregated storage", customers: ["ACME"] },
@@ -617,6 +629,7 @@ async function seedReferenceOnly(db: AppDb): Promise<void> {
   await db.insert(boxSizeList).values(BOX_SIZES.map((code, i) => ({ id: uid(140 + i), code })));
 
   await seedKoaCounterPeriods(db);
+  await seedSeqCounters(db);
 
   // Shelf layout: the real warehouse layout for this instance (HK default,
   // SZ when WAREHOUSE_CODE=sz).

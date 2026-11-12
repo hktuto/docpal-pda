@@ -30,6 +30,7 @@ import { adminAppDownloadRoute } from "./appDownload.js";
 import { adminFlowConfigRoute } from "./flowConfig.js";
 import { adminReceivingShipperRoute } from "./receivingShipper.js";
 import { adminPartsLookupRoute } from "./partsLookup.js";
+import { adminCustItemLookupRoute } from "./custItemLookup.js";
 import { adminPickingListRoute } from "./pickingList.js";
 import { shelfBatchImportRoute } from "./shelfBatchImport.js";
 import { adminAllocationRoute } from "./allocation.js";
@@ -47,6 +48,7 @@ import { adminTaskAssignmentsRoute } from "./taskAssignments.js";
 import { adminCancelRecordsRoute } from "./cancelRecords.js";
 import { adminInternalTransferRoute } from "./internalTransferOrders.js";
 import { adminBugReportsRoute } from "./bugReports.js";
+import { adminSequencesRoute } from "./sequences.js";
 import { parseScopeEntries, type UserScopeEntry } from "../../db/user-scope.js";
 
 // Optional id on create: use the client's when given, else generate one.
@@ -488,6 +490,10 @@ adminRoute.route("/", adminReceivingCnRoute);
 // Batch parts-master check for the CN excel upload (src/db/partsLookup.ts).
 adminRoute.route("/", adminPartsLookupRoute);
 
+// Batch CUST_ITEM_NUMBER + part-description lookup for the Custom Print Label
+// CSV upload (src/db/custItemLookup.ts).
+adminRoute.route("/", adminCustItemLookupRoute);
+
 // Task assignee management for the PDA queues (spec
 // 2026-11-01-task-assignee-design.md).
 adminRoute.route("/", adminTaskAssignmentsRoute);
@@ -498,6 +504,9 @@ adminRoute.route("/", adminInternalTransferRoute);
 // Bug report triage queue (spec 2026-11-05-in-app-bug-report-design.md) —
 // sub-router uses relative paths, mounted at the resource path.
 adminRoute.route("/bug-reports", adminBugReportsRoute);
+
+// Keyed sequence counters (plan 2026-11-12-seq-counters.md).
+adminRoute.route("/sequences", adminSequencesRoute);
 
 // DocPal console link for the admin user popover — null when DOCPAL_URL is
 // not configured (login itself requires it, so real deployments always have it).

@@ -194,6 +194,25 @@ export const dateCodeCounterPeriods = pgTable("date_code_counter_periods", {
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 });
 
+// Keyed sequence counters issuing atomic, gap-free integer blocks (plan
+// docs/superpowers/plans/2026-11-12-seq-counters.md; first consumer: the
+// custom-label CSV converter's REEL NO serial). Reset is lazy — evaluated on
+// each POST /admin/sequences/next, no cron. reset_schedule + reset_interval:
+// 'weekly' (interval = weekday 1–7, 1=Mon), 'monthly' (interval = day of
+// month 1–28), 'days' (interval = every N≥1 days since last_reset_on),
+// 'never' (interval NULL). Rows are seeded, never auto-created — unknown
+// keys 404.
+export const seqCounters = pgTable("seq_counters", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  value: integer("value").notNull().default(0), // last issued number (first issue = 1)
+  resetSchedule: text("reset_schedule").notNull().default("never"),
+  resetInterval: integer("reset_interval"),
+  lastResetOn: date("last_reset_on", { mode: "string" }), // YYYY-MM-DD period start of the last reset
+  createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+  lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+});
+
 // Default box sizes offered at measuring/packing, "L X W X H" in cm
 export const boxSizeList = pgTable("box_size_list", {
   id: text("id").primaryKey(),
