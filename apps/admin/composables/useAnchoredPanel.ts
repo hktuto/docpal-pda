@@ -1,4 +1,4 @@
-import { onScopeDispose, ref, watch, type Ref } from "vue";
+import { nextTick, onScopeDispose, ref, watch, type Ref } from "vue";
 
 /**
  * Positioning for dropdown panels that must escape an overflow-clipped
@@ -8,22 +8,51 @@ import { onScopeDispose, ref, watch, type Ref } from "vue";
  * viewport position while open (any scroll — capture phase catches inner
  * scroll containers — and window resize).
  *
+ * Prefers below the anchor; flips above when the viewport has more room
+ * there (e.g. Pager page-size at the table footer).
+ *
  * Usage:
- *   const { panelStyle } = useAnchoredPanel(rootRef, open);
- *   <Teleport to="body"><div v-if="open" :style="panelStyle" class="...">
+ *   const { panelStyle } = useAnchoredPanel(rootRef, open, panelRef);
+ *   <Teleport to="body"><div v-if="open" ref="panelRef" :style="panelStyle" class="...">
  */
-export function useAnchoredPanel(anchorRef: Ref<HTMLElement | null>, visible: Ref<boolean>) {
-  const panelStyle = ref<{ top: string; left: string; minWidth: string } | null>(null);
+export function useAnchoredPanel(
+  anchorRef: Ref<HTMLElement | null>,
+  visible: Ref<boolean>,
+  panelRef?: Ref<HTMLElement | null>
+) {
+  const panelStyle = ref<{
+    top: string;
+    bottom: string;
+    left: string;
+    minWidth: string;
+  } | null>(null);
+
+  // Used before the panel mounts (flush:'pre'); remasured after nextTick.
+  const FALLBACK_H = 280;
 
   function update() {
     const anchor = anchorRef.value;
     if (!anchor) return;
     const rect = anchor.getBoundingClientRect();
-    panelStyle.value = {
-      top: `${Math.round(rect.bottom + 3)}px`,
-      left: `${Math.round(rect.left)}px`,
-      minWidth: `${Math.round(rect.width)}px`,
-    };
+    const gap = 3;
+    const panelH = panelRef?.value?.offsetHeight || FALLBACK_H;
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    const openUp = spaceBelow < panelH && spaceAbove > spaceBelow;
+
+    panelStyle.value = openUp
+      ? {
+          top: "auto",
+          bottom: `${Math.round(window.innerHeight - rect.top + gap)}px`,
+          left: `${Math.round(rect.left)}px`,
+          minWidth: `${Math.round(rect.width)}px`,
+        }
+      : {
+          top: `${Math.round(rect.bottom + gap)}px`,
+          bottom: "auto",
+          left: `${Math.round(rect.left)}px`,
+          minWidth: `${Math.round(rect.width)}px`,
+        };
   }
 
   let detach: (() => void) | null = null;
@@ -49,6 +78,8 @@ export function useAnchoredPanel(anchorRef: Ref<HTMLElement | null>, visible: Re
       // — flush:'pre' runs this before the panel's first render.
       update();
       attach();
+      // Remasure with the real panel height once it is in the DOM.
+      if (panelRef) nextTick(update);
     },
     { flush: "pre" }
   );

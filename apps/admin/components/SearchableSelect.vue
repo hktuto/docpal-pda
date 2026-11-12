@@ -43,7 +43,7 @@ const searchRef = ref<HTMLInputElement | null>(null);
 // The panel teleports to <body> (a select inside a table cell would be
 // clipped by the cell's overflow) and tracks the toggle's viewport position
 // while open.
-const { panelStyle } = useAnchoredPanel(rootRef, open);
+const { panelStyle } = useAnchoredPanel(rootRef, open, panelRef);
 
 const selectedValues = computed<string[]>(() =>
   props.multiple
