@@ -14,6 +14,7 @@ import { HTTPException } from "hono/http-exception";
 import {
   allocateForInternalTransferOrder,
   addManualInternalTransferAllocation,
+  addManualInternalTransferAllocations,
   removeInternalTransferAllocation,
 } from "./internalTransferAllocate.js";
 import { assignTransferPickingOrder } from "./internalTransfer.js";
@@ -339,6 +340,84 @@ test("manual add/remove: pins, caps, ledger — and availability nets both engin
     SELECT COUNT(*)::int AS n FROM inventory_transactions
     WHERE reference_type = 'internal_transfer_allocation' AND txn_reason = 'admin: manual allocation'`);
   assert.equal(Number((ledger[0] as any).n), 1);
+});
+
+test("manual batch add: one atomic pin across several sources, indexed failures roll back", async () => {
+  const transferId = await insertTransfer("ITO-BATCH");
+  const item = await insertTransferItem(transferId, "RK73H1JTTD1002F", 600);
+  // a second lot of the same part so the batch can span two sources
+  const lot2 = randomUUID();
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, org_id, sub_inventory_code, date_code, total_qty, allocated_qty, created_date, last_update_date)
+    VALUES (${lot2}, 'RK73H1JTTD1002F', 2, 'STORE1', '0111', 300, 0, now(), now())`);
+
+  const res = await addManualInternalTransferAllocations(
+    client.db,
+    transferId,
+    item,
+    [
+      { qty: 200, inventoryLotId: LOT_18 },
+      { qty: 150, inventoryLotId: lot2 },
+    ],
+    ACTOR
+  );
+  assert.equal(res.allocations.length, 2);
+  let it = await client.db.execute(sql`SELECT allocated_qty FROM internal_transfer_items WHERE id = ${item}`);
+  assert.equal(Number((it[0] as any).allocated_qty), 350);
+  let lot = await client.db.execute(sql`SELECT allocated_qty FROM inventory_lots WHERE id = ${LOT_18}`);
+  assert.equal(Number((lot[0] as any).allocated_qty), 200);
+  lot = await client.db.execute(sql`SELECT allocated_qty FROM inventory_lots WHERE id = ${lot2}`);
+  assert.equal(Number((lot[0] as any).allocated_qty), 150);
+
+  // intra-batch netting: the two entries together exceed the item's open qty
+  // (350 already pinned + 200 + 100 > 600) → over_allocation at index 1,
+  // and the first entry of the failed batch is rolled back too.
+  try {
+    await addManualInternalTransferAllocations(
+      client.db,
+      transferId,
+      item,
+      [
+        { qty: 200, inventoryLotId: LOT_18 },
+        { qty: 100, inventoryLotId: lot2 },
+      ],
+      ACTOR
+    );
+    assert.fail("expected over_allocation");
+  } catch (err) {
+    assert.ok(err instanceof HTTPException);
+    assert.equal(err.message, "over_allocation");
+    const body = (await err.getResponse().json()) as any;
+    assert.equal(body.error, "over_allocation");
+    assert.equal(body.index, 1);
+  }
+  it = await client.db.execute(sql`SELECT allocated_qty FROM internal_transfer_items WHERE id = ${item}`);
+  assert.equal(Number((it[0] as any).allocated_qty), 350); // unchanged
+  lot = await client.db.execute(sql`SELECT allocated_qty FROM inventory_lots WHERE id = ${LOT_18}`);
+  assert.equal(Number((lot[0] as any).allocated_qty), 200); // unchanged
+
+  // duplicate source inside one batch → 400 duplicate_source at index 1
+  try {
+    await addManualInternalTransferAllocations(
+      client.db,
+      transferId,
+      item,
+      [
+        { qty: 10, inventoryLotId: LOT_18 },
+        { qty: 10, inventoryLotId: LOT_18 },
+      ],
+      ACTOR
+    );
+    assert.fail("expected duplicate_source");
+  } catch (err) {
+    assert.ok(err instanceof HTTPException);
+    assert.equal(err.message, "duplicate_source");
+    const body = (await err.getResponse().json()) as any;
+    assert.equal(body.index, 1);
+  }
+
+  // empty batch
+  await rejects(() => addManualInternalTransferAllocations(client.db, transferId, item, [], ACTOR), "allocations_required");
 });
 
 test("assign delegated picking order: org match, open window, editable window, clear", async () => {
