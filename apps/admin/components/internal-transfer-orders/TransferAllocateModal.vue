@@ -5,9 +5,6 @@
 // manual allocations. Confirm submits every filled qty row in one batch
 // (all-or-nothing). The picking modal (PartAvailabilityModal) is not reused —
 // its final-state allocate-form / group / steal modes are picking-specific.
-import { ElButton, ElDialog } from "element-plus";
-import "element-plus/es/components/button/style/css";
-import "element-plus/es/components/dialog/style/css";
 import type { InternalTransferItemRow, PartAvailabilityReceivingRow, PartAvailabilityStockRow } from "~/utils/flowApi";
 
 const props = defineProps<{
@@ -21,6 +18,7 @@ const emit = defineEmits<{ close: []; allocated: [] }>();
 
 const flow = useFlowApi();
 const { t } = useI18n();
+const dismiss = useOverlayDismiss(() => emit("close"));
 
 const loading = ref(false);
 const saving = ref(false);
@@ -123,10 +121,6 @@ watch(
   }
 );
 
-function onOpenUpdate(v: boolean) {
-  if (!v) emit("close");
-}
-
 /** JSON 409 bodies (lock_held etc.) — same style as AllocationBreakdown. */
 function describeError(e: any): string {
   try {
@@ -169,152 +163,147 @@ async function submit() {
 </script>
 
 <template>
-  <ElDialog
-    :model-value="open"
-    :title="$t('internalTransfer.mTitle', { partNo: item?.partNo ?? '' })"
-    width="56.25rem"
-    class="transfer-alloc-dialog"
-    destroy-on-close
-    @update:model-value="onOpenUpdate"
-  >
-    <div v-if="error" class="error-banner">{{ error }}</div>
-    <div v-if="loading" class="muted">{{ $t("admin.common.loading") }}</div>
-    <template v-else>
-      <p class="hint">
-        {{ $t("internalTransfer.mRemaining", { qty: remaining }) }}
-        <span v-if="resolvedCtx"> · {{ $t("internalTransfer.mAt", { org: resolvedCtx.orgId ?? "—", sub: resolvedCtx.subInventoryCode ?? "—" }) }}</span>
-        <span v-if="draft.total > 0"> · {{ draft.total }} / {{ remaining }}</span>
-      </p>
-      <p v-if="draft.overRemaining" class="error-banner">{{ $t("internalTransfer.mOverRemaining", { qty: remaining }) }}</p>
+  <div v-if="open" class="overlay" @mousedown="dismiss.onMousedown" @click="dismiss.onClick">
+    <div class="dialog transfer-alloc-dialog">
+      <button type="button" class="dialog-close" @click="emit('close')" aria-label="Close">&times;</button>
+      <h2>{{ $t("internalTransfer.mTitle", { partNo: item?.partNo ?? "" }) }}</h2>
 
-      <h3>{{ $t("internalTransfer.mStock") }}</h3>
-      <table class="data">
-        <thead>
-          <tr>
-            <th>{{ $t("internalTransfer.mShelf") }}</th>
-            <th>{{ $t("internalTransfer.mBox") }}</th>
-            <th>{{ $t("internalTransfer.mDateCode") }}</th>
-            <th class="num">{{ $t("stockSearch.allocatedQty") }}</th>
-            <th class="num">{{ $t("internalTransfer.mAvailable") }}</th>
-            <th class="num">{{ $t("internalTransfer.colQty") }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in stock" :key="r.lotId">
-            <td>{{ r.shelfDisplayName ?? r.shelfCode ?? "—" }}</td>
-            <td>{{ r.boxId ?? "—" }}</td>
-            <td>{{ r.dateCode ?? "—" }}</td>
-            <td class="num">
-              <AllocationBreakdown
-                :part-no="r.partNo"
-                :wcl-item-no="r.wclItemNo"
-                :allocated-qty="r.allocatedQty"
-                :lot-id="r.lotId"
-                @changed="onAllocationsChanged"
-              />
-            </td>
-            <td class="num">{{ r.availableQty }}</td>
-            <td class="num">
-              <input
-                v-model="qtyByKey[`l:${r.lotId}`]"
-                class="qty-input"
-                type="number"
-                min="1"
-                :max="Math.min(r.availableQty, remaining)"
-                :disabled="remaining <= 0 || saving"
-              />
-            </td>
-          </tr>
-          <tr v-if="stock.length === 0">
-            <td colspan="6" class="muted">{{ $t("internalTransfer.mNone") }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="dialog-body">
+        <div v-if="error" class="error-banner">{{ error }}</div>
+        <div v-if="loading" class="muted">{{ $t("admin.common.loading") }}</div>
+        <template v-else>
+          <p class="hint">
+            {{ $t("internalTransfer.mRemaining", { qty: remaining }) }}
+            <span v-if="resolvedCtx"> · {{ $t("internalTransfer.mAt", { org: resolvedCtx.orgId ?? "—", sub: resolvedCtx.subInventoryCode ?? "—" }) }}</span>
+            <span v-if="draft.total > 0"> · {{ draft.total }} / {{ remaining }}</span>
+          </p>
+          <p v-if="draft.overRemaining" class="error-banner">{{ $t("internalTransfer.mOverRemaining", { qty: remaining }) }}</p>
 
-      <template v-if="dockAllowed">
-        <h3>{{ $t("internalTransfer.mDock") }}</h3>
-        <table class="data">
-          <thead>
-            <tr>
-              <th>{{ $t("internalTransfer.mBatch") }}</th>
-              <th>{{ $t("internalTransfer.mBox") }}</th>
-              <th>{{ $t("internalTransfer.mDateCode") }}</th>
-              <th class="num">{{ $t("stockSearch.allocatedQty") }}</th>
-              <th class="num">{{ $t("internalTransfer.mAvailable") }}</th>
-              <th class="num">{{ $t("internalTransfer.colQty") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="r in receiving" :key="r.receivingInvoiceItemId">
-              <td>{{ r.batchNo }} · {{ r.invoiceNo }}</td>
-              <td>{{ r.ctnNo ?? "—" }}</td>
-              <td>{{ r.dateCode ?? "—" }}</td>
-              <td class="num">
-                <AllocationBreakdown
-                  :part-no="item?.partNo ?? ''"
-                  :wcl-item-no="item?.wclItemNo ?? null"
-                  :allocated-qty="r.allocatedQty"
-                  :receiving-invoice-item-id="r.receivingInvoiceItemId"
-                  @changed="onAllocationsChanged"
-                />
-              </td>
-              <td class="num">{{ dockAvailable(r) }}</td>
-              <td class="num">
-                <input
-                  v-model="qtyByKey[`r:${r.receivingInvoiceItemId}`]"
-                  class="qty-input"
-                  type="number"
-                  min="1"
-                  :max="Math.min(dockAvailable(r), remaining)"
-                  :disabled="remaining <= 0 || saving"
-                />
-              </td>
-            </tr>
-            <tr v-if="receiving.length === 0">
-              <td colspan="6" class="muted">{{ $t("internalTransfer.mNone") }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </template>
-    </template>
+          <h3>{{ $t("internalTransfer.mStock") }}</h3>
+          <table class="data">
+            <thead>
+              <tr>
+                <th>{{ $t("internalTransfer.mShelf") }}</th>
+                <th>{{ $t("internalTransfer.mBox") }}</th>
+                <th>{{ $t("internalTransfer.mDateCode") }}</th>
+                <th class="num">{{ $t("stockSearch.allocatedQty") }}</th>
+                <th class="num">{{ $t("internalTransfer.mAvailable") }}</th>
+                <th class="num">{{ $t("internalTransfer.colQty") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in stock" :key="r.lotId">
+                <td>{{ r.shelfDisplayName ?? r.shelfCode ?? "—" }}</td>
+                <td>{{ r.boxId ?? "—" }}</td>
+                <td>{{ r.dateCode ?? "—" }}</td>
+                <td class="num">
+                  <AllocationBreakdown
+                    :part-no="r.partNo"
+                    :wcl-item-no="r.wclItemNo"
+                    :allocated-qty="r.allocatedQty"
+                    :lot-id="r.lotId"
+                    @changed="onAllocationsChanged"
+                  />
+                </td>
+                <td class="num">{{ r.availableQty }}</td>
+                <td class="num">
+                  <input
+                    v-model="qtyByKey[`l:${r.lotId}`]"
+                    class="qty-input"
+                    type="number"
+                    min="1"
+                    :max="Math.min(r.availableQty, remaining)"
+                    :disabled="remaining <= 0 || saving"
+                  />
+                </td>
+              </tr>
+              <tr v-if="stock.length === 0">
+                <td colspan="6" class="muted">{{ $t("internalTransfer.mNone") }}</td>
+              </tr>
+            </tbody>
+          </table>
 
-    <template #footer>
-      <template v-if="!loading">
-        <ElButton :disabled="saving" @click="emit('close')">{{ $t("admin.common.cancel") }}</ElButton>
-        <ElButton type="primary" :disabled="!canSubmit" @click="submit">
+          <template v-if="dockAllowed">
+            <h3>{{ $t("internalTransfer.mDock") }}</h3>
+            <table class="data">
+              <thead>
+                <tr>
+                  <th>{{ $t("internalTransfer.mBatch") }}</th>
+                  <th>{{ $t("internalTransfer.mBox") }}</th>
+                  <th>{{ $t("internalTransfer.mDateCode") }}</th>
+                  <th class="num">{{ $t("stockSearch.allocatedQty") }}</th>
+                  <th class="num">{{ $t("internalTransfer.mAvailable") }}</th>
+                  <th class="num">{{ $t("internalTransfer.colQty") }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in receiving" :key="r.receivingInvoiceItemId">
+                  <td>{{ r.batchNo }} · {{ r.invoiceNo }}</td>
+                  <td>{{ r.ctnNo ?? "—" }}</td>
+                  <td>{{ r.dateCode ?? "—" }}</td>
+                  <td class="num">
+                    <AllocationBreakdown
+                      :part-no="item?.partNo ?? ''"
+                      :wcl-item-no="item?.wclItemNo ?? null"
+                      :allocated-qty="r.allocatedQty"
+                      :receiving-invoice-item-id="r.receivingInvoiceItemId"
+                      @changed="onAllocationsChanged"
+                    />
+                  </td>
+                  <td class="num">{{ dockAvailable(r) }}</td>
+                  <td class="num">
+                    <input
+                      v-model="qtyByKey[`r:${r.receivingInvoiceItemId}`]"
+                      class="qty-input"
+                      type="number"
+                      min="1"
+                      :max="Math.min(dockAvailable(r), remaining)"
+                      :disabled="remaining <= 0 || saving"
+                    />
+                  </td>
+                </tr>
+                <tr v-if="receiving.length === 0">
+                  <td colspan="6" class="muted">{{ $t("internalTransfer.mNone") }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+        </template>
+      </div>
+
+      <div v-if="!loading" class="dialog-actions">
+        <button class="btn" :disabled="saving" @click="emit('close')">{{ $t("admin.common.cancel") }}</button>
+        <button class="btn btn-primary" :disabled="!canSubmit" @click="submit">
           {{ saving ? $t("admin.common.saving") : $t("internalTransfer.mSubmit") }}
-        </ElButton>
-      </template>
-    </template>
-  </ElDialog>
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.qty-input {
-  width: 7ch;
-  font: inherit;
-  text-align: right;
-}
-</style>
-
-<!-- class lands on teleported .el-dialog — must be unscoped -->
-<style>
 .transfer-alloc-dialog {
-  max-height: 80vh;
+  width: 56.25rem;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
-.transfer-alloc-dialog .el-dialog__body {
+.dialog-body {
   overflow-y: auto;
   flex: 1;
   min-height: 0;
 }
-.transfer-alloc-dialog .hint {
+.hint {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--el-bg-color, #fff);
+  background: #fff;
   margin: 0 0 0.5rem;
   padding: 0.25rem 0;
+}
+.qty-input {
+  width: 7ch;
+  font: inherit;
+  text-align: right;
 }
 </style>
