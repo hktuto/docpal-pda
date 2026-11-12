@@ -4,7 +4,7 @@ import { db } from "../../db.js";
 import { listInternalTransferOrders, getInternalTransferOrder, assignTransferPickingOrder } from "../../db/internalTransfer.js";
 import {
   allocateForInternalTransferOrder,
-  addManualInternalTransferAllocations,
+  addManualInternalTransferAllocation,
   removeInternalTransferAllocation,
 } from "../../db/internalTransferAllocate.js";
 import { overrideInternalTransferStatus } from "../../db/internalTransferPicking.js";
@@ -78,49 +78,27 @@ adminInternalTransferRoute.put("/internal-transfer-orders/:id/picking-order", as
   return c.json(result);
 });
 
-// "Allocate" in the availability modal: pin manual allocations against stock
-// lots or receiving invoice items (any location — the modal filters to the
-// from_ pair, the API trusts the admin). Batch body
-// `{allocations: [{qty, inventoryLotId?} | {qty, receivingInvoiceItemId?}, ...]}`
-// — applied atomically (one transaction, all-or-nothing), 1..100 entries; the
-// legacy single-source body `{qty, inventoryLotId?} | {qty, receivingInvoiceItemId?}`
-// is still accepted as a 1-entry batch. 400 allocations_required /
-// too_many_allocations / invalid_qty / source_required / duplicate_source,
-// 404 *_not_found, 409 lock_held / shelf_not_found / insufficient_available /
-// over_allocation — batch failures carry the failing entry's `index` in the
-// JSON body. No order-status check; no override-steal (remove the other
-// order's allocation by hand instead).
+// "Allocate" in the availability modal: pin a manual allocation of `qty`
+// against one stock lot or receiving invoice item (any location — the modal
+// filters to the from_ pair, the API trusts the admin). Body
+// `{qty, inventoryLotId?} | {qty, receivingInvoiceItemId?}`. 400 invalid_qty /
+// source_required, 404 *_not_found, 409 lock_held / shelf_not_found /
+// insufficient_available / over_allocation. No order-status check; no
+// override-steal (remove the other order's allocation by hand instead).
 adminInternalTransferRoute.post("/internal-transfer-orders/:id/items/:itemId/allocations", async (c) => {
-  const body = await c.req.json<{
-    qty?: number;
-    inventoryLotId?: string;
-    receivingInvoiceItemId?: string;
-    allocations?: { qty?: number; inventoryLotId?: string; receivingInvoiceItemId?: string }[];
-  }>();
-  const raw = Array.isArray(body.allocations) ? body.allocations : null;
-  const entries = raw === null
-    ? [{ qty: Number(body.qty), inventoryLotId: body.inventoryLotId, receivingInvoiceItemId: body.receivingInvoiceItemId }]
-    : raw.map((e) => ({
-        qty: Number(e?.qty),
-        inventoryLotId: e?.inventoryLotId,
-        receivingInvoiceItemId: e?.receivingInvoiceItemId,
-      }));
-  if (entries.length === 0) {
-    throw new HTTPException(400, { message: "allocations_required" });
-  }
-  if (entries.length > 100) {
-    throw new HTTPException(400, { message: "too_many_allocations" });
-  }
-  const result = await addManualInternalTransferAllocations(
+  const body = await c.req.json<{ qty?: number; inventoryLotId?: string; receivingInvoiceItemId?: string }>();
+  const result = await addManualInternalTransferAllocation(
     db,
     c.req.param("id"),
     c.req.param("itemId"),
-    entries,
+    {
+      qty: Number(body.qty),
+      inventoryLotId: body.inventoryLotId,
+      receivingInvoiceItemId: body.receivingInvoiceItemId,
+    },
     actorFrom(c).id
   );
-  // Legacy callers read the single {allocationId, qty} shape — keep it on top
-  // of the batch payload for them.
-  return c.json(raw === null ? { ...result.allocations[0], allocations: result.allocations } : result);
+  return c.json(result);
 });
 
 // "Remove allocation" (x) on one allocation row of a transfer item:

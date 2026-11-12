@@ -676,64 +676,30 @@ export async function removeInternalTransferAllocation(
   });
 }
 
-export interface ManualTransferAllocationInput {
-  qty: number;
-  inventoryLotId?: string;
-  receivingInvoiceItemId?: string;
-}
-
-/** 400/404/409 carrying the failing entry's batch index in the JSON body. */
-function batchSourceError(status: 400 | 404 | 409, code: string, index: number): never {
-  throw new HTTPException(status, {
-    message: code,
-    res: new Response(JSON.stringify({ error: code, index }), {
-      status,
-      headers: { "content-type": "application/json" },
-    }),
-  });
-}
-
 /**
  * Admin "manual allocation" (availability modal) for a transfer item —
- * mirror of addManualPickingAllocation: pin manual rows against stock lots or
- * receiving invoice items, ANY location (admin override — the modal filters
- * to the from_ pair, the API trusts the admin). Batch form: every entry of
- * `inputs` is applied in ONE transaction, all-or-nothing; per-entry rules are
- * identical to a single pin (availability net of BOTH engines — earlier batch
- * entries count, since they are already inserted when later entries are
- * validated — and the item's open-qty cap). Duplicate sources inside one
- * batch are refused (400 duplicate_source); every failure body carries the
- * failing entry's `index`. No order-status check. shortcut: no override-steal
- * — a shortfall above the source's availability is refused (409
- * insufficient_available); remove the other order's allocation by hand
- * instead.
+ * mirror of addManualPickingAllocation: pin one manual row against a stock
+ * lot or receiving invoice item, ANY location (admin override — the modal
+ * filters to the from_ pair, the API trusts the admin). No order-status
+ * check. shortcut: no override-steal — a shortfall above the source's
+ * availability is refused (409 insufficient_available); remove the other
+ * order's allocation by hand instead.
  */
-export async function addManualInternalTransferAllocations(
+export async function addManualInternalTransferAllocation(
   db: AppDb,
   transferOrderId: string,
   transferItemId: string,
-  inputs: ManualTransferAllocationInput[],
+  input: { qty: number; inventoryLotId?: string; receivingInvoiceItemId?: string },
   actorId: string
-): Promise<{ allocations: { allocationId: string; qty: number }[] }> {
-  if (inputs.length === 0) {
-    throw new HTTPException(400, { message: "allocations_required" });
+): Promise<{ allocationId: string; qty: number }> {
+  const qty = input.qty;
+  if (!Number.isInteger(qty) || qty <= 0) {
+    throw new HTTPException(400, { message: "invalid_qty" });
   }
-  const seen = new Set<string>();
-  for (let i = 0; i < inputs.length; i++) {
-    const input = inputs[i];
-    if (!Number.isInteger(input.qty) || input.qty <= 0) {
-      batchSourceError(400, "invalid_qty", i);
-    }
-    const hasLot = !!input.inventoryLotId;
-    const hasRecv = !!input.receivingInvoiceItemId;
-    if (hasLot === hasRecv) {
-      batchSourceError(400, "source_required", i);
-    }
-    const key = hasLot ? `lot:${input.inventoryLotId}` : `recv:${input.receivingInvoiceItemId}`;
-    if (seen.has(key)) {
-      batchSourceError(400, "duplicate_source", i);
-    }
-    seen.add(key);
+  const hasLot = !!input.inventoryLotId;
+  const hasRecv = !!input.receivingInvoiceItemId;
+  if (hasLot === hasRecv) {
+    throw new HTTPException(400, { message: "source_required" });
   }
 
   const order = await queryGet<{
@@ -769,12 +735,19 @@ export async function addManualInternalTransferAllocations(
   if (!item) throw new HTTPException(404, { message: "transfer_item_not_found" });
 
   return db.transaction(async (tx) => {
-    const allocations: { allocationId: string; qty: number }[] = [];
-    const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
-
-    for (let i = 0; i < inputs.length; i++) {
-      const input = inputs[i];
-      let source: {
+    let source: {
+      partNo: string;
+      dateCode: string | null;
+      lotCode: string | null;
+      coo: string | null;
+      cow: string | null;
+      shelfCode: string | null;
+      boxId: string | null;
+      available: number;
+    };
+    if (hasLot) {
+      const lot = await queryGet<{
+        id: string;
         partNo: string;
         dateCode: string | null;
         lotCode: string | null;
@@ -783,122 +756,107 @@ export async function addManualInternalTransferAllocations(
         shelfCode: string | null;
         boxId: string | null;
         available: number;
-      };
-      if (input.inventoryLotId) {
-        const lot = await queryGet<{
-          id: string;
-          partNo: string;
-          dateCode: string | null;
-          lotCode: string | null;
-          coo: string | null;
-          cow: string | null;
-          shelfCode: string | null;
-          boxId: string | null;
-          available: number;
-          shelfKnown: boolean;
-        }>(
-          tx,
-          sql`SELECT id, part_no AS "partNo", date_code AS "dateCode", lot_code AS "lotCode",
-                     coo, cow, shelf_code AS "shelfCode", box_id AS "boxId",
-                     (total_qty - allocated_qty) AS "available",
-                     (shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = inventory_lots.shelf_code)) AS "shelfKnown"
-              FROM inventory_lots WHERE id = ${input.inventoryLotId}`
-        );
-        if (!lot) batchSourceError(404, "inventory_lot_not_found", i);
-        if (!lot.shelfKnown) batchSourceError(409, "shelf_not_found", i);
-        source = lot;
-      } else {
-        const recv = await queryGet<{
-          id: string;
-          partNo: string;
-          dateCode: string | null;
-          lotCode: string | null;
-          coo: string | null;
-          cow: string | null;
-          boxId: string | null;
-          available: number;
-        }>(
-          tx,
-          sql`SELECT rii.id, rii.part_no AS "partNo", rii.date_code AS "dateCode",
-                     rii.lot_code AS "lotCode", rii.coo, rii.cow, rii.ctn_no AS "boxId",
-                     (rii.received_qty - rii.picked_qty - COALESCE(alloc.qty, 0)) AS "available"
-              FROM receiving_invoice_items rii
-              LEFT JOIN (
-                SELECT rii_id, SUM(qty)::int AS qty FROM (
-                  SELECT receiving_invoice_item_id AS rii_id, qty
-                  FROM allocations WHERE receiving_invoice_item_id IS NOT NULL
-                  UNION ALL
-                  SELECT ita.receiving_invoice_item_id, ita.qty
-                  FROM internal_transfer_allocations ita
-                  WHERE ita.receiving_invoice_item_id IS NOT NULL
-                ) u GROUP BY rii_id
-              ) alloc ON alloc.rii_id = rii.id
-              WHERE rii.id = ${input.receivingInvoiceItemId!}`
-        );
-        if (!recv) batchSourceError(404, "receiving_invoice_item_not_found", i);
-        source = { ...recv, shelfCode: null };
-      }
-      if (input.qty > source.available) {
-        batchSourceError(409, "insufficient_available", i);
-      }
-
-      // Σ allocations reads the rows earlier entries of this batch already
-      // inserted — the cap holds across the whole batch.
-      const open = await queryGet<{ openQty: number; allocated: number }>(
+        shelfKnown: boolean;
+      }>(
         tx,
-        sql`SELECT (iti.qty - COALESCE(pkg.qty, 0)) AS "openQty",
-                   COALESCE(alloc.qty, 0) AS "allocated"
-            FROM internal_transfer_items iti
-            LEFT JOIN (
-              SELECT transfer_item_id, SUM(qty)::int AS qty FROM internal_transfer_packages GROUP BY transfer_item_id
-            ) pkg ON pkg.transfer_item_id = iti.id
-            LEFT JOIN (
-              SELECT transfer_item_id, SUM(qty)::int AS qty FROM internal_transfer_allocations GROUP BY transfer_item_id
-            ) alloc ON alloc.transfer_item_id = iti.id
-            WHERE iti.id = ${transferItemId}`
+        sql`SELECT id, part_no AS "partNo", date_code AS "dateCode", lot_code AS "lotCode",
+                   coo, cow, shelf_code AS "shelfCode", box_id AS "boxId",
+                   (total_qty - allocated_qty) AS "available",
+                   (shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = inventory_lots.shelf_code)) AS "shelfKnown"
+            FROM inventory_lots WHERE id = ${input.inventoryLotId!}`
       );
-      if (open!.allocated + input.qty > open!.openQty) {
-        batchSourceError(409, "over_allocation", i);
-      }
-
-      const allocationId = newId();
-      await tx.insert(internalTransferAllocations).values({
-        id: allocationId,
-        transferItemId,
-        inventoryLotId: input.inventoryLotId ?? null,
-        receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
-        receivingOrderId: null,
-        qty: input.qty,
-        manual: true,
-      });
-      if (input.inventoryLotId) {
-        await recomputeLot(tx, input.inventoryLotId);
-      }
-      txnRows.push({
-        id: newId(),
-        inventoryLotId: input.inventoryLotId ?? null,
-        partNo: source.partNo,
-        shelfCode: source.shelfCode,
-        boxId: source.boxId,
-        txnType: "RESERVE",
-        qtyType: "reserved",
-        qtyDelta: input.qty,
-        dateCode: source.dateCode,
-        lotCode: source.lotCode,
-        coo: source.coo,
-        cow: source.cow,
-        referenceType: "internal_transfer_allocation",
-        referenceId: allocationId,
-        receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
-        actorId,
-        txnReason: "admin: manual allocation",
-        txnAt: now(),
-      });
-      allocations.push({ allocationId, qty: input.qty });
+      if (!lot) throw new HTTPException(404, { message: "inventory_lot_not_found" });
+      if (!lot.shelfKnown) throw new HTTPException(409, { message: "shelf_not_found" });
+      source = lot;
+    } else {
+      const recv = await queryGet<{
+        id: string;
+        partNo: string;
+        dateCode: string | null;
+        lotCode: string | null;
+        coo: string | null;
+        cow: string | null;
+        boxId: string | null;
+        available: number;
+      }>(
+        tx,
+        sql`SELECT rii.id, rii.part_no AS "partNo", rii.date_code AS "dateCode",
+                   rii.lot_code AS "lotCode", rii.coo, rii.cow, rii.ctn_no AS "boxId",
+                   (rii.received_qty - rii.picked_qty - COALESCE(alloc.qty, 0)) AS "available"
+            FROM receiving_invoice_items rii
+            LEFT JOIN (
+              SELECT rii_id, SUM(qty)::int AS qty FROM (
+                SELECT receiving_invoice_item_id AS rii_id, qty
+                FROM allocations WHERE receiving_invoice_item_id IS NOT NULL
+                UNION ALL
+                SELECT ita.receiving_invoice_item_id, ita.qty
+                FROM internal_transfer_allocations ita
+                WHERE ita.receiving_invoice_item_id IS NOT NULL
+              ) u GROUP BY rii_id
+            ) alloc ON alloc.rii_id = rii.id
+            WHERE rii.id = ${input.receivingInvoiceItemId!}`
+      );
+      if (!recv) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
+      source = { ...recv, shelfCode: null };
+    }
+    if (qty > source.available) {
+      throw new HTTPException(409, { message: "insufficient_available" });
     }
 
-    await tx.insert(inventoryTransactions).values(txnRows);
+    const open = await queryGet<{ openQty: number; allocated: number }>(
+      tx,
+      sql`SELECT (iti.qty - COALESCE(pkg.qty, 0)) AS "openQty",
+                 COALESCE(alloc.qty, 0) AS "allocated"
+          FROM internal_transfer_items iti
+          LEFT JOIN (
+            SELECT transfer_item_id, SUM(qty)::int AS qty FROM internal_transfer_packages GROUP BY transfer_item_id
+          ) pkg ON pkg.transfer_item_id = iti.id
+          LEFT JOIN (
+            SELECT transfer_item_id, SUM(qty)::int AS qty FROM internal_transfer_allocations GROUP BY transfer_item_id
+          ) alloc ON alloc.transfer_item_id = iti.id
+          WHERE iti.id = ${transferItemId}`
+    );
+    if (open!.allocated + qty > open!.openQty) {
+      throw new HTTPException(409, { message: "over_allocation" });
+    }
+
+    const allocationId = newId();
+    await tx.insert(internalTransferAllocations).values({
+      id: allocationId,
+      transferItemId,
+      inventoryLotId: input.inventoryLotId ?? null,
+      receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
+      receivingOrderId: null,
+      qty,
+      manual: true,
+    });
+
+    if (input.inventoryLotId) {
+      await recomputeLot(tx, input.inventoryLotId);
+    }
     await recomputeTransferItem(tx, transferItemId);
+
+    await tx.insert(inventoryTransactions).values({
+      id: newId(),
+      inventoryLotId: input.inventoryLotId ?? null,
+      partNo: source.partNo,
+      shelfCode: source.shelfCode,
+      boxId: source.boxId,
+      txnType: "RESERVE",
+      qtyType: "reserved",
+      qtyDelta: qty,
+      dateCode: source.dateCode,
+      lotCode: source.lotCode,
+      coo: source.coo,
+      cow: source.cow,
+      referenceType: "internal_transfer_allocation",
+      referenceId: allocationId,
+      receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
+      actorId,
+      txnReason: "admin: manual allocation",
+      txnAt: now(),
+    });
+
     await refreshTransferAllocationStatus(tx);
 
     await logTransition(tx, {
@@ -909,36 +867,21 @@ export async function addManualInternalTransferAllocations(
       actorId,
       metadata: {
         action: "manual_allocation",
+        allocationId,
         itemId: transferItemId,
         partNo: item.partNo,
-        entries: inputs.map((input, i) => ({
-          allocationId: allocations[i].allocationId,
-          qty: input.qty,
-          inventoryLotId: input.inventoryLotId ?? null,
-          receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
-        })),
+        qty,
+        inventoryLotId: input.inventoryLotId ?? null,
+        receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
       },
     });
 
     await emitEvent(tx, {
       type: "allocation.computed",
       topics: ["/internal-transfer-orders"],
-      data: { scope: "internal-transfer-order-item", transferOrderId, transferItemId, manual: true, allocations },
+      data: { scope: "internal-transfer-order-item", transferOrderId, transferItemId, allocationId, manual: true, qty },
     });
 
-    return { allocations };
+    return { allocationId, qty };
   });
-}
-
-/** Single-source form of addManualInternalTransferAllocations (legacy body
- *  `{qty, inventoryLotId?} | {qty, receivingInvoiceItemId?}`). */
-export async function addManualInternalTransferAllocation(
-  db: AppDb,
-  transferOrderId: string,
-  transferItemId: string,
-  input: ManualTransferAllocationInput,
-  actorId: string
-): Promise<{ allocationId: string; qty: number }> {
-  const { allocations } = await addManualInternalTransferAllocations(db, transferOrderId, transferItemId, [input], actorId);
-  return allocations[0];
 }
