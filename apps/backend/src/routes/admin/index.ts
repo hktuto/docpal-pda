@@ -49,7 +49,10 @@ import { adminCancelRecordsRoute } from "./cancelRecords.js";
 import { adminInternalTransferRoute } from "./internalTransferOrders.js";
 import { adminBugReportsRoute } from "./bugReports.js";
 import { adminSequencesRoute } from "./sequences.js";
+import { uatInventoryWipeRoute } from "./uatInventoryWipe.js";
+import { shelfInventoryImportRoute } from "./shelfInventoryImport.js";
 import { parseScopeEntries, type UserScopeEntry } from "../../db/user-scope.js";
+import { uatToolsEnabled } from "../../config.js";
 
 // Optional id on create: use the client's when given, else generate one.
 function optId(body: Record<string, unknown>): string {
@@ -507,6 +510,16 @@ adminRoute.route("/bug-reports", adminBugReportsRoute);
 
 // Keyed sequence counters (plan 2026-11-12-seq-counters.md).
 adminRoute.route("/sequences", adminSequencesRoute);
+
+// Per-shelf inventory Excel import (spec 2026-11-13-uat-inventory-tools-
+// design.md) — POST the decoded rows, GET the shelf's allowed org pairs.
+adminRoute.route("/shelves/import-inventory", shelfInventoryImportRoute);
+
+// UAT-only inventory wipe — registered only when UAT_TOOLS=1, mirroring the
+// DEV_ROUTES mount in src/index.ts.
+if (uatToolsEnabled()) {
+  adminRoute.route("/uat/inventory-wipe", uatInventoryWipeRoute);
+}
 
 // DocPal console link for the admin user popover — null when DOCPAL_URL is
 // not configured (login itself requires it, so real deployments always have it).

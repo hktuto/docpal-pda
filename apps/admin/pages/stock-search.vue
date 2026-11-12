@@ -378,7 +378,45 @@ async function exportExcel() {
 onMounted(() => {
   loadOptions();
   loadSummary();
+  loadUatTools();
 });
+
+// UAT-only inventory wipe (spec 2026-11-13-uat-inventory-tools-design.md) —
+// the danger button only renders when the backend runs with UAT_TOOLS=1
+// (GET /config carries uatTools.inventoryWipe).
+const uatInventoryWipe = ref(false);
+async function loadUatTools() {
+  try {
+    const cfg = await flow.getConfig();
+    uatInventoryWipe.value = cfg.uatTools?.inventoryWipe === true;
+  } catch {
+    uatInventoryWipe.value = false;
+  }
+}
+
+const wipeOpen = ref(false);
+const wipeConfirmWord = ref("");
+const wipeWorking = ref(false);
+const wipeError = ref("");
+const wipeMessage = ref("");
+const WIPE_WORD = "DELETE";
+
+async function runInventoryWipe() {
+  wipeWorking.value = true;
+  wipeError.value = "";
+  try {
+    const res = await flow.uatInventoryWipe();
+    wipeMessage.value = t("stockSearch.wipeDone", { count: res.deletedLots });
+    wipeOpen.value = false;
+    wipeConfirmWord.value = "";
+    searched.value = false;
+    await loadSummary();
+  } catch (e: any) {
+    wipeError.value = e?.message ?? String(e);
+  } finally {
+    wipeWorking.value = false;
+  }
+}
 
 // Re-run the current search when stock levels change elsewhere. No-op until
 // the user has searched at least once.
@@ -397,6 +435,38 @@ const {
   <div>
     <div class="page-head">
       <h1>{{ $t("stockSearch.title") }}</h1>
+      <button v-if="uatInventoryWipe" class="btn btn-danger wipe-btn" @click="wipeOpen = true">
+        {{ $t("stockSearch.wipe") }}
+      </button>
+    </div>
+
+    <div v-if="wipeMessage" class="success-banner">
+      <button class="banner-close" @click="wipeMessage = ''">&times;</button>
+      <span>{{ wipeMessage }}</span>
+    </div>
+
+    <div v-if="wipeOpen" class="overlay" @click.self="wipeOpen = false">
+      <div class="dialog" role="dialog" :aria-label="$t('stockSearch.wipeConfirmTitle')">
+        <h2>{{ $t("stockSearch.wipeConfirmTitle") }}</h2>
+        <p>{{ $t("stockSearch.wipeConfirmMessage") }}</p>
+        <div v-if="wipeError" class="error-banner">{{ wipeError }}</div>
+        <label class="form-row">
+          <span>{{ $t("stockSearch.wipeConfirmPrompt", { word: WIPE_WORD }) }}</span>
+          <input v-model="wipeConfirmWord" autocomplete="off" />
+        </label>
+        <div class="dialog-actions">
+          <button class="btn" :disabled="wipeWorking" @click="wipeOpen = false">
+            {{ $t("admin.common.cancel") }}
+          </button>
+          <button
+            class="btn btn-danger"
+            :disabled="wipeWorking || wipeConfirmWord !== WIPE_WORD"
+            @click="runInventoryWipe"
+          >
+            {{ wipeWorking ? $t("admin.common.loading") : $t("stockSearch.wipeConfirmButton") }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <div v-if="summary" class="summary">

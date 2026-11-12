@@ -1280,6 +1280,12 @@ export default {
     noResults: "No results found.",
     onHand: "On hand: {qty}",
     lotQty: "{available} / {total}",
+    wipe: "Remove all inventory (UAT)",
+    wipeConfirmTitle: "Remove all inventory?",
+    wipeConfirmMessage: "This deletes every inventory lot, allocation, ledger row and log. It cannot be undone. UAT environments only.",
+    wipeConfirmPrompt: "Type \"{word}\" to confirm.",
+    wipeConfirmButton: "Delete permanently",
+    wipeDone: "Deleted {count} inventory lots."
   },
   lotHistory: {
     title: "Lot History",
@@ -1487,7 +1493,24 @@ export default {
       bulkEditWarningHint: "Shown as a ⚠ icon wherever an allocation points at the shelf. Leave empty to clear the warning on all {count} selected shelves.",
       bulkEditZoneToggle: "Also update the zone",
       bulkEditZoneMixed: "Mixed values — enter to replace on all",
-      bulkEditZoneHint: "Leave empty to clear the zone on all {count} selected shelves."
+      bulkEditZoneHint: "Leave empty to clear the zone on all {count} selected shelves.",
+      importInventory: {
+        open: "Import inventory",
+        title: "Import inventory into {shelf}",
+        hint: "Excel format: wcl_item_no | date_code | qty (first row = column names). One part per row; date_code may be blank; qty must be a positive integer. The import only affects this shelf and the chosen Org / sub-inventory.",
+        orgSubInventory: "Org / sub-inventory",
+        pickOrgSubInventory: "Pick Org / sub-inventory",
+        file: "Excel file",
+        pickFile: "Choose file",
+        rowsReady: "{count} rows read, ready to import.",
+        submit: "Import",
+        result: "Import complete: {inserted} inserted, {merged} merged.",
+        rowError: "Row {row}: {message}",
+        noRows: "The file contains no data rows.",
+        missingColumn: 'Could not find the "{column}" column.',
+        emptyWclItemNo: "Row {row}: wcl_item_no is empty.",
+        badQty: "Row {row}: qty must be a positive integer."
+      }
     },
     print: {
       title: "Print labels ({count})",

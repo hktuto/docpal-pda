@@ -1279,6 +1279,12 @@ export default {
     noResults: "未找到結果。",
     onHand: "現貨：{qty}",
     lotQty: "可用 {available} / 共 {total}",
+    wipe: "清除全部庫存（UAT）",
+    wipeConfirmTitle: "清除全部庫存？",
+    wipeConfirmMessage: "此操作會刪除所有庫存批次、分配、出入流水及日誌，且無法復原。只可用於 UAT 環境。",
+    wipeConfirmPrompt: "請輸入「{word}」以確認。",
+    wipeConfirmButton: "永久刪除",
+    wipeDone: "已刪除 {count} 個庫存批次。"
   },
   lotHistory: {
     title: "批次歷史",
@@ -1486,7 +1492,24 @@ export default {
       bulkEditWarningHint: "凡分配指向此貨架，即顯示 ⚠ 圖示。留空代表清除全部 {count} 個已選貨架的警告。",
       bulkEditZoneToggle: "同時更新區域",
       bulkEditZoneMixed: "目前設定不一 — 輸入以取代全部",
-      bulkEditZoneHint: "留空代表清除全部 {count} 個已選貨架的區域。"
+      bulkEditZoneHint: "留空代表清除全部 {count} 個已選貨架的區域。",
+      importInventory: {
+        open: "匯入庫存",
+        title: "匯入庫存到 {shelf}",
+        hint: "Excel 格式：wcl_item_no | date_code | qty（第一列為欄位名稱）。每行一個料號；date_code 可留空；qty 必須為正整數。匯入只影響此貨架及所選 Org / 子庫。",
+        orgSubInventory: "Org / 子庫",
+        pickOrgSubInventory: "選擇 Org / 子庫",
+        file: "Excel 檔案",
+        pickFile: "選擇檔案",
+        rowsReady: "已讀取 {count} 行，準備匯入。",
+        submit: "匯入",
+        result: "匯入完成：新增 {inserted}，合併 {merged}。",
+        rowError: "第 {row} 行：{message}",
+        noRows: "檔案沒有資料行。",
+        missingColumn: "找不到欄位「{column}」。",
+        emptyWclItemNo: "第 {row} 行的 wcl_item_no 為空。",
+        badQty: "第 {row} 行的 qty 必須為正整數。"
+      }
     },
     print: {
       title: "列印標籤（{count}）",

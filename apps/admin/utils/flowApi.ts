@@ -545,6 +545,40 @@ export interface StockSearchOptions {
   locations: { orgId: number | null; subInventoryCode: string | null; description: string | null; officeCode: string | null; label: string | null }[];
 }
 
+// ---- per-shelf inventory import (spec 2026-11-13-uat-inventory-tools) ----
+
+/** (org, sub-inventory) pairs a shelf import may target (scope-restricted). */
+export interface ShelfOrgOptions {
+  pairs: { orgId: number; code: string; description: string | null }[];
+}
+
+export interface ShelfInventoryImportRow {
+  wclItemNo: string;
+  dateCode?: string | null;
+  qty: number;
+}
+
+export interface ShelfInventoryImportPayload {
+  shelfCode: string;
+  orgId: number;
+  subInventoryCode: string;
+  rows: ShelfInventoryImportRow[];
+}
+
+export interface ShelfInventoryImportResult {
+  ok: boolean;
+  inserted: number;
+  merged: number;
+  errors: { row: number; message: string }[];
+}
+
+/** The slice of GET /config the admin console reads directly. */
+export interface AppConfig {
+  dateCodeFormat?: string;
+  warehouseCode?: string;
+  uatTools?: { inventoryWipe?: boolean };
+}
+
 // ---- issues ----
 
 export interface MismatchListRow {
@@ -1782,6 +1816,18 @@ export function useFlowApi() {
     stockSearchPage: (params: StockSearchPageParams) =>
       api.get<StockSearchPage>(`/stock-search?${stockSearchQuery(params)}`),
     stockSearchOptions: () => api.get<StockSearchOptions>("/stock-search/options"),
+    // Per-shelf inventory Excel import (spec 2026-11-13-uat-inventory-tools-
+    // design.md) — the modal's org/sub-inventory picker + the row import POST.
+    shelfOrgOptions: (shelfCode: string) =>
+      api.get<ShelfOrgOptions>(`/admin/shelves/import-inventory/org-options?shelfCode=${encodeURIComponent(shelfCode)}`),
+    importShelfInventory: (payload: ShelfInventoryImportPayload) =>
+      api.post<ShelfInventoryImportResult>("/admin/shelves/import-inventory", payload),
+    /** GET /config — flow/display flags; carries uatTools only when the
+     *  backend runs with UAT_TOOLS=1. */
+    getConfig: () => api.get<AppConfig>("/config"),
+    // UAT-only inventory wipe (UAT_TOOLS=1 backend flag; the admin only
+    // renders the button when GET /config carries uatTools.inventoryWipe).
+    uatInventoryWipe: () => api.post<{ ok: boolean; deletedLots: number }>("/admin/uat/inventory-wipe"),
     // Same filters as stockSearch ({} = overall totals).
     stockSearchSummary: (params: StockSearchParams = {}) =>
       api.get<StockSearchSummary>(`/stock-search/summary?${stockSearchQuery(params)}`),

@@ -10,6 +10,7 @@ import {
   pdaViewConfig,
   pickingShelfScan,
   putAwayConfig,
+  uatToolsEnabled,
   type FlowStep,
 } from "../config.js";
 
@@ -42,6 +43,9 @@ configRoute.get("/config", async (c) => {
       pickingShelfScan: pickingShelfScan(),
       dateCodeFormat: dateCodeFormat(),
       cnReceiving: cnReceiving(),
+      // UAT-only tools (spec 2026-11-13-uat-inventory-tools-design.md) — the
+      // key is omitted entirely unless UAT_TOOLS=1 on the backend.
+      ...(uatToolsEnabled() ? { uatTools: { inventoryWipe: true } } : {}),
       warehouseCode: (process.env.WAREHOUSE_CODE ?? "").toLowerCase(),
     },
     200

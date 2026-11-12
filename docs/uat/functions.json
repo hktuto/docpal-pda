@@ -779,5 +779,27 @@
     "result": "",
     "bugIds": "",
     "remarks": "Spec docs/superpowers/specs/2026-11-10-packaging-shipping-steps-design.md; `shipping` flow step gates the /shipping nav link"
+  },
+  {
+    "id": "ADM-042",
+    "app": "Admin",
+    "module": "Inventory",
+    "name": "Per-shelf inventory Excel import (匯入庫存) — shelves page row action; modal picks Org / sub-inventory (shelf-scope-restricted) + .xlsx (wcl_item_no | date_code | qty); lot upsert merge with ADJUST ledger + import audit log",
+    "tester": "",
+    "testDate": "",
+    "result": "",
+    "bugIds": "",
+    "remarks": "Spec docs/superpowers/specs/2026-11-13-uat-inventory-tools-design.md"
+  },
+  {
+    "id": "ADM-043",
+    "app": "Admin",
+    "module": "Inventory",
+    "name": "UAT inventory wipe (清除全部庫存) — stock-search red danger button, UAT_TOOLS=1 backend flag; typed-word confirm; wipes lots/allocations/ledger/logs in one tx",
+    "tester": "",
+    "testDate": "",
+    "result": "",
+    "bugIds": "",
+    "remarks": "Spec docs/superpowers/specs/2026-11-13-uat-inventory-tools-design.md; hidden unless UAT_TOOLS=1"
   }
 ]

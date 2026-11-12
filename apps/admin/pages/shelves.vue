@@ -83,6 +83,9 @@ async function downloadQr(row: any) {
 // the selection clears.
 const table = ref<{ reload: () => Promise<void> } | null>(null);
 const bulkEdit = ref<{ rows: any[]; clear: () => void } | null>(null);
+// Per-shelf inventory Excel import (ShelfInventoryImportDialog): one dialog at
+// a time, opened from the row-actions "Import" button.
+const importShelf = ref<any | null>(null);
 
 async function onBulkEditSaved() {
   bulkEdit.value?.clear();
@@ -253,6 +256,7 @@ async function onImportFile(e: Event) {
       <template #row-actions="{ row }">
         <button class="btn-link" @click="printOne(row)">{{ $t("admin.print.print") }}</button>
         <button class="btn-link" @click="downloadQr(row)">{{ $t("admin.print.downloadQr") }}</button>
+        <button class="btn-link" @click="importShelf = row">{{ $t("admin.shelves.importInventory.open") }}</button>
       </template>
       <template #bulk-actions="{ rows, clear }">
         <button class="btn btn-primary" @click="printSelected(rows, clear)">
@@ -281,6 +285,12 @@ async function onImportFile(e: Event) {
       :shelves="bulkEdit.rows"
       @saved="onBulkEditSaved"
       @close="bulkEdit = null"
+    />
+    <ShelfInventoryImportDialog
+      v-if="importShelf"
+      :shelf="importShelf"
+      @saved="table?.reload()"
+      @close="importShelf = null"
     />
   </div>
 </template>
