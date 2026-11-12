@@ -99,7 +99,7 @@ const {
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t("admin.pages.issues.receivingTitle") }}</h1>
       <div class="head-actions">
@@ -111,10 +111,10 @@ const {
 
     <div v-if="error" class="error-banner">{{ error }}</div>
     <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
-    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <DataTable
-      v-else
+      fill
+      :loading="loading"
       :table="table"
       :empty-text="$t('admin.pages.issues.noReceivingIssues')"
       :on-reset-columns="resetColumnState"
@@ -139,8 +139,10 @@ const {
           {{ acting[row.itemId] === "cancel" ? $t("admin.common.saving") : $t("admin.common.cancel") }}
         </button>
       </template>
+      <template #footer>
+        <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
+      </template>
     </DataTable>
-    <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>
 </template>
 

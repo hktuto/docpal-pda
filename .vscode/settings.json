@@ -1,0 +1,8 @@
+{
+  "i18n-ally.localesPaths": [
+    "layers/i18n",
+    "layers/i18n/i18n",
+    "layers/i18n/i18n/locales",
+    "libraries/vform/src/lang"
+  ]
+}

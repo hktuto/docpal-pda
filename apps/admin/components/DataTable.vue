@@ -24,9 +24,12 @@ const props = defineProps<{
   onResetColumns?: () => void;
   /** Share horizontal scroll position with other DataTables using the same key. */
   syncScrollKey?: string;
+  /** Fill parent height: toolbar / table / footer → auto 1fr auto. */
+  fill?: boolean;
 }>();
 const emit = defineEmits<{ (e: "row-click", row: any): void; (e: "row-dblclick", row: any): void }>();
 const slots = useSlots();
+const hasFooter = computed(() => !!slots.footer);
 
 const wrapRef = ref<HTMLElement | null>(null);
 useSyncedScroll(props.syncScrollKey, wrapRef);
@@ -205,7 +208,11 @@ const emptyColspan = computed(
 </script>
 
 <template>
-  <div ref="rootRef">
+  <div
+    ref="rootRef"
+    class="data-table"
+    :class="{ 'data-table--fill': fill, 'data-table--has-footer': hasFooter }"
+  >
     <div class="table-toolbar">
       <div ref="sortMenuRef" class="column-menu-wrap">
         <button
@@ -352,15 +359,39 @@ const emptyColspan = computed(
         </tbody>
       </table>
     </div>
+    <div v-if="hasFooter" class="table-footer">
+      <slot name="footer" />
+    </div>
   </div>
 </template>
 
 <style scoped>
+.data-table--fill {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+  min-height: 0;
+}
+.data-table--fill.data-table--has-footer {
+  grid-template-rows: auto 1fr auto;
+}
+.data-table--fill .table-wrap {
+  min-height: 0;
+  overflow: auto;
+}
+.data-table--fill .table-wrap th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
 .table-toolbar {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
   margin-bottom: 0.375rem;
+}
+.table-footer {
+  min-width: 0;
 }
 .column-menu-wrap {
   position: relative;

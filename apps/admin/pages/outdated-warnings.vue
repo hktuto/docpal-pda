@@ -187,7 +187,7 @@ const {
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t("admin.pages.outdatedWarnings.title") }}</h1>
     </div>
@@ -221,10 +221,10 @@ const {
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="notice" class="notice-banner">{{ notice }}</div>
     <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
-    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <DataTable
-      v-else
+      fill
+      :loading="loading"
       :table="table"
       :empty-text="$t('admin.pages.outdatedWarnings.none')"
       :on-reset-columns="resetColumnState"

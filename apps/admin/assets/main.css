@@ -167,6 +167,29 @@ a:hover {
   gap: 0.5rem;
 }
 
+/* ---- list pages: table fills leftover viewport ---- */
+.list-fill-page {
+  display: flex;
+  flex-direction: column;
+  /* content padding top+bottom = 3.75rem */
+  height: calc(100vh - 3.75rem);
+  min-height: 0;
+}
+.list-fill-page > .data-table--fill {
+  flex: 1;
+  min-height: 0;
+}
+.list-fill-page > .table-wrap--fill {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.list-fill-page > .table-wrap--fill th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
 /* ---- tables ---- */
 .table-wrap {
   background: #fff;

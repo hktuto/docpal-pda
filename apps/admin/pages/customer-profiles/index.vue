@@ -108,7 +108,7 @@ onMounted(load);
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t("admin.pages.customerProfiles.title") }}</h1>
       <div class="head-actions">
@@ -145,10 +145,10 @@ onMounted(load);
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
-    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <DataTable
-      v-else
+      fill
+      :loading="loading"
       :table="table"
       :empty-text="$t('admin.pages.customerProfiles.none')"
       :on-reset-columns="resetColumnState"
@@ -178,8 +178,10 @@ onMounted(load);
           }}
         </button>
       </template>
+      <template #footer>
+        <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
+      </template>
     </DataTable>
-    <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>
 </template>
 

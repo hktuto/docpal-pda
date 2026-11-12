@@ -92,7 +92,7 @@ async function confirmPutBack(row: CancelRecordRow) {
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t("cancelRecords.title") }}</h1>
       <button class="btn" :disabled="loading" @click="load">
@@ -122,7 +122,7 @@ async function confirmPutBack(row: CancelRecordRow) {
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
-    <div v-else class="table-wrap">
+    <div class="table-wrap table-wrap--fill">
       <table class="data">
         <thead>
           <tr>

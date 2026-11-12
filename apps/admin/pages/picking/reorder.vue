@@ -65,7 +65,7 @@ onMounted(load);
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t("admin.pages.reorder.title") }}</h1>
       <div>
@@ -83,7 +83,7 @@ onMounted(load);
     <div v-if="saved" class="ok-banner">{{ saved }}</div>
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
-    <div v-else class="table-wrap">
+    <div class="table-wrap table-wrap--fill">
       <table class="data">
         <thead>
           <tr>

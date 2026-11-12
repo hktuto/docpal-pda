@@ -202,7 +202,7 @@ const {
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t("admin.pages.receiving.title") }}</h1>
       <div class="head-actions">
@@ -234,11 +234,11 @@ const {
 
     <div v-if="error" class="error-banner">{{ error }}</div>
     <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
-    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <DataTable
-      v-else
+      fill
       v-model:selected="selected"
+      :loading="loading"
       :table="table"
       selectable
       :row-id="(r: ReceivingOrderRow) => r.id"
@@ -257,8 +257,10 @@ const {
       <template #cell-supplier="{ row }">{{ row.supplierName ?? row.supplierCode ?? "—" }}</template>
       <template #cell-createdDate="{ row }">{{ formatDateTime(row.createdDate) }}</template>
       <template #cell-lastUpdateDate="{ row }">{{ formatDateTime(row.lastUpdateDate) }}</template>
+      <template #footer>
+        <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
+      </template>
     </DataTable>
-    <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
     <ReceivingStatusOverrideModal
       :open="overrideOpen"
       :order-nos="selectedRows.map((r) => r.displayName ?? r.batchNo)"

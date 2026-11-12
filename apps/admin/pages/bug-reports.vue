@@ -144,7 +144,7 @@ async function deleteDetail() {
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t("bugQueue.title") }}</h1>
     </div>
@@ -170,9 +170,14 @@ async function deleteDetail() {
 
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="notice" class="notice-banner">{{ notice }}</div>
-    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
-    <DataTable v-else :table="table" :empty-text="$t('bugQueue.empty')" :on-reset-columns="resetColumnState">
+    <DataTable
+      fill
+      :loading="loading"
+      :table="table"
+      :empty-text="$t('bugQueue.empty')"
+      :on-reset-columns="resetColumnState"
+    >
       <template #cell-createdDate="{ row }">{{ formatDateTime(row.createdDate) }}</template>
       <template #cell-app="{ row }">
         <span class="muted">{{ row.app }}</span>

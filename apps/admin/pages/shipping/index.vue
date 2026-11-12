@@ -127,7 +127,7 @@ const {
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t("admin.pages.shipping.title") }}</h1>
       <div class="head-actions">
@@ -163,11 +163,11 @@ const {
 
     <div v-if="error" class="error-banner">{{ error }}</div>
     <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
-    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <DataTable
-      v-else
+      fill
       v-model:selected="selected"
+      :loading="loading"
       :table="table"
       selectable
       :row-id="(r: ShippingBoxRow) => r.boxId"
@@ -180,8 +180,10 @@ const {
       <template #cell-netGross="{ row }">{{ row.netWeight ?? "—" }} / {{ row.grossWeight ?? "—" }}</template>
       <template #cell-packaged="{ row }">{{ row.packaged ? "✓" : "—" }}</template>
       <template #cell-closedAt="{ row }">{{ formatDateTime(row.closedAt) }}</template>
+      <template #footer>
+        <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
+      </template>
     </DataTable>
-    <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>
 </template>
 
