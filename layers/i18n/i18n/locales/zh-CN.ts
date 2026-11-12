@@ -2977,6 +2977,8 @@ export default {
     mBatch: "收货批次 / 发票",
     mNone: "此位置没有可分配库存。",
     mAllocate: "分配",
+    mSubmit: "确认分配",
+    mOverRemaining: "合计数量超过尚需分配（{qty}）。",
     pda: {
       title: "内部调拨",
       detailTitle: "内部调拨",

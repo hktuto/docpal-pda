@@ -2981,6 +2981,8 @@ export default {
     mBatch: "Receiving batch / invoice",
     mNone: "No allocatable stock at this location.",
     mAllocate: "Allocate",
+    mSubmit: "Confirm allocation",
+    mOverRemaining: "Total qty exceeds remaining to allocate ({qty}).",
     pda: {
       title: "Internal Transfer",
       detailTitle: "Internal Transfer",

@@ -2977,6 +2977,8 @@ export default {
     mBatch: "收貨批次 / 發票",
     mNone: "此位置沒有可分配庫存。",
     mAllocate: "分配",
+    mSubmit: "確認分配",
+    mOverRemaining: "合計數量超過尚需分配（{qty}）。",
     pda: {
       title: "內部調撥",
       detailTitle: "內部調撥",

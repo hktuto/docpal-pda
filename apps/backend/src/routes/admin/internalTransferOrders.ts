@@ -5,6 +5,7 @@ import { listInternalTransferOrders, getInternalTransferOrder, assignTransferPic
 import {
   allocateForInternalTransferOrder,
   addManualInternalTransferAllocation,
+  addManualInternalTransferAllocations,
   removeInternalTransferAllocation,
 } from "../../db/internalTransferAllocate.js";
 import { overrideInternalTransferStatus } from "../../db/internalTransferPicking.js";
@@ -96,6 +97,30 @@ adminInternalTransferRoute.post("/internal-transfer-orders/:id/items/:itemId/all
       inventoryLotId: body.inventoryLotId,
       receivingInvoiceItemId: body.receivingInvoiceItemId,
     },
+    actorFrom(c).id
+  );
+  return c.json(result);
+});
+
+// Batch pin from the availability modal Confirm — same per-row guards as the
+// single POST, one transaction (any row failing rolls the whole set back).
+// Body `{ rows: [{ qty, inventoryLotId? | receivingInvoiceItemId? }, ...] }`.
+adminInternalTransferRoute.post("/internal-transfer-orders/:id/items/:itemId/allocations/batch", async (c) => {
+  const body = await c.req.json<{
+    rows?: { qty?: number; inventoryLotId?: string; receivingInvoiceItemId?: string }[];
+  }>();
+  const rows = Array.isArray(body.rows)
+    ? body.rows.map((r) => ({
+        qty: Number(r.qty),
+        inventoryLotId: r.inventoryLotId,
+        receivingInvoiceItemId: r.receivingInvoiceItemId,
+      }))
+    : [];
+  const result = await addManualInternalTransferAllocations(
+    db,
+    c.req.param("id"),
+    c.req.param("itemId"),
+    rows,
     actorFrom(c).id
   );
   return c.json(result);

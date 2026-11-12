@@ -14,6 +14,7 @@ import { HTTPException } from "hono/http-exception";
 import {
   allocateForInternalTransferOrder,
   addManualInternalTransferAllocation,
+  addManualInternalTransferAllocations,
   removeInternalTransferAllocation,
 } from "./internalTransferAllocate.js";
 import { assignTransferPickingOrder } from "./internalTransfer.js";
@@ -339,6 +340,57 @@ test("manual add/remove: pins, caps, ledger — and availability nets both engin
     SELECT COUNT(*)::int AS n FROM inventory_transactions
     WHERE reference_type = 'internal_transfer_allocation' AND txn_reason = 'admin: manual allocation'`);
   assert.equal(Number((ledger[0] as any).n), 1);
+});
+
+test("manual batch: two pins succeed; over remaining rolls the whole set back", async () => {
+  const transferId = await insertTransfer("ITO-BATCH");
+  const item = await insertTransferItem(transferId, "RK73H1JTTD1002F", 600);
+
+  const ok = await addManualInternalTransferAllocations(
+    client.db,
+    transferId,
+    item,
+    [
+      { qty: 100, inventoryLotId: LOT_18 },
+      { qty: 200, inventoryLotId: LOT_18 },
+    ],
+    ACTOR
+  );
+  assert.equal(ok.totalQty, 300);
+  assert.equal(ok.allocations.length, 2);
+  let it = await client.db.execute(sql`SELECT allocated_qty FROM internal_transfer_items WHERE id = ${item}`);
+  assert.equal(Number((it[0] as any).allocated_qty), 300);
+  let rows = await client.db.execute(sql`
+    SELECT qty FROM internal_transfer_allocations WHERE transfer_item_id = ${item} ORDER BY qty`);
+  assert.deepEqual(
+    rows.map((r: any) => Number(r.qty)),
+    [100, 200]
+  );
+
+  // wipe and prove all-or-nothing: second row would push past open qty
+  await client.db.execute(sql`DELETE FROM internal_transfer_allocations WHERE transfer_item_id = ${item}`);
+  await client.db.execute(sql`UPDATE internal_transfer_items SET allocated_qty = 0 WHERE id = ${item}`);
+  await client.db.execute(sql`UPDATE inventory_lots SET allocated_qty = 0 WHERE id = ${LOT_18}`);
+
+  await rejects(
+    () =>
+      addManualInternalTransferAllocations(
+        client.db,
+        transferId,
+        item,
+        [
+          { qty: 400, inventoryLotId: LOT_18 },
+          { qty: 400, inventoryLotId: LOT_18 },
+        ],
+        ACTOR
+      ),
+    "over_allocation"
+  );
+  it = await client.db.execute(sql`SELECT allocated_qty FROM internal_transfer_items WHERE id = ${item}`);
+  assert.equal(Number((it[0] as any).allocated_qty), 0);
+  rows = await client.db.execute(sql`
+    SELECT COUNT(*)::int AS n FROM internal_transfer_allocations WHERE transfer_item_id = ${item}`);
+  assert.equal(Number((rows[0] as any).n), 0);
 });
 
 test("assign delegated picking order: org match, open window, editable window, clear", async () => {

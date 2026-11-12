@@ -18,7 +18,6 @@
   --border: #d3dce5;
   --muted: #7b8794;
   --radius: 0.375rem;
-
 }
 input {
     font-size: 0.8rem;
@@ -30,6 +29,15 @@ body {
   color: #1f2933;
   background: #f7f9fc;
   position: relative;
+  /* EP base.css loads after main.css and resets :root primary to blue;
+     set on body so descendants inherit teal regardless of load order. */
+  --el-color-primary: #0fb5a3;
+  --el-color-primary-light-3: #57cbbe;
+  --el-color-primary-light-5: #87dad1;
+  --el-color-primary-light-7: #b7e9e3;
+  --el-color-primary-light-8: #cff0ed;
+  --el-color-primary-light-9: #e7f8f6;
+  --el-color-primary-dark-2: #0b968f;
 }
 
 a {
