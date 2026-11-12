@@ -340,7 +340,7 @@ onMounted(load);
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t("admin.pages.subInventories.title") }}</h1>
       <div class="head-actions">
@@ -363,10 +363,10 @@ onMounted(load);
 
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="shareError" class="error-banner">{{ shareError }}</div>
-    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <DataTable
-      v-else
+      fill
+      :loading="loading"
       :table="table"
       :empty-text="$t('admin.pages.subInventories.none')"
       :on-reset-columns="resetColumnState"
@@ -391,8 +391,10 @@ onMounted(load);
         <button class="btn-link" @click="openEdit(row)">{{ $t("admin.common.edit") }}</button>
         <button class="btn-link" @click="remove(row)">{{ $t("admin.common.delete") }}</button>
       </template>
+      <template #footer>
+        <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
+      </template>
     </DataTable>
-    <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
 
     <div v-if="showNew" class="overlay" @mousedown="newDlg.onMousedown" @click="newDlg.onClick">
       <div class="dialog">

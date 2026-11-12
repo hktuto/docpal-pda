@@ -23,17 +23,15 @@ onMounted(loadProfiles);
 </script>
 
 <template>
-  <div>
-    <CrudTable :config="entities.suppliers">
-      <template #row-actions="{ row }">
-        <button
-          class="btn-link"
-          :title="profileFor(row.code)?.qrTemplate || $t('admin.pages.suppliers.noProfileYet')"
-          @click="navigateTo(`/suppliers/${encodeURIComponent(row.code)}`)"
-        >
-          {{ $t("admin.pages.suppliers.editProfile") }}
-        </button>
-      </template>
-    </CrudTable>
-  </div>
+  <CrudTable :config="entities.suppliers">
+    <template #row-actions="{ row }">
+      <button
+        class="btn-link"
+        :title="profileFor(row.code)?.qrTemplate || $t('admin.pages.suppliers.noProfileYet')"
+        @click="navigateTo(`/suppliers/${encodeURIComponent(row.code)}`)"
+      >
+        {{ $t("admin.pages.suppliers.editProfile") }}
+      </button>
+    </template>
+  </CrudTable>
 </template>

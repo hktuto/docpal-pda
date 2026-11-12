@@ -221,7 +221,7 @@ onMounted(load);
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t("admin.pages.shelfBoxes.title") }}</h1>
       <div class="head-actions">
@@ -236,9 +236,9 @@ onMounted(load);
       </div>
     </div>
     <div v-if="error" class="error-banner">{{ error }}</div>
-    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
     <DataTable
-      v-else
+      fill
+      :loading="loading"
       :table="table"
       selectable
       :row-id="(b: any) => b.id"
@@ -255,8 +255,10 @@ onMounted(load);
         <button class="btn-link" @click="openEdit(row)">{{ $t("admin.common.edit") }}</button>
         <button class="btn-link" @click="remove(row)">{{ $t("admin.common.delete") }}</button>
       </template>
+      <template #footer>
+        <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
+      </template>
     </DataTable>
-    <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
 
     <div v-if="showNew" class="overlay" @mousedown="newDlg.onMousedown" @click="newDlg.onClick">
       <div class="dialog">

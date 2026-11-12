@@ -12,6 +12,7 @@
     "@fontsource/roboto-mono": "^5.3.0",
     "@tanstack/table-core": "9.2.4",
     "@tanstack/vue-table": "^9.2.4",
+    "element-plus": "^2.14.8",
     "exceljs": "^4.4.0",
     "jspdf": "^4.2.1",
     "nuxt": "^3.21.8",

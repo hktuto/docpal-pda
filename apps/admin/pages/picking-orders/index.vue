@@ -273,7 +273,7 @@ const {
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t("admin.pages.pickingOrders.title") }}</h1>
       <div class="head-actions">
@@ -327,11 +327,11 @@ const {
 
     <div v-if="error" class="error-banner">{{ error }}</div>
     <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
-    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <DataTable
-      v-else
+      fill
       v-model:selected="selected"
+      :loading="loading"
       :table="table"
       selectable
       :row-id="(r: PickingOrderRow) => r.id"
@@ -359,8 +359,10 @@ const {
       <template #cell-remark="{ row }">{{ row.remark ?? "" }}</template>
       <template #cell-createdDate="{ row }">{{ formatDateTime(row.createdDate) }}</template>
       <template #cell-lastUpdateDate="{ row }">{{ formatDateTime(row.lastUpdateDate) }}</template>
+      <template #footer>
+        <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
+      </template>
     </DataTable>
-    <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
     <PickingOrdersStatusOverrideModal
       :open="overrideOpen"
       :order-nos="selectedRows.map((r) => r.orderNo)"
@@ -378,6 +380,7 @@ const {
   margin-bottom: 0.75rem;
   align-items: flex-end;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 .filter-date {
   display: flex;

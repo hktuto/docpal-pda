@@ -100,7 +100,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t("admin.pages.adHocPutAways.title") }}</h1>
       <div class="head-actions">
@@ -139,9 +139,9 @@ onMounted(() => {
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
-    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
     <DataTable
-      v-else
+      fill
+      :loading="loading"
       :table="table"
       :row-id="(r: any) => r.id"
       :empty-text="$t('admin.pages.adHocPutAways.noResults')"
@@ -152,8 +152,10 @@ onMounted(() => {
           {{ row.id.slice(0, 8) }}
         </NuxtLink>
       </template>
+      <template #footer>
+        <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
+      </template>
     </DataTable>
-    <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>
 </template>
 

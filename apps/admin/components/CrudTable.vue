@@ -255,7 +255,7 @@ onMounted(load);
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t(config.title) }}</h1>
       <div class="head-actions">
@@ -295,9 +295,8 @@ onMounted(load);
       <span>{{ $t("admin.print.selectedCount", { count: selected.size }) }}</span>
       <slot name="bulk-actions" :rows="selectedRows" :clear="clearSelection" />
     </div>
-    <div v-if="loading && rows.length === 0" class="loading">{{ $t("admin.common.loading") }}</div>
     <DataTable
-      v-else
+      fill
       v-model:selected="selected"
       :table="table"
       :selectable="config.selectable"
@@ -316,8 +315,10 @@ onMounted(load);
         </button>
         <button class="btn-link" @click="onDelete(row)">{{ $t("admin.common.delete") }}</button>
       </template>
+      <template #footer>
+        <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
+      </template>
     </DataTable>
-    <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
     <CrudForm
       v-if="showForm"
       :title="formTitle"
@@ -341,5 +342,6 @@ onMounted(load);
   gap: 0.75rem;
   margin-bottom: 0.625rem;
   font-size: 0.8125rem;
+  flex-shrink: 0;
 }
 </style>

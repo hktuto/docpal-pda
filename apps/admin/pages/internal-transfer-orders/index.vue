@@ -71,7 +71,7 @@ function fmtLoc(orgId: number | null, code: string | null): string {
 </script>
 
 <template>
-  <div>
+  <div class="list-fill-page">
     <div class="page-head">
       <h1>{{ $t("internalTransfer.title") }}</h1>
       <button class="btn" :disabled="loading" @click="load">
@@ -95,7 +95,7 @@ function fmtLoc(orgId: number | null, code: string | null): string {
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
-    <div v-else class="table-wrap">
+    <div class="table-wrap table-wrap--fill">
       <table class="data">
         <thead>
           <tr>

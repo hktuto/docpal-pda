@@ -1746,6 +1746,15 @@ export function useFlowApi() {
         `/admin/internal-transfer-orders/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/allocations`,
         input
       ),
+    addInternalTransferAllocationsBatch: (
+      id: string,
+      itemId: string,
+      rows: { qty: number; inventoryLotId?: string; receivingInvoiceItemId?: string }[]
+    ) =>
+      api.post<{ allocations: { allocationId: string; qty: number }[]; totalQty: number }>(
+        `/admin/internal-transfer-orders/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/allocations/batch`,
+        { rows }
+      ),
     removeInternalTransferAllocation: (id: string, itemId: string, allocationId: string) =>
       api.del<{ removed: number; qty: number }>(
         `/admin/internal-transfer-orders/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/allocations/${encodeURIComponent(allocationId)}`
