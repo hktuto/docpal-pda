@@ -156,6 +156,8 @@ a:hover {
   background: transparent;
   color: var(--primary);
   border-color: var(--primary);
+  white-space: nowrap;
+  overflow: clip;
 }
 
 .btn--ghost:hover:not(:disabled) {
