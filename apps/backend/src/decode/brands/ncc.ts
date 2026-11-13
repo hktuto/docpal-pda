@@ -19,13 +19,14 @@ export async function resolve(
   if (!drawno) return true;
   const wcls = [...new Set((await lookupPartsByDrawingNo(db, drawno)).map((m) => m.wclItemNo))];
   if (!gated) {
-    if (wcls.length === 1) parsed.wclItemNo = wcls[0];
+    parsed.wclItemNo = wcls[0];
     return true;
   }
   // The drawing code is never among the order targets — accept the ungated
   // rerun only when exactly one resolved wcl_item_no is.
   const norms = new Set((targets ?? []).map(normalizePartNo));
   const onOrder = wcls.filter((w) => norms.has(normalizePartNo(w)));
+
   if (onOrder.length !== 1) return false;
   parsed.wclItemNo = onOrder[0];
   return true;
