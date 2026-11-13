@@ -6,9 +6,11 @@ import { newId } from "../../db/id.js";
 import { transactionLogs } from "../../db/schema/index.js";
 
 /**
- * POST /admin/uat/inventory-wipe — UAT-only destructive reset of all on-hand
- * inventory state (spec 2026-11-13-uat-inventory-tools-design.md). Registered
- * only when UAT_TOOLS=1 (admin/index.ts). One transaction:
+ * POST /admin/uat/inventory-wipe — UAT destructive reset of all on-hand
+ * inventory state (spec 2026-11-13-uat-inventory-tools-design.md). Always
+ * registered (admin-group middleware only); the admin UI's type-"DELETE"
+ * confirm dialog is the safeguard. Must be removed or re-gated before a
+ * production release. One transaction:
  *   1. allocations (all rows — they reference lots via ON DELETE CASCADE, but
  *      wiping them explicitly also clears lot-less reservations)
  *   2. inventory_lot_sources (explicit; also cascades from lots)

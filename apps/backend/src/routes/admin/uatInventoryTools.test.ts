@@ -8,9 +8,6 @@
 //   POST /admin/uat/inventory-wipe — wipes allocations / inventory_lot_sources
 //     / inventory_transactions / transaction_logs / inventory_lots in one tx
 //     (goods_verify_tasks.inventory_lot_id nulled) and reports deletedLots.
-// UAT_TOOLS=1 must be set BEFORE ../../index.js is imported (the route is
-// registered at module load, mirroring DEV_ROUTES). The unset case lives in
-// uatToolsOff.test.ts.
 // Same auth/fixture pattern as orderReset.test.ts.
 
 import { test, before, beforeEach } from "node:test";
@@ -22,7 +19,6 @@ import { insertPickingOrder } from "../../db/test-fixtures.js";
 import { allocateAll } from "../../db/allocate.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
-process.env.UAT_TOOLS = "1";
 
 let client: TestDb;
 let app: (typeof import("../../index.js"))["app"];

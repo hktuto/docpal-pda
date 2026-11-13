@@ -572,13 +572,6 @@ export interface ShelfInventoryImportResult {
   errors: { row: number; message: string }[];
 }
 
-/** The slice of GET /config the admin console reads directly. */
-export interface AppConfig {
-  dateCodeFormat?: string;
-  warehouseCode?: string;
-  uatTools?: { inventoryWipe?: boolean };
-}
-
 // ---- issues ----
 
 export interface MismatchListRow {
@@ -1822,11 +1815,8 @@ export function useFlowApi() {
       api.get<ShelfOrgOptions>(`/admin/shelves/import-inventory/org-options?shelfCode=${encodeURIComponent(shelfCode)}`),
     importShelfInventory: (payload: ShelfInventoryImportPayload) =>
       api.post<ShelfInventoryImportResult>("/admin/shelves/import-inventory", payload),
-    /** GET /config — flow/display flags; carries uatTools only when the
-     *  backend runs with UAT_TOOLS=1. */
-    getConfig: () => api.get<AppConfig>("/config"),
-    // UAT-only inventory wipe (UAT_TOOLS=1 backend flag; the admin only
-    // renders the button when GET /config carries uatTools.inventoryWipe).
+    // UAT inventory wipe — always available to admins (type-"DELETE"
+    // confirm dialog in the UI is the safeguard); remove before production.
     uatInventoryWipe: () => api.post<{ ok: boolean; deletedLots: number }>("/admin/uat/inventory-wipe"),
     // Same filters as stockSearch ({} = overall totals).
     stockSearchSummary: (params: StockSearchParams = {}) =>

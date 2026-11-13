@@ -1055,13 +1055,6 @@ export function receivingSubInventoryRules(): SubInventoryRuleGroup[] {
   return flowConfig.receivingSubInventoryRules;
 }
 
-/** UAT-only admin tools (spec 2026-11-13-uat-inventory-tools-design.md):
- *  UAT_TOOLS=1 registers POST /admin/uat/inventory-wipe and exposes
- *  `uatTools` on GET /config. Default off — the wipe is destructive. */
-export function uatToolsEnabled(): boolean {
-  return process.env.UAT_TOOLS === "1";
-}
-
 /** Transfer-order from_subinventory → org conversion groups; [] = off. */
 export function pickingFromSubinventoryOrgs(): FromSubinventoryOrgGroup[] {
   return flowConfig.pickingFromSubinventoryOrgs;

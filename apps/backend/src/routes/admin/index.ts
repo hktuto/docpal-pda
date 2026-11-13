@@ -52,7 +52,6 @@ import { adminSequencesRoute } from "./sequences.js";
 import { uatInventoryWipeRoute } from "./uatInventoryWipe.js";
 import { shelfInventoryImportRoute } from "./shelfInventoryImport.js";
 import { parseScopeEntries, type UserScopeEntry } from "../../db/user-scope.js";
-import { uatToolsEnabled } from "../../config.js";
 
 // Optional id on create: use the client's when given, else generate one.
 function optId(body: Record<string, unknown>): string {
@@ -515,11 +514,10 @@ adminRoute.route("/sequences", adminSequencesRoute);
 // design.md) — POST the decoded rows, GET the shelf's allowed org pairs.
 adminRoute.route("/shelves/import-inventory", shelfInventoryImportRoute);
 
-// UAT-only inventory wipe — registered only when UAT_TOOLS=1, mirroring the
-// DEV_ROUTES mount in src/index.ts.
-if (uatToolsEnabled()) {
-  adminRoute.route("/uat/inventory-wipe", uatInventoryWipeRoute);
-}
+// UAT inventory wipe — ALWAYS registered (admin-group middleware only); the
+// stock-search UI's type-"DELETE" confirm dialog is the safeguard. Must be
+// removed or re-gated before a production release.
+adminRoute.route("/uat/inventory-wipe", uatInventoryWipeRoute);
 
 // DocPal console link for the admin user popover — null when DOCPAL_URL is
 // not configured (login itself requires it, so real deployments always have it).

@@ -6,9 +6,11 @@ Branch: `feat/uat-inventory-tools`
 Two admin-console tools for UAT/demo environments:
 
 1. **Per-shelf inventory Excel import** — credit stock directly onto a shelf
-   from an .xlsx, without a receiving order.
-2. **Remove-all-inventory (UAT only)** — a guarded, env-flagged wipe of all
-   on-hand inventory state so a UAT database can be reset from the UI.
+   from an .xlsx, without a receiving order. Ships with the product.
+2. **Remove-all-inventory (UAT tooling)** — a guarded wipe of all on-hand
+   inventory state so a UAT database can be reset from the UI. Always
+   available to admins (no env flag) and **must be removed or re-gated
+   before a production release** — see §2 "Guard".
 
 ## 1. Per-shelf inventory Excel import
 
@@ -81,19 +83,16 @@ New stock participates in allocation at the admin's next Re-allocate
 
 ### Guard
 
-`UAT_TOOLS` env flag (default off). When `UAT_TOOLS=1`:
-- `POST /admin/uat/inventory-wipe` is registered in
-  `src/routes/admin/index.ts` (mirroring the `DEV_ROUTES` mount pattern in
-  `src/index.ts` — registration happens at module load, so the route does
-  not exist at all when the flag is off; tests toggle the env before
-  importing the app, one process per flag state).
-- `GET /config` gains `uatTools: { inventoryWipe: true }` (key omitted
-  entirely when off) so the admin console can decide to render the button.
+**No env flag.** The wipe route is registered unconditionally and the admin
+button always renders — the only gate is the `/admin/*` admin-group
+middleware plus the UI's confirm dialog, which requires typing `DELETE`
+before the POST fires. (An earlier revision of this spec gated both behind a
+`UAT_TOOLS` env flag; that was dropped — the user will remove the feature
+manually after UAT and wants no env configuration.)
 
-Rationale for an env flag instead of an admin permission: the wipe is
-irreversible and UAT-scoped; a whole-instance configuration makes it
-impossible to trigger by accident in production, where the env will not be
-set.
+⚠️ **Must be removed or re-gated before a production release.** The route
+and button are UAT tooling; nothing prevents an admin from wiping all
+on-hand inventory in any environment where this code ships.
 
 ### Effect (`src/routes/admin/uatInventoryWipe.ts`)
 
@@ -121,20 +120,17 @@ auditable. Response: `{ ok: true, deletedLots }` with the real lot count.
 
 ### Client (`apps/admin/pages/stock-search.vue`)
 
-Red danger button in `.page-head`, rendered only when `GET /config` carries
-`uatTools.inventoryWipe`. Click opens a confirm dialog that requires typing
-`DELETE` before the POST fires. After success: a success banner shows the
-deleted lot count and the summary/table reload.
+Red danger button in `.page-head`, always rendered for admins. Click opens a
+confirm dialog that requires typing `DELETE` before the POST fires. After
+success: a success banner shows the deleted lot count and the summary/table
+reload.
 
 ## Files
 
 - `apps/backend/src/routes/admin/shelfInventoryImport.ts` (new)
 - `apps/backend/src/routes/admin/uatInventoryWipe.ts` (new)
-- `apps/backend/src/routes/admin/index.ts` (mounts, conditional)
-- `apps/backend/src/routes/config.ts` (`uatTools` key)
-- `apps/backend/src/config.ts` (`uatToolsEnabled()`)
-- `apps/backend/src/routes/admin/uatInventoryTools.test.ts` (new),
-  `uatToolsOff.test.ts` (new)
+- `apps/backend/src/routes/admin/index.ts` (mounts, wipe unconditional)
+- `apps/backend/src/routes/admin/uatInventoryTools.test.ts` (new)
 - `apps/admin/components/ShelfInventoryImportDialog.vue` (new)
 - `apps/admin/pages/shelves.vue`, `apps/admin/pages/stock-search.vue`,
   `apps/admin/utils/flowApi.ts`

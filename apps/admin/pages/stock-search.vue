@@ -378,22 +378,11 @@ async function exportExcel() {
 onMounted(() => {
   loadOptions();
   loadSummary();
-  loadUatTools();
 });
 
-// UAT-only inventory wipe (spec 2026-11-13-uat-inventory-tools-design.md) —
-// the danger button only renders when the backend runs with UAT_TOOLS=1
-// (GET /config carries uatTools.inventoryWipe).
-const uatInventoryWipe = ref(false);
-async function loadUatTools() {
-  try {
-    const cfg = await flow.getConfig();
-    uatInventoryWipe.value = cfg.uatTools?.inventoryWipe === true;
-  } catch {
-    uatInventoryWipe.value = false;
-  }
-}
-
+// UAT inventory wipe (spec 2026-11-13-uat-inventory-tools-design.md) — the
+// danger button always renders for admins; the type-"DELETE" confirm dialog
+// below is the safeguard. Must be removed before a production release.
 const wipeOpen = ref(false);
 const wipeConfirmWord = ref("");
 const wipeWorking = ref(false);
@@ -435,7 +424,7 @@ const {
   <div>
     <div class="page-head">
       <h1>{{ $t("stockSearch.title") }}</h1>
-      <button v-if="uatInventoryWipe" class="btn btn-danger wipe-btn" @click="wipeOpen = true">
+      <button class="btn btn-danger wipe-btn" @click="wipeOpen = true">
         {{ $t("stockSearch.wipe") }}
       </button>
     </div>

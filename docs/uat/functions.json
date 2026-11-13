@@ -795,11 +795,11 @@
     "id": "ADM-043",
     "app": "Admin",
     "module": "Inventory",
-    "name": "UAT inventory wipe (清除全部庫存) — stock-search red danger button, UAT_TOOLS=1 backend flag; typed-word confirm; wipes lots/allocations/ledger/logs in one tx",
+    "name": "UAT inventory wipe (清除全部庫存) — stock-search red danger button, always available to admins; typed-word confirm; wipes lots/allocations/ledger/logs in one tx",
     "tester": "",
     "testDate": "",
     "result": "",
     "bugIds": "",
-    "remarks": "Spec docs/superpowers/specs/2026-11-13-uat-inventory-tools-design.md; hidden unless UAT_TOOLS=1"
+    "remarks": "Spec docs/superpowers/specs/2026-11-13-uat-inventory-tools-design.md; UAT tooling — no env flag, remove/re-gate before production release"
   }
 ]
