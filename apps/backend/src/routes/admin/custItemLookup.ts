@@ -7,7 +7,7 @@ import { lookupCustItems, type CustItemLookupLine } from "../../db/custItemLooku
 // Label CSV confirm (apps/admin/pages/custom-print-label.vue →
 // utils/customLabelCsv.ts convertToPrintData): per CSV line (單號, 物料號) the
 // chain runs picking_orders → customer_accounts → mtl_cross_references for the
-// cross_reference, plus parts for the description (src/db/custItemLookup.ts).
+// cross_reference, plus parts for description/moq (src/db/custItemLookup.ts).
 export const adminCustItemLookupRoute = new Hono();
 
 adminCustItemLookupRoute.post("/cust-item-lookup", async (c) => {
