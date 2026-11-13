@@ -201,6 +201,62 @@ test("import: org-options reflects the shelf scope", async () => {
   assert.ok(allBody.pairs.length >= 1, "unrestricted shelf offers all org pairs");
 });
 
+test("import: drawing_no splits lots — same part + date_code, different drawing_no = second lot; blank = null", async () => {
+  await insertPart("WCL-IMP-DWG", "PART-IMP-DWG");
+  const res = await req(IMPORT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      shelfCode: "A0101",
+      orgId: 2,
+      subInventoryCode: "STORE1",
+      rows: [
+        { wclItemNo: "WCL-IMP-DWG", dateCode: "2632", drawingNo: "DWG-4521-A", qty: 10 },
+        { wclItemNo: "WCL-IMP-DWG", dateCode: "2632", drawingNo: "DWG-4521-B", qty: 20 },
+        { wclItemNo: "WCL-IMP-DWG", dateCode: "2632", drawingNo: "", qty: 5 },
+      ],
+    }),
+  });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual({ ok: body.ok, inserted: body.inserted, merged: body.merged, errors: body.errors }, {
+    ok: true,
+    inserted: 3,
+    merged: 0,
+    errors: [],
+  });
+
+  const lots = await queryAll<{ drawingNo: string | null; totalQty: number }>(
+    client.db,
+    sql`SELECT drawing_no AS "drawingNo", total_qty AS "totalQty" FROM inventory_lots
+        WHERE wcl_item_no = 'WCL-IMP-DWG' ORDER BY drawing_no NULLS LAST`
+  );
+  assert.equal(lots.length, 3, "three distinct lots (two drawing numbers + one blank)");
+  assert.deepEqual(lots, [
+    { drawingNo: "DWG-4521-A", totalQty: 10 },
+    { drawingNo: "DWG-4521-B", totalQty: 20 },
+    { drawingNo: null, totalQty: 5 },
+  ]);
+
+  // The ADJUST ledger snapshot carries drawing_no in metadata (the table has
+  // no drawing_no column).
+  const txnMeta = await queryAll<{ drawingNo: string | null }>(
+    client.db,
+    sql`SELECT metadata->>'drawingNo' AS "drawingNo" FROM inventory_transactions
+        WHERE part_no = 'PART-IMP-DWG' AND txn_type = 'ADJUST' ORDER BY metadata->>'drawingNo' NULLS LAST`
+  );
+  assert.deepEqual(txnMeta, [{ drawingNo: "DWG-4521-A" }, { drawingNo: "DWG-4521-B" }, { drawingNo: null }]);
+
+  // The import log metadata lists the distinct drawing numbers touched.
+  const log = (await queryGet<{ drawingNos: string[] }>(
+    client.db,
+    sql`SELECT metadata->'drawingNos' AS "drawingNos" FROM transaction_logs
+        WHERE entity_type = 'inventory_import' AND entity_id = 'A0101'
+        ORDER BY created_date DESC LIMIT 1`
+  ))!;
+  assert.deepEqual(log.drawingNos, ["DWG-4521-A", "DWG-4521-B"]);
+});
+
 // --- inventory-wipe ---------------------------------------------------------------
 
 test("wipe: clears lots, allocations, ledger and logs in one call", async () => {

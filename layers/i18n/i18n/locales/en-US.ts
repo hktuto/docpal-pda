@@ -1500,7 +1500,7 @@ export default {
       importInventory: {
         open: "Import inventory",
         title: "Import inventory into {shelf}",
-        hint: "Excel format: wcl_item_no | date_code | qty (first row = column names). One part per row; date_code may be blank; qty must be a positive integer. The import only affects this shelf and the chosen Org / sub-inventory.",
+        hint: "Excel format: wcl_item_no | date_code | drawing_no | qty (first row = column names, matched case-insensitively). One part per row; date_code and drawing_no may be blank; qty must be a positive integer. Same part + date_code but a different drawing_no creates a separate lot. The import only affects this shelf and the chosen Org / sub-inventory.",
         orgSubInventory: "Org / sub-inventory",
         pickOrgSubInventory: "Pick Org / sub-inventory",
         file: "Excel file",

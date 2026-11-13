@@ -555,6 +555,8 @@ export interface ShelfOrgOptions {
 export interface ShelfInventoryImportRow {
   wclItemNo: string;
   dateCode?: string | null;
+  /** Optional lot identity field — blank/null; distinct drawing_no = distinct lot. */
+  drawingNo?: string | null;
   qty: number;
 }
 

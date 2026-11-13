@@ -29,7 +29,8 @@ want a spreadsheet-driven equivalent per shelf.
   restricted to the shelf's `sub_inventory_scopes` (`NULL`/empty =
   unrestricted). 404 `shelf_not_found`.
 - `POST /admin/shelves/import-inventory`
-  Body: `{ shelfCode, orgId, subInventoryCode, rows: [{ wclItemNo, dateCode, qty }] }`
+  Body: `{ shelfCode, orgId, subInventoryCode, rows: [{ wclItemNo, dateCode, drawingNo, qty }] }`
+  (`drawingNo` optional, blank → null).
   Response: `{ ok, inserted, merged, errors: [{ row, message }] }`.
 
 ### Server behaviour (`src/routes/admin/shelfInventoryImport.ts`)
@@ -48,16 +49,25 @@ One `db.transaction`, `actorId` from the JWT (`actorFrom(c)`):
    throw away the other 499.
 4. Lot upsert on the partial unique key `(part_no, date_code, coo, cow,
    shelf_code, box_id, org_id, sub_inventory_code)` with coo/cow/box_id
-   NULL: an existing lot (same part + date_code + shelf + pair, box_id IS
-   NULL) gets `total_qty += qty` (`merged++`), otherwise a new lot is
-   inserted with `allocated_qty = 0` (`inserted++`).
+   NULL, **with `drawing_no` as an additional identity field**: an existing
+   lot (same part + date_code + drawing_no + shelf + pair, box_id IS NULL)
+   gets `total_qty += qty` (`merged++`), otherwise a new lot is inserted
+   with `allocated_qty = 0` (`inserted++`). Same part + date_code but a
+   different `drawing_no` is therefore a different lot.
 5. One `inventory_transactions` row per touched lot: `txn_type 'ADJUST'`,
    `qty_type 'on_hand'`, `qty_delta = +qty`, `txn_reason 'admin import'`,
-   batch snapshot fields (part_no/date_code/shelf) filled, `actor_id` set,
+   batch snapshot fields (part_no/date_code/shelf) filled, `drawing_no` in
+   the row `metadata` (the table has no drawing_no column), `actor_id` set,
    `reference_type 'inventory_import'` / `reference_id` = shelfCode.
 6. One `transaction_logs` row for the import: `entity_type
    'inventory_import'`, `entity_id` = shelfCode, `to_state 'imported'`,
-   metadata `{ inserted, merged, orgId, subInventoryCode }`.
+   metadata `{ inserted, merged, orgId, subInventoryCode, drawingNos }`
+   (`drawingNos` = the distinct non-null drawing numbers touched).
+
+The Excel row format is `wcl_item_no | date_code | drawing_no | qty` (POST
+body rows: `{ wclItemNo, dateCode, drawingNo, qty }`). `drawing_no` is
+optional — blank → NULL — and the column may be omitted from the sheet
+entirely (older 3-column files keep working).
 
 New stock participates in allocation at the admin's next Re-allocate
 (manual-only allocation — no automatic recompute).
@@ -71,11 +81,14 @@ New stock participates in allocation at the admin's next Re-allocate
   input + button (mirrors `receiving-cn/new.vue`). Read with dynamic
   `await import("xlsx")`, first sheet, `sheet_to_json(ws, { header: 1,
   defval: "" })`.
-- Format: exactly `wcl_item_no | date_code | qty`, first row header. Column
-  indices come from the header row (case-insensitive); extra columns are
-  ignored; a missing/renamed required column aborts with a client-side error.
+- Format: `wcl_item_no | date_code | drawing_no | qty`, first row header.
+  Column indices come from the header row (case-insensitive); `drawing_no`
+  is optional (blank → null; the column may be omitted entirely); extra
+  columns are ignored; a missing/renamed required column aborts with a
+  client-side error.
 - Client validation: qty positive integer, wcl_item_no non-empty,
-  date_code blank → null. Per-row problems are listed and abort the import.
+  date_code/drawing_no blank → null. Per-row problems are listed and abort
+  the import.
 - On success: `{inserted}/{merged}` banner + table reload. Per-row server
   errors render in the dialog.
 

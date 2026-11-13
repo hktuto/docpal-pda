@@ -19,7 +19,8 @@ import { actorFrom } from "../../auth/middleware.js";
  * (spec 2026-11-13-uat-inventory-tools-design.md). The admin console decodes
  * the .xlsx client-side and posts JSON rows; each row credits a lot on the
  * partial unique key (part_no, date_code, coo, cow, shelf_code, box_id,
- * org_id, sub_inventory_code) with coo/cow/box_id NULL — an existing lot
+ * org_id, sub_inventory_code) with coo/cow/box_id NULL — drawing_no (optional,
+ * blank → NULL) joins the match as another identity field. An existing lot
  * merges (total_qty += qty), otherwise a new lot is inserted. Every touched
  * lot gets an ADJUST/on_hand ledger row; the whole import writes one
  * transaction_logs row. Rows with an unknown wcl_item_no are reported and
@@ -35,6 +36,7 @@ export const shelfInventoryImportRoute = new Hono();
 interface ImportRow {
   wclItemNo: string;
   dateCode: string | null;
+  drawingNo: string | null;
   qty: number;
 }
 
@@ -90,12 +92,17 @@ shelfInventoryImportRoute.post("/", async (c) => {
       dateCodeRaw === null || dateCodeRaw === undefined || String(dateCodeRaw).trim() === ""
         ? null
         : String(dateCodeRaw).trim();
+    const drawingNoRaw = raw.drawingNo;
+    const drawingNo =
+      drawingNoRaw === null || drawingNoRaw === undefined || String(drawingNoRaw).trim() === ""
+        ? null
+        : String(drawingNoRaw).trim();
     const qty = raw.qty;
     if (!wclItemNo) throw new HTTPException(400, { message: `rows[${i}].wclItemNo is required` });
     if (!Number.isInteger(qty) || (qty as number) <= 0) {
       throw new HTTPException(400, { message: `rows[${i}].qty must be a positive integer` });
     }
-    rows.push({ wclItemNo, dateCode, qty: qty as number });
+    rows.push({ wclItemNo, dateCode, drawingNo, qty: qty as number });
   }
 
   const actorId = actorFrom(c).id;
@@ -135,8 +142,10 @@ shelfInventoryImportRoute.post("/", async (c) => {
       }
       const { partNo, wclItemNo } = part[0];
 
-      // Lot upsert on the partial unique key with coo/cow/box_id NULL.
-      const cacheKey = `${partNo}|${row.dateCode ?? ""}`;
+      // Lot upsert on the partial unique key with coo/cow/box_id NULL;
+      // drawing_no is part of the lot identity (same part + date code but a
+      // different drawing_no is a different lot).
+      const cacheKey = `${partNo}|${row.dateCode ?? ""}|${row.drawingNo ?? ""}`;
       let lotId = lotCache.get(cacheKey);
       let isNew = false;
       if (!lotId) {
@@ -147,6 +156,7 @@ shelfInventoryImportRoute.post("/", async (c) => {
             and(
               eq(inventoryLots.partNo, partNo),
               row.dateCode === null ? isNull(inventoryLots.dateCode) : eq(inventoryLots.dateCode, row.dateCode),
+              row.drawingNo === null ? isNull(inventoryLots.drawingNo) : eq(inventoryLots.drawingNo, row.drawingNo),
               eq(inventoryLots.shelfCode, shelfCode),
               isNull(inventoryLots.boxId),
               eq(inventoryLots.orgId, orgId as number),
@@ -163,6 +173,7 @@ shelfInventoryImportRoute.post("/", async (c) => {
             partNo,
             wclItemNo,
             dateCode: row.dateCode,
+            drawingNo: row.drawingNo,
             shelfCode,
             orgId: orgId as number,
             subInventoryCode,
@@ -190,6 +201,9 @@ shelfInventoryImportRoute.post("/", async (c) => {
         qtyType: "on_hand",
         qtyDelta: row.qty,
         dateCode: row.dateCode,
+        // inventory_transactions has no drawing_no column — the batch
+        // snapshot carries it in metadata instead.
+        metadata: { drawingNo: row.drawingNo },
         referenceType: "inventory_import",
         referenceId: shelfCode,
         actorId,
@@ -205,7 +219,14 @@ shelfInventoryImportRoute.post("/", async (c) => {
       fromState: null,
       toState: "imported",
       actorId,
-      metadata: { inserted, merged, orgId, subInventoryCode },
+      metadata: {
+        inserted,
+        merged,
+        orgId,
+        subInventoryCode,
+        // Distinct drawing numbers touched (identity field, may be all-null).
+        drawingNos: [...new Set(rows.map((r) => r.drawingNo).filter((d): d is string => d !== null))],
+      },
     });
 
     return { inserted, merged, errors };

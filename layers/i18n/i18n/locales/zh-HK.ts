@@ -1499,7 +1499,7 @@ export default {
       importInventory: {
         open: "匯入庫存",
         title: "匯入庫存到 {shelf}",
-        hint: "Excel 格式：wcl_item_no | date_code | qty（第一列為欄位名稱）。每行一個料號；date_code 可留空；qty 必須為正整數。匯入只影響此貨架及所選 Org / 子庫。",
+        hint: "Excel 格式：wcl_item_no | date_code | drawing_no | qty（第一列為欄位名稱，欄位名不分大小寫）。每行一個料號；date_code 及 drawing_no 可留空；qty 必須為正整數。相同料號 + date_code 但不同 drawing_no 會建立不同批次。匯入只影響此貨架及所選 Org / 子庫。",
         orgSubInventory: "Org / 子庫",
         pickOrgSubInventory: "選擇 Org / 子庫",
         file: "Excel 檔案",

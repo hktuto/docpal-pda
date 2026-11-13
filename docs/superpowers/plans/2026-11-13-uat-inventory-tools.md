@@ -16,9 +16,10 @@ Branch: `feat/uat-inventory-tools`.
    `{ ok, deletedLots }`).
 2. `src/routes/admin/shelfInventoryImport.ts` (new) —
    `GET /org-options?shelfCode=` (scope-filtered org_info pairs) and
-   `POST /` (scope validation → per-row part lookup → lot upsert/merge →
-   ADJUST ledger rows → import transaction_logs row; per-row errors, good
-   rows commit).
+   `POST /` (scope validation → per-row part lookup → lot upsert/merge with
+   drawing_no as a lot-identity field → ADJUST ledger rows (drawing_no in
+   txn metadata) → import transaction_logs row (metadata `drawingNos`);
+   per-row errors, good rows commit).
 3. `src/routes/admin/index.ts` — mount `/shelves/import-inventory` and
    `/uat/inventory-wipe` unconditionally (wipe is admin-gated by the
    existing middleware; no env flag).

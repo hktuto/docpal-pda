@@ -784,7 +784,7 @@
     "id": "ADM-042",
     "app": "Admin",
     "module": "Inventory",
-    "name": "Per-shelf inventory Excel import (匯入庫存) — shelves page row action; modal picks Org / sub-inventory (shelf-scope-restricted) + .xlsx (wcl_item_no | date_code | qty); lot upsert merge with ADJUST ledger + import audit log",
+    "name": "Per-shelf inventory Excel import (匯入庫存) — shelves page row action; modal picks Org / sub-inventory (shelf-scope-restricted) + .xlsx (wcl_item_no | date_code | drawing_no | qty; drawing_no optional, distinct drawing_no = separate lot); lot upsert merge with ADJUST ledger + import audit log",
     "tester": "",
     "testDate": "",
     "result": "",

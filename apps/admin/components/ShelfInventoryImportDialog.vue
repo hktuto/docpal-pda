@@ -29,6 +29,9 @@ const { t } = useI18n();
 const { onMousedown, onClick } = useOverlayDismiss(() => emit("close"));
 
 const REQUIRED_HEADERS = ["wcl_item_no", "date_code", "qty"];
+// drawing_no is OPTIONAL — recognized when present (case-insensitive header
+// match, like the required columns); files without the column still import.
+const OPTIONAL_HEADERS = ["drawing_no"];
 
 const loading = ref(false);
 const submitting = ref(false);
@@ -92,13 +95,19 @@ async function onFile(e: Event) {
       if (i < 0) throw new Error(t("admin.shelves.importInventory.missingColumn", { column: col }));
       idx[col] = i;
     }
+    for (const col of OPTIONAL_HEADERS) {
+      const i = headers.indexOf(col);
+      if (i >= 0) idx[col] = i;
+    }
 
-    const parsed: { wclItemNo: string; dateCode: string | null; qty: number }[] = [];
+    const parsed: { wclItemNo: string; dateCode: string | null; drawingNo: string | null; qty: number }[] = [];
     const problems: string[] = [];
     for (let i = 1; i < aoa.length; i++) {
       const row = aoa[i];
       const wclItemNo = String(row[idx.wcl_item_no] ?? "").trim();
       const dateCode = String(row[idx.date_code] ?? "").trim() || null;
+      const drawingNo =
+        idx.drawing_no !== undefined ? String(row[idx.drawing_no] ?? "").trim() || null : null;
       const qtyRaw = row[idx.qty];
       const qty = typeof qtyRaw === "number" ? qtyRaw : Number(String(qtyRaw).trim());
       if (!wclItemNo) {
@@ -109,7 +118,7 @@ async function onFile(e: Event) {
         problems.push(t("admin.shelves.importInventory.badQty", { row: i + 1 }));
         continue;
       }
-      parsed.push({ wclItemNo, dateCode, qty });
+      parsed.push({ wclItemNo, dateCode, drawingNo, qty });
     }
     if (problems.length) throw new Error(problems.join("; "));
     if (!parsed.length) throw new Error(t("admin.shelves.importInventory.noRows"));
