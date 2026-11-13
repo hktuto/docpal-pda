@@ -27,16 +27,17 @@ export interface CustItemLookupResult extends CustItemLookupLine {
   partNo: string | null;
   /** parts.description for wcl_item_no = 物料號; null when no part row. */
   itemDescription: string | null;
-  /** MOQ number parsed from the description's `MOQ=xxx` text; null when absent. */
-  moq: number | null;
+  /** parts.moq for wcl_item_no = 物料號; 0 when the column/row is null or missing. */
+  moq: number;
   /** picking_orders.delivery_date as YYYY-MM-DD; null when the order row misses. */
   deliveryDate: string | null;
 }
 
-/** Descriptions usually carry the minimum order quantity as `MOQ=xxx`. */
-export function extractMoq(description: string | null): number | null {
-  const m = description?.match(/MOQ\s*=\s*(\d+)/i);
-  return m ? Number(m[1]) : null;
+/** Coerce a nullable parts.moq (string | number) to a finite number; else 0. */
+export function extractMoq(value: string | number | null | undefined): number {
+  if (value == null || value === "") return 0;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
 interface CrossRefRow {
@@ -135,18 +136,28 @@ export async function lookupCustItems(db: DbOrTx, rawLines: CustItemLookupLine[]
     }
   }
 
-  // 4. 物料號 = parts.wcl_item_no → part_no + description (wcl_item_no is the
-  //    unique business key, so no grouping needed).
-  const partByWcl = new Map<string, { partNo: string; itemDescription: string | null }>();
+  // 4. 物料號 = parts.wcl_item_no → part_no + description + moq. wcl_item_no is
+  //    NOT unique in production — DISTINCT ON + id keeps one stable row.
+  const partByWcl = new Map<string, { partNo: string; itemDescription: string | null; moq: string | number | null }>();
   const wclItemNos = [...new Set(lines.map((l) => l.wclItemNo).filter(Boolean))];
   if (wclItemNos.length > 0) {
-    const rows = await queryAll<{ wclItemNo: string; partNo: string; itemDescription: string | null }>(
+    const rows = await queryAll<{
+      wclItemNo: string;
+      partNo: string;
+      itemDescription: string | null;
+      moq: string | number | null;
+    }>(
       db,
-      sql`SELECT wcl_item_no AS "wclItemNo", part_no AS "partNo", description AS "itemDescription"
+      sql`SELECT DISTINCT ON (wcl_item_no)
+                 wcl_item_no AS "wclItemNo", part_no AS "partNo",
+                 description AS "itemDescription", moq AS "moq"
           FROM parts
-          WHERE wcl_item_no IN (${sql.join(wclItemNos.map((v) => sql`${v}`), sql`, `)})`
+          WHERE wcl_item_no IN (${sql.join(wclItemNos.map((v) => sql`${v}`), sql`, `)})
+          ORDER BY wcl_item_no, id`
     );
-    for (const r of rows) partByWcl.set(r.wclItemNo, r);
+    for (const r of rows) {
+      if (!partByWcl.has(r.wclItemNo)) partByWcl.set(r.wclItemNo, r);
+    }
   }
 
   return lines.map((l) => {
@@ -159,7 +170,7 @@ export async function lookupCustItems(db: DbOrTx, rawLines: CustItemLookupLine[]
         accountNumber && l.wclItemNo ? custItemByPair.get(`${accountNumber}${PAIR_SEP}${l.wclItemNo}`) ?? null : null,
       partNo: part?.partNo ?? null,
       itemDescription: part?.itemDescription ?? null,
-      moq: extractMoq(part?.itemDescription ?? null),
+      moq: extractMoq(part?.moq),
       deliveryDate: deliveryByOrder.get(l.orderNo) ?? null,
     };
   });

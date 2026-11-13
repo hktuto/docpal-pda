@@ -1,4 +1,4 @@
-import { pgTable, foreignKey, index, unique, uniqueIndex, text, varchar, bigint, integer, real, timestamp, date, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, foreignKey, index, unique, uniqueIndex, text, varchar, bigint, integer, numeric, real, timestamp, date, jsonb } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { now } from "../now.js";
 
@@ -112,6 +112,8 @@ export const parts = pgTable("parts", {
   partNo: text("part_no").notNull(), // 供应商 part number — 不唯一
   wclItemNo: text("wcl_item_no").notNull().unique(), // WCL Part No（唯一业务 key — ingest/sync dedup key；同 receiving_invoice_items.wcl_item_no）
   description: text("description"),
+  // Minimum order qty from upstream (nullable). Custom-label lookup returns 0 when null.
+  moq: numeric("moq"),
   creationDate: timestamp("creation_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 },

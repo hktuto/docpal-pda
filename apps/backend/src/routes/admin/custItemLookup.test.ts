@@ -54,8 +54,8 @@ async function seedChain() {
     VALUES ('test-cl-1', 'HK2610-0450', 'LWXY Customer', '2026-10-30')
   `);
   await client.db.execute(sql`
-    INSERT INTO parts (id, brand, part_no, wcl_item_no, description)
-    VALUES ('test-cl-p1', 'KOA', 'SG73P2ATTD4701F', 'KOA+SG73P2ATTD 4701F', 'CHIP.RES 0402 100K OHM 1% MOQ=10000')
+    INSERT INTO parts (id, brand, part_no, wcl_item_no, description, moq)
+    VALUES ('test-cl-p1', 'KOA', 'SG73P2ATTD4701F', 'KOA+SG73P2ATTD 4701F', 'CHIP.RES 0402 100K OHM 1%', 10000)
   `);
   await client.db.execute(sql`
     INSERT INTO mtl_cross_references (description, inv_item_concat_segs, cross_reference)
@@ -75,7 +75,7 @@ test("cust-item-lookup: full chain resolves custItemNumber + description", async
       wclItemNo: "KOA+SG73P2ATTD 4701F",
       custItemNumber: "28895",
       partNo: "SG73P2ATTD4701F",
-      itemDescription: "CHIP.RES 0402 100K OHM 1% MOQ=10000",
+      itemDescription: "CHIP.RES 0402 100K OHM 1%",
       moq: 10000,
       deliveryDate: "2026-10-30",
     },
@@ -88,7 +88,7 @@ test("cust-item-lookup: chain misses resolve to null; description is independent
   const res = await post({
     lines: [
       { orderNo: "NO-SUCH-ORDER", wclItemNo: "KOA+SG73P2ATTD 4701F" }, // order miss → null cust item, part fields still found
-      { orderNo: "HK2610-0450", wclItemNo: "NO-SUCH-PART" }, // cross-ref + part miss → all null
+      { orderNo: "HK2610-0450", wclItemNo: "NO-SUCH-PART" }, // cross-ref + part miss → nulls; moq → 0
     ],
   });
   assert.equal(res.status, 200);
@@ -99,7 +99,7 @@ test("cust-item-lookup: chain misses resolve to null; description is independent
       wclItemNo: "KOA+SG73P2ATTD 4701F",
       custItemNumber: null,
       partNo: "SG73P2ATTD4701F",
-      itemDescription: "CHIP.RES 0402 100K OHM 1% MOQ=10000",
+      itemDescription: "CHIP.RES 0402 100K OHM 1%",
       moq: 10000,
       deliveryDate: null,
     },
@@ -109,10 +109,20 @@ test("cust-item-lookup: chain misses resolve to null; description is independent
       custItemNumber: null,
       partNo: null,
       itemDescription: null,
-      moq: null,
+      moq: 0,
       deliveryDate: "2026-10-30",
     },
   ]);
+});
+
+test("cust-item-lookup: null parts.moq returns 0", async () => {
+  await reseed(client);
+  await seedChain();
+  await client.db.execute(sql`UPDATE parts SET moq = NULL WHERE id = 'test-cl-p1'`);
+  const res = await post({ lines: [{ orderNo: "HK2610-0450", wclItemNo: "KOA+SG73P2ATTD 4701F" }] });
+  assert.equal(res.status, 200);
+  const { results } = await res.json();
+  assert.equal(results[0].moq, 0);
 });
 
 test("cust-item-lookup: rejects invalid payloads", async () => {
