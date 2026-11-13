@@ -360,7 +360,7 @@ export async function scanReceivingOrder(
                  rii.coo, rii.cow
           FROM receiving_invoice_items rii
           JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-          JOIN parts p ON p.wcl_item_no = rii.wcl_item_no
+          LEFT JOIN parts p ON p.wcl_item_no = rii.wcl_item_no
           WHERE ri.receiving_order_id = ${orderId}
           ORDER BY rii.po_no, rii.po_line, rii.id`
     );

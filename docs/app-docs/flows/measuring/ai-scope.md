@@ -73,7 +73,8 @@
 ## Key files
 
 - `pages/measuring/index.vue` — box list (open boxes of picking-completed
-  orders, grouped by picking order; `MeasuringOrderGroup[]`).
+  orders, grouped by picking order; `MeasuringOrderGroup[]`), with an
+  invoice-no search box filtering the groups client-side.
 - `pages/measuring/[boxId].vue` — the single box page, a thin wrapper over
   `components/MeasureBox.vue` (package verify by scan, measurements, close;
   box title/status/actions live in the app header via

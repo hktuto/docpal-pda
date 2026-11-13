@@ -11,6 +11,13 @@
     :reload="load"
   >
     <template #header>
+      <input
+        v-model="search"
+        type="search"
+        class="search-input"
+        :placeholder="$t('measuring.searchPlaceholder')"
+        @click.stop
+      />
       <p class="page-hint">{{ $t('measuring.hint') }}</p>
     </template>
 
@@ -86,7 +93,19 @@ async function load() {
   }
 }
 
-const groups = computed(() => rawGroups.value);
+const search = ref("");
+const groups = computed(() => {
+  const q = search.value.trim().toLowerCase();
+  if (!q) return rawGroups.value;
+  return rawGroups.value
+    .map((g) => ({
+      ...g,
+      boxes: g.orderNo.toLowerCase().includes(q)
+        ? g.boxes
+        : g.boxes.filter((b) => b.orderNos.some((o) => o.toLowerCase().includes(q))),
+    }))
+    .filter((g) => g.boxes.length > 0);
+});
 const allBoxes = computed(() => groups.value.flatMap((g) => g.boxes));
 
 // Scanning a box QR (or typing its id on the wedge) opens that box directly.
@@ -110,6 +129,16 @@ useHardwareScanner({
 </script>
 
 <style scoped>
+.search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+}
+
 .page-hint {
   margin: -0.25rem 0 1rem;
   color: var(--muted);

@@ -2,7 +2,7 @@
   <AppListPage
     :loading="loading"
     :error="loadError"
-    :empty="rows.length === 0"
+    :empty="groups.length === 0"
     empty-text="common.noPendingVerifyTasks"
     :shown="rows.length"
     :total="rows.length"
@@ -11,19 +11,29 @@
     :reload="load"
   >
     <template #header>
+      <input
+        v-model="search"
+        type="search"
+        class="search-input"
+        :placeholder="$t('verify.searchPlaceholder')"
+        @click.stop
+      />
       <p class="page-hint">{{ $t('verify.hint') }}</p>
     </template>
 
-    <AppListRow
-      v-for="task in rows"
-      :key="task.taskId"
-      :to="`/verify/${task.shippingBoxId}`"
-      :title="rowView(task).title"
-      :meta="rowMeta(task)"
-      :chip-text="rowChip(task)?.text"
-      :chip-class="rowChip(task)?.cls"
-      :mine-text="mineText(task)"
-    />
+    <template v-for="group in groups" :key="group.orderNos">
+      <h2 class="order-group__heading">{{ $t('verify.orderGroup', { orderNo: group.orderNos }) }}</h2>
+      <AppListRow
+        v-for="task in group.tasks"
+        :key="task.taskId"
+        :to="`/verify/${task.shippingBoxId}`"
+        :title="rowView(task).title"
+        :meta="rowMeta(task)"
+        :chip-text="rowChip(task)?.text"
+        :chip-class="rowChip(task)?.cls"
+        :mine-text="mineText(task)"
+      />
+    </template>
   </AppListPage>
 </template>
 
@@ -81,7 +91,25 @@ async function load() {
   }
 }
 
-const rows = computed(() => rawRows.value);
+const search = ref("");
+const rows = computed(() => {
+  const q = search.value.trim().toLowerCase();
+  if (!q) return rawRows.value;
+  return rawRows.value.filter((t) => t.orderNos.some((o) => o.toLowerCase().includes(q)));
+});
+
+// Group the (filtered) tasks by their picking order numbers — the same
+// grouping the measuring list uses, derived client-side here.
+const groups = computed(() => {
+  const byOrders = new Map<string, VerifyTaskListRow[]>();
+  for (const task of rows.value) {
+    const key = task.orderNos.join(", ");
+    const list = byOrders.get(key);
+    if (list) list.push(task);
+    else byOrders.set(key, [task]);
+  }
+  return [...byOrders].map(([orderNos, tasks]) => ({ orderNos, tasks }));
+});
 
 // Scanning a printed carton label opens its box (and stamps the box's
 // carton_label_verified — spec 2026-10-30); otherwise a box QR (or its id
@@ -113,9 +141,31 @@ useHardwareScanner({
 </script>
 
 <style scoped>
+.search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+}
+
 .page-hint {
   margin: -0.25rem 0 1rem;
   color: var(--muted);
   font-size: 0.875rem;
+}
+
+.order-group__heading {
+  margin: 0 0 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}
+
+.order-group__heading:not(:first-child) {
+  margin-top: 1rem;
 }
 </style>

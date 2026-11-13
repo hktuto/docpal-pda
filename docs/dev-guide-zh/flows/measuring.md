@@ -27,7 +27,7 @@ flowchart TD
 
 | 步骤 | 前端入口 | API | 关键表/模块 |
 |------|----------|-----|-------------|
-| 列表 | `pages/measuring/index.vue` | `GET /measuring-boxes` | `db/measuring.ts` `listMeasuringBoxes`(无 SSE,mount+visibility 重载) |
+| 列表 | `pages/measuring/index.vue`(发票号搜索框,客户端过滤) | `GET /measuring-boxes` | `db/measuring.ts` `listMeasuringBoxes`(无 SSE,mount+visibility 重载) |
 | 箱子详情 | `pages/measuring/[boxId].vue` → `MeasureBox.vue` | `GET /measuring-boxes/:id` | `getMeasuringBoxDetail`(一次读全,料号身份内嵌) |
 | 重扫 | `useScanMatchers.ts` + `utils/measuringAggregateMatch.ts`;相机走 `useLabelScanReview` + `LabelScanReviewModal` | `POST /packages/:id/verify` | `verifyPackage` in `db/picking.ts`(open 箱=衡量支,`verified=true`) |
 | 封箱 | `BoxMeasurementsModal.vue` | `PATCH /shipping-boxes/:id` + `POST /shipping-boxes/:id/close` | `closeShippingBox`、`verify_tasks` 派生 |

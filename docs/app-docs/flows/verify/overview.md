@@ -8,7 +8,7 @@ Use the Verify flow when a verify task was created for a box (one task per box �
 
 ## Concept
 
-1. The operator opens the Verify list — boxes with a pending verify task. A box may contain packages from several picking orders (cross-order packing).
+1. The operator opens the Verify list — boxes with a pending verify task, grouped by picking order (invoice no.), with a search box to filter by invoice no. A box may contain packages from several picking orders (cross-order packing; such a box heads its own combined-order group).
 
    ![Verify list](./assets/verify-list.png)
 2. The operator selects a box — the page shows the box's packages with their re-scan progress and recorded measurements.

@@ -826,6 +826,7 @@ export default {
     title: "测量",
     hint: "按拣货单分组的待测量箱子（拣货已完成）。",
     orderGroup: "拣货单 {orderNo}",
+    searchPlaceholder: "搜索发票号码",
     boxNotFound: "列表中没有匹配“{id}”的箱子。",
     measureBox: {
       title: "测量箱子",
@@ -852,6 +853,8 @@ export default {
   verify: {
     title: "复核",
     hint: "待复核的已关闭箱子。",
+    orderGroup: "拣货单 {orderNo}",
+    searchPlaceholder: "搜索发票号码",
     boxNotFound: "列表中没有匹配“{id}”的箱子。",
     cartonLabelVerified: "箱标签已核验",
     labelScanned: "标签已核验：{part}",
@@ -1279,6 +1282,12 @@ export default {
     noResults: "未找到结果。",
     onHand: "现货：{qty}",
     lotQty: "可用 {available} / 共 {total}",
+    wipe: "清除全部库存（UAT）",
+    wipeConfirmTitle: "清除全部库存？",
+    wipeConfirmMessage: "此操作会删除所有库存批次、分配、出入流水及日志，且无法复原。只可用于 UAT 环境。",
+    wipeConfirmPrompt: "请输入「{word}」以确认。",
+    wipeConfirmButton: "永久删除",
+    wipeDone: "已删除 {count} 个库存批次。"
   },
   lotHistory: {
     title: "批次历史",
@@ -1486,7 +1495,24 @@ export default {
       bulkEditWarningHint: "凡分配指向此货架，即显示 ⚠ 图标。留空代表清除全部 {count} 个已选货架的警告。",
       bulkEditZoneToggle: "同时更新区域",
       bulkEditZoneMixed: "当前设置不一 — 输入以取代全部",
-      bulkEditZoneHint: "留空代表清除全部 {count} 个已选货架的区域。"
+      bulkEditZoneHint: "留空代表清除全部 {count} 个已选货架的区域。",
+      importInventory: {
+        open: "导入库存",
+        title: "导入库存到 {shelf}",
+        hint: "Excel 格式：wcl_item_no | date_code | drawing_no | qty（第一行为字段名称，字段名不分大小写）。每行一个料号；date_code 及 drawing_no 可留空；qty 必须为正整数。相同料号 + date_code 但不同 drawing_no 会建立不同批次。导入只影响此货架及所选 Org / 子库。",
+        orgSubInventory: "Org / 子库",
+        pickOrgSubInventory: "选择 Org / 子库",
+        file: "Excel 文件",
+        pickFile: "选择文件",
+        rowsReady: "已读取 {count} 行，准备导入。",
+        submit: "导入",
+        result: "导入完成：新增 {inserted}，合并 {merged}。",
+        rowError: "第 {row} 行：{message}",
+        noRows: "文件没有数据行。",
+        missingColumn: "找不到字段「{column}」。",
+        emptyWclItemNo: "第 {row} 行的 wcl_item_no 为空。",
+        badQty: "第 {row} 行的 qty 必须为正整数。"
+      }
     },
     print: {
       title: "打印标签（{count}）",

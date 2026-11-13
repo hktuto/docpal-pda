@@ -827,6 +827,7 @@ export default {
     title: "Measuring",
     hint: "Boxes of picking-completed orders, grouped by picking order.",
     orderGroup: "Picking order {orderNo}",
+    searchPlaceholder: "Search invoice no.",
     boxNotFound: "No box in the list matches \"{id}\".",
     measureBox: {
       title: "Measure Box",
@@ -853,6 +854,8 @@ export default {
   verify: {
     title: "Verify",
     hint: "Closed boxes ready for the verify pass.",
+    orderGroup: "Picking order {orderNo}",
+    searchPlaceholder: "Search invoice no.",
     boxNotFound: "No box in the list matches \"{id}\".",
     cartonLabelVerified: "Carton label verified",
     labelScanned: "Label verified: {part}",
@@ -1280,6 +1283,12 @@ export default {
     noResults: "No results found.",
     onHand: "On hand: {qty}",
     lotQty: "{available} / {total}",
+    wipe: "Remove all inventory (UAT)",
+    wipeConfirmTitle: "Remove all inventory?",
+    wipeConfirmMessage: "This deletes every inventory lot, allocation, ledger row and log. It cannot be undone. UAT environments only.",
+    wipeConfirmPrompt: "Type \"{word}\" to confirm.",
+    wipeConfirmButton: "Delete permanently",
+    wipeDone: "Deleted {count} inventory lots."
   },
   lotHistory: {
     title: "Lot History",
@@ -1487,7 +1496,24 @@ export default {
       bulkEditWarningHint: "Shown as a ⚠ icon wherever an allocation points at the shelf. Leave empty to clear the warning on all {count} selected shelves.",
       bulkEditZoneToggle: "Also update the zone",
       bulkEditZoneMixed: "Mixed values — enter to replace on all",
-      bulkEditZoneHint: "Leave empty to clear the zone on all {count} selected shelves."
+      bulkEditZoneHint: "Leave empty to clear the zone on all {count} selected shelves.",
+      importInventory: {
+        open: "Import inventory",
+        title: "Import inventory into {shelf}",
+        hint: "Excel format: wcl_item_no | date_code | drawing_no | qty (first row = column names, matched case-insensitively). One part per row; date_code and drawing_no may be blank; qty must be a positive integer. Same part + date_code but a different drawing_no creates a separate lot. The import only affects this shelf and the chosen Org / sub-inventory.",
+        orgSubInventory: "Org / sub-inventory",
+        pickOrgSubInventory: "Pick Org / sub-inventory",
+        file: "Excel file",
+        pickFile: "Choose file",
+        rowsReady: "{count} rows read, ready to import.",
+        submit: "Import",
+        result: "Import complete: {inserted} inserted, {merged} merged.",
+        rowError: "Row {row}: {message}",
+        noRows: "The file contains no data rows.",
+        missingColumn: 'Could not find the "{column}" column.',
+        emptyWclItemNo: "Row {row}: wcl_item_no is empty.",
+        badQty: "Row {row}: qty must be a positive integer."
+      }
     },
     print: {
       title: "Print labels ({count})",
