@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { inArray, sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
+import { partsMasterByWcl } from "./partsMaster.js";
 import { transactionLogs, inventoryTransactions } from "./schema/index.js";
 import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
@@ -1254,12 +1255,18 @@ export async function getPickingOrderDetail(
     db,
     sql`
       SELECT
-        pi.id, pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo", p.brand,
+        pi.id, pi.part_no AS "partNo", COALESCE(p.wcl_item_no, pi.part_no) AS "wclItemNo", p.brand,
         pi.qty, pi.picked_qty AS "pickedQty", pi.allocated_qty AS "allocatedQty",
         pi.line_id AS "lineId", pi.line_number AS "lineNumber",
         pi.shipment_number AS "shipmentNumber", pi.status
       FROM picking_items pi
-      JOIN parts p ON p.wcl_item_no = pi.part_no
+      -- Upstream-synced DBs may carry duplicate parts rows per wcl_item_no
+      -- (the unique constraint is not enforced everywhere — observed on the
+      -- UAT remote): a plain JOIN fans every item out once per duplicate. The
+      -- derived table collapses to one row per wcl_item_no; LEFT so a part
+      -- missing from parts is still listed (part_no is the fallback key).
+      LEFT JOIN (SELECT wcl_item_no, MIN(brand) AS brand FROM parts GROUP BY wcl_item_no) p
+        ON p.wcl_item_no = pi.part_no
       WHERE pi.picking_order_id = ${orderId}
       ORDER BY pi.part_no ASC, pi.created_date, pi.id
     `
@@ -2385,7 +2392,9 @@ export async function verifyPackage(
                  COALESCE(pp.scanned_date_code, pp.date_code) AS "dateCode"
           FROM picking_packages pp
           JOIN picking_items pi ON pi.id = pp.picking_item_id
-          JOIN parts p ON p.wcl_item_no = pi.part_no
+          -- parts wcl_item_no is no longer unique on upstream-synced DBs:
+          -- join the deduped master (partsMaster.ts).
+          JOIN ${partsMasterByWcl} p ON p.wcl_item_no = pi.part_no
           WHERE pp.id = ${input.packageId}`
     );
     if (!pkg) throw new HTTPException(404, { message: "package_not_found" });

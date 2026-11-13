@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
+import { partsMasterByWcl } from "./partsMaster.js";
 import { transactionLogs } from "./schema/index.js";
 import { isStepEnabled } from "../config.js";
 import { now } from "./now.js";
@@ -211,7 +212,9 @@ export async function getVerifyTaskDetail(db: AppDb, taskId: string, username?: 
         nwf.weight AS "formulaWeight", nwf.qty AS "formulaQty"
       FROM picking_packages pp
       JOIN picking_items pi ON pi.id = pp.picking_item_id
-      JOIN parts p ON p.wcl_item_no = pi.part_no
+      -- parts wcl_item_no is no longer unique on upstream-synced DBs: join
+      -- the deduped master (partsMaster.ts) to avoid fan-out per package.
+      JOIN ${partsMasterByWcl} p ON p.wcl_item_no = pi.part_no
       LEFT JOIN net_weight_formula nwf ON nwf.part_no = pi.part_no
       WHERE pp.shipping_box_id = ${task.shippingBoxId}
       ORDER BY pp.created_date, pp.id
@@ -390,7 +393,7 @@ export async function scanVerifyTaskLabel(
                  COALESCE(pp.scanned_date_code, pp.date_code) AS "dateCode"
           FROM picking_packages pp
           JOIN picking_items pi ON pi.id = pp.picking_item_id
-          JOIN parts p ON p.wcl_item_no = pi.part_no
+          JOIN ${partsMasterByWcl} p ON p.wcl_item_no = pi.part_no
           WHERE pp.id = ${itemHit.packageId}`
     ))!;
     return { kind: "item", packageId: itemHit.packageId, expectations: pkg };

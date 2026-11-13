@@ -2,6 +2,7 @@ import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet } from "./query.js";
+import { partsMasterByWcl } from "./partsMaster.js";
 import { cartonPrintExists, labeledOrderIds } from "./verify.js";
 import { assigneeFilter } from "./user-scope.js";
 
@@ -181,7 +182,9 @@ export async function getMeasuringBoxDetail(db: AppDb, boxId: string, username?:
         nwf.weight AS "formulaWeight", nwf.qty AS "formulaQty"
       FROM picking_packages pp
       JOIN picking_items pi ON pi.id = pp.picking_item_id
-      JOIN parts p ON p.wcl_item_no = pi.part_no
+      -- parts wcl_item_no is no longer unique on upstream-synced DBs: join
+      -- the deduped master (partsMaster.ts) to avoid fan-out per package.
+      JOIN ${partsMasterByWcl} p ON p.wcl_item_no = pi.part_no
       LEFT JOIN net_weight_formula nwf ON nwf.part_no = pi.part_no
       WHERE pp.shipping_box_id = ${boxId}
       ORDER BY pp.created_date, pp.id

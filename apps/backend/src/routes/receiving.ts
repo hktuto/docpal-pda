@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import { inArray, sql } from "drizzle-orm";
 import { db } from "../db.js";
 import { queryAll, queryGet } from "../db/query.js";
+import { partsMasterByWcl } from "../db/partsMaster.js";
 import {
   cancelReceivingItemMismatch,
   confirmReceivingArrival,
@@ -333,7 +334,9 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
         p.description AS "partDescription"
       FROM receiving_invoice_items rii
       JOIN receiving_invoices inv ON inv.id = rii.receiving_invoice_id
-      LEFT JOIN parts p ON p.wcl_item_no = rii.wcl_item_no
+      -- parts wcl_item_no is no longer unique on upstream-synced DBs: join
+      -- the deduped master (partsMaster.ts) to avoid fan-out per item.
+      LEFT JOIN ${partsMasterByWcl} p ON p.wcl_item_no = rii.wcl_item_no
       WHERE inv.receiving_order_id = ${id}
       ${userScopeFilter(sql`rii.org_id`, sql`rii.sub_inventory_code`, scope)}
       ORDER BY rii.wcl_item_no ASC, rii.part_no ASC, rii.po_no, rii.po_line, rii.id
@@ -582,7 +585,9 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
         pi.qty AS "itemQty", pi.picked_qty AS "pickedQty", pi.allocated_qty AS "allocatedQty"
       FROM picking_items pi
       JOIN picking_orders po ON po.id = pi.picking_order_id
-      LEFT JOIN parts p ON p.wcl_item_no = pi.part_no
+      -- parts wcl_item_no is no longer unique on upstream-synced DBs: join
+      -- the deduped master (partsMaster.ts) to avoid fan-out per item.
+      LEFT JOIN ${partsMasterByWcl} p ON p.wcl_item_no = pi.part_no
       WHERE EXISTS (
         SELECT 1 FROM allocations a
         LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id

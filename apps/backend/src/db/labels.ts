@@ -7,6 +7,7 @@
 
 import { sql } from "drizzle-orm";
 import { queryAll, type DbOrTx } from "./query.js";
+import { partsMasterByWcl } from "./partsMaster.js";
 import { buildKoaLabelRaw } from "../decode/codecs.js";
 import { listDateCodePeriods } from "./dateCodePeriods.js";
 import { toCanonicalDateCode } from "./dateCode.js";
@@ -257,7 +258,10 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
         JOIN picking_orders po ON po.id = pi.picking_order_id
         LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
         LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
-        LEFT JOIN parts p ON p.wcl_item_no = pi.part_no
+        -- parts wcl_item_no is no longer unique on upstream-synced DBs:
+        -- join the deduped master (partsMaster.ts) to avoid fan-out per
+        -- allocation row.
+        LEFT JOIN ${partsMasterByWcl} p ON p.wcl_item_no = pi.part_no
         WHERE po.status IN ('pending', 'picking', 'allocated') AND a.qty > 0
         ORDER BY po.priority_seq, po.order_no, pi.line_number NULLS LAST, a.id`
   );

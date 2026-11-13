@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { inArray, sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
+import { partsMasterByWcl } from "./partsMaster.js";
 import { transactionLogs, inventoryTransactions, receivingScanLabels } from "./schema/index.js";
 import { now } from "./now.js";
 import { emitEvent } from "./events.js";
@@ -360,7 +361,10 @@ export async function scanReceivingOrder(
                  rii.coo, rii.cow
           FROM receiving_invoice_items rii
           JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-          LEFT JOIN parts p ON p.wcl_item_no = rii.wcl_item_no
+          -- parts wcl_item_no is no longer unique on upstream-synced DBs:
+          -- join the deduped master (partsMaster.ts) to avoid fan-out per
+          -- invoice item.
+          LEFT JOIN ${partsMasterByWcl} p ON p.wcl_item_no = rii.wcl_item_no
           WHERE ri.receiving_order_id = ${orderId}
           ORDER BY rii.po_no, rii.po_line, rii.id`
     );

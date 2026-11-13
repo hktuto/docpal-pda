@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun } from "./query.js";
+import { partsMasterByWcl } from "./partsMaster.js";
 import { transactionLogs } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import { now } from "./now.js";
@@ -146,7 +147,9 @@ export async function getShippingOrderDetail(db: AppDb, boxId: string): Promise<
         pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo"
       FROM picking_packages pp
       JOIN picking_items pi ON pi.id = pp.picking_item_id
-      JOIN parts p ON p.wcl_item_no = pi.part_no
+      -- parts wcl_item_no is no longer unique on upstream-synced DBs: join
+      -- the deduped master (partsMaster.ts) to avoid fan-out per package.
+      JOIN ${partsMasterByWcl} p ON p.wcl_item_no = pi.part_no
       WHERE pp.shipping_box_id = ${boxId}
       ORDER BY pp.created_date, pp.id
     `

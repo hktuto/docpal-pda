@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll } from "./query.js";
+import { partsMasterByWcl } from "./partsMaster.js";
 import { normalizePartNo } from "../decode/codecs.js";
 import { allowedOrgFilter } from "./org-filter.js";
 import { userScopeFilter, type UserScopeEntry } from "./user-scope.js";
@@ -203,7 +204,10 @@ interface LotJoinRow extends StockSearchLotRow {
 function stockFromWhere(filters: StockSearchFilters) {
   return sql`
     FROM inventory_lots il
-    JOIN parts p ON p.wcl_item_no = il.wcl_item_no
+    -- parts wcl_item_no is no longer unique on upstream-synced DBs: join
+    -- the deduped master (partsMaster.ts) so each lot matches exactly one
+    -- master row (fan-out would double lots in rows, counts and sums).
+    JOIN ${partsMasterByWcl} p ON p.wcl_item_no = il.wcl_item_no
     LEFT JOIN shelves s ON s.code = il.shelf_code
     LEFT JOIN org_info oi ON oi.org_id = il.org_id AND oi.secondary_inventory_name = il.sub_inventory_code
     WHERE TRUE
@@ -426,7 +430,7 @@ export async function stockSearchSummary(db: AppDb, filters: StockSearchFilters 
         COUNT(*) FILTER (WHERE ${outdated})::int AS "outdatedLotCount",
         COALESCE(SUM(il.total_qty) FILTER (WHERE ${outdated}), 0)::int AS "outdatedQty"
       FROM inventory_lots il
-      JOIN parts p ON p.wcl_item_no = il.wcl_item_no
+      JOIN ${partsMasterByWcl} p ON p.wcl_item_no = il.wcl_item_no
       LEFT JOIN shelves s ON s.code = il.shelf_code
       WHERE TRUE
       ${stockFilterClauses(filters)}
