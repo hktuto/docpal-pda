@@ -161,10 +161,15 @@ async function addExcelDraft(picked: File): Promise<CnReceivingDraft[]> {
 // the verify/edit step open with the issues banner (inline fix beats a
 // re-upload round-trip).
 async function gateAndAutoCreate(added: CnReceivingDraft[]) {
+  // Fresh gate pass: clear any banner left by a previous attempt so the
+  // ambiguous warning isn't shown next to a stale error.
+  error.value = "";
+  warning.value = "";
   const keys = added.flatMap((d) => d.items.map((i) => i.partNo.trim())).filter((k) => k !== "");
   if (keys.length > 0) {
     const failed = await parts.ensure(keys);
     if (failed) {
+      console.error("parts batch check failed — see the network tab for the /admin/parts-lookup response");
       error.value = t("admin.pages.receivingCn.partsCheckFailed");
       step.value = 2;
       return;
