@@ -67,11 +67,12 @@ export function usePartsBrandCheck() {
     return cache.get(cacheKey(key));
   }
 
-  /** Brand of a uniquely-matched master row; undefined = unchecked,
-   *  null = unknown/ambiguous. */
+  /** Brand of the uniquely-matched master row; when the key is ambiguous
+   *  (multiple master rows match) the FIRST row's brand is returned as the
+   *  default — undefined = unchecked, null = unknown. */
   function brandOf(key: string): string | null | undefined {
     const c = check(key);
-    return c === undefined ? undefined : c.found ? c.brand : null;
+    return c === undefined ? undefined : c.found || c.ambiguous ? c.brand : null;
   }
 
   return { ensure, check, brandOf };

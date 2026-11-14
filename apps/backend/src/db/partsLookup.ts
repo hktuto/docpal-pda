@@ -44,7 +44,8 @@ export async function lookupPartKeys(db: AppDb, rawKeys: string[]): Promise<Part
         FROM parts
         WHERE ${unwrappedPartCol(sql`part_no`)} IN (${keyList})
            OR ${unwrappedPartCol(sql`wcl_item_no`)} IN (${keyList})
-        GROUP BY npn, nwcl, part_no, wcl_item_no`
+        GROUP BY npn, nwcl, part_no, wcl_item_no
+        ORDER BY part_no ASC, wcl_item_no ASC`
   );
   return keys.map((key) => {
     const k = normalizePartNo(key);
@@ -52,7 +53,11 @@ export async function lookupPartKeys(db: AppDb, rawKeys: string[]): Promise<Part
     for (const r of rows) {
       if (r.npn === k || r.nwcl === k) groups.set(`${r.partNo}\u0000${r.wclItemNo}`, r);
     }
-    const one = groups.size === 1 ? [...groups.values()][0] : null;
-    return { key, found: one !== null, ambiguous: groups.size > 1, brand: one?.brand ?? null };
+    // Ambiguous keys keep found=false (the brand is not trustworthy) but
+    // still surface the FIRST row's brand (stable ORDER BY above) so callers
+    // can default to it instead of blocking the upload.
+    const first = groups.size > 0 ? [...groups.values()][0] : null;
+    const one = groups.size === 1 ? first : null;
+    return { key, found: one !== null, ambiguous: groups.size > 1, brand: one?.brand ?? first?.brand ?? null };
   });
 }

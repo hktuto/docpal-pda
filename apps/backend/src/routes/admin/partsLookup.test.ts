@@ -64,7 +64,7 @@ test("parts-lookup: hits either column via normalize/unwrap; misses + ambiguous 
       ["5205208-1", true, false, "TE"],
       ["WCL-KOA-1", true, false, "KOA"],
       ["NOT-A-PART", false, false, null],
-      ["DUP-PART", false, true, null],
+      ["DUP-PART", false, true, "AA"], // ambiguous — first master row's brand (A before B) as the default
     ]
   );
 });
