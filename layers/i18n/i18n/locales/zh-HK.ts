@@ -2291,11 +2291,13 @@ export default {
           noOrderNo: "缺少訂單號。",
           noPartNo: "缺少型號。",
           invalidQty: "數量必須為正整數。",
-          unknownPart: "型號「{partNo}」不在零件主檔 — 請修正後再送出。"
+          unknownPart: "型號「{partNo}」不在零件主檔 — 請修正後再送出。",
+          ambiguousPart: "型號「{partNo}」在零件主檔中匹配到多行 — 請選擇正確的一行。"
         },
         noSheet: "檔案內找不到工作表。",
         noItems: "解析不到任何收貨明細 — 請確認檔案格式正確。",
         partNotFound: "零件主檔中不存在",
+        partAmbiguous: "匹配到多行主檔記錄",
         submit: "確認",
         submitting: "送出中…",
         submitFailed: "送出失敗",

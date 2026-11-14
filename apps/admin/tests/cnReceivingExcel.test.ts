@@ -411,6 +411,17 @@ describe("checkCnDraft", () => {
     expect(issues).toContainEqual({ code: "noPartNo", row: 3 });
   });
 
+  it("reports an ambiguous part key once, distinct from not-found", () => {
+    const withAmb = structuredClone(draft);
+    withAmb.items.push({ ...withAmb.items[0]!, uid: 11, index: 11, partNo: "P-AMB" });
+    withAmb.items.push({ ...withAmb.items[0]!, uid: 12, index: 12, partNo: "P-AMB" });
+    const issues = checkCnDraft(withAmb, (k) => (k === "P-AMB" ? "ambiguous" : k !== "P-Z"));
+    expect(issues.filter((i) => i.code === "ambiguousPart")).toEqual([
+      { code: "ambiguousPart", row: 11, partNo: "P-AMB" },
+    ]);
+    expect(issues.some((i) => i.code === "unknownPart")).toBe(false);
+  });
+
   it("reports an unknown part key once with the row and key", () => {
     const withUnknown = structuredClone(draft);
     withUnknown.items.push({ ...withUnknown.items[0]!, uid: 9, index: 9, partNo: "P-Z" });

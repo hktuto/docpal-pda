@@ -17,6 +17,9 @@ const files = ref<File[]>([]); // PDFs
 const drafts = ref<CnReceivingDraft[]>([]); // decoded Excels
 const parsing = ref(false);
 const error = ref("");
+/** Non-blocking reminders (e.g. ambiguous part keys) — shown without the
+ *  error styling; auto-create still proceeds. */
+const warning = ref("");
 const submitting = ref(false);
 const step = ref<1 | 2>(1);
 let nextUid = 1;
@@ -168,15 +171,23 @@ async function gateAndAutoCreate(added: CnReceivingDraft[]) {
     }
   }
   const msgs: string[] = [];
+  const warnings: string[] = [];
   for (const d of added) {
-    for (const iss of checkCnDraft(d, (k) => parts.check(k)?.found === true)) {
-      msgs.push(fmtIssue(d.filename, iss));
+    for (const iss of checkCnDraft(d, (k) => {
+      const c = parts.check(k);
+      return c === undefined ? false : c.ambiguous ? "ambiguous" : c.found;
+    })) {
+      // Ambiguous part keys are a reminder, not an error — the order still
+      // auto-creates (brand falls back to server-side derivation).
+      if (iss.code === "ambiguousPart") warnings.push(fmtIssue(d.filename, iss));
+      else msgs.push(fmtIssue(d.filename, iss));
     }
     if (d.brand.trim() === "") {
       const b = parts.brandOf(d.items[0]?.partNo ?? "");
       if (typeof b === "string") d.brand = b;
     }
   }
+  warning.value = warnings.join("\n");
   if (msgs.length > 0) {
     error.value = msgs.join("\n");
     step.value = 2;
@@ -198,11 +209,13 @@ function removeFile(index: number) {
 function removeDraft(uid: number) {
   drafts.value = drafts.value.filter((d) => d.uid !== uid);
   if (drafts.value.length === 0) error.value = "";
+  warning.value = "";
 }
 
 function backToPick() {
   step.value = 1;
   error.value = "";
+  warning.value = "";
 }
 
 async function submit() {
@@ -213,6 +226,7 @@ async function submit() {
   }
   submitting.value = true;
   error.value = "";
+  warning.value = "";
   try {
     await submitCnPdfUpload(files.value);
     await navigateTo("/receiving-cn");
@@ -263,6 +277,7 @@ function cancel() {
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <div v-if="warning" class="warning-banner">{{ warning }}</div>
 
     <!-- Step 1: pick PDF(s) or Excel(s) (click to browse or drag & drop) -->
     <div v-if="step === 1" class="panel">

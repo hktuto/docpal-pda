@@ -56,6 +56,8 @@ const open = ref(false);
 const searching = ref(false);
 /** The current value has no exact wcl_item_no / part_no match in the master. */
 const unknown = ref(false);
+/** The value matches multiple master rows — a reminder, not an error. */
+const ambiguous = ref(false);
 const options = ref<PartOption[]>([]);
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 let searchSeq = 0;
@@ -63,7 +65,7 @@ let searchSeq = 0;
 // The panel teleports to <body> (table cells clip absolutely-positioned
 // children) and tracks the input's viewport position while anything anchored
 // is visible — the suggestions panel or the not-found hint.
-const { panelStyle } = useAnchoredPanel(rootRef, computed(() => open.value || unknown.value));
+const { panelStyle } = useAnchoredPanel(rootRef, computed(() => open.value || unknown.value || ambiguous.value));
 
 function onInput(event: Event) {
   const value = (event.target as HTMLInputElement).value;
@@ -94,6 +96,7 @@ function scheduleSearch(raw: string, showPanel: boolean) {
       unknown.value = !rows.some(
         (o) => o.wclItemNo.trim().toLowerCase() === needle || o.partNo.trim().toLowerCase() === needle
       );
+      ambiguous.value = false;
     } catch {
       if (seq !== searchSeq) return;
       options.value = [];
@@ -114,7 +117,9 @@ onMounted(() => {
   if (!v) return;
   void parts.ensure([v]).then((failed) => {
     if (failed) return;
-    unknown.value = parts.check(v)?.found === false;
+    const c = parts.check(v);
+    unknown.value = c?.found === false && !c.ambiguous;
+    ambiguous.value = c?.ambiguous === true;
   });
 });
 
@@ -126,6 +131,7 @@ let lastCommitted = props.modelValue;
 function pick(option: PartOption) {
   emit("update:modelValue", option.wclItemNo);
   unknown.value = false;
+  ambiguous.value = false;
   open.value = false;
   lastCommitted = option.wclItemNo;
   emit("pick", option);
@@ -177,6 +183,7 @@ onBeforeUnmount(() => {
     />
     <Teleport to="body">
       <div v-if="unknown && !open" ref="errorRef" :style="panelStyle" class="pns-error">{{ t("admin.pages.receivingCn.partNotFound") }}</div>
+      <div v-else-if="ambiguous && !open" ref="errorRef" :style="panelStyle" class="pns-ambiguous">{{ t("admin.pages.receivingCn.partAmbiguous") }}</div>
       <div v-if="open" ref="panelRef" :style="panelStyle" class="pns-panel">
       <div
         v-for="o in options"
@@ -210,6 +217,14 @@ onBeforeUnmount(() => {
   z-index: 35;
   font-size: 0.6875rem;
   color: #cf1124;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.pns-ambiguous {
+  position: fixed;
+  z-index: 35;
+  font-size: 0.6875rem;
+  color: #8a6d1a;
   white-space: nowrap;
   pointer-events: none;
 }

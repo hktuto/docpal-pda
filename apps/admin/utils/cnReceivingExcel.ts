@@ -520,7 +520,7 @@ export function cnDraftToEntry(draft: CnReceivingDraft): {
 
 /** Issue codes resolved by the caller via
  *  `admin.pages.receivingCn.gate.<code>` i18n keys. */
-export type CnDraftIssueCode = "noInvoiceNo" | "noOrderNo" | "noPartNo" | "invalidQty" | "unknownPart";
+export type CnDraftIssueCode = "noInvoiceNo" | "noOrderNo" | "noPartNo" | "invalidQty" | "unknownPart" | "ambiguousPart";
 
 export interface CnDraftIssue {
   code: CnDraftIssueCode;
@@ -533,8 +533,13 @@ export interface CnDraftIssue {
 /** Check one decoded draft against the upload rules: 編號 header present and
  *  every item row having 訂單號, a parts-master-resolvable 型號 and a
  *  positive-integer qty. `partKnown` reads the batch-check cache (see
- *  composables/usePartsBrandCheck). */
-export function checkCnDraft(draft: CnReceivingDraft, partKnown: (key: string) => boolean): CnDraftIssue[] {
+ *  composables/usePartsBrandCheck): true = known, false = not in the parts
+ *  master (blocking), "ambiguous" = multiple master rows match (reminder —
+ *  the caller decides how to surface it, it is not a data error). */
+export function checkCnDraft(
+  draft: CnReceivingDraft,
+  partKnown: (key: string) => boolean | "ambiguous"
+): CnDraftIssue[] {
   const issues: CnDraftIssue[] = [];
   if (draft.header.invoiceNo.trim() === "") issues.push({ code: "noInvoiceNo" });
   const seenUnknown = new Set<string>();
@@ -542,9 +547,13 @@ export function checkCnDraft(draft: CnReceivingDraft, partKnown: (key: string) =
     if (item.orderNo.trim() === "") issues.push({ code: "noOrderNo", row: item.index });
     const partNo = item.partNo.trim();
     if (partNo === "") issues.push({ code: "noPartNo", row: item.index });
-    else if (!partKnown(partNo) && !seenUnknown.has(cacheKeyOf(partNo))) {
-      seenUnknown.add(cacheKeyOf(partNo));
-      issues.push({ code: "unknownPart", row: item.index, partNo });
+    else {
+      const status = partKnown(partNo);
+      const code = status === true ? null : status === "ambiguous" ? "ambiguousPart" : "unknownPart";
+      if (code && !seenUnknown.has(cacheKeyOf(partNo))) {
+        seenUnknown.add(cacheKeyOf(partNo));
+        issues.push({ code, row: item.index, partNo });
+      }
     }
     const q = Number(item.qty.trim());
     if (!Number.isInteger(q) || q <= 0) issues.push({ code: "invalidQty", row: item.index });

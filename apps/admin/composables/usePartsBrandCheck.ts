@@ -11,6 +11,8 @@ import { useFlowApi } from "~/utils/flowApi";
 
 export interface PartsCheckResult {
   found: boolean;
+  /** Multiple distinct master rows match — the key exists but is ambiguous. */
+  ambiguous: boolean;
   brand: string | null;
 }
 
@@ -40,7 +42,7 @@ export function usePartsBrandCheck() {
     try {
       for (let i = 0; i < todo.length; i += CHUNK) {
         const { matches } = await flow.checkParts(todo.slice(i, i + CHUNK));
-        for (const m of matches) cache.set(cacheKey(m.key), { found: m.found, brand: m.brand });
+        for (const m of matches) cache.set(cacheKey(m.key), { found: m.found, ambiguous: m.ambiguous === true, brand: m.brand });
       }
     } catch {
       // Network/server failure — keys stay uncached, callers decide (never

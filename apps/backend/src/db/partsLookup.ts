@@ -21,6 +21,10 @@ export interface PartsKeyMatch {
    *  uniqueness rule as resolvePartByKey; an unknown or ambiguous key is
    *  false so callers never trust a brand from a non-unique hit. */
   found: boolean;
+  /** True when MULTIPLE distinct master rows match (e.g. the same part
+   *  stored under TE-AMP(...) and TYCO-AMP(...) brands) — the key exists but
+   *  the brand is not trustworthy. Distinct from not-found. */
+  ambiguous: boolean;
   /** The matched row's brand; null when not found. */
   brand: string | null;
 }
@@ -49,6 +53,6 @@ export async function lookupPartKeys(db: AppDb, rawKeys: string[]): Promise<Part
       if (r.npn === k || r.nwcl === k) groups.set(`${r.partNo}\u0000${r.wclItemNo}`, r);
     }
     const one = groups.size === 1 ? [...groups.values()][0] : null;
-    return { key, found: one !== null, brand: one?.brand ?? null };
+    return { key, found: one !== null, ambiguous: groups.size > 1, brand: one?.brand ?? null };
   });
 }

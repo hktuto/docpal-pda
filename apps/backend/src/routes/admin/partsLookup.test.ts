@@ -55,16 +55,16 @@ test("parts-lookup: hits either column via normalize/unwrap; misses + ambiguous 
   ]);
   assert.equal(res.status, 200);
   const { matches } = (await res.json()) as {
-    matches: { key: string; found: boolean; brand: string | null }[];
+    matches: { key: string; found: boolean; ambiguous: boolean; brand: string | null }[];
   };
   assert.deepEqual(
-    matches.map((m) => [m.key, m.found, m.brand]),
+    matches.map((m) => [m.key, m.found, m.ambiguous, m.brand]),
     [
-      ["koa+rk73h2brttd 4303f", true, "KOA"],
-      ["5205208-1", true, "TE"],
-      ["WCL-KOA-1", true, "KOA"],
-      ["NOT-A-PART", false, null],
-      ["DUP-PART", false, null],
+      ["koa+rk73h2brttd 4303f", true, false, "KOA"],
+      ["5205208-1", true, false, "TE"],
+      ["WCL-KOA-1", true, false, "KOA"],
+      ["NOT-A-PART", false, false, null],
+      ["DUP-PART", false, true, null],
     ]
   );
 });

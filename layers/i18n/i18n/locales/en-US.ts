@@ -2294,11 +2294,13 @@ export default {
           noOrderNo: "Order no. (訂單號) is missing.",
           noPartNo: "Part no. (型號) is missing.",
           invalidQty: "Qty must be a positive integer.",
-          unknownPart: "Part \"{partNo}\" is not in the parts master — fix it before submitting."
+          unknownPart: "Part \"{partNo}\" is not in the parts master — fix it before submitting.",
+          ambiguousPart: "Part \"{partNo}\" matches multiple parts-master rows — please pick the correct row."
         },
         noSheet: "The file contains no worksheet.",
         noItems: "No receiving items could be parsed — check the file format.",
         partNotFound: "Not in parts master",
+        partAmbiguous: "Matches multiple master rows",
         submit: "Confirm",
         submitting: "Submitting…",
         submitFailed: "Submit failed",
