@@ -1,1 +1,1 @@
-ALTER TABLE "parts" ADD COLUMN "moq" numeric;
+ALTER TABLE "parts" ADD COLUMN IF NOT EXISTS "moq" numeric;
