@@ -36,7 +36,18 @@ Two pieces:
    | `shipped` | SummaryView | final summary |
    | `issue` | current issue panel + progress | resolve |
 
-   **Current step ("1 view for all")**: every status renders the placeholder
+   **Delivered views**: `pickingFinished` (`PickingFinishedView.vue`) for
+   `picking_finished` / `measuring_finished` — summary stats (picked vs
+   required, packages, boxes, re-scan credit, verified count), a per-package
+   real-scan-data table (effective DC/lot/COO/COW with ✎ markers when the
+   pick-time scan overrode the source, shipping box, verified flag, raw
+   label barcode) and a boxes summary with measuring/verify assignees. The
+   per-step assignee pickers moved to the shared `useStepAssignees`
+   composable. The `packages` type in `utils/flowApi.ts` now surfaces the
+   full backend `PickingPackageDetail` (rescannedQty, scanned* overrides,
+   labelBarcode, sourceType) which the backend already returned.
+
+   Remaining placeholder: every other status renders `OrderDetailView.vue`
    `OrderDetailView.vue` (the previous monolithic body, extracted unchanged). Per-stage
    views are carved out of it later by adding entries to the page's `stageViews` map.
 

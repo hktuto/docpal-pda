@@ -9,6 +9,7 @@
 // later, one per status.
 import type { PickingOrderDetail } from "~/utils/flowApi";
 import OrderDetailView from "~/components/picking-orders/OrderDetailView.vue";
+import PickingFinishedView from "~/components/picking-orders/PickingFinishedView.vue";
 
 const route = useRoute();
 const { t } = useI18n();
@@ -20,10 +21,11 @@ const loading = ref(true);
 const error = ref("");
 const logsKey = ref(0);
 
-// Status → body view. One entry per stage; all point at the placeholder for
-// now ("1 view for all" step of the refactor).
-const stageViews = { detail: OrderDetailView } as const;
-const viewForStatus = (_status: string): keyof typeof stageViews => "detail";
+// Status → body view. Each entry is a focused stage view; statuses without
+// one yet fall back to the `detail` placeholder.
+const stageViews = { detail: OrderDetailView, pickingFinished: PickingFinishedView } as const;
+const viewForStatus = (status: string): keyof typeof stageViews =>
+  status === "picking_finished" || status === "measuring_finished" ? "pickingFinished" : "detail";
 const activeView = computed(() => stageViews[viewForStatus(order.value?.status ?? "")]);
 
 // Progress header: stages filtered by the warehouse flow config (mirrored

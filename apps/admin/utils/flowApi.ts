@@ -92,7 +92,28 @@ export interface PickingItemRow {
      *  threshold (spec 2026-10-20). */
     outdated: boolean;
   }[];
-  packages: { id: string; qty: number; dateCode: string | null; lotCode: string | null; verified: boolean; verifyVerified: boolean; shippingBoxId: string | null }[];
+  packages: {
+    id: string;
+    qty: number;
+    dateCode: string | null;
+    lotCode: string | null;
+    coo: string | null;
+    cow: string | null;
+    verified: boolean;
+    verifyVerified: boolean;
+    /** Re-scan credit (aggregate re-scan completion, docs/backend/verify-measuring.md). */
+    rescannedQty: number;
+    /** Raw scan string of the source label (traceability/display only). */
+    labelBarcode: string | null;
+    /** Pick-time scanned batch fields — win over the source snapshot when set. */
+    scannedDateCode: string | null;
+    scannedLotCode: string | null;
+    scannedCoo: string | null;
+    scannedCow: string | null;
+    shippingBoxId: string | null;
+    sourceType: string;
+    sourceId: string;
+  }[];
 }
 
 export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | "totalQty" | "pickedQty" | "prioritySeq" | "workingBy" | "workingByName" | "hasOutdatedAllocations"> {
