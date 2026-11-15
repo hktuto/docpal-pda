@@ -98,8 +98,8 @@ describe("buildPickingScanAoa", () => {
     const aoa = buildPickingScanAoa({ order: o, dateCodeFormat: "yyww" });
     expect(aoa[0]).toEqual([...PICKING_SCAN_EXCEL_HEADERS]);
     expect(aoa.length).toBe(3);
-    expect(aoa[1]).toEqual([1, "HK2611-0011", "wcl_item_A", 20000, "20260101", "2601", "JP", "", "", "BOX-1", "1/4"]);
-    expect(aoa[2]).toEqual([2, "HK2611-0011", "wcl_item_A", 100, "20260910", "2637", "CN", "", "", "BOX-1", "1/4"]);
+    expect(aoa[1]).toEqual([1, "HK2611-0011", "wcl_item_A", 20000, "20260101", "2601", "JP", "", "", 1, "1/4"]);
+    expect(aoa[2]).toEqual([2, "HK2611-0011", "wcl_item_A", 100, "20260910", "2637", "CN", "", "", 1, "1/4"]);
   });
 
   it("prefers the pick-time scanned batch fields and skips cancelled items", () => {
@@ -137,7 +137,7 @@ describe("buildPickingScanAoa", () => {
     } as Partial<PickingOrderDetail>) as PickingOrderDetail;
     const aoa = buildPickingScanAoa({ order: o, dateCodeFormat: "wwyy" });
     expect(aoa.length).toBe(2);
-    expect(aoa[1]).toEqual([1, "HK2611-0011", "wcl_item_A", 20000, "20260305", "1026", "CN", "", "D-123", "BOX-1", "1/4"]);
+    expect(aoa[1]).toEqual([1, "HK2611-0011", "wcl_item_A", 20000, "20260305", "1026", "CN", "", "D-123", 1, "1/4"]);
   });
 
   it("labels unboxed packages with an empty box index", () => {
@@ -160,7 +160,7 @@ describe("buildPickingScanAoa", () => {
       ],
     } as Partial<PickingOrderDetail>) as PickingOrderDetail;
     const aoa = buildPickingScanAoa({ order: o, dateCodeFormat: "yyww" });
-    expect(aoa[1][9]).toBe("");
+    expect(aoa[1][9]).toBe(""); // box_no is empty when unboxed
     expect(aoa[1][10]).toBe("");
   });
 });
