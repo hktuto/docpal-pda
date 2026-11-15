@@ -379,6 +379,19 @@ describe("cnDraftToEntry", () => {
     const entry = cnDraftToEntry({ ...draft, brand: "  " });
     expect(entry.brand).toBeUndefined();
   });
+
+  it("drops rows with an empty or non-numeric qty from the payload", () => {
+    const withBad = structuredClone(draft);
+    withBad.items.push(
+      { ...structuredClone(draft.items[0]!), uid: 21, index: 2, qty: "" },
+      { ...structuredClone(draft.items[0]!), uid: 22, index: 3, qty: "abc" },
+      { ...structuredClone(draft.items[0]!), uid: 23, index: 4, qty: "0" }
+    );
+    const entry = cnDraftToEntry(withBad);
+    // Only the valid-qty row survives; the skipped ones stay in the draft.
+    expect((entry.payload.items as unknown[]).length).toBe(1);
+    expect(withBad.items.length).toBe(4);
+  });
 });
 
 describe("checkCnDraft", () => {

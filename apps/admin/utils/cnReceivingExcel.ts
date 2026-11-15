@@ -505,7 +505,12 @@ export function cnDraftToEntry(draft: CnReceivingDraft): {
     ...(brand ? { brand } : {}),
     payload: {
       ...draft.header,
-      items: draft.items.map(
+      // Rows with no valid qty (empty / non-numeric / ≤ 0) stay visible in
+      // the verify form but are dropped on confirm — checked at submit time
+      // so a qty the admin fixed in the editor is still included.
+      items: draft.items
+        .filter((item) => isCnQtyValid(item.qty))
+        .map(
         ({ uid: _uid, cartonMerged: _cm, orderNo, poNo, ...rest }) => ({
           ...rest,
           orderNo: poNo,
@@ -528,6 +533,14 @@ export interface CnDraftIssue {
   row?: number;
   /** The offending part key for unknownPart issues. */
   partNo?: string;
+}
+
+/** Positive-integer qty check shared by the gate, the verify-editor row
+ *  highlight and the submit filter — items failing it are shown in the
+ *  verify form but dropped from the wire payload on confirm. */
+export function isCnQtyValid(qty: string): boolean {
+  const n = Number(qty.trim());
+  return Number.isInteger(n) && n > 0;
 }
 
 /** Check one decoded draft against the upload rules: 編號 header present and
@@ -555,8 +568,8 @@ export function checkCnDraft(
         issues.push({ code, row: item.index, partNo });
       }
     }
-    const q = Number(item.qty.trim());
-    if (!Number.isInteger(q) || q <= 0) issues.push({ code: "invalidQty", row: item.index });
+    const q = item.qty.trim();
+    if (!isCnQtyValid(q)) issues.push({ code: "invalidQty", row: item.index });
   }
   return issues;
 }

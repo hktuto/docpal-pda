@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AdminColumnDef } from "~/composables/useAdminTable";
-import type { CnReceivingDraft, CnReceivingDraftItem } from "~/utils/cnReceivingExcel";
+import { isCnQtyValid, type CnReceivingDraft, type CnReceivingDraftItem } from "~/utils/cnReceivingExcel";
 
 /**
  * One locally decoded Excel receiving confirmation (收貨確認) with inline
@@ -87,6 +87,10 @@ const totalsMismatch = computed(() => {
 });
 
 const sheetTotalsLabel = computed(() => `${sheetTotals.value.carton} / ${sheetTotals.value.qty}`);
+
+// Rows with no valid qty stay visible but are dropped from the payload on
+// confirm (cnDraftToEntry filters them at submit time) — highlight them.
+const invalidQtyCount = computed(() => props.draft.items.filter((i) => !isCnQtyValid(i.qty)).length);
 </script>
 
 <template>
@@ -142,6 +146,10 @@ const sheetTotalsLabel = computed(() => `${sheetTotals.value.carton} / ${sheetTo
       </div>
     </fieldset>
 
+    <div v-if="invalidQtyCount > 0" class="warning-banner">
+      {{ $t("admin.pages.receivingCn.qtySkipHint", { count: invalidQtyCount }) }}
+    </div>
+
     <div v-if="totalsMismatch" class="error-banner">
       {{
         $t("admin.pages.receivingCn.totalsMismatch", {
@@ -174,7 +182,7 @@ const sheetTotalsLabel = computed(() => `${sheetTotals.value.carton} / ${sheetTo
         <input v-model="row.dateCode" class="cell-input" type="number" inputmode="numeric" />
       </template>
       <template #cell-qty="{ row }">
-        <input v-model="row.qty" class="cell-input" type="number" inputmode="numeric" min="1" step="1" />
+        <input v-model="row.qty" class="cell-input" :class="{ 'qty-invalid': !isCnQtyValid(row.qty) }" type="number" inputmode="numeric" min="1" step="1" />
       </template>
       <template #cell-weight="{ row }">
         <input v-model="row.weight" class="cell-input" type="text" inputmode="decimal" />
@@ -267,6 +275,10 @@ const sheetTotalsLabel = computed(() => `${sheetTotals.value.carton} / ${sheetTo
   border-color: var(--brand-teal);
   background: #fff;
   outline: none;
+}
+.qty-invalid {
+  background: #fdf3f2;
+  border-color: #d64541;
 }
 .totals-row {
   font-size: 0.875rem;

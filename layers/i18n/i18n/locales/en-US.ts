@@ -2298,6 +2298,7 @@ export default {
           ambiguousPart: "Part \"{partNo}\" matches multiple parts-master rows — please pick the correct row."
         },
         noSheet: "The file contains no worksheet.",
+        qtySkipHint: "{count} row(s) have no valid qty (empty or not a positive integer) — they stay in the list but are skipped when you confirm.",
         noItems: "No receiving items could be parsed — check the file format.",
         partNotFound: "Not in parts master",
         partAmbiguous: "Matches multiple master rows",

@@ -2295,6 +2295,7 @@ export default {
           ambiguousPart: "型號「{partNo}」在零件主檔中匹配到多行 — 請選擇正確的一行。"
         },
         noSheet: "檔案內找不到工作表。",
+        qtySkipHint: "{count} 行數量為空或不是正整數 — 會在核對表中顯示，確認後自動略過。",
         noItems: "解析不到任何收貨明細 — 請確認檔案格式正確。",
         partNotFound: "零件主檔中不存在",
         partAmbiguous: "匹配到多行主檔記錄",

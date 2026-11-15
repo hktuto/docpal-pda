@@ -177,15 +177,21 @@ async function gateAndAutoCreate(added: CnReceivingDraft[]) {
   }
   const msgs: string[] = [];
   const warnings: string[] = [];
+  let invalidQtySeen = false;
   for (const d of added) {
     for (const iss of checkCnDraft(d, (k) => {
       const c = parts.check(k);
       return c === undefined ? false : c.ambiguous ? "ambiguous" : c.found;
     })) {
       // Ambiguous part keys are a reminder, not an error — the order still
-      // auto-creates (brand falls back to server-side derivation).
+      // auto-creates (brand falls back to server-side derivation). Invalid
+      // qty rows no longer block: they are shown in the verify form and
+      // dropped from the payload on confirm (never auto-created directly).
       if (iss.code === "ambiguousPart") warnings.push(fmtIssue(d.filename, iss));
-      else msgs.push(fmtIssue(d.filename, iss));
+      else if (iss.code === "invalidQty") {
+        warnings.push(fmtIssue(d.filename, iss));
+        invalidQtySeen = true;
+      } else msgs.push(fmtIssue(d.filename, iss));
     }
     if (d.brand.trim() === "") {
       const b = parts.brandOf(d.items[0]?.partNo ?? "");
@@ -195,6 +201,12 @@ async function gateAndAutoCreate(added: CnReceivingDraft[]) {
   warning.value = warnings.join("\n");
   if (msgs.length > 0) {
     error.value = msgs.join("\n");
+    step.value = 2;
+    return;
+  }
+  if (invalidQtySeen) {
+    // Skipped-qty rows need eyes before the order exists — open the verify
+    // form with the warning banner instead of auto-creating.
     step.value = 2;
     return;
   }
