@@ -2012,6 +2012,7 @@ export default {
           verified: "已查货",
           labelBarcode: "标签条码",
           overriddenHint: "拣货时扫描值覆写了来源数据",
+          downloadScanExcel: "下载拣货扫描 Excel",
         },
         downloadPickingList: "下载拣货清单",
         printPng: "打印",

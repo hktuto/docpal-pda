@@ -26,6 +26,7 @@ const route = useRoute();
 const orderId = route.params.id as string;
 const flow = useFlowApi();
 const error = ref("");
+import { buildPickingScanAoa } from "~/utils/pickingScanExcel";
 
 // The audit-log table fetches itself; the page bumps logsKey after
 // mutations that write logs (both view-internal and page-head actions).
@@ -189,6 +190,28 @@ onMounted(() => {
   loadUsers();
 });
 
+// Picked-scan Excel: one row per package in scan order (the backend returns
+// packages ordered by created_date, id). util builds the AOA; XLSX writes it.
+const dateCodeFormat = useDateCodeFormat();
+const downloadingScanExcel = ref(false);
+async function downloadScanExcel() {
+  if (downloadingScanExcel.value) return;
+  downloadingScanExcel.value = true;
+  error.value = "";
+  try {
+    const XLSX = await import("xlsx");
+    const aoa = buildPickingScanAoa({ order: props.order, dateCodeFormat: dateCodeFormat.format.value });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "scan");
+    XLSX.writeFile(wb, `picking-scan-${props.order.orderNo}.xlsx`);
+  } catch (e: any) {
+    error.value = `${t("admin.pages.pickingOrders.pickingListError")}: ${e.message}`;
+  } finally {
+    downloadingScanExcel.value = false;
+  }
+}
+
 watch(
   () => props.order,
   (o) => initFromOrder(o),
@@ -209,6 +232,11 @@ defineExpose({
       <div v-for="s in stats" :key="s.label" class="stat-card">
         <div class="stat-value">{{ s.value }}</div>
         <div class="stat-label">{{ s.label }}</div>
+      </div>
+      <div class="stat-card stat-action">
+        <button class="btn" :disabled="downloadingScanExcel" @click="downloadScanExcel">
+          {{ downloadingScanExcel ? $t("admin.common.saving") : $t("admin.pages.pickingOrders.downloadScanExcel") }}
+        </button>
       </div>
     </div>
 
@@ -307,6 +335,10 @@ defineExpose({
   font-size: 0.75rem;
   color: #52606d;
   margin-top: 0.125rem;
+}
+.stat-action {
+  display: flex;
+  align-items: center;
 }
 .section-title {
   font-size: 0.9375rem;

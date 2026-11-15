@@ -1117,6 +1117,9 @@ export interface PickingPackageDetail {
   shippingBoxId: string | null;
   sourceType: string;
   sourceId: string;
+  /** Drawing number — joined from inventory_lots for lot-sourced packages;
+   *  null for receiving-sourced packages (receiving items carry no drawing no). */
+  drawingNo: string | null;
 }
 
 export interface PickingItemDetail {
@@ -1317,8 +1320,10 @@ export async function getPickingOrderDetail(
             scanned_date_code AS "scannedDateCode", scanned_lot_code AS "scannedLotCode",
             scanned_coo AS "scannedCoo", scanned_cow AS "scannedCow",
             shipping_box_id AS "shippingBoxId",
-            source_type AS "sourceType", source_id AS "sourceId"
-          FROM picking_packages
+            source_type AS "sourceType", source_id AS "sourceId",
+            il.drawing_no AS "drawingNo"
+          FROM picking_packages pp
+          LEFT JOIN inventory_lots il ON pp.source_type = 'inventory_lot' AND il.id = pp.source_id
           WHERE ${inArray(sql`picking_item_id`, itemIds)}
           ORDER BY created_date, id
         `

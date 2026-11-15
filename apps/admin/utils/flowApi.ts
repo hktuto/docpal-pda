@@ -113,6 +113,9 @@ export interface PickingItemRow {
     shippingBoxId: string | null;
     sourceType: string;
     sourceId: string;
+    /** Drawing number — joined from inventory_lots for lot-sourced packages;
+     *  null for receiving-sourced packages. */
+    drawingNo: string | null;
   }[];
 }
 

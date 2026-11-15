@@ -2014,6 +2014,7 @@ export default {
           verified: "Verified",
           labelBarcode: "Label barcode",
           overriddenHint: "Pick-time scan overrode the source value",
+          downloadScanExcel: "Download pick scan Excel",
         },
         downloadPickingList: "Download picking list",
         printPng: "Print",
