@@ -705,6 +705,7 @@ export default {
       totalQty: "总数",
       scannedQty: "已扫描",
       boxedQty: "已上架",
+      allocatedChip: "已分配拣货 {qty} 件",
       dateLot: "日期 / 批次",
       cooCow: "产地 / 晶圆产地",
       noScans: "尚未扫描任何件",

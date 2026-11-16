@@ -15,7 +15,11 @@ export interface PutAwayItemGroup {
   /** Summed qty fields (lineQty null when any member is null). */
   lineQty: number | null;
   receivedQty: number;
+  pickedQty: number;
   putAwayQty: number;
+  /** Qty allocated to picking orders — excluded from the backend remaining
+   *  guard, so it must NOT count toward the card's Done display. */
+  allocatedQty: number;
   remainingQty: number;
   /** Staged (unboxed) scan qty across the member lines. */
   stagedQty: number;
@@ -40,7 +44,9 @@ export function groupPutAwayItems(
         items: [],
         lineQty: 0,
         receivedQty: 0,
+        pickedQty: 0,
         putAwayQty: 0,
+        allocatedQty: 0,
         remainingQty: 0,
         stagedQty: 0,
       };
@@ -51,11 +57,23 @@ export function groupPutAwayItems(
     if (item.lineQty == null) group.lineQty = null;
     else if (group.lineQty != null) group.lineQty += item.lineQty;
     group.receivedQty += item.receivedQty;
+    group.pickedQty += item.pickedQty;
     group.putAwayQty += item.putAwayQty;
+    group.allocatedQty += item.allocatedQty;
     group.remainingQty += item.remainingQty;
     group.stagedQty += stagedQtyByItem[item.id] ?? 0;
   }
   return groups;
+}
+
+/** Display-side "fully scanned" check: put-away + staged scans vs the qty
+ *  this flow must handle (received − picked). Deliberately ignores
+ *  allocatedQty — the backend remaining guard nets allocated stock out
+ *  (remainingQty ≤ 0 with zero scans when picking reserved it all), which
+ *  must not mark the card Done while the operator has unscanned pieces.
+ *  2026-11-XX user report: 未 scan 曬但顯示已經 scan 完. */
+export function putAwayGroupComplete(group: PutAwayItemGroup): boolean {
+  return group.putAwayQty + group.stagedQty >= group.receivedQty - group.pickedQty;
 }
 
 /** Qty catalog fields are summed; batch/location fields render the distinct

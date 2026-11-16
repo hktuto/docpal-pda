@@ -46,6 +46,7 @@ flowchart TD
 - **批次回写是「填充」不是「覆盖」**:`recordPutAwayScan` 用 `COALESCE(旧值,新值)` 回填 `receiving_invoice_items`——已有非空值永远赢过扫到的值(ai-scope 已同步为此措辞)。
 - **货架建议 advisory、读时算、不落库**:三级排序 same-part-box → same-part-stock → 子库亲和(`shelves.sub_inventory_scopes`);`suggestShelf=off` 全抑制。
 - **剩余量守卫**:`received − picked − put_away − allocated − staged`;lot 已有拣货分配 → 撤销 409 `lot_has_pick_allocations`。
+- **完成显示与守卫不同源**:卡片 Done 看 `put_away + staged ≥ received − picked`(`putAwayGroupComplete`,不含 allocated)——被分配去拣货的存货不会令卡片显示已完成,改显「已分配拣货 N 件」警示 chip;守卫本身仍扣 allocated(多扫会 409 `scanned_qty_exceeds_remaining`)。
 - **assignee 语义**:队列列表**无** `allowedOrgIds` 过滤(有任务就能干),candidates 有;foreign assignee detail 404 = 权限语义,不是缺行。
 - CN 变体差异:无 dock 账、无 `inventory_lot_sources`(FK 指标准表)、无盒实体(pair 取自 item);lot 键先经 `resolveCnMasterPart` 解回主档(TE `AMP(...)` 拆包)。
 - 详情页 `useSupplierSymbologyScope(..., { withShelfCodes: true })`:货架/箱 QR 符号常开。

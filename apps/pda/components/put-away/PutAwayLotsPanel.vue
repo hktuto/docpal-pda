@@ -22,6 +22,9 @@
         :meta="[fieldsMeta(group), progressMeta(group)]"
         :chip-text="isDone(group) ? $t('putAway.lotsPanel.done') : undefined"
         chip-class="badge--done"
+        :warn-text="!isDone(group) && group.allocatedQty > 0
+          ? $t('putAway.lotsPanel.allocatedChip', { qty: group.allocatedQty })
+          : undefined"
         :done="isDone(group)"
         @toggle="toggleExpand(group.key)"
       >
@@ -143,6 +146,7 @@ import { IDENTITY_DETAIL_FIELDS, putAwayItemFieldValue } from "~/utils/viewConfi
 import {
   putAwayGroupFieldValue,
   putAwayGroupSuggestion,
+  putAwayGroupComplete,
   type PutAwayItemGroup,
 } from "~/utils/putAwayGroups";
 import type { PutAwayScan } from "~/services/types";
@@ -209,11 +213,15 @@ function isExpandable(group: PutAwayItemGroup): boolean {
   );
 }
 
-/** Fully put away: nothing left on any member line and no staged scans. Done
- *  groups stay on the list — dimmed, with a done chip — and no longer offer
- *  scan actions. */
+/** Fully put away: every member line scanned/shelved up to the qty this flow
+ *  handles (received − picked) and nothing staged. Deliberately does NOT
+ *  follow the backend remainingQty (which nets out allocations) — a part
+ *  whose stock was allocated to picking must not read as Done while the
+ *  operator has unscanned pieces; an "allocated" chip explains the gap.
+ *  Done groups stay on the list — dimmed, with a done chip — and no longer
+ *  offer scan actions. */
 function isDone(group: PutAwayItemGroup): boolean {
-  return group.remainingQty <= 0 && group.stagedQty === 0;
+  return putAwayGroupComplete(group) && group.stagedQty === 0;
 }
 
 function groupTitle(group: PutAwayItemGroup): string {

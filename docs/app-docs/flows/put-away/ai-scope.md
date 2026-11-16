@@ -87,9 +87,17 @@
   single card with summed qty (`utils/putAwayGroups.ts`
   `groupPutAwayItems`, spec `2026-10-05-put-away-part-grouping-design`),
   ordered by part number (numeric-aware; CN mode keeps po_line → part_no).
-  Fully put-away groups (nothing remaining, nothing staged) stay on the
-  list — dimmed with a green "Done" chip and no scan buttons — instead of
-  disappearing; the scan-match pool (`visibleItems`) still excludes them.
+  Fully put-away groups stay on the list — dimmed with a green "Done"
+  chip and no scan buttons — instead of disappearing; the scan-match pool
+  (`visibleItems`) still excludes them. The Done display is deliberately
+  NOT the backend `remainingQty` (which nets out allocations): it checks
+  `putAwayQty + stagedQty >= receivedQty − pickedQty`
+  (`putAwayGroupComplete`) plus nothing staged, so a part whose stock was
+  allocated to picking orders does not read Done while the operator has
+  unscanned pieces — such not-done groups carry a warning chip
+  "已分配揀貨 {qty} 件" (i18n `putAway.lotsPanel.allocatedChip`) explaining
+  the gap; scanning the allocated portion still 409s
+  (`scanned_qty_exceeds_remaining`) until the allocation is released.
   Expanding the card lists the member lines with their per-line remaining +
   batch values. One label's qty may span several same-part lines (a 20300
   package against 300 + 20000 lines): every write path splits the qty FIFO

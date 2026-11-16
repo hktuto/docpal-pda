@@ -706,6 +706,7 @@ export default {
       totalQty: "Total",
       scannedQty: "Scanned",
       boxedQty: "Put away",
+      allocatedChip: "{qty} pcs allocated to picking",
       dateLot: "Date / Lot",
       cooCow: "COO / COW",
       noScans: "No scanned pieces yet",
