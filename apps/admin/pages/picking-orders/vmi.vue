@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { checkVmiDrafts, parseVmiAoa, vmiQty, type VmiIssue, type VmiOrderDraft } from "~/utils/vmiExcel";
+import { checkVmiDrafts, parseVmiAoa, vmiLineFields, vmiQty, type VmiIssue, type VmiOrderDraft } from "~/utils/vmiExcel";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 import type { VmiPickingOrderCreate } from "~/utils/flowApi";
 
@@ -165,10 +165,12 @@ async function create() {
       subInventoryCode: o.subInventoryCode.trim(),
       shipTo: o.shipTo || undefined,
       poNo: o.poNo || undefined,
-      items: o.items.map((item, i) => ({
+      items: o.items.map((item) => ({
         partNo: item.partNo,
         qty: vmiQty(item.qty)!,
-        lineNumber: item.lineNumber ? Number(item.lineNumber) : i + 1,
+        // Integer PO Line → line_number; text PO Line ("18/1", "1.1") →
+        // additional_data.poLine passthrough (sequence fallback server-side).
+        ...vmiLineFields(item.lineNumber),
         customerItem: item.customerItem || undefined,
       })),
     }));

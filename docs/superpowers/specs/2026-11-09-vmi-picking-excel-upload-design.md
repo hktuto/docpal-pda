@@ -28,7 +28,7 @@ Qty, Sub Inventory — anything else maps to nullable columns.
 | Sub Inventory | `sub_inventory_code`; `org_id` resolved client-side via `GET /admin/sub-inventories` (unique name match) |
 | Item | `picking_items.part_no` (wcl_item_no form) |
 | Qty | `picking_items.qty` (positive integer) |
-| PO Line | `picking_items.line_number` |
+| PO Line | `picking_items.line_number` when the cell is a positive integer; otherwise the text (e.g. `18/1`, `1.1`) rides `picking_items.additional_data.poLine` and `line_number` falls back to the row sequence |
 | Customer Item | `picking_items.additional_data.customerItem` (jsonb passthrough) |
 
 `picking_order_type` is fixed to `'vmi'` by the backend. deliveryDate/priority

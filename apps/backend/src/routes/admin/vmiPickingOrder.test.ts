@@ -80,6 +80,29 @@ test("creates one order per VMI group with type vmi and item passthrough", async
   assert.equal(items[1]!.extra, null);
 });
 
+test("keeps a non-integer PO Line as additional_data.poLine; line_number falls back to sequence", async () => {
+  const res = await create([
+    vmiOrder("VMI-58057", {
+      items: [
+        { partNo: "VMI-TEST-PART", qty: 2000, poLine: "18/1" },
+        { partNo: "VMI-TEST-PART", qty: 4000, poLine: "1.1", lineNumber: 7 },
+      ],
+    }),
+  ]);
+  assert.equal(res.status, 200);
+  const items = await queryAll<{ line: number | null; extra: { poLine?: string } | null }>(
+    client.db,
+    sql`SELECT pi.line_number AS line, pi.additional_data AS extra
+        FROM picking_items pi JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE po.order_no = 'VMI-58057' ORDER BY pi.id`
+  );
+  assert.equal(items.length, 2);
+  assert.equal(items[0]!.line, 1); // sequence fallback
+  assert.equal(items[0]!.extra?.poLine, "18/1");
+  assert.equal(items[1]!.line, 7); // explicit integer still wins
+  assert.equal(items[1]!.extra?.poLine, "1.1");
+});
+
 test("rejects a batch whose refs already exist (409) without creating anything", async () => {
   const first = await create([vmiOrder("VMI-58051")]);
   assert.equal(first.status, 200);

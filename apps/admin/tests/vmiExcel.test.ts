@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { checkVmiDrafts, parseVmiAoa, vmiQty } from "~/utils/vmiExcel";
+import { checkVmiDrafts, parseVmiAoa, vmiLineFields, vmiQty } from "~/utils/vmiExcel";
 
 const require = createRequire(import.meta.url);
 
@@ -118,5 +118,22 @@ describe("vmiQty", () => {
     expect(vmiQty("-5")).toBeNull();
     expect(vmiQty("1.5")).toBeNull();
     expect(vmiQty("")).toBeNull();
+  });
+});
+
+describe("vmiLineFields", () => {
+  it("maps a positive integer PO Line to lineNumber", () => {
+    expect(vmiLineFields("3")).toEqual({ lineNumber: 3 });
+    expect(vmiLineFields(" 12 ")).toEqual({ lineNumber: 12 });
+  });
+
+  it("passes text PO Line values through as poLine", () => {
+    expect(vmiLineFields("18/1")).toEqual({ poLine: "18/1" });
+    expect(vmiLineFields("1.1")).toEqual({ poLine: "1.1" });
+    expect(vmiLineFields("0")).toEqual({ poLine: "0" });
+  });
+
+  it("maps a blank PO Line to no fields", () => {
+    expect(vmiLineFields("")).toEqual({});
   });
 });

@@ -44,7 +44,15 @@ adminVmiPickingOrderRoute.post("/picking-orders/vmi-create", async (c) => {
       const partNo = reqStr(item, "partNo");
       const qty = reqInt(item, "qty");
       if (qty <= 0) throw new HTTPException(400, { message: `orders[${i}].items[${j}].qty must be > 0` });
-      return { partNo, qty, lineNumber: optInt(item, "lineNumber"), customerItem: optStr(item, "customerItem") };
+      return {
+        partNo,
+        qty,
+        lineNumber: optInt(item, "lineNumber"),
+        // Non-integer PO Line cells ("18/1", "1.1") arrive as poLine text and
+        // ride additional_data; line_number falls back to the row sequence.
+        poLine: optStr(item, "poLine"),
+        customerItem: optStr(item, "customerItem"),
+      };
     });
     return {
       orderNo: reqStr(o, "orderNo"),
@@ -113,7 +121,13 @@ adminVmiPickingOrderRoute.post("/picking-orders/vmi-create", async (c) => {
             allocatedQty: 0,
             lineNumber: item.lineNumber ?? j + 1,
             status: "pending",
-            additionalData: item.customerItem ? { customerItem: item.customerItem } : null,
+            additionalData:
+              item.customerItem || item.poLine
+                ? {
+                    ...(item.customerItem ? { customerItem: item.customerItem } : {}),
+                    ...(item.poLine ? { poLine: item.poLine } : {}),
+                  }
+                : null,
             createdDate: now,
             lastUpdateDate: now,
           });

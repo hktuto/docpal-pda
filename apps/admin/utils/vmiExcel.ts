@@ -57,6 +57,17 @@ const VMI_COLUMNS: Record<string, keyof (VmiItemDraft & VmiOrderDraft)> = {
   "sub inventory": "subInventoryCode",
 };
 
+/** PO Line cell → API fields: a positive integer maps to picking_items.line_number
+ *  as before; anything else ("18/1", "1.1") rides along verbatim as
+ *  additional_data.poLine (line_number then falls back to the row sequence). */
+export function vmiLineFields(lineNumber: string): { lineNumber?: number; poLine?: string } {
+  const s = text(lineNumber);
+  if (s === "") return {};
+  const n = Number(s);
+  if (Number.isInteger(n) && n > 0) return { lineNumber: n };
+  return { poLine: s };
+}
+
 /** Qty cell → positive integer, or null ("1,000" tolerated). */
 export function vmiQty(value: string): number | null {
   const n = Number(text(value).replace(/,/g, ""));

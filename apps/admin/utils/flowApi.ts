@@ -211,7 +211,7 @@ export interface VmiPickingOrderCreate {
   subInventoryCode: string;
   shipTo?: string;
   poNo?: string;
-  items: { partNo: string; qty: number; lineNumber?: number | null; customerItem?: string }[];
+  items: { partNo: string; qty: number; lineNumber?: number | null; poLine?: string; customerItem?: string }[];
 }
 
 /** customer_accounts row (GET /admin/customer-accounts) — dropdown source for customer_code. */
