@@ -88,7 +88,7 @@ test("cust-item-lookup: chain misses resolve to null; description is independent
   const res = await post({
     lines: [
       { orderNo: "NO-SUCH-ORDER", wclItemNo: "KOA+SG73P2ATTD 4701F" }, // order miss → null cust item, part fields still found
-      { orderNo: "HK2610-0450", wclItemNo: "NO-SUCH-PART" }, // cross-ref + part miss → nulls; moq → 0
+      { orderNo: "HK2610-0450", wclItemNo: "NO-SUCH-PART" }, // cross-ref + part miss → all null
     ],
   });
   assert.equal(res.status, 200);
@@ -109,20 +109,38 @@ test("cust-item-lookup: chain misses resolve to null; description is independent
       custItemNumber: null,
       partNo: null,
       itemDescription: null,
-      moq: 0,
+      moq: null,
       deliveryDate: "2026-10-30",
     },
   ]);
 });
 
-test("cust-item-lookup: null parts.moq returns 0", async () => {
+test("cust-item-lookup: null parts.moq falls back to description MOQ=", async () => {
   await reseed(client);
   await seedChain();
-  await client.db.execute(sql`UPDATE parts SET moq = NULL WHERE id = 'test-cl-p1'`);
+  await client.db.execute(sql`
+    UPDATE parts
+    SET moq = NULL, description = 'CHIP.RES 0603 910 OHM 0.5% 1/10W Sn MPQ=5K/R MOQ=5000'
+    WHERE id = 'test-cl-p1'
+  `);
   const res = await post({ lines: [{ orderNo: "HK2610-0450", wclItemNo: "KOA+SG73P2ATTD 4701F" }] });
   assert.equal(res.status, 200);
   const { results } = await res.json();
-  assert.equal(results[0].moq, 0);
+  assert.equal(results[0].moq, 5000);
+});
+
+test("cust-item-lookup: null moq and no MOQ= in description returns null", async () => {
+  await reseed(client);
+  await seedChain();
+  await client.db.execute(sql`
+    UPDATE parts
+    SET moq = NULL, description = 'MOF.RES 47 OHM 5% 1/2W SnCu 2K/BOX'
+    WHERE id = 'test-cl-p1'
+  `);
+  const res = await post({ lines: [{ orderNo: "HK2610-0450", wclItemNo: "KOA+SG73P2ATTD 4701F" }] });
+  assert.equal(res.status, 200);
+  const { results } = await res.json();
+  assert.equal(results[0].moq, null);
 });
 
 test("cust-item-lookup: rejects invalid payloads", async () => {
