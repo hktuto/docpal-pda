@@ -10,6 +10,7 @@
 import type { PickingOrderDetail } from "~/utils/flowApi";
 import OrderDetailView from "~/components/picking-orders/OrderDetailView.vue";
 import PickingFinishedView from "~/components/picking-orders/PickingFinishedView.vue";
+import { buildPickingScanAoa } from "~/utils/pickingScanExcel";
 
 const route = useRoute();
 const { t } = useI18n();
@@ -59,6 +60,27 @@ async function load() {
 // allocations, no in-request recompute, so no reload afterwards).
 const apiBaseUrl = useRuntimeConfig().public.apiBaseUrl as string;
 const downloadingPickingList = ref(false);
+// Picked-scan Excel (picking_finished view): one row per package in scan
+// order — util builds the AOA, XLSX writes it client-side.
+const dateCodeFormat = useDateCodeFormat();
+const downloadingScanExcel = ref(false);
+async function downloadScanExcel() {
+  if (!order.value || downloadingScanExcel.value) return;
+  downloadingScanExcel.value = true;
+  error.value = "";
+  try {
+    const XLSX = await import("xlsx");
+    const aoa = buildPickingScanAoa({ order: order.value, dateCodeFormat: dateCodeFormat.format.value });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "scan");
+    XLSX.writeFile(wb, `picking-scan-${order.value.orderNo}.xlsx`);
+  } catch (e: any) {
+    error.value = `${t("admin.pages.pickingOrders.pickingListError")}: ${e.message}`;
+  } finally {
+    downloadingScanExcel.value = false;
+  }
+}
 // PNG print of the same picking list (CR-049) — the dialog fetches the
 // picking-list document + renders/prints it; build errors surface there.
 const printOpen = ref(false);
@@ -166,6 +188,14 @@ const {
       <div class="head-actions">
         <button class="btn" :disabled="downloadingPickingList" @click="downloadPickingList">
           {{ $t("admin.pages.pickingOrders.downloadPickingList") }}
+        </button>
+        <button
+          v-if="order && (order.status === 'picking_finished' || order.status === 'measuring_finished')"
+          class="btn"
+          :disabled="downloadingScanExcel"
+          @click="downloadScanExcel"
+        >
+          {{ $t("admin.pages.pickingOrders.downloadScanExcel") }}
         </button>
         <button class="btn" :disabled="!order" @click="printOpen = true">
           {{ $t("admin.pages.pickingOrders.printPng") }}
