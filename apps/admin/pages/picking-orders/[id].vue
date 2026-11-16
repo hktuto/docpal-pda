@@ -33,9 +33,22 @@ const activeView = computed(() => stageViews[viewForStatus(order.value?.status ?
 // from GET /config's flowSteps — app.vue loads the shared singleton).
 const { steps: flowSteps } = useFlowSteps();
 
-// Body-view ref: the placeholder exposes `changeBusy` so the SSE change
-// notice can suppress a silent reload while a body modal is open.
-const viewEl = ref<{ changeBusy: boolean } | null>(null);
+// Body-view ref: the placeholder exposes `changeBusy` (SSE reload guard) and
+// the stage-action handlers driven by the page-head buttons.
+const viewEl = ref<{
+  changeBusy: boolean;
+  reallocating: boolean;
+  confirmingAllocation: boolean;
+  reallocate: () => Promise<void>;
+  openReportModal: () => void;
+  confirmAllocation: () => Promise<void>;
+} | null>(null);
+
+// Stage actions — status-specific shortcuts rendered in the page head but
+// executed inside the body view (which owns the handlers + modals).
+const stageActionVisible = computed(() =>
+  !!order.value && ["pending", "picking", "allocated"].includes(order.value.status)
+);
 
 // Page-head mutations and body mutations both reload the order and bump the
 // audit-log key — the view receives this as its `refresh` prop.
@@ -199,6 +212,30 @@ const {
         </button>
         <button class="btn" :disabled="!order" @click="printOpen = true">
           {{ $t("admin.pages.pickingOrders.printPng") }}
+        </button>
+        <button
+          v-if="stageActionVisible"
+          class="btn"
+          :disabled="!viewEl || viewEl.reallocating"
+          @click="viewEl?.reallocate()"
+        >
+          {{ viewEl?.reallocating ? $t("admin.common.saving") : $t("admin.pages.pickingOrders.reallocate") }}
+        </button>
+        <button
+          v-if="stageActionVisible"
+          class="btn"
+          :disabled="!viewEl"
+          @click="viewEl?.openReportModal()"
+        >
+          {{ $t("admin.pages.pickingOrders.reportIssue") }}
+        </button>
+        <button
+          v-if="order && order.status === 'pending'"
+          class="btn btn-primary"
+          :disabled="!viewEl || viewEl.confirmingAllocation"
+          @click="viewEl?.confirmAllocation()"
+        >
+          {{ viewEl?.confirmingAllocation ? $t("admin.common.saving") : $t("admin.pages.pickingOrders.confirmAllocation") }}
         </button>
         <button class="btn" @click="overrideOpen = true">
           {{ $t("admin.pages.pickingOrders.overrideStatus") }}

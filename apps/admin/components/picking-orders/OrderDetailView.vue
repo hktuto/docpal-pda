@@ -613,6 +613,13 @@ watch(
 // must suppress the silent SSE reload.
 defineExpose({
   changeBusy: computed(() => reportOpen.value || availOpen.value),
+  // Stage-action state + handlers driven by the page-head buttons
+  // (re-allocate / report issue / confirm allocation live in the header).
+  reallocating: computed(() => reallocating.value),
+  confirmingAllocation: computed(() => confirmingAllocation.value),
+  reallocate,
+  openReportModal,
+  confirmAllocation,
 });
 </script>
 
@@ -621,34 +628,6 @@ defineExpose({
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="reallocDoneMs" class="alloc-done-banner">
       {{ $t("admin.pages.pickingOrders.allocationDoneIn", { ms: reallocDoneMs }) }}
-    </div>
-
-    <!-- Stage actions (moved from the page head): status-specific shortcuts.
-         Later each stage view carries its own subset of these. -->
-    <div class="stage-actions">
-      <button
-        v-if="['pending', 'picking', 'allocated'].includes(order.status)"
-        class="btn"
-        :disabled="reallocating"
-        @click="reallocate"
-      >
-        {{ reallocating ? $t("admin.common.saving") : $t("admin.pages.pickingOrders.reallocate") }}
-      </button>
-      <button
-        v-if="['pending', 'picking', 'allocated'].includes(order.status)"
-        class="btn"
-        @click="openReportModal"
-      >
-        {{ $t("admin.pages.pickingOrders.reportIssue") }}
-      </button>
-      <button
-        v-if="order.status === 'pending'"
-        class="btn btn-primary"
-        :disabled="confirmingAllocation"
-        @click="confirmAllocation"
-      >
-        {{ confirmingAllocation ? $t("admin.common.saving") : $t("admin.pages.pickingOrders.confirmAllocation") }}
-      </button>
     </div>
 
     <div class="detail-grid">
@@ -1079,10 +1058,5 @@ defineExpose({
 }
 .shelf-warning {
   cursor: help;
-}
-.stage-actions {
-  display: flex;
-  gap: 0.625rem;
-  margin-bottom: 0.875rem;
 }
 </style>
