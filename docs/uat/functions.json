@@ -773,12 +773,12 @@
     "id": "ADM-041",
     "app": "Admin",
     "module": "Shipping",
-    "name": "Packaging pages (打包) — pending queue + weight/box/pallet confirm form (same endpoint as PDA); shipping list `packaged` column; shipping detail packaged orders panel + copy summary for the delivery provider; task-assignment packaging flow",
+    "name": "Packaging pages (打包) — pending queue + 按箱/按卡板 two-mode confirm form (same endpoint as PDA); shipping list by order (read-only overview: box/cart counts per order, links to the picking-order detail); picking-order detail packaging row = the shipping detail (packing record + per-cart breakdown + 標記出貨 button + copy summary for the delivery provider); task-assignment packaging flow",
     "tester": "",
     "testDate": "",
     "result": "",
     "bugIds": "",
-    "remarks": "Spec docs/superpowers/specs/2026-11-10-packaging-shipping-steps-design.md; `shipping` flow step gates the /shipping nav link"
+    "remarks": "Specs docs/superpowers/specs/2026-11-10-packaging-shipping-steps-design.md + 2026-11-16-packaging-box-cart-modes-design.md; `shipping` flow step gates the /shipping nav link"
   },
   {
     "id": "ADM-042",

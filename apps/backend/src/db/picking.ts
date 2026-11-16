@@ -1159,6 +1159,18 @@ export interface PickingOrderDetail extends PickingOrderRow {
    *  step's assignee is `assignee` (picking_orders column). */
   labelingAssignee: string | null;
   labelPrintingAssignee: string | null;
+  /** Packaging stage state + recorded figures (spec
+   *  2026-11-10-packaging-shipping-steps-design.md +
+   *  2026-11-16-packaging-box-cart-modes-design.md); packaged_at IS the
+   *  packaged truth. Display-only on the admin detail page. */
+  packagedAt: Date | null;
+  packagedBy: string | null;
+  packagedByName: string | null;
+  packedWeight: number | null;
+  packedBoxCount: number | null;
+  packedPalletCount: number | null;
+  packedInputBoxCount: number | null;
+  packedCarts: { boxCount: number; weight: number }[] | null;
   items: PickingItemDetail[];
   boxes: PickingBoxDetail[];
   /** Whole-box claim hint: a fully-claimable shelf box whose current contents
@@ -1212,9 +1224,7 @@ export async function getPickingOrderDetail(
   scope?: UserScopeEntry[] | null,
   username?: string
 ): Promise<PickingOrderDetail> {
-  const order = await queryGet<
-    PickingOrderRow & { labelingAssignee: string | null; labelPrintingAssignee: string | null; packagedAt: Date | null }
-  >(
+  const order = await queryGet<Omit<PickingOrderDetail, "items" | "boxes" | "suggestedBox">>(
     db,
     sql`
       SELECT
@@ -1239,10 +1249,15 @@ export async function getPickingOrderDetail(
         po.label_printing_pending AS "labelPrintingPending",
         po.label_printing_done_at AS "labelPrintingDoneAt", po.label_printing_done_by AS "labelPrintingDoneBy",
         lpu.display_name AS "labelPrintingDoneByName",
-        po.packaged_at AS "packagedAt",
+        po.packaged_at AS "packagedAt", po.packaged_by AS "packagedBy",
+        pu.display_name AS "packagedByName",
+        po.packed_weight AS "packedWeight", po.packed_box_count AS "packedBoxCount",
+        po.packed_pallet_count AS "packedPalletCount",
+        po.packed_input_box_count AS "packedInputBoxCount", po.packed_carts AS "packedCarts",
         po.created_date AS "createdDate", po.last_update_date AS "lastUpdateDate"
       FROM picking_orders po
       LEFT JOIN users w ON w.id = po.working_by
+      LEFT JOIN users pu ON pu.id = po.packaged_by
       LEFT JOIN users ru ON ru.id = po.issue_reported_by
       LEFT JOIN users lu ON lu.id = po.labeling_done_by
       LEFT JOIN users lpu ON lpu.id = po.label_printing_done_by
@@ -3602,6 +3617,8 @@ export async function resetPickingOrderProgress(
               packed_weight = NULL,
               packed_box_count = NULL,
               packed_pallet_count = NULL,
+              packed_input_box_count = NULL,
+              packed_carts = NULL,
               shipped_at = NULL,
               shipped_by = NULL,
               issue_reason = NULL,

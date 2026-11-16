@@ -456,6 +456,13 @@
       "when": 1794618804549,
       "tag": "0065_youthful_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1794809662335,
+      "tag": "0066_narrow_firebrand",
+      "breakpoints": true
     }
   ]
 }

@@ -450,6 +450,72 @@ async function reallocate() {
 
 onBeforeUnmount(() => clearTimeout(reallocTimer));
 
+// Per-order ship (寄出, spec 2026-11-16-packaging-box-cart-modes-design.md):
+// shown on packaged orders — ships every ready-to-ship box of the order
+// (ship core stays per box; shared boxes with other unpackaged orders 409
+// per box and are listed). 409 nothing_to_ship = all shipped / gates open.
+const shippingOrder = ref(false);
+const shippedDoneCount = ref(0);
+let shippedTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function markShipped() {
+  if (shippingOrder.value) return;
+  if (!window.confirm(t("admin.pages.pickingOrders.shipConfirm", { orderNo: props.order.orderNo }))) return;
+  shippingOrder.value = true;
+  error.value = "";
+  try {
+    const result = await flow.shipPickingOrder(orderId);
+    if (result.failed.length > 0) {
+      error.value = t("admin.pages.pickingOrders.shipFailed", {
+        boxes: result.failed.map((f) => `${f.boxId} (${f.message})`).join(", "),
+      });
+    } else {
+      shippedDoneCount.value = result.shippedBoxIds.length;
+      clearTimeout(shippedTimer);
+      shippedTimer = setTimeout(() => {
+        shippedDoneCount.value = 0;
+      }, 8000);
+    }
+    await props.refresh();
+  } catch (e: any) {
+    error.value = e?.message === "nothing_to_ship" ? t("admin.pages.pickingOrders.nothingToShip") : e.message;
+  } finally {
+    shippingOrder.value = false;
+  }
+}
+
+// Packing summary for the delivery provider's form (was the box-detail copy
+// block; shipping is order-keyed now): one copyable line per packaged order
+// + per-cart breakdown. Clipboard with a select fallback on insecure origins.
+const copied = ref(false);
+const packagingSummary = computed(() => {
+  const o = props.order;
+  if (!o.packagedAt) return "";
+  const base = [
+    o.orderNo,
+    o.customerCode ?? "",
+    o.shipTo ?? "",
+    `${o.packedWeight ?? ""} kg`,
+    t("admin.pages.shipping.summaryBoxes", { count: o.packedBoxCount ?? 0 }),
+    ...(o.packedPalletCount != null ? [t("admin.pages.shipping.summaryPallets", { count: o.packedPalletCount })] : []),
+  ].filter(Boolean).join(" | ");
+  const carts = o.packedCarts ?? [];
+  if (carts.length === 0) return base;
+  return `${base}\n  ${carts
+    .map((c, i) => `${t("admin.pages.shipping.summaryCartNo", { no: i + 1 })}: ${t("admin.pages.shipping.summaryBoxes", { count: c.boxCount })} / ${c.weight} kg`)
+    .join("; ")}`;
+});
+
+async function copyPackaging() {
+  try {
+    await navigator.clipboard.writeText(packagingSummary.value);
+    copied.value = true;
+    setTimeout(() => (copied.value = false), 2000);
+  } catch {
+    // clipboard unavailable (insecure origin) — silently ignore
+  }
+}
+
 // Per-allocation "Remove" (x): DELETEs that one allocation row. No order
 // status check (admins may fix allocations in any state); 409 lock_held
 // carries the same JSON body as reallocate.
@@ -699,6 +765,37 @@ defineExpose({
               by: order.labelingDoneByName ?? order.labelingDoneBy ?? "—",
             }) }}
           </template>
+        </div>
+      </div>
+      <!-- Packaging record (打包, specs 2026-11-10 + 2026-11-16): figures recorded
+           at the packaging confirm — shown only once packaged, with the
+           per-order ship action (the ship core stays per box). -->
+      <div v-if="order.packagedAt">
+        <div class="dt">{{ $t("admin.pages.pickingOrders.packaging") }}</div>
+        <div class="dd packaging-dd">
+          <span>
+            {{ $t("admin.pages.pickingOrders.packagingDone", {
+              at: formatDateTime(order.packagedAt),
+              by: order.packagedByName ?? order.packagedBy ?? "—",
+            }) }}
+            · {{ order.packedWeight ?? "—" }} kg
+            <template v-if="order.packedInputBoxCount != null">· {{ $t("admin.pages.pickingOrders.packagingInputBoxes", { count: order.packedInputBoxCount }) }}</template>
+            · {{ $t("admin.pages.pickingOrders.packagingAutoBoxes", { count: order.packedBoxCount ?? 0 }) }}
+            <template v-if="order.packedPalletCount != null">· {{ $t("admin.pages.pickingOrders.packagingPallets", { count: order.packedPalletCount }) }}</template>
+          </span>
+          <span v-if="shippedDoneCount" class="ship-done">{{ $t("admin.pages.pickingOrders.shipDone", { n: shippedDoneCount }) }}</span>
+          <button class="btn ship-btn" :disabled="shippingOrder" @click="markShipped">
+            {{ shippingOrder ? $t("admin.pages.pickingOrders.shipping") : $t("admin.pages.pickingOrders.markShipped") }}
+          </button>
+          <button class="btn ship-btn" :title="packagingSummary" @click="copyPackaging">
+            {{ copied ? $t("admin.pages.shipping.copied") : $t("admin.pages.shipping.copy") }}
+          </button>
+        </div>
+        <div v-if="order.packedCarts && order.packedCarts.length" class="packaging-carts">
+          <span v-for="(cart, i) in order.packedCarts" :key="i" class="packaging-cart">
+            {{ $t("admin.pages.pickingOrders.packagingCartNo", { no: i + 1 }) }}:
+            {{ $t("admin.pages.pickingOrders.packagingCartEntry", { boxes: cart.boxCount, weight: cart.weight }) }}
+          </span>
         </div>
       </div>
       <div><div class="dt">{{ $t("admin.pages.pickingOrders.customer") }}</div><div class="dd">{{ order.customerCode ?? "—" }}</div></div>
@@ -983,6 +1080,28 @@ defineExpose({
   font-size: 0.9375rem;
   margin: 1.125rem 0 0.5rem;
   color: #52606d;
+}
+.packaging-carts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.875rem;
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: #52606d;
+}
+.packaging-dd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.ship-btn {
+  padding: 0.2rem 0.75rem;
+  font-size: 0.8125rem;
+}
+.ship-done {
+  color: #1e7a46;
+  font-size: 0.8125rem;
 }
 .view-toggle {
   margin-left: 0.625rem;

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../db.js";
-import { confirmPackaging, getPackagingOrderDetail, listPackagingOrders } from "../db/packaging.js";
+import { confirmPackaging, getPackagingOrderDetail, listPackagingOrders, parseConfirmPackagingInput } from "../db/packaging.js";
 import { getUserScope } from "../db/user-scope.js";
 import { actorFrom, visibilityUsername } from "../auth/middleware.js";
 
@@ -30,19 +30,36 @@ packagingRoute.get("/packaging-orders/:orderId", async (c) => {
   return c.json(await getPackagingOrderDetail(db, c.req.param("orderId"), { scope, username: visibilityUsername(c) }), 200);
 });
 
-// Confirm: { weight (kg), palletCount? } → stamps packaged_at/by, box count is
-// recomputed server-side. 409 packaging_not_ready when off-queue (covers
-// double-confirm).
+// Confirm payload (spec 2026-11-16-packaging-box-cart-modes-design.md):
+// { mode: "box", weight, boxCount } or { mode: "pallet", pallets: [...] }.
+// Legacy shim (pre-2026-11-16 clients): { weight, palletCount? } without a
+// mode maps to box mode with no 打包記錄 box count; palletCount rides through
+// as the stored pallet count. 409 packaging_not_ready covers double-confirm.
 packagingRoute.post("/packaging-orders/:orderId/confirm", async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as { weight?: unknown; palletCount?: unknown };
-  if (typeof body.weight !== "number") throw new HTTPException(400, { message: "weight_required" });
-  if (body.palletCount !== undefined && body.palletCount !== null && typeof body.palletCount !== "number") {
-    throw new HTTPException(400, { message: "invalid_pallet_count" });
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  if (body.mode === undefined) {
+    // Legacy: single weight + optional pallet count.
+    if (typeof body.weight !== "number") throw new HTTPException(400, { message: "weight_required" });
+    if (body.palletCount !== undefined && body.palletCount !== null && typeof body.palletCount !== "number") {
+      throw new HTTPException(400, { message: "invalid_pallet_count" });
+    }
+    const result = await confirmPackaging(db, {
+      orderId: c.req.param("orderId"),
+      input: {
+        mode: "box",
+        weight: body.weight,
+        boxCount: null,
+        palletCount:
+          body.palletCount === undefined || body.palletCount === null ? null : (body.palletCount as number),
+      },
+      actorId: actorFrom(c).id,
+    });
+    return c.json(result, 200);
   }
+  const input = parseConfirmPackagingInput(body);
   const result = await confirmPackaging(db, {
     orderId: c.req.param("orderId"),
-    weight: body.weight,
-    palletCount: body.palletCount === undefined || body.palletCount === null ? null : body.palletCount,
+    input,
     actorId: actorFrom(c).id,
   });
   return c.json(result, 200);

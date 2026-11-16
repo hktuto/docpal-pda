@@ -33,6 +33,7 @@ import {
   verifyPackage,
   type PickingIssueEntry,
 } from "../db/picking.js";
+import { shipPickingOrder } from "../db/shipping.js";
 import { resolveLabelPrintRulesForOrder } from "../db/labelPrint.js";
 import { labelCountForMatch, printOrderLabel } from "../db/labelPrintParams.js";
 import { actorFrom, visibilityUsername } from "../auth/middleware.js";
@@ -109,6 +110,17 @@ pickingRoute.get("/picking-orders/:id", async (c) => {
   const actor = actorFrom(c);
   const scope = await getUserScope(db, actor.username);
   return c.json(await getPickingOrderDetail(db, c.req.param("id"), scope, visibilityUsername(c)), 200);
+});
+
+// Per-order ship (admin picking-order detail button, spec
+// 2026-11-16-packaging-box-cart-modes-design.md): ships every ready-to-ship
+// box holding the order's packages — the ship core stays per box
+// (shipShippingBox); shared boxes with other unpackaged orders 409 per box
+// and are reported in `failed`. 404 picking_order_not_found / 409
+// nothing_to_ship when the order has no ready boxes.
+pickingRoute.post("/picking-orders/:id/ship", async (c) => {
+  const result = await shipPickingOrder(db, c.req.param("id"), actorFrom(c).id);
+  return c.json(result, 200);
 });
 
 // Label-print rules matching this order (picking-finish print prompt):

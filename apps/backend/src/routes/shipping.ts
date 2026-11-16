@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db } from "../db.js";
-import { getShippingOrderDetail, listShippingOrders, shipShippingBox } from "../db/shipping.js";
+import { getShippingOrderDetail, listShippingOrderGroups, listShippingOrders, shipShippingBox } from "../db/shipping.js";
 import { actorFrom } from "../auth/middleware.js";
 
 export const shippingRoute = new Hono();
@@ -9,6 +9,13 @@ export const shippingRoute = new Hono();
 // the box's completed verify task when the verify step is enabled.
 shippingRoute.get("/shipping-orders", async (c) => {
   return c.json(await listShippingOrders(db), 200);
+});
+
+// Order-keyed view of the same feed (admin list ships per order): one row per
+// picking order with its ready-to-ship box/cart counts. Registered before the
+// /:boxId routes so "by-order" is not swallowed as a box id.
+shippingRoute.get("/shipping-orders/by-order", async (c) => {
+  return c.json(await listShippingOrderGroups(db), 200);
 });
 
 // Ship a fed box: stamps shipped_at/shipped_by, then derives order 'shipped'

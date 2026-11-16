@@ -74,9 +74,9 @@
     - detail receiving order ( edit item details — date code / lot code / COO / COW / ctn no, single or batch, download shipper / finished shipper, and delivery order list ) 7.2, 7.3
   - Customer Receiving Upload (CN) — upload the customer receiving Excel (收貨確認及付款通知書); the app decodes it in-browser for verify/edit, submits the original file + verified JSON to a DocPal workflow, and tracks workflow status per upload. The /receiving-cn page lists the synced CN receiving orders (with still-processing uploads merged on top as pending rows), drill into an order for invoices/items/put-away task status; the upload wizard lives at /receiving-cn/new.
 - Shipping Management
-  - Packaging (打包, flow step `packaging` — opt-in, CN) — /packaging lists verified orders awaiting the weight + box/pallet confirm; detail records total weight, auto box count (server-recomputed) or pallet count, one confirm; packaged orders read back the numbers. Same queue the PDA /packaging page works.
-  - list shipping order with filter and sort, multiple select to download shipper 7.3; `packaged` column (packaging step)
-    - detail shipping order — packaged orders' weight / boxes / pallets + copy summary block for the delivery provider form
+  - Packaging (打包, flow step `packaging` — opt-in, CN) — /packaging lists verified orders awaiting the confirm; detail records 按箱 (packing-record box count + total weight) or 按卡板 (per-cart box count + weight rows, totals derived server-side); packaged orders read back the numbers incl. per-cart breakdown. Same queue the PDA /packaging page works.
+  - list shipping orders BY ORDER (read-only overview, `GET /shipping-orders/by-order`): per-order ready box/cart counts + `packaged` ✓ (packaging step); row links to the picking-order detail
+    - shipping detail = the picking-order detail: packaging row (weight / packing-record box count vs scanned auto count / carts) + 標記出貨 button (ships every ready box) + copy summary for the delivery provider; per-box contents stay on the order's boxes table
 - Issues
   - receiving issues, picking issues
   - Outdated warnings — supplier date-code scan warnings from picking / put-away scans, whole-order resolution with note; pending-count badge in nav; warning chip links from the picking / receiving order detail pages

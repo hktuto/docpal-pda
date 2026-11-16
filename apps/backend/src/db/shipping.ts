@@ -82,6 +82,92 @@ export async function listShippingOrders(db: AppDb): Promise<ShippingOrderRow[]>
   );
 }
 
+export interface ShippingOrderGroupRow {
+  orderId: string;
+  orderNo: string;
+  customerCode: string | null;
+  shipTo: string | null;
+  poNo: string | null;
+  /** Ready-to-ship (closed, unshipped, gate-passing) boxes holding the order's packages. */
+  boxCount: number;
+  packageCount: number;
+  /** Recorded cart (卡板) count from the packaging confirm (packed_carts row
+   *  count, legacy pallet count); NULL = not recorded (not packaged / box mode). */
+  cartCount: number | null;
+  /** Data truth: the order itself has been packaged. */
+  packaged: boolean;
+  /** The ready-to-ship box ids (per-order ship-all + links to the box detail). */
+  boxIds: string[];
+  lastUpdateDate: Date;
+}
+
+/** Order-keyed view of the shipping feed (admin list ships per order): one row
+ *  per picking order that has ≥1 ready-to-ship box, with its box/cart counts.
+ *  Same per-box gates as listShippingOrders (the ship action still ships each
+ *  box — the order row aggregates them). */
+export async function listShippingOrderGroups(db: AppDb): Promise<ShippingOrderGroupRow[]> {
+  return queryAll<ShippingOrderGroupRow>(
+    db,
+    sql`
+      SELECT
+        po.id AS "orderId",
+        po.order_no AS "orderNo",
+        po.customer_code AS "customerCode", po.ship_to AS "shipTo", po.po_no AS "poNo",
+        COUNT(DISTINCT sb.id)::int AS "boxCount",
+        COUNT(pp.id)::int AS "packageCount",
+        COALESCE(
+          CASE WHEN po.packed_carts IS NOT NULL THEN jsonb_array_length(po.packed_carts) END,
+          po.packed_pallet_count) AS "cartCount",
+        po.packaged_at IS NOT NULL AS "packaged",
+        array_agg(DISTINCT sb.id) AS "boxIds",
+        MAX(sb.last_update_date) AS "lastUpdateDate"
+      FROM shipping_boxes sb
+      JOIN picking_packages pp ON pp.shipping_box_id = sb.id
+      JOIN picking_items pi ON pi.id = pp.picking_item_id
+      JOIN picking_orders po ON po.id = pi.picking_order_id
+      WHERE ${readyToShipWhere()}
+      GROUP BY po.id
+      ORDER BY MAX(sb.last_update_date) DESC, po.order_no
+    `
+  );
+}
+
+/** Per-order ship (admin picking-order detail button, spec
+ *  2026-11-16-packaging-box-cart-modes-design.md): ships EVERY ready-to-ship
+ *  box holding the order's packages — one tx per box via shipShippingBox
+ *  (shared boxes with other unpackaged orders 409 per box and are reported).
+ *  404 when the order does not exist; 409 nothing_to_ship when it has no
+ *  ready boxes (all shipped / gates still open). */
+export async function shipPickingOrder(
+  db: AppDb,
+  orderId: string,
+  actorId: string
+): Promise<{ shippedBoxIds: string[]; failed: { boxId: string; message: string }[] }> {
+  const order = await queryGet<{ id: string }>(db, sql`SELECT id FROM picking_orders WHERE id = ${orderId}`);
+  if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+  const boxes = await queryAll<{ id: string }>(
+    db,
+    sql`
+      SELECT DISTINCT sb.id
+      FROM shipping_boxes sb
+      JOIN picking_packages pp ON pp.shipping_box_id = sb.id
+      JOIN picking_items pi ON pi.id = pp.picking_item_id
+      WHERE pi.picking_order_id = ${orderId} AND ${readyToShipWhere()}`
+  );
+  if (boxes.length === 0) throw new HTTPException(409, { message: "nothing_to_ship" });
+  const shippedBoxIds: string[] = [];
+  const failed: { boxId: string; message: string }[] = [];
+  for (const b of boxes) {
+    try {
+      await shipShippingBox(db, b.id, actorId);
+      shippedBoxIds.push(b.id);
+    } catch (e) {
+      failed.push({ boxId: b.id, message: e instanceof HTTPException ? e.message : String(e) });
+    }
+  }
+  return { shippedBoxIds, failed };
+}
+
 export interface ShippingOrderDetailBoxRow {
   boxId: string;
   pickingOrderId: string | null;
@@ -118,6 +204,8 @@ export interface ShippingOrderDetailOrderRow {
   packedWeight: number | null;
   packedBoxCount: number | null;
   packedPalletCount: number | null;
+  packedInputBoxCount: number | null;
+  packedCarts: { boxCount: number; weight: number }[] | null;
 }
 
 export interface ShippingOrderDetail {
@@ -162,7 +250,8 @@ export async function getShippingOrderDetail(db: AppDb, boxId: string): Promise<
         po.id, po.order_no AS "orderNo", po.status, po.ship_to AS "shipTo",
         po.customer_code AS "customerCode", po.po_no AS "poNo",
         po.packaged_at AS "packagedAt", po.packed_weight AS "packedWeight",
-        po.packed_box_count AS "packedBoxCount", po.packed_pallet_count AS "packedPalletCount"
+        po.packed_box_count AS "packedBoxCount", po.packed_pallet_count AS "packedPalletCount",
+        po.packed_input_box_count AS "packedInputBoxCount", po.packed_carts AS "packedCarts"
       FROM picking_orders po
       JOIN picking_packages pp ON pp.picking_order_id = po.id
       WHERE pp.shipping_box_id = ${boxId}

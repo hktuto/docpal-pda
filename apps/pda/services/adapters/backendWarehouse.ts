@@ -41,6 +41,7 @@ import type {
   PackagingOrderRow,
   PackagingOrderDetail,
   ConfirmPackagingResult,
+  ConfirmPackagingPayload,
   VerifyTaskDetail,
   VerifyLabelLookup,
   ScanVerifyTaskLabelResult,
@@ -768,12 +769,8 @@ export function createBackendWarehouseService(
     async getPackagingOrder(orderId: string): Promise<PackagingOrderDetail> {
       return client.get(`/packaging-orders/${orderId}`);
     },
-    async confirmPackaging(
-      orderId: string,
-      weight: number,
-      palletCount: number | null
-    ): Promise<ConfirmPackagingResult> {
-      return client.post(`/packaging-orders/${orderId}/confirm`, { weight, palletCount });
+    async confirmPackaging(orderId: string, payload: ConfirmPackagingPayload): Promise<ConfirmPackagingResult> {
+      return client.post(`/packaging-orders/${orderId}/confirm`, payload);
     },
 
     // Flow-step config (GET /config) — env-driven, read once after login.

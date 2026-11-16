@@ -126,13 +126,16 @@ interface PackagedCols {
   packedWeight: number | null;
   packedBoxCount: number | null;
   packedPalletCount: number | null;
+  packedInputBoxCount: number | null;
+  packedCarts: { boxCount: number; weight: number }[] | null;
 }
 
 async function packagedRow(orderId: string): Promise<PackagedCols> {
   return (await queryGet<PackagedCols>(
     client.db,
     sql`SELECT packaged_at AS "packagedAt", packed_weight AS "packedWeight",
-               packed_box_count AS "packedBoxCount", packed_pallet_count AS "packedPalletCount"
+               packed_box_count AS "packedBoxCount", packed_pallet_count AS "packedPalletCount",
+               packed_input_box_count AS "packedInputBoxCount", packed_carts AS "packedCarts"
         FROM picking_orders WHERE id = ${orderId}`
   ))!;
 }
@@ -193,16 +196,22 @@ test("detail: boxes listed; unknown order 404", async () => {
 
 // --- confirm ----------------------------------------------------------------------
 
-test("confirm: stamps weight/by/at with server-recomputed box count, ledger + SSE event; pending queue drains, completed lists it", async () => {
+test("confirm: box mode stamps the 打包記錄 box count + auto count, ledger + SSE event; pending queue drains, completed lists it", async () => {
   await reset({ packaging: true });
   const fx = await verifiedOrder();
-  const result = await confirmPackaging(client.db, { orderId: fx.orderId, weight: 12.3456, palletCount: null, actorId: fx.actorId });
+  const result = await confirmPackaging(client.db, {
+    orderId: fx.orderId,
+    input: { mode: "box", weight: 12.3456, boxCount: 4 },
+    actorId: fx.actorId,
+  });
   assert.deepEqual(result, { id: fx.orderId, boxCount: 1 });
   const row = await packagedRow(fx.orderId);
   assert.ok(row.packagedAt, "packaged_at stamped");
   assert.equal(row.packedWeight, 12.346, "kg rounded to ≤3 dp");
-  assert.equal(row.packedBoxCount, 1);
+  assert.equal(row.packedBoxCount, 1, "auto scan count — never overridden by the input");
+  assert.equal(row.packedInputBoxCount, 4, "operator's 打包記錄 box count");
   assert.equal(row.packedPalletCount, null);
+  assert.equal(row.packedCarts, null);
   const order = await queryGet<{ status: string; packagedBy: string }>(
     client.db,
     sql`SELECT status, packaged_by AS "packagedBy" FROM picking_orders WHERE id = ${fx.orderId}`
@@ -226,14 +235,45 @@ test("confirm: stamps weight/by/at with server-recomputed box count, ledger + SS
   const done = (await listPackagingOrders(client.db, { status: "completed" })).find((r) => r.id === fx.orderId)!;
   assert.equal(done.packedWeight, 12.346);
   assert.equal(done.packagedBy, fx.actorId);
+  assert.equal(done.packedInputBoxCount, 4);
 });
 
-test("confirm: pallet mode stores the count alongside the auto box count", async () => {
+test("confirm: cart (卡板) mode stores the per-cart array + derived totals", async () => {
   await reset({ packaging: true });
   const fx = await verifiedOrder();
-  await confirmPackaging(client.db, { orderId: fx.orderId, weight: 80, palletCount: 2, actorId: fx.actorId });
+  await confirmPackaging(client.db, {
+    orderId: fx.orderId,
+    input: { mode: "pallet", pallets: [{ boxCount: 2, weight: 30.5 }, { boxCount: 3, weight: 20 }] },
+    actorId: fx.actorId,
+  });
+  const row = await packagedRow(fx.orderId);
+  assert.deepEqual(row.packedCarts, [
+    { boxCount: 2, weight: 30.5 },
+    { boxCount: 3, weight: 20 },
+  ]);
+  assert.equal(row.packedPalletCount, 2, "pallet count = row count");
+  assert.equal(row.packedInputBoxCount, 5, "Σ cart box counts");
+  assert.equal(row.packedWeight, 50.5, "Σ cart weights");
+  assert.equal(row.packedBoxCount, 1, "auto scan count kept alongside");
+  const done = (await listPackagingOrders(client.db, { status: "completed" })).find((r) => r.id === fx.orderId)!;
+  assert.deepEqual(done.packedCarts, [
+    { boxCount: 2, weight: 30.5 },
+    { boxCount: 3, weight: 20 },
+  ]);
+});
+
+test("confirm: legacy payload (single weight, optional pallet count) still confirms", async () => {
+  await reset({ packaging: true });
+  const fx = await verifiedOrder();
+  await confirmPackaging(client.db, {
+    orderId: fx.orderId,
+    input: { mode: "box", weight: 80, boxCount: null, palletCount: 2 },
+    actorId: fx.actorId,
+  });
   const row = await packagedRow(fx.orderId);
   assert.equal(row.packedPalletCount, 2);
+  assert.equal(row.packedInputBoxCount, null);
+  assert.equal(row.packedCarts, null);
   assert.equal(row.packedBoxCount, 1);
 });
 
@@ -243,17 +283,48 @@ test("confirm guards: not-ready 409, double-confirm 409, unknown 404, bad payloa
   const bad = () => ({ orderId: fx.orderId, actorId: fx.actorId });
 
   await client.db.execute(sql`UPDATE verify_tasks SET status = 'pending' WHERE id = ${fx.verifyTaskId}`);
-  assert.equal((await catchHttp(confirmPackaging(client.db, { ...bad(), weight: 1, palletCount: null }))).message, "packaging_not_ready");
+  assert.equal(
+    (await catchHttp(confirmPackaging(client.db, { ...bad(), input: { mode: "box", weight: 1, boxCount: 1 } }))).message,
+    "packaging_not_ready"
+  );
   await client.db.execute(sql`UPDATE verify_tasks SET status = 'completed' WHERE id = ${fx.verifyTaskId}`);
 
-  assert.equal((await catchHttp(confirmPackaging(client.db, { orderId: "nope", weight: 1, palletCount: null, actorId: fx.actorId }))).message, "packaging_order_not_found");
-  assert.equal((await catchHttp(confirmPackaging(client.db, { ...bad(), weight: 0, palletCount: null }))).message, "invalid_weight");
-  assert.equal((await catchHttp(confirmPackaging(client.db, { ...bad(), weight: NaN, palletCount: null }))).message, "invalid_weight");
-  assert.equal((await catchHttp(confirmPackaging(client.db, { ...bad(), weight: 1, palletCount: 0 }))).message, "invalid_pallet_count");
-  assert.equal((await catchHttp(confirmPackaging(client.db, { ...bad(), weight: 1, palletCount: 1.5 }))).message, "invalid_pallet_count");
+  assert.equal(
+    (await catchHttp(confirmPackaging(client.db, { orderId: "nope", input: { mode: "box", weight: 1, boxCount: 1 }, actorId: fx.actorId }))).message,
+    "packaging_order_not_found"
+  );
+  assert.equal(
+    (await catchHttp(confirmPackaging(client.db, { ...bad(), input: { mode: "box", weight: 0, boxCount: 1 } }))).message,
+    "invalid_weight"
+  );
+  assert.equal(
+    (await catchHttp(confirmPackaging(client.db, { ...bad(), input: { mode: "box", weight: NaN, boxCount: 1 } }))).message,
+    "invalid_weight"
+  );
+  assert.equal(
+    (await catchHttp(confirmPackaging(client.db, { ...bad(), input: { mode: "box", weight: 1, boxCount: 0 } }))).message,
+    "invalid_box_count"
+  );
+  assert.equal(
+    (await catchHttp(confirmPackaging(client.db, { ...bad(), input: { mode: "box", weight: 1, boxCount: 1.5 } }))).message,
+    "invalid_box_count"
+  );
+  assert.equal((await catchHttp(confirmPackaging(client.db, { ...bad(), input: { mode: "pallet", pallets: [] } }))).message, "invalid_pallets");
+  assert.equal(
+    (await catchHttp(confirmPackaging(client.db, { ...bad(), input: { mode: "pallet", pallets: [{ boxCount: 1, weight: 0 }] } }))).message,
+    "invalid_pallets"
+  );
+  assert.equal(
+    (await catchHttp(confirmPackaging(client.db, { ...bad(), input: { mode: "pallet", pallets: [{ boxCount: 0, weight: 1 }] } }))).message,
+    "invalid_pallets"
+  );
 
-  await confirmPackaging(client.db, { ...bad(), weight: 5, palletCount: null });
-  assert.equal((await catchHttp(confirmPackaging(client.db, { ...bad(), weight: 5, palletCount: null }))).message, "packaging_not_ready", "double-confirm drains the queue");
+  await confirmPackaging(client.db, { ...bad(), input: { mode: "box", weight: 5, boxCount: 1 } });
+  assert.equal(
+    (await catchHttp(confirmPackaging(client.db, { ...bad(), input: { mode: "box", weight: 5, boxCount: 1 } }))).message,
+    "packaging_not_ready",
+    "double-confirm drains the queue"
+  );
 });
 
 // --- ship gate --------------------------------------------------------------------
@@ -267,9 +338,9 @@ test("ship gate: box ships only once every order in it is packaged (shared box);
 
   // cross-order: a second order sharing the box blocks even after the first is packaged
   const orderB = await orderInBox("SO-PKG-B", fx.boxId);
-  await confirmPackaging(client.db, { orderId: fx.orderId, weight: 10, palletCount: null, actorId: fx.actorId });
+  await confirmPackaging(client.db, { orderId: fx.orderId, input: { mode: "box", weight: 10, boxCount: null }, actorId: fx.actorId });
   assert.equal((await listShippingOrders(client.db)).find((r) => r.boxId === fx.boxId), undefined, "B still blocks");
-  await confirmPackaging(client.db, { orderId: orderB, weight: 4, palletCount: null, actorId: fx.actorId });
+  await confirmPackaging(client.db, { orderId: orderB, input: { mode: "box", weight: 4, boxCount: null }, actorId: fx.actorId });
 
   // a cancelled order in the box does not block
   await orderInBox("SO-PKG-C", fx.boxId, "cancelled");

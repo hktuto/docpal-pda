@@ -152,6 +152,17 @@ export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | 
    *  backends predating the feature omit them. */
   labelingAssignee?: string | null;
   labelPrintingAssignee?: string | null;
+  /** Packaging stage state + recorded figures (specs 2026-11-10 +
+   *  2026-11-16). Optional — backends predating the packaging stage omit
+   *  them; packaged_at IS the packaged truth. */
+  packagedAt?: string | null;
+  packagedBy?: string | null;
+  packagedByName?: string | null;
+  packedWeight?: number | null;
+  packedBoxCount?: number | null;
+  packedPalletCount?: number | null;
+  packedInputBoxCount?: number | null;
+  packedCarts?: { boxCount: number; weight: number }[] | null;
   items: PickingItemRow[];
   boxes: {
     id: string;
@@ -398,36 +409,34 @@ export interface ShippingBoxRow {
   closedAt: string;
 }
 
-export interface ShippingBoxDetail {
-  box: {
-    boxId: string;
-    pickingOrderId: string | null;
-    status: string;
-    boxSize: string | null;
-    grossWeight: number | null;
-    netWeight: number | null;
-    destinationCountry: string | null;
-    shippedAt: string | null;
-    shippedBy: string | null;
-    createdDate: string;
-  };
-  packages: { id: string; qty: number; dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null; verified: boolean; partNo: string; wclItemNo: string | null }[];
-  orders: {
-    id: string;
-    orderNo: string;
-    status: string;
-    shipTo: string | null;
-    customerCode: string | null;
-    poNo: string | null;
-    packagedAt: string | null;
-    packedWeight: number | null;
-    packedBoxCount: number | null;
-    packedPalletCount: number | null;
-  }[];
+/** Order-keyed view of the shipping feed (GET /shipping-orders/by-order): one
+ *  row per picking order with its ready-to-ship box/cart counts. */
+export interface ShippingOrderGroupRow {
+  orderId: string;
+  orderNo: string;
+  customerCode: string | null;
+  shipTo: string | null;
+  poNo: string | null;
+  /** Ready-to-ship (closed, unshipped, gate-passing) boxes. */
+  boxCount: number;
+  packageCount: number;
+  /** Recorded cart (卡板) count from the packaging confirm; NULL = not recorded. */
+  cartCount: number | null;
+  packaged: boolean;
+  /** The ready-to-ship box ids (per-order ship + box-search filter). */
+  boxIds: string[];
+  lastUpdateDate: string;
 }
 
 // ---- packaging (打包: order-keyed queue after verify, spec
-// 2026-11-10-packaging-shipping-steps-design.md) ----
+// 2026-11-10-packaging-shipping-steps-design.md + 2026-11-16 box/cart modes) ----
+
+/** POST /packaging-orders/:orderId/confirm payload: box mode = 打包記錄 box
+ *  count + total weight; cart (卡板) mode = one row per cart, each with its
+ *  box count + weight. */
+export type ConfirmPackagingPayload =
+  | { mode: "box"; weight: number; boxCount: number }
+  | { mode: "pallet"; pallets: { boxCount: number; weight: number }[] };
 
 export interface PackagingOrderRow {
   id: string;
@@ -444,6 +453,11 @@ export interface PackagingOrderRow {
   packedWeight: number | null;
   packedBoxCount: number | null;
   packedPalletCount: number | null;
+  /** Box mode: operator-entered 打包記錄 box count; cart mode: Σ cart boxCount.
+   *  NULL = legacy confirm (pre-2026-11-16). */
+  packedInputBoxCount: number | null;
+  /** Cart (卡板) mode array [{boxCount, weight}] (array order = cart number). */
+  packedCarts: { boxCount: number; weight: number }[] | null;
   lastUpdateDate: string;
 }
 
@@ -1939,8 +1953,8 @@ export function useFlowApi() {
 
     // Shipping (per-box — closed, unshipped boxes ready to ship)
     listShippingBoxes: () => api.get<ShippingBoxRow[]>("/shipping-orders"),
-    getShippingBox: (boxId: string) =>
-      api.get<ShippingBoxDetail>(`/shipping-orders/${boxId}`),
+    // Order-keyed shipping list: one row per order (box/cart counts).
+    listShippingOrderGroups: () => api.get<ShippingOrderGroupRow[]>("/shipping-orders/by-order"),
     // Marks each box shipped (POST /shipping-orders/:boxId/ship). Attempts all
     // ids; on any failure throws an Error whose `failed` property lists the
     // per-box failures ({ id, message }) so callers can surface them.
@@ -1960,14 +1974,24 @@ export function useFlowApi() {
       }
     },
 
-    // Packaging (打包 — order-keyed queue after verify; the confirm recomputes
-    // the box count server-side; 409 packaging_not_ready covers double-confirm)
+    // Per-order ship (admin picking-order detail button): ships every ready
+    // box of the order; per-box failures come back in `failed`.
+    shipPickingOrder: (orderId: string) =>
+      api.post<{ shippedBoxIds: string[]; failed: { boxId: string; message: string }[] }>(
+        `/picking-orders/${orderId}/ship`,
+        {}
+      ),
+
+    // Packaging (打包 — order-keyed queue after verify; confirm takes the
+    // box-mode payload (打包記錄 box count + total weight) or the cart-mode
+    // payload (one row per 卡板, each box count + weight); 409
+    // packaging_not_ready covers double-confirm)
     listPackagingOrders: (status: "pending" | "completed") =>
       api.get<PackagingOrderRow[]>(`/packaging-orders?status=${status}`),
     getPackagingOrder: (orderId: string) =>
       api.get<PackagingOrderDetail>(`/packaging-orders/${orderId}`),
-    confirmPackagingOrder: (orderId: string, weight: number, palletCount: number | null) =>
-      api.post<{ id: string; boxCount: number }>(`/packaging-orders/${orderId}/confirm`, { weight, palletCount }),
+    confirmPackagingOrder: (orderId: string, payload: ConfirmPackagingPayload) =>
+      api.post<{ id: string; boxCount: number }>(`/packaging-orders/${orderId}/confirm`, payload),
 
     // Batch status override on the picking order list: one PATCH per id (same
     // shipShippingBoxes contract — attempts every id, throws with `failed`

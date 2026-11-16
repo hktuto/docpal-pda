@@ -60,11 +60,18 @@ export const pickingOrders = pgTable(
     // packed_box_count is recomputed server-side at confirm; packed_pallet_count
     // non-NULL = pallet mode (boxes still counted). Weights in kg, ≤3 dp like
     // shipping_boxes.gross_weight. No status-column changes.
+    // Box/cart input modes (spec 2026-11-16-packaging-box-cart-modes-design.md):
+    // packed_input_box_count = operator-entered 打包記錄 box count (box mode) or
+    // Σ cart box counts (cart mode); packed_carts = cart-mode array
+    // [{boxCount, weight}] (array order = cart number). packed_box_count keeps
+    // being the server-recomputed AUTO scan count — the input never overrides it.
     packagedAt: timestamp("packaged_at", { mode: "date" }),
     packagedBy: text("packaged_by").references(() => users.id),
     packedWeight: real("packed_weight"),
     packedBoxCount: integer("packed_box_count"),
     packedPalletCount: integer("packed_pallet_count"),
+    packedInputBoxCount: integer("packed_input_box_count"),
+    packedCarts: jsonb("packed_carts"),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },

@@ -1,45 +1,40 @@
 <script setup lang="ts">
-import type { ShippingBoxRow } from "~/utils/flowApi";
+// Shipping list (寄出, spec 2026-11-10-packaging-shipping-steps-design.md):
+// ORDER-keyed overview (GET /shipping-orders/by-order) — one row per picking
+// order with its ready-to-ship box/cart counts (the clerk thinks in orders,
+// not boxes). Read-only: the ship action lives on the picking-order detail
+// page (per-order ship); rows link there + to each box's detail (copy
+// summary for the delivery provider).
+import type { ShippingOrderGroupRow } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const flow = useFlowApi();
 const { t } = useI18n();
-const rows = ref<ShippingBoxRow[]>([]);
+const rows = ref<ShippingOrderGroupRow[]>([]);
 const loading = ref(false);
 const error = ref("");
 const search = ref("");
-const selected = ref<Set<string>>(new Set());
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
   if (!q) return rows.value;
   return rows.value.filter(
     (r) =>
-      r.boxId.toLowerCase().includes(q) ||
-      r.orderNos.some((o) => o.toLowerCase().includes(q)) ||
-      r.shipTos.some((s) => s.toLowerCase().includes(q))
+      r.orderNo.toLowerCase().includes(q) ||
+      (r.customerCode ?? "").toLowerCase().includes(q) ||
+      (r.shipTo ?? "").toLowerCase().includes(q) ||
+      (r.poNo ?? "").toLowerCase().includes(q) ||
+      r.boxIds.some((b) => b.toLowerCase().includes(q))
   );
 });
 
-const columnDefs = computed<AdminColumnDef<ShippingBoxRow>[]>(() => [
-  { key: "boxId", label: t("admin.pages.shipping.boxId") },
-  {
-    key: "orderNos",
-    label: t("admin.pages.shipping.orders"),
-    accessor: (r) => r.orderNos.join(", "),
-  },
-  {
-    key: "shipTos",
-    label: t("admin.pages.shipping.shipTo"),
-    accessor: (r) => r.shipTos.join(", "),
-  },
-  { key: "destinationCountry", label: t("admin.pages.shipping.destination") },
-  { key: "boxSize", label: t("admin.pages.shipping.size") },
-  {
-    key: "netGross",
-    label: t("admin.pages.shipping.netGross"),
-    accessor: (r) => r.netWeight ?? "",
-  },
+const columnDefs = computed<AdminColumnDef<ShippingOrderGroupRow>[]>(() => [
+  { key: "orderNo", label: t("admin.pages.shipping.orderNo") },
+  { key: "customerCode", label: t("admin.pages.shipping.customer"), accessor: (r) => r.customerCode ?? "" },
+  { key: "shipTo", label: t("admin.pages.shipping.shipTo"), accessor: (r) => r.shipTo ?? "" },
+  { key: "poNo", label: t("admin.pages.shipping.poNo"), accessor: (r) => r.poNo ?? "" },
+  { key: "boxCount", label: t("admin.pages.shipping.boxCount") },
+  { key: "cartCount", label: t("admin.pages.shipping.cartCount"), accessor: (r) => r.cartCount ?? "" },
   { key: "packageCount", label: t("admin.pages.shipping.packages") },
   {
     key: "packaged",
@@ -50,10 +45,10 @@ const columnDefs = computed<AdminColumnDef<ShippingBoxRow>[]>(() => [
 ]);
 
 const { table, pagination, resetColumnState } = useAdminTable({
-  tableId: "shipping-list",
+  tableId: "shipping-orders-list",
   columns: columnDefs,
   rows: filtered,
-  getRowId: (r) => r.boxId,
+  getRowId: (r) => r.orderId,
 });
 
 // Pager uses a 1-based page; the table uses a 0-based pageIndex.
@@ -71,41 +66,11 @@ const pageSize = computed({
 });
 const total = computed(() => filtered.value.length);
 
-const selectedIds = computed(() => [...selected.value]);
-
-const shipping = ref(false);
-
-async function markShipped() {
-  const ids = selectedIds.value;
-  if (ids.length === 0 || shipping.value) return;
-  if (!window.confirm(t("admin.pages.shipping.markShippedConfirm", { n: ids.length }))) return;
-  shipping.value = true;
-  error.value = "";
-  try {
-    await flow.shipShippingBoxes(ids);
-    await load();
-  } catch (e: any) {
-    // Partial failure: shipShippingBoxes attempts every id and lists the
-    // per-box failures (e.g. 409 box_not_ready_to_ship) on `failed`.
-    const failed: { id: string; message: string }[] = e?.failed ?? [];
-    error.value =
-      failed.length > 0
-        ? t("admin.pages.shipping.markShippedFailed", {
-            boxes: failed.map((f) => `${f.id} (${f.message})`).join(", "),
-          })
-        : e.message;
-    await load();
-  } finally {
-    shipping.value = false;
-  }
-}
-
 async function load() {
   loading.value = true;
   error.value = "";
   try {
-    rows.value = await flow.listShippingBoxes();
-    selected.value = new Set();
+    rows.value = await flow.listShippingOrderGroups();
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -115,15 +80,13 @@ async function load() {
 
 onMounted(load);
 
-// Reload when boxes are shipped or orders change elsewhere. Busy while rows
-// are selected (load() clears the selection): banner instead of silent reload.
-const changeBusy = computed(() => selected.value.size > 0);
+// Reload when boxes are shipped or orders change elsewhere.
 const {
   pending: changePending,
   justUpdated: changeUpdated,
   refreshNow,
   dismiss,
-} = useChangeNotice(["shipping_box.shipped", "picking_order.updated", "picking.packaged"], load, { busy: changeBusy });
+} = useChangeNotice(["shipping_box.shipped", "picking_order.updated", "picking.packaged"], load);
 </script>
 
 <template>
@@ -132,28 +95,6 @@ const {
       <h1>{{ $t("admin.pages.shipping.title") }}</h1>
       <div class="head-actions">
         <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
-        <button
-          class="btn"
-          :disabled="selectedIds.length === 0 || shipping"
-          @click="markShipped"
-        >
-          {{
-            selectedIds.length
-              ? $t("admin.pages.shipping.markShippedSelected", { n: selectedIds.length })
-              : $t("admin.pages.shipping.markShipped")
-          }}
-        </button>
-        <button
-          class="btn"
-          :disabled="selectedIds.length === 0"
-          :title="$t('admin.pages.shipping.downloadPendingSelected', { n: selectedIds.length })"
-        >
-          {{
-            selectedIds.length
-              ? $t("admin.pages.shipping.downloadShipperSelected", { n: selectedIds.length })
-              : $t("admin.pages.shipping.downloadShipper")
-          }}
-        </button>
       </div>
     </div>
 
@@ -166,20 +107,21 @@ const {
 
     <DataTable
       fill
-      v-model:selected="selected"
       :loading="loading"
       :table="table"
-      selectable
-      :row-id="(r: ShippingBoxRow) => r.boxId"
+      :row-id="(r: ShippingOrderGroupRow) => r.orderId"
       :empty-text="$t('admin.pages.shipping.none')"
       :on-reset-columns="resetColumnState"
     >
-      <template #cell-boxId="{ row }">
-        <span class="clickable" @click="navigateTo(`/shipping/${row.boxId}`)">{{ row.boxId }}</span>
+      <template #cell-orderNo="{ row }">
+        <span class="clickable" @click="navigateTo(`/picking-orders/${row.orderId}`)">{{ row.orderNo }}</span>
       </template>
-      <template #cell-netGross="{ row }">{{ row.netWeight ?? "—" }} / {{ row.grossWeight ?? "—" }}</template>
+      <template #cell-boxCount="{ row }">
+        <span>{{ row.boxCount }}</span>
+      </template>
+      <template #cell-cartCount="{ row }">{{ row.cartCount ?? "—" }}</template>
       <template #cell-packaged="{ row }">{{ row.packaged ? "✓" : "—" }}</template>
-      <template #cell-closedAt="{ row }">{{ formatDateTime(row.closedAt) }}</template>
+      <template #cell-closedAt="{ row }">{{ formatDateTime(row.lastUpdateDate) }}</template>
       <template #footer>
         <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
       </template>

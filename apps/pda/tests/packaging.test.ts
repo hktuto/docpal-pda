@@ -37,6 +37,8 @@ describe("packaging list view config", () => {
       packedWeight: null,
       packedBoxCount: null,
       packedPalletCount: null,
+      packedInputBoxCount: null,
+      packedCarts: null,
       lastUpdateDate: "2026-11-10T00:00:00.000Z",
       ...over,
     };

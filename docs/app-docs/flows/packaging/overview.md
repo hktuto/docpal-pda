@@ -3,12 +3,13 @@
 ## Purpose
 
 Packaging is the **opt-in stage between verify and shipping** (spec
-`docs/superpowers/specs/2026-11-10-packaging-shipping-steps-design.md`, CN
-warehouses). Once an order's goods are fully boxed and verified, an operator
-records the shipment's **total weight** plus either the **box count** (auto —
-recomputed server-side, so it can never be typed wrong) or a **pallet count**,
-and confirms once. It is an attestation of what the shipment weighs and how it
-is packed — no stock moves.
+`docs/superpowers/specs/2026-11-10-packaging-shipping-steps-design.md` +
+`2026-11-16-packaging-box-cart-modes-design.md`, CN warehouses). Once an
+order's goods are fully boxed and verified, an operator records the shipment
+figures in one of two input modes — **按箱 (by box)**: the packing-record box
+count + total weight, or **按卡板 (by cart)**: one row per cart, each with its
+own box count + weight — and confirms once. It is an attestation of what the
+shipment weighs and how it is packed — no stock moves.
 
 ## Entry point
 
@@ -26,11 +27,14 @@ the admin console (`/packaging`).
   every box holding its packages is closed (+ its verify task completed when
   the verify step is on) and it has never been packaged. Nothing to miss: a
   box reopened or a late verify completion moves the order back out.
-- **Auto box count** — the detail page shows the current box count; at confirm
-  the server counts again and stores THAT number. The typed value never wins.
-- **Boxes or pallets** — the default mode is "by boxes" (the auto count).
-  Switching to "by pallets" adds a pallet-count field (≥ 1); the box count is
-  still recorded next to it.
+- **Auto box count** — the detail page shows the scanned box count; at confirm
+  the server counts again and stores THAT number as the auto count. The
+  operator's packing-record box count (box mode) is stored NEXT TO it, never
+  instead of it.
+- **Two input modes** — 按箱 (by box): packing-record box count + total
+  weight; 按卡板 (by cart): an array of auto-numbered carts, each with its own
+  box count + weight (totals — cart count, box sum, weight sum — are derived
+  server-side from the rows, never typed).
 - **Weight is a scale reading** — the total weight (kg, ≤ 3 decimals) is typed,
   independent of the summed per-box gross weights, which are shown as a hint
   only.

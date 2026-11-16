@@ -1384,6 +1384,11 @@ export interface PackagingOrderRow {
   packedWeight: number | null;
   packedBoxCount: number | null;
   packedPalletCount: number | null;
+  /** Box mode: operator-entered 打包記錄 box count; cart mode: Σ cart boxCount.
+   *  NULL = legacy confirm (pre-2026-11-16). */
+  packedInputBoxCount: number | null;
+  /** Cart (卡板) mode array [{boxCount, weight}] (array order = cart number). */
+  packedCarts: { boxCount: number; weight: number }[] | null;
   lastUpdateDate: string;
 }
 
@@ -1400,6 +1405,14 @@ export interface PackagingOrderDetail extends PackagingOrderRow {
     closedAt: string;
   }[];
 }
+
+/** POST /packaging-orders/:orderId/confirm payload (spec
+ *  2026-11-16-packaging-box-cart-modes-design.md): box mode = 打包記錄 box
+ *  count + total weight; cart (卡板) mode = one row per cart, each with its
+ *  box count + weight. */
+export type ConfirmPackagingPayload =
+  | { mode: "box"; weight: number; boxCount: number }
+  | { mode: "pallet"; pallets: { boxCount: number; weight: number }[] };
 
 /** POST /packaging-orders/:orderId/confirm result. */
 export interface ConfirmPackagingResult {

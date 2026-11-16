@@ -513,9 +513,11 @@ upstream database — the sync/dedup key is the caller-supplied UUID `id`
 | label_printing_done_by | text | User who cleared the label-printing stage |
 | packaged_at | timestamp | Packaging stage (打包, spec `docs/superpowers/specs/2026-11-10-packaging-shipping-steps-design.md`): set by `POST /packaging-orders/:orderId/confirm` once every box holding the order's packages is closed (+ its verify task completed when the `verify` step is on); non-NULL = packaged (the queue derives from it — no `*_pending` flag); the order status is NOT extended (stays `measuring_finished` until ship derives `shipped`) |
 | packaged_by | text FK → users(id) | User who confirmed packaging |
-| packed_weight | real | Recorded total weight (kg, ≤3 dp — same unit rule as `shipping_boxes.gross_weight`) |
-| packed_box_count | integer | Box count auto-recomputed server-side at confirm |
-| packed_pallet_count | integer | Pallet mode count (NULL = boxes mode) |
+| packed_weight | real | Recorded total weight (kg, ≤3 dp — same unit rule as `shipping_boxes.gross_weight`); cart mode = Σ cart weights |
+| packed_box_count | integer | Box count auto-recomputed server-side at confirm (never overridden by the operator input) |
+| packed_pallet_count | integer | Pallet/cart mode count (cart mode = `packed_carts` row count; NULL = boxes mode) |
+| packed_input_box_count | integer | Operator-entered 打包記錄 box count (box mode, spec `2026-11-16-packaging-box-cart-modes-design.md`) or Σ cart box counts (cart mode); NULL = legacy confirm |
+| packed_carts | jsonb | Cart (卡板) mode array `[{boxCount, weight}]` (array order = cart number); NULL = box mode |
 | assignee | text | Optional PDA task assignee (username, no FK; spec `docs/superpowers/specs/2026-11-01-task-assignee-design.md`) — NULL = visible to every user; set = only that user sees the order in the PDA picking/labeling list + detail; admin-managed via `PATCH /admin/task-assignment` |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |

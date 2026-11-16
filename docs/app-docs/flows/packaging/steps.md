@@ -9,18 +9,23 @@ row shows the order number, customer/ship-to, and a chip with the box count.
 
 ## 2. Open the order
 
-Tap a row. The detail shows the order header (customer, ship-to) and the
-box summary: how many boxes, how many packages, and each box's package count
-and gross weight. The box count is the **auto** number — do not count cartons.
+Tap a row. The detail shows the order header (customer, ship-to) and the box
+summary: how many boxes were scanned and how many packages they hold. That
+box count is the **auto** number from the scan records — it is shown for
+reference and can never be typed over.
 
-## 3. Record the shipment
+## 3. Choose the input mode and record the shipment
 
-- **Total weight (kg)** — read it off the scale and type it in (decimals
-  allowed, e.g. `12.345`).
-- **Boxes or pallets** — the default mode is **by boxes**, which keeps the
-  auto box count. Switch to **by pallets** (按卡板) when the shipment rides
-  on pallets, and type the pallet count (whole number ≥ 1). The box count is
-  still recorded either way.
+The form has two modes (spec `2026-11-16-packaging-box-cart-modes-design.md`):
+
+- **按箱 (by box)** — type the **box count (打包記錄)** of the packaging record
+  (whole number ≥ 1 — it may differ from the scanned count, e.g. after
+  repacking) and the **total weight (kg)** read off the scale. The scanned box
+  count stays displayed as the reference.
+- **按卡板 (by cart)** — one row per cart, auto-numbered 卡板 1, 卡板 2, ….
+  Each row takes its own **box count** and **weight**; add rows with
+  **+ 添加卡板**, remove with ✕ (at least one row). The totals line shows the
+  running sums (carts · boxes · kg) — the server re-derives them at confirm.
 
 ## 4. Confirm
 
@@ -31,5 +36,6 @@ app says so and returns to the list. Packaged orders cannot be re-confirmed
 from the PDA — the recorded numbers are final unless an admin reworks the
 order.
 
-Packaged orders that were already confirmed show the recorded numbers
-(weight, boxes, pallets, who/when) instead of the form.
+Packaged orders that were already confirmed show the recorded numbers instead
+of the form: the total weight, the packing-record box count next to the
+scanned (auto) count, and — in cart mode — each cart's box count and weight.

@@ -22,6 +22,18 @@ import { assigneeFilter, type UserScopeEntry } from "./user-scope.js";
 // rides the picking_tasks side table (step='packaging', CR-048 pattern).
 // ---------------------------------------------------------------------------
 
+export interface PackedCartEntry {
+  boxCount: number;
+  weight: number;
+}
+
+/** Confirm payload (spec 2026-11-16-packaging-box-cart-modes-design.md):
+ *  box mode = operator-entered 打包記錄 box count + total weight; pallet
+ *  (卡板) mode = one row per cart, each with its box count + weight. */
+export type ConfirmPackagingInput =
+  | { mode: "box"; weight: number; boxCount: number | null; palletCount?: number | null }
+  | { mode: "pallet"; pallets: PackedCartEntry[] };
+
 export interface PackagingOrderRow {
   id: string;
   orderNo: string;
@@ -38,6 +50,11 @@ export interface PackagingOrderRow {
   packedWeight: number | null;
   packedBoxCount: number | null;
   packedPalletCount: number | null;
+  /** Box mode: operator-entered 打包記錄 box count; cart mode: Σ cart boxCount.
+   *  NULL = legacy confirm (pre-2026-11-16). Never overrides the scan records. */
+  packedInputBoxCount: number | null;
+  /** Cart mode array [{boxCount, weight}] (array order = cart number). */
+  packedCarts: PackedCartEntry[] | null;
   lastUpdateDate: Date;
 }
 
@@ -93,6 +110,8 @@ export async function listPackagingOrders(
         po.packaged_at AS "packagedAt", po.packaged_by AS "packagedBy",
         po.packed_weight AS "packedWeight", po.packed_box_count AS "packedBoxCount",
         po.packed_pallet_count AS "packedPalletCount",
+        po.packed_input_box_count AS "packedInputBoxCount",
+        po.packed_carts AS "packedCarts",
         po.last_update_date AS "lastUpdateDate"
       FROM picking_orders po
       LEFT JOIN picking_tasks pt ON pt.picking_order_id = po.id AND pt.step = 'packaging'
@@ -137,6 +156,8 @@ export async function getPackagingOrderDetail(
         po.packaged_at AS "packagedAt", po.packaged_by AS "packagedBy",
         po.packed_weight AS "packedWeight", po.packed_box_count AS "packedBoxCount",
         po.packed_pallet_count AS "packedPalletCount",
+        po.packed_input_box_count AS "packedInputBoxCount",
+        po.packed_carts AS "packedCarts",
         po.last_update_date AS "lastUpdateDate"
       FROM picking_orders po
       LEFT JOIN picking_tasks pt ON pt.picking_order_id = po.id AND pt.step = 'packaging'
@@ -162,34 +183,70 @@ export async function getPackagingOrderDetail(
 }
 
 /**
+ * Validate a confirm payload (spec 2026-11-16-packaging-box-cart-modes-design.md).
+ * Returns the typed input or throws the snake_code error. kg weights are
+ * rounded to ≤3 dp (same rule as box gross_weight).
+ */
+export function parseConfirmPackagingInput(raw: {
+  weight?: unknown;
+  boxCount?: unknown;
+  pallets?: unknown;
+}): ConfirmPackagingInput {
+  const round3 = (v: number) => Math.round(v * 1000) / 1000;
+  const finitePos = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) && v > 0 ? round3(v) : null;
+  const intMin1 = (v: unknown): number | null =>
+    typeof v === "number" && Number.isInteger(v) && v >= 1 ? v : null;
+  if (Array.isArray(raw.pallets)) {
+    // Cart (卡板) mode: one row per cart, each with box count + weight.
+    if (raw.pallets.length < 1) throw new HTTPException(400, { message: "invalid_pallets" });
+    const pallets = raw.pallets.map((p) => {
+      const boxCount = intMin1((p as { boxCount?: unknown } | null)?.boxCount);
+      if (boxCount === null) throw new HTTPException(400, { message: "invalid_pallets" });
+      const weight = finitePos((p as { weight?: unknown } | null)?.weight);
+      if (weight === null) throw new HTTPException(400, { message: "invalid_pallets" });
+      return { boxCount, weight };
+    });
+    return { mode: "pallet", pallets };
+  }
+  // Box mode (also the legacy single-weight payload shape).
+  const weight = finitePos(raw.weight);
+  if (weight === null) throw new HTTPException(400, { message: "invalid_weight" });
+  if (raw.boxCount !== undefined && raw.boxCount !== null) {
+    const boxCount = intMin1(raw.boxCount);
+    if (boxCount === null) throw new HTTPException(400, { message: "invalid_box_count" });
+    return { mode: "box", weight, boxCount };
+  }
+  return { mode: "box", weight, boxCount: null };
+}
+
+/**
  * Confirm packaging (one confirm per order): re-checks the pending predicate
  * in-tx (409 packaging_not_ready — also covers double-confirm), validates the
- * payload, recomputes the box count server-side (auto count is guaranteed),
- * stamps the packaged columns + audit row. No stock movement.
+ * payload, recomputes the box count server-side (auto count is guaranteed —
+ * the operator's 打包記錄 box count rides alongside in packed_input_box_count,
+ * never overriding the scan records), stamps the packaged columns + audit row.
+ * Cart mode derives the scalar columns (pallet count = rows, weight = Σ,
+ * input box count = Σ boxCount) so read-back pages stay scalar-first.
+ * No stock movement.
  */
 export async function confirmPackaging(
   db: AppDb,
-  input: { orderId: string; weight: number; palletCount: number | null; actorId: string }
+  params: { orderId: string; input: ConfirmPackagingInput; actorId: string }
 ): Promise<{ id: string; boxCount: number }> {
-  const weight = Math.round(input.weight * 1000) / 1000; // kg, ≤3 dp (same rule as box gross_weight)
-  if (!Number.isFinite(weight) || weight <= 0) {
-    throw new HTTPException(400, { message: "invalid_weight" });
-  }
-  if (input.palletCount !== null && !(Number.isInteger(input.palletCount) && input.palletCount >= 1)) {
-    throw new HTTPException(400, { message: "invalid_pallet_count" });
-  }
+  const input = params.input;
   return db.transaction(async (tx) => {
     const order = await queryGet<{ id: string; status: string }>(
       tx,
       sql`SELECT po.id, po.status FROM picking_orders po
-          WHERE po.id = ${input.orderId} AND (${packagingPendingWhere()})`
+          WHERE po.id = ${params.orderId} AND (${packagingPendingWhere()})`
     );
     if (!order) {
-      const exists = await queryGet<{ id: string }>(tx, sql`SELECT id FROM picking_orders WHERE id = ${input.orderId}`);
+      const exists = await queryGet<{ id: string }>(tx, sql`SELECT id FROM picking_orders WHERE id = ${params.orderId}`);
       if (!exists) throw new HTTPException(404, { message: "packaging_order_not_found" });
       throw new HTTPException(409, { message: "packaging_not_ready" });
     }
-    const actor = await queryGet<{ id: string }>(tx, sql`SELECT id FROM users WHERE id = ${input.actorId}`);
+    const actor = await queryGet<{ id: string }>(tx, sql`SELECT id FROM users WHERE id = ${params.actorId}`);
     if (!actor) throw new HTTPException(400, { message: "actor_not_found" });
 
     const boxRow = await queryGet<{ boxCount: number }>(
@@ -200,13 +257,31 @@ export async function confirmPackaging(
     );
     const boxCount = boxRow?.boxCount ?? 0;
 
+    // Cart (卡板) mode: store the array + derived scalars. Box mode: total
+    // weight + the operator's 打包記錄 box count (legacy confirms have no
+    // input count — packed_input_box_count stays NULL; their optional pallet
+    // count rides through in palletCount). Auto box count is always
+    // recomputed server-side — the input never overrides the scan records.
+    const isCart = input.mode === "pallet";
+    const palletCount = isCart ? input.pallets.length : (input.palletCount ?? null);
+    const weight = isCart
+      ? Math.round(input.pallets.reduce((s, p) => s + p.weight, 0) * 1000) / 1000
+      : input.weight;
+    const inputBoxCount = isCart
+      ? input.pallets.reduce((s, p) => s + p.boxCount, 0)
+      : input.boxCount;
+    const carts = isCart ? input.pallets : null;
+
     const at = now();
     await queryRun(
       tx,
       sql`UPDATE picking_orders
-          SET packaged_at = ${at}, packaged_by = ${input.actorId},
+          SET packaged_at = ${at}, packaged_by = ${params.actorId},
               packed_weight = ${weight}, packed_box_count = ${boxCount},
-              packed_pallet_count = ${input.palletCount}, last_update_date = ${at}
+              packed_pallet_count = ${palletCount},
+              packed_input_box_count = ${inputBoxCount},
+              packed_carts = ${carts ? JSON.stringify(carts) : null},
+              last_update_date = ${at}
           WHERE id = ${order.id}`
     );
     await logTransition(tx, {
@@ -214,13 +289,13 @@ export async function confirmPackaging(
       entityId: order.id,
       fromState: "packaging_pending",
       toState: "packaged",
-      actorId: input.actorId,
-      metadata: { weight, boxCount, palletCount: input.palletCount },
+      actorId: params.actorId,
+      metadata: { mode: input.mode, weight, boxCount, palletCount, input: input },
     });
     await emitEvent(tx, {
       type: "picking.packaged",
       topics: ["/packaging-orders", "/picking-orders", "/shipping-orders"],
-      data: { orderId: order.id, weight, boxCount, palletCount: input.palletCount, actorId: input.actorId },
+      data: { orderId: order.id, mode: input.mode, weight, boxCount, palletCount, input, actorId: params.actorId },
     });
     return { id: order.id, boxCount };
   });

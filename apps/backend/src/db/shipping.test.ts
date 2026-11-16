@@ -16,7 +16,7 @@ import {
   verifyPackage,
 } from "./picking.js";
 import { completeVerifyTask } from "./verify.js";
-import { getShippingOrderDetail, listShippingOrders, shipShippingBox } from "./shipping.js";
+import { getShippingOrderDetail, listShippingOrderGroups, listShippingOrders, shipPickingOrder, shipShippingBox } from "./shipping.js";
 import { _setFlowStepsDisabledForTests, type FlowStep } from "../config.js";
 
 let client: TestDb;
@@ -157,6 +157,84 @@ test("feed: verify disabled → a closed box is feed-ready without any task", as
   assert.deepEqual(feed[0].orderNos, ["SO-DEMO-0001"]);
 });
 
+test("order-group feed: one row per order with box/cart counts, packaged flags and its ready box ids", async () => {
+  await reset();
+  const fx = await closedBox();
+  // not yet verify-completed → the same gates as the box feed apply
+  assert.equal((await listShippingOrderGroups(client.db)).length, 0);
+  const vt = (await verifyTaskOf(fx.boxId))!;
+  for (const packageId of fx.packageIds) {
+    await verifyPackage(client.db, { packageId, actorId: fx.actorId });
+  }
+  await completeVerifyTask(client.db, { taskId: vt.id, actorId: fx.actorId });
+
+  const orderId = await pickingOrderIdOf("SO-DEMO-0001");
+  const groups = await listShippingOrderGroups(client.db);
+  assert.equal(groups.length, 1);
+  const g = groups[0];
+  assert.equal(g.orderId, orderId);
+  assert.equal(g.orderNo, "SO-DEMO-0001");
+  assert.equal(g.boxCount, 1);
+  assert.equal(g.packageCount, 3);
+  assert.equal(g.cartCount, null, "nothing recorded yet");
+  assert.equal(g.packaged, false);
+  assert.deepEqual(g.boxIds, [fx.boxId]);
+
+  // packaged in cart (卡板) mode → cart count + packaged flag ride along
+  const at = new Date();
+  await client.db.execute(sql`UPDATE picking_orders
+      SET packaged_at = ${at}, packed_pallet_count = 5,
+          packed_carts = ${JSON.stringify([{ boxCount: 1, weight: 5 }, { boxCount: 2, weight: 8 }])}
+      WHERE id = ${orderId}`);
+  const packaged = (await listShippingOrderGroups(client.db))[0];
+  assert.equal(packaged.packaged, true);
+  assert.equal(packaged.cartCount, 2, "packed_carts row count wins over the legacy pallet count");
+
+  // after shipping the box the order drops out of the feed
+  await shipShippingBox(client.db, fx.boxId, fx.actorId);
+  assert.equal((await listShippingOrderGroups(client.db)).length, 0);
+});
+
+test("shipPickingOrder: ships the order's ready boxes per box; 404 unknown; 409 nothing_to_ship when none ready", async () => {
+  await reset();
+  const fx = await closedBox();
+  // gates still open (verify pending) → nothing_to_ship
+  assert.equal(
+    (await catchHttp(shipPickingOrder(client.db, fx.orderId, fx.actorId))).message,
+    "nothing_to_ship"
+  );
+  assert.equal(
+    (await catchHttp(shipPickingOrder(client.db, randomUUID(), fx.actorId))).message,
+    "picking_order_not_found"
+  );
+
+  const vt = (await verifyTaskOf(fx.boxId))!;
+  for (const packageId of fx.packageIds) {
+    await verifyPackage(client.db, { packageId, actorId: fx.actorId });
+  }
+  await completeVerifyTask(client.db, { taskId: vt.id, actorId: fx.actorId });
+
+  const result = await shipPickingOrder(client.db, fx.orderId, fx.actorId);
+  assert.deepEqual(result, { shippedBoxIds: [fx.boxId], failed: [] });
+  // everything shipped → nothing left
+  assert.equal((await catchHttp(shipPickingOrder(client.db, fx.orderId, fx.actorId))).message, "nothing_to_ship");
+
+  // a second order sharing the box reports the per-box failure instead of failing hard
+  const orderB = randomUUID();
+  const itemId = randomUUID();
+  await client.db.execute(sql`INSERT INTO picking_orders (id, order_no, status, created_date, last_update_date)
+      VALUES (${orderB}, 'SO-SHIP-B', 'picking_finished', now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, created_date, last_update_date)
+      VALUES (${itemId}, ${orderB}, 'RK73B1JTTD181G', 1, now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
+      VALUES (${randomUUID()}, ${itemId}, ${orderB}, 'inventory_lot', 'x', 1, ${fx.boxId}, now(), now())`);
+  const resultB = await shipPickingOrder(client.db, orderB, fx.actorId);
+  assert.deepEqual(resultB.shippedBoxIds, []);
+  assert.equal(resultB.failed.length, 1);
+  assert.equal(resultB.failed[0].boxId, fx.boxId);
+  assert.equal(resultB.failed[0].message, "shipping_box_not_found");
+});
+
 // --- detail -------------------------------------------------------------------
 
 test("detail: box + packages (part identity) + orders involved; 404", async () => {
@@ -190,6 +268,8 @@ test("detail: box + packages (part identity) + orders involved; 404", async () =
       packedWeight: null,
       packedBoxCount: null,
       packedPalletCount: null,
+      packedInputBoxCount: null,
+      packedCarts: null,
     },
   ]);
 

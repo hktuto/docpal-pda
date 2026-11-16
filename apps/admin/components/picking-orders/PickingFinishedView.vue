@@ -64,6 +64,28 @@ const stats = computed(() => [
   },
 ]);
 
+// Packing record (打包, specs 2026-11-10 + 2026-11-16): once packaged the
+// summary shows the PACKAGING figures instead of the scan stats — the record
+// as entered at the packaging confirm (box mode: packing-record box count vs
+// the scanned auto count; cart mode: the per-cart rows).
+const packaged = computed(() => !!props.order.packagedAt);
+const packingRows = computed<{ label: string; value: string }[]>(() => {
+  const o = props.order;
+  if (!o.packagedAt) return [];
+  const rows = [
+    { label: t("admin.pages.pickingOrders.packingRecord.weight"), value: `${o.packedWeight ?? "—"} kg` },
+    { label: t("admin.pages.pickingOrders.packingRecord.mode"), value: o.packedCarts?.length ? t("admin.pages.pickingOrders.packingRecord.modeCart") : t("admin.pages.pickingOrders.packingRecord.modeBox") },
+    { label: t("admin.pages.pickingOrders.packingRecord.inputBoxes"), value: o.packedInputBoxCount != null ? String(o.packedInputBoxCount) : "—" },
+    { label: t("admin.pages.pickingOrders.pickingFinished.statBoxes"), value: String(o.packedBoxCount ?? "—") },
+  ];
+  if (o.packedPalletCount != null) {
+    rows.push({ label: t("admin.pages.pickingOrders.packingRecord.carts"), value: String(o.packedPalletCount) });
+  }
+  rows.push({ label: t("admin.pages.pickingOrders.packingRecord.at"), value: formatDateTime(o.packagedAt) });
+  rows.push({ label: t("admin.pages.pickingOrders.packingRecord.by"), value: o.packagedByName ?? o.packagedBy ?? "—" });
+  return rows;
+});
+
 // ---------------------------------------------------------------------------
 // Real scan data table — one row per package (the actual scanned pick)
 // ---------------------------------------------------------------------------
@@ -204,8 +226,37 @@ defineExpose({
   <div>
     <div v-if="error" class="error-banner">{{ error }}</div>
 
-    <!-- Summary stats -->
-    <div class="stats-row">
+    <!-- Summary: packaged orders show the PACKING record table (the 打包
+         figures); otherwise the scan-stat cards. -->
+    <template v-if="packaged">
+      <h2 class="section-title">{{ $t("admin.pages.pickingOrders.packingRecord.title") }}</h2>
+      <table class="data packing-table">
+        <tbody>
+          <tr v-for="r in packingRows" :key="r.label">
+            <td class="packing-table__label">{{ r.label }}</td>
+            <td>{{ r.value }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <!-- Cart mode: the per-cart breakdown. -->
+      <table v-if="order.packedCarts && order.packedCarts.length" class="data packing-table">
+        <thead>
+          <tr>
+            <th>{{ $t("admin.pages.pickingOrders.packingRecord.cart") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.packingRecord.cartBoxes") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.packingRecord.cartWeight") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(cart, i) in order.packedCarts" :key="i">
+            <td>{{ $t("admin.pages.pickingOrders.packagingCartNo", { no: i + 1 }) }}</td>
+            <td>{{ cart.boxCount }}</td>
+            <td>{{ cart.weight }} kg</td>
+          </tr>
+        </tbody>
+      </table>
+    </template>
+    <div v-else class="stats-row">
       <div v-for="s in stats" :key="s.label" class="stat-card">
         <div class="stat-value">{{ s.value }}</div>
         <div class="stat-label">{{ s.label }}</div>
@@ -307,6 +358,14 @@ defineExpose({
   font-size: 0.75rem;
   color: #52606d;
   margin-top: 0.125rem;
+}
+.packing-table {
+  max-width: 30rem;
+  margin-bottom: 0.875rem;
+}
+.packing-table__label {
+  color: #52606d;
+  width: 12rem;
 }
 .section-title {
   font-size: 0.9375rem;
