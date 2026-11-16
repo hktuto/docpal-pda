@@ -17,7 +17,7 @@ import {
   updateShippingBox,
   verifyPackage,
 } from "./picking.js";
-import { getMeasuringBoxDetail, listMeasuringBoxes } from "./measuring.js";
+import { getMeasuringBoxDetail, listMeasuringBoxes, scanItemCompleteBox } from "./measuring.js";
 import { _setFlowStepsDisabledForTests, type FlowStep } from "../config.js";
 
 let client: TestDb;
@@ -351,4 +351,54 @@ test("close: verify disabled → no verify task; measuring disabled → close gu
     sql`SELECT status FROM verify_tasks WHERE shipping_box_id = ${fx2.boxId}`
   );
   assert.equal(task2!.status, "pending");
+});
+
+// --- quick item scan (spec 2026-11-18-measure-verify-2level-and-item-scan-design.md)
+
+test("scanItemCompleteBox: single-part box fully credited; multi-part box untouched", async () => {
+  await reset();
+  const actorId = await actorIdOf();
+  await allocateAll(client.db);
+  const orderId = await pickingOrderIdOf("SO-DEMO-0001");
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 1000
+  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 500
+  const item3 = await pickingItemIdOf(orderId, "RK73B1JTTD181G"); // qty 300
+  const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: await allocationIdOf(item1), qty: 1000 })).packageIds[0];
+  const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 500 })).packageIds[0];
+  const p3 = (await scanPickingItem(client.db, item3, { actorId, allocationId: await allocationIdOf(item3), qty: 300 })).packageIds[0];
+  // one box per item (single-item boxes) — boxing happens BEFORE the finish
+  const box1 = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  const box2 = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  const box3 = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  await addPackageToBox(client.db, { packageId: p1, shippingBoxId: box1.id, actorId });
+  await addPackageToBox(client.db, { packageId: p2, shippingBoxId: box2.id, actorId });
+  await addPackageToBox(client.db, { packageId: p3, shippingBoxId: box3.id, actorId });
+  await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
+
+  // a wrong part → no match, nothing credited
+  const noMatch = await scanItemCompleteBox(client.db, {
+    mode: "measuring",
+    orderKey: orderId,
+    partNo: "RK73B1JTTD181G",
+    actorId,
+  });
+  assert.ok(noMatch);
+  assert.equal(noMatch.boxId, box3.id);
+  assert.equal((await listMeasuringBoxes(client.db)).find((g) => g.orderId === orderId)!.boxes.find((b) => b.boxId === box1.id)!.verifiedCount, 0);
+
+  // scanning item2's part credits its whole box (single-item box)
+  const result = await scanItemCompleteBox(client.db, {
+    mode: "measuring",
+    orderKey: orderId,
+    partNo: "RK73H1JTTD2202F",
+    actorId,
+  });
+  assert.ok(result);
+  assert.equal(result.boxId, box2.id);
+  assert.equal(result.creditedPackages, 1);
+  assert.equal(result.taskCompleted, false);
+  const group = (await listMeasuringBoxes(client.db)).find((g) => g.orderId === orderId)!;
+  assert.equal(group.boxes.find((b) => b.boxId === box2.id)!.verifiedCount, group.boxes.find((b) => b.boxId === box2.id)!.packageCount);
+  // the other boxes are untouched
+  assert.equal(group.boxes.find((b) => b.boxId === box1.id)!.verifiedCount, 0);
 });

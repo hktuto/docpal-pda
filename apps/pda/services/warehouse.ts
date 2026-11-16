@@ -301,6 +301,15 @@ export interface WarehouseService {
   // completion. Scanned labels are matched to packages client-side.
   getMeasuringBoxes(): Promise<MeasuringOrderGroup[]>;
   getMeasuringBox(boxId: string): Promise<MeasuringBoxDetail>;
+  // Quick item scan (spec 2026-11-18): one order's boxes; the single
+  // remaining part's box gets fully credited when no label-mode/carton
+  // matching applies. orderKey = orderId (measuring) / orderNo (verify).
+  scanItemCompleteBox(input: {
+    mode: "measuring" | "verify";
+    orderKey: string;
+    partNo?: string;
+    wclItemNo?: string;
+  }): Promise<{ boxId: string; creditedPackages: number; taskCompleted: boolean }>;
 
   // Verify — the second measuring pass, one task per shipping box
   // (GET /verify-tasks* is box-keyed). Reopen flips a closed box back to

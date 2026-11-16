@@ -2,10 +2,10 @@
   <AppListPage
     :loading="loading"
     :error="loadError"
-    :empty="groups.length === 0"
+    :empty="orders.length === 0"
     empty-text="common.noPendingMeasuringTasks"
-    :shown="allBoxes.length"
-    :total="allBoxes.length"
+    :shown="orders.length"
+    :total="orders.length"
     :has-more="false"
     hide-footer
     :reload="load"
@@ -21,19 +21,13 @@
       <p class="page-hint">{{ $t('measuring.hint') }}</p>
     </template>
 
-    <template v-for="group in groups" :key="group.orderId">
-      <h2 class="order-group__heading">{{ $t('measuring.orderGroup', { orderNo: group.orderNo }) }}</h2>
-      <AppListRow
-        v-for="box in group.boxes"
-        :key="`${group.orderId}:${box.boxId}`"
-        :to="`/measuring/${box.boxId}`"
-        :title="rowView(box).title"
-        :meta="rowMeta(box)"
-        :chip-text="rowChip(box)?.text"
-        :chip-class="rowChip(box)?.cls"
-        :mine-text="mineText(box)"
-      />
-    </template>
+    <AppListRow
+      v-for="order in orders"
+      :key="order.orderId"
+      :to="`/measuring/order/${order.orderId}`"
+      :title="order.orderNo"
+      :meta="[t('measuring.boxCount', { count: order.boxes.length })]"
+    />
   </AppListPage>
 </template>
 
@@ -42,38 +36,20 @@ import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useToast } from "~/composables/useToast";
-import { badgeClass } from "~/composables/useStatusBadge";
-import { viewListChip, viewListRow } from "~/utils/viewConfig";
-import type { MeasuringBoxListRow, MeasuringOrderGroup } from "~/services/types";
 
 definePageMeta({ title: "meta.measuring" });
 
+// 2-level navigation (spec 2026-11-18): level 1 lists the picking orders,
+// level 2 (/measuring/order/[orderId]) lists the order's boxes.
 const { t } = useI18n();
-const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
-const { mineText } = useAssignedToMe();
-// Row title/meta/chip come from the warehouse's pdaViewConfig flow config
-// (spec 2026-10-04-pda-app-rewrite-design.md); on a backend without the key
-// the legacy listTemplates + the extra meta line render instead.
-const { viewConfig, viewConfigLoaded, renderChip } = useViewConfig();
-const rowView = (box: MeasuringBoxListRow) => viewListRow("measuring", box, viewConfig.value);
-function rowMeta(box: MeasuringBoxListRow): string[] {
-  const meta = rowView(box).meta;
-  return viewConfigLoaded.value
-    ? meta
-    : [...meta, t("common.packagesVerified", { verified: box.verifiedCount, total: box.packageCount })];
-}
-function rowChip(box: MeasuringBoxListRow) {
-  if (!viewConfigLoaded.value) return { text: statusLabel.box(box.status), cls: badgeClass(box.status) };
-  return renderChip(viewListChip("measuring", box, viewConfig.value));
-}
 const router = useRouter();
 const { showToast } = useToast();
 
 useHead({ title: t('measuring.title') });
 
-const rawGroups = ref<MeasuringOrderGroup[]>([]);
+const rawGroups = ref<{ orderId: string; orderNo: string; boxCount: number }[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 
@@ -81,10 +57,8 @@ async function load() {
   loading.value = true;
   loadError.value = null;
   try {
-    // The list is the post-picking work queue: open boxes whose picking
-    // orders have ALL finished picking (picking_finished or beyond),
-    // grouped by picking order.
-    rawGroups.value = await warehouse.getMeasuringBoxes();
+    const groups = await warehouse.getMeasuringBoxes();
+    rawGroups.value = groups.map((g) => ({ orderId: g.orderId, orderNo: g.orderNo, boxCount: g.boxes.length }));
   } catch (e: unknown) {
     loadError.value = errorMessage(e);
     rawGroups.value = [];
@@ -94,28 +68,21 @@ async function load() {
 }
 
 const search = ref("");
-const groups = computed(() => {
+const orders = computed(() => {
   const q = search.value.trim().toLowerCase();
   if (!q) return rawGroups.value;
-  return rawGroups.value
-    .map((g) => ({
-      ...g,
-      boxes: g.orderNo.toLowerCase().includes(q)
-        ? g.boxes
-        : g.boxes.filter((b) => b.orderNos.some((o) => o.toLowerCase().includes(q))),
-    }))
-    .filter((g) => g.boxes.length > 0);
+  return rawGroups.value.filter((g) => g.orderNo.toLowerCase().includes(q));
 });
-const allBoxes = computed(() => groups.value.flatMap((g) => g.boxes));
 
-// Scanning a box QR (or typing its id on the wedge) opens that box directly.
-// Exact id wins; otherwise a unique substring match (e.g. the daily seq).
+// Scanning a box QR (or typing its id on the wedge) still opens that box
+// directly from level 1. Exact id wins; otherwise a unique substring match.
 useHardwareScanner({
-  enabled: () => allBoxes.value.length > 0,
-  onScan: (rawValue) => {
-    const boxes = allBoxes.value;
+  enabled: () => rawGroups.value.length > 0,
+  onScan: async (rawValue) => {
     const q = rawValue.trim().toLowerCase();
     if (!q) return false;
+    const groups = await warehouse.getMeasuringBoxes();
+    const boxes = groups.flatMap((g) => g.boxes);
     const exact = boxes.find((b) => b.boxId.toLowerCase() === q);
     const matches = exact ? [exact] : boxes.filter((b) => b.boxId.toLowerCase().includes(q));
     if (matches.length === 1) {
@@ -143,17 +110,5 @@ useHardwareScanner({
   margin: -0.25rem 0 1rem;
   color: var(--muted);
   font-size: 0.875rem;
-}
-
-.order-group__heading {
-  margin: 0 0 0.375rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--muted);
-  letter-spacing: 0.03em;
-}
-
-.order-group__heading:not(:first-child) {
-  margin-top: 1rem;
 }
 </style>

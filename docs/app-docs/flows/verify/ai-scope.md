@@ -12,6 +12,17 @@
   (`verify_tasks.assignee` + `assigneeFilter`, spec
   `docs/superpowers/specs/2026-11-01-task-assignee-design.md` — foreign
   assignee detail 404s; PDA `mineText` badge on the list rows).
+- **2-level navigation + quick item scan (2026-11-18):** the list is
+  level 1 — one row per picking order number derived from the pending
+  tasks' `orderNos[]` (`pages/verify/index.vue`) — and
+  `pages/verify/order/[orderNo].vue` is level 2: the order's box tasks
+  (unchanged row rendering). On level 2 the carton-label / box scans behave
+  as before; an **item** scan decodes via `POST /scan/decode` and calls
+  `POST /measuring-boxes/scan-item` (`mode: "verify"`), which fully credits
+  the box whose remaining packages are exactly that single part and
+  attempts `completeVerifyTask` — only when no label-mode/carton matching
+  applies (a gate 409 leaves the credit but skips the completion). Spec:
+  `docs/superpowers/specs/2026-11-18-measure-verify-2level-and-item-scan-design.md`.
 - Box detail as **one consolidated read** (`GET /verify-tasks/:id`):
   `{task{id, status, shippingBoxId, createdDate}, box{...,
   suggestedNetWeightKg}, packages[]}` with part identity plus the

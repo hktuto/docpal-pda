@@ -725,6 +725,15 @@ export function createBackendWarehouseService(
     async getMeasuringBox(boxId: string): Promise<MeasuringBoxDetail> {
       return client.get(`/measuring-boxes/${boxId}`);
     },
+    // Quick item scan (spec 2026-11-18) — POST /measuring-boxes/scan-item.
+    async scanItemCompleteBox(input: {
+      mode: "measuring" | "verify";
+      orderKey: string;
+      partNo?: string;
+      wclItemNo?: string;
+    }): Promise<{ boxId: string; creditedPackages: number; taskCompleted: boolean }> {
+      return client.post("/measuring-boxes/scan-item", input);
+    },
 
     // Verify — box-keyed list/detail reads plus completion. Reopen is the
     // verify-step-only escape hatch: closed box → open, packages

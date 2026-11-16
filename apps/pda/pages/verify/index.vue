@@ -2,10 +2,10 @@
   <AppListPage
     :loading="loading"
     :error="loadError"
-    :empty="groups.length === 0"
+    :empty="orders.length === 0"
     empty-text="common.noPendingVerifyTasks"
-    :shown="rows.length"
-    :total="rows.length"
+    :shown="orders.length"
+    :total="orders.length"
     :has-more="false"
     hide-footer
     :reload="load"
@@ -21,19 +21,13 @@
       <p class="page-hint">{{ $t('verify.hint') }}</p>
     </template>
 
-    <template v-for="group in groups" :key="group.orderNos">
-      <h2 class="order-group__heading">{{ $t('verify.orderGroup', { orderNo: group.orderNos }) }}</h2>
-      <AppListRow
-        v-for="task in group.tasks"
-        :key="task.taskId"
-        :to="`/verify/${task.shippingBoxId}`"
-        :title="rowView(task).title"
-        :meta="rowMeta(task)"
-        :chip-text="rowChip(task)?.text"
-        :chip-class="rowChip(task)?.cls"
-        :mine-text="mineText(task)"
-      />
-    </template>
+    <AppListRow
+      v-for="order in orders"
+      :key="order.orderNo"
+      :to="`/verify/order/${encodeURIComponent(order.orderNo)}`"
+      :title="order.orderNo"
+      :meta="[t('verify.taskCount', { count: order.taskCount })]"
+    />
   </AppListPage>
 </template>
 
@@ -42,32 +36,17 @@ import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useToast } from "~/composables/useToast";
-import { badgeClass } from "~/composables/useStatusBadge";
-import { viewListChip, viewListRow } from "~/utils/viewConfig";
 import type { VerifyTaskListRow } from "~/services/types";
 
 definePageMeta({ title: "meta.verify" });
 
+// 2-level navigation (spec 2026-11-18): level 1 lists the picking order
+// numbers derived from the pending verify tasks (a cross-order task appears
+// under each of its orders); level 2 (/verify/order/[orderNo]) lists the
+// order's box tasks.
 const { t } = useI18n();
-const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
-const { mineText } = useAssignedToMe();
-// Row title/meta/chip come from the warehouse's pdaViewConfig flow config
-// (spec 2026-10-04-pda-app-rewrite-design.md); on a backend without the key
-// the legacy listTemplates + the extra meta line render instead.
-const { viewConfig, viewConfigLoaded, renderChip } = useViewConfig();
-const rowView = (task: VerifyTaskListRow) => viewListRow("verify", task, viewConfig.value);
-function rowMeta(task: VerifyTaskListRow): string[] {
-  const meta = rowView(task).meta;
-  return viewConfigLoaded.value
-    ? meta
-    : [...meta, t("common.packagesVerified", { verified: task.verifyVerifiedCount, total: task.packageCount })];
-}
-function rowChip(task: VerifyTaskListRow) {
-  if (!viewConfigLoaded.value) return { text: statusLabel.box(task.boxStatus), cls: badgeClass(task.boxStatus) };
-  return renderChip(viewListChip("verify", task, viewConfig.value));
-}
 const router = useRouter();
 const { showToast } = useToast();
 
@@ -92,48 +71,42 @@ async function load() {
 }
 
 const search = ref("");
-const rows = computed(() => {
+const orders = computed(() => {
   const q = search.value.trim().toLowerCase();
-  if (!q) return rawRows.value;
-  return rawRows.value.filter((t) => t.orderNos.some((o) => o.toLowerCase().includes(q)));
-});
-
-// Group the (filtered) tasks by their picking order numbers — the same
-// grouping the measuring list uses, derived client-side here.
-const groups = computed(() => {
-  const byOrders = new Map<string, VerifyTaskListRow[]>();
-  for (const task of rows.value) {
-    const key = task.orderNos.join(", ");
-    const list = byOrders.get(key);
-    if (list) list.push(task);
-    else byOrders.set(key, [task]);
+  const seen = new Map<string, number>();
+  for (const task of rawRows.value) {
+    for (const orderNo of task.orderNos) {
+      if (q && !orderNo.toLowerCase().includes(q)) continue;
+      seen.set(orderNo, (seen.get(orderNo) ?? 0) + 1);
+    }
   }
-  return [...byOrders].map(([orderNos, tasks]) => ({ orderNos, tasks }));
+  return [...seen]
+    .map(([orderNo, taskCount]) => ({ orderNo, taskCount }))
+    .sort((a, b) => a.orderNo.localeCompare(b.orderNo));
 });
 
 // Scanning a printed carton label opens its box (and stamps the box's
 // carton_label_verified — spec 2026-10-30); otherwise a box QR (or its id
-// typed on the wedge) opens that box directly. Exact id wins; otherwise a
-// unique substring match (e.g. the daily seq).
+// typed on the wedge) opens that box directly.
 useHardwareScanner({
-  enabled: () => rows.value.length > 0,
+  enabled: () => rawRows.value.length > 0,
   onScan: async (rawValue) => {
-    const q = rawValue.trim();
-    if (!q) return false;
-    const hit = await warehouse.lookupVerifyTaskByLabel(q);
-    if (hit) {
-      router.push(`/verify/${hit.shippingBoxId}`);
+    const raw = rawValue.trim();
+    if (!raw) return false;
+    const carton = await warehouse.lookupVerifyTaskByLabel(raw);
+    if (carton) {
+      router.push(`/verify/${carton.shippingBoxId}`);
       showToast(t("verify.cartonLabelVerified"));
-      return;
+      return true;
     }
-    const boxes = rows.value;
-    const needle = q.toLowerCase();
-    const exact = boxes.find((b) => b.shippingBoxId.toLowerCase() === needle);
-    const matches = exact ? [exact] : boxes.filter((b) => b.shippingBoxId.toLowerCase().includes(needle));
+    const tasks = rawRows.value;
+    const q = raw.toLowerCase();
+    const boxMatches = (b: string) => b.toLowerCase() === q || b.toLowerCase().includes(q);
+    const matches = tasks.filter((t) => boxMatches(t.shippingBoxId));
     if (matches.length === 1) {
       router.push(`/verify/${matches[0].shippingBoxId}`);
     } else {
-      showToast(t("verify.boxNotFound", { id: q }));
+      showToast(t("verify.boxNotFound", { id: raw }));
       return false;
     }
   },
@@ -155,17 +128,5 @@ useHardwareScanner({
   margin: -0.25rem 0 1rem;
   color: var(--muted);
   font-size: 0.875rem;
-}
-
-.order-group__heading {
-  margin: 0 0 0.375rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--muted);
-  letter-spacing: 0.03em;
-}
-
-.order-group__heading:not(:first-child) {
-  margin-top: 1rem;
 }
 </style>

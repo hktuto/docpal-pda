@@ -3,7 +3,9 @@ import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet } from "./query.js";
 import { partsMasterByWcl } from "./partsMaster.js";
-import { cartonPrintExists, labeledOrderIds } from "./verify.js";
+import { cartonPrintExists, completeVerifyTask, labeledOrderIds } from "./verify.js";
+import { verifyPackage } from "./picking.js";
+import { normalizePartNo } from "../decode/codecs.js";
 import { assigneeFilter } from "./user-scope.js";
 
 // ---------------------------------------------------------------------------
@@ -223,4 +225,108 @@ function suggestedNetWeightKg(
   }
   if (!any) return null;
   return Math.round((grams / 1000) * 1000) / 1000;
+}
+
+// ---------------------------------------------------------------------------
+// Quick item scan (2026-11-18): on the picking-order box page, scanning an
+// item auto-credits the single remaining part's box when no other matching
+// (label mode / carton label) is required. Spec:
+// docs/superpowers/specs/2026-11-18-measure-verify-2level-and-item-scan-design.md
+// ---------------------------------------------------------------------------
+
+export interface ScanItemCompleteResult {
+  boxId: string;
+  creditedPackages: number;
+  /** Verify mode only: the pending task was completed too. */
+  taskCompleted: boolean;
+}
+
+function scanIdentityMatches(needle: string, values: (string | null | undefined)[]): boolean {
+  const n = normalizePartNo(needle);
+  if (!n) return false;
+  return values.some((v) => {
+    if (!v) return false;
+    const t = normalizePartNo(v);
+    return t === n || t.includes(n) || n.includes(t);
+  });
+}
+
+/** Scan an item identity against one order's boxes: the box whose remaining
+ *  (not fully re-scanned) packages are exactly that single part, label-mode
+ *  free and not carton-gated, gets every remaining package credited fully
+ *  (the same verifyPackage pass as a manual scan). Verify mode also attempts
+ *  completeVerifyTask; a gate 409 is swallowed → taskCompleted: false.
+ *  Returns null when no candidate box matches. */
+export async function scanItemCompleteBox(
+  db: AppDb,
+  input: {
+    mode: "measuring" | "verify";
+    /** measuring: picking order id; verify: picking order no. */
+    orderKey: string;
+    partNo?: string;
+    wclItemNo?: string;
+    actorId: string;
+    username?: string;
+  }
+): Promise<ScanItemCompleteResult | null> {
+  interface Candidate {
+    boxId: string;
+    taskId: string | null;
+  }
+  let candidates: Candidate[];
+  if (input.mode === "measuring") {
+    const groups = await listMeasuringBoxes(db, input.username);
+    candidates = (groups.find((g) => g.orderId === input.orderKey)?.boxes ?? []).map((b) => ({
+      boxId: b.boxId,
+      taskId: null,
+    }));
+  } else {
+    const tasks = await queryAll<{ taskId: string; shippingBoxId: string }>(
+      db,
+      sql`
+        SELECT DISTINCT vt.id AS "taskId", vt.shipping_box_id AS "shippingBoxId"
+        FROM verify_tasks vt
+        JOIN picking_packages pp ON pp.shipping_box_id = vt.shipping_box_id
+        JOIN picking_items pi ON pi.id = pp.picking_item_id
+        JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE vt.status = 'pending' AND po.order_no = ${input.orderKey}
+        ${assigneeFilter(sql`vt.assignee`, input.username)}`
+    );
+    candidates = tasks.map((t) => ({ boxId: t.shippingBoxId, taskId: t.taskId }));
+  }
+
+  const needles = [input.partNo, input.wclItemNo].filter(
+    (s): s is string => typeof s === "string" && s.trim() !== ""
+  );
+  if (needles.length === 0) return null;
+
+  for (const candidate of candidates) {
+    const detail = await getMeasuringBoxDetail(db, candidate.boxId, input.username);
+    const remaining = detail.packages.filter((p) => p.rescannedQty < p.qty);
+    if (remaining.length === 0) continue;
+    // Quick path only when no other matching is required.
+    if (remaining.some((p) => p.labelMode)) continue;
+    if (detail.cartonLabelRequired && !detail.cartonLabelVerified) continue;
+    // "Single item" box: every remaining package shares one part identity.
+    const boxIdentity = normalizePartNo(remaining[0]!.wclItemNo || remaining[0]!.partNo);
+    if (!boxIdentity) continue;
+    if (!remaining.every((p) => normalizePartNo(p.wclItemNo || p.partNo) === boxIdentity)) continue;
+    if (!needles.some((n) => scanIdentityMatches(n, remaining.map((p) => [p.partNo, p.wclItemNo]).flat()))) continue;
+
+    for (const p of remaining) {
+      await verifyPackage(db, { packageId: p.id, actorId: input.actorId });
+    }
+    let taskCompleted = false;
+    if (input.mode === "verify" && candidate.taskId) {
+      try {
+        await completeVerifyTask(db, { taskId: candidate.taskId, actorId: input.actorId });
+        taskCompleted = true;
+      } catch {
+        // A completion gate (label/carton) still blocks — credit stands,
+        // the operator finishes via the normal flow.
+      }
+    }
+    return { boxId: candidate.boxId, creditedPackages: remaining.length, taskCompleted };
+  }
+  return null;
 }

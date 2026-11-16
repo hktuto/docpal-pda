@@ -22,6 +22,15 @@
   `verifiedCount` plus the aggregated `orderNos[]` (a box may hold packages
   from several picking orders — cross-order packing); a cross-order box
   appears under each of its orders' groups.
+- **2-level navigation + quick item scan (2026-11-18):** the list is
+  level 1 — one row per picking order (`pages/measuring/index.vue`) — and
+  `pages/measuring/order/[orderId].vue` is level 2: the order's box rows
+  (unchanged row rendering). On level 2 a box QR scan opens the box; an
+  **item** scan decodes via `POST /scan/decode` and calls
+  `POST /measuring-boxes/scan-item` (`scanItemCompleteBox`), which fully
+  credits the box whose remaining packages are exactly that single part —
+  only when no label-mode/carton matching applies. Spec:
+  `docs/superpowers/specs/2026-11-18-measure-verify-2level-and-item-scan-design.md`.
 - Box detail as **one consolidated read** (`GET /measuring-boxes/:id`): the
   box and its packages with part identity and the `verified`/`verifyVerified`
   flags embedded, plus `suggestedNetWeightKg` per box. Scanning a box QR/id
