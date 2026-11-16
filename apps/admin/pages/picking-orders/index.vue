@@ -289,7 +289,6 @@ const {
               : $t("admin.pages.pickingOrders.overrideStatus")
           }}
         </button>
-        <NuxtLink to="/picking/reorder" class="btn">{{ $t("admin.pages.pickingOrders.reorderPriority") }}</NuxtLink>
         <NuxtLink to="/picking-orders/vmi" class="btn">{{ $t("admin.pages.pickingOrders.newVmi") }}</NuxtLink>
       </div>
     </div>
