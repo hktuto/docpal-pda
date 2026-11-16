@@ -1,0 +1,14 @@
+{
+ "id": "BUG-057",
+ "dateFound": "2026-11-16",
+ "functionId": "PDA-010",
+ "description": "Put-away detail marks a part group Done before the operator has scanned all pieces: the card's Done chip / dimming / scan-button removal follow the backend remainingQty (received − picked − put_away − allocated − staged), which nets out qty allocated to picking orders. When all (or part) of a received item is allocated to picking, remainingQty hits ≤ 0 with zero scans, so the card reads 已完成 with Scanned: 0 and the scan buttons disappear even though nothing was scanned",
+ "reproSteps": "Receive an order, allocate an item's stock to a picking order, open the put-away detail for that order → the affected part card shows the green Done chip and no scan buttons while the operator has scanned nothing",
+ "severity": "Major",
+ "status": "Fixed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Backfill — commit ccd9136d: Done display is now putAwayQty + stagedQty vs receivedQty − pickedQty (putAwayGroupComplete in apps/pda/utils/putAwayGroups.ts, used by components/put-away/PutAwayLotsPanel.vue) and deliberately ignores allocations; not-done groups with allocated qty carry a warning chip 已分配揀貨 {qty} 件 (i18n putAway.lotsPanel.allocatedChip). Backend remaining guard unchanged — scanning the allocated portion still 409s scanned_qty_exceeds_remaining until the allocation is released. CN put-away unaffected (allocatedQty always 0). Display-only; KMB compact-qty rounding precision fixed separately in 5b377eda"
+}
