@@ -42,6 +42,10 @@ export interface PickingOrderRow {
   issuePackSize?: number | null;
   issueNote?: string | null;
   issueReportedAt?: string | null;
+  /** Packaging stage truth (packaged_at, spec 2026-11-10): set once every
+   *  holding box is closed (+ verify done when the step is on). Optional —
+   *  backends predating the packaging step omit it. */
+  packagedAt?: string | null;
   createdDate: string;
   lastUpdateDate: string;
 }

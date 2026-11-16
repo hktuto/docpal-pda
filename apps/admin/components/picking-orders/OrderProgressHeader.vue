@@ -10,18 +10,24 @@ const props = defineProps<{
   labelingEnabled?: boolean;
   /** measuring or verify step enabled (either gates the verify stage). */
   verifyEnabled?: boolean;
+  /** packaging step enabled (spec 2026-11-10 packaging/shipping steps). */
+  packagingEnabled?: boolean;
   labelPrintingDone?: boolean;
   labelingDone?: boolean;
+  /** packaged_at IS the packaged truth — the order status stays
+   *  measuring_finished until shipped; done = !!packagedAt. */
+  packaged?: boolean;
 }>();
 const { t } = useI18n();
 
-type StageKey = "allocate" | "picking" | "labelPrinting" | "labeling" | "verify" | "ship";
+type StageKey = "allocate" | "picking" | "labelPrinting" | "labeling" | "verify" | "packaging" | "ship";
 
 const stages = computed<{ key: StageKey; label: string }[]>(() => {
   const list: StageKey[] = ["allocate", "picking"];
   if (props.labelPrintingEnabled) list.push("labelPrinting");
   if (props.labelingEnabled) list.push("labeling");
   if (props.verifyEnabled) list.push("verify");
+  if (props.packagingEnabled) list.push("packaging");
   list.push("ship");
   return list.map((key) => ({ key, label: t(`admin.pages.pickingOrders.progress.${key}`) }));
 });
@@ -36,9 +42,13 @@ const currentIndex = computed(() => {
     if (props.labelPrintingEnabled && !props.labelPrintingDone) return stages.value.findIndex((x) => x.key === "labelPrinting");
     if (props.labelingEnabled && !props.labelingDone) return stages.value.findIndex((x) => x.key === "labeling");
     if (props.verifyEnabled) return stages.value.findIndex((x) => x.key === "verify");
+    if (props.packagingEnabled && !props.packaged) return stages.value.findIndex((x) => x.key === "packaging");
     return stages.value.findIndex((x) => x.key === "ship");
   }
-  if (s === "measuring_finished") return stages.value.findIndex((x) => x.key === "ship");
+  if (s === "measuring_finished") {
+    if (props.packagingEnabled && !props.packaged) return stages.value.findIndex((x) => x.key === "packaging");
+    return stages.value.findIndex((x) => x.key === "ship");
+  }
   if (s === "shipped") return stages.value.length;
   return -1;
 });

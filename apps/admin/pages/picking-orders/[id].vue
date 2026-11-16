@@ -263,8 +263,10 @@ const {
         :label-printing-enabled="flowSteps['label-printing'] !== false"
         :labeling-enabled="flowSteps.labeling !== false"
         :verify-enabled="flowSteps.measuring !== false || flowSteps.verify !== false"
+        :packaging-enabled="flowSteps.packaging !== false"
         :label-printing-done="!order.labelPrintingPending"
         :labeling-done="!order.labelingPending"
+        :packaged="!!order.packagedAt"
       />
 
       <!-- Status-driven body view (placeholder for every status for now). -->

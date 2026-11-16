@@ -1213,7 +1213,7 @@ export async function getPickingOrderDetail(
   username?: string
 ): Promise<PickingOrderDetail> {
   const order = await queryGet<
-    PickingOrderRow & { labelingAssignee: string | null; labelPrintingAssignee: string | null }
+    PickingOrderRow & { labelingAssignee: string | null; labelPrintingAssignee: string | null; packagedAt: Date | null }
   >(
     db,
     sql`
@@ -1239,6 +1239,7 @@ export async function getPickingOrderDetail(
         po.label_printing_pending AS "labelPrintingPending",
         po.label_printing_done_at AS "labelPrintingDoneAt", po.label_printing_done_by AS "labelPrintingDoneBy",
         lpu.display_name AS "labelPrintingDoneByName",
+        po.packaged_at AS "packagedAt",
         po.created_date AS "createdDate", po.last_update_date AS "lastUpdateDate"
       FROM picking_orders po
       LEFT JOIN users w ON w.id = po.working_by

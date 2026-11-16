@@ -1997,6 +1997,7 @@ export default {
           labelPrinting: "打印標籤",
           labeling: "貼標籤",
           verify: "測量/復核",
+          packaging: "打包",
           ship: "出貨",
         },
         pickingFinished: {

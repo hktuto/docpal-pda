@@ -1999,6 +1999,7 @@ export default {
           labelPrinting: "Print labels",
           labeling: "Apply labels",
           verify: "Measure/Verify",
+          packaging: "Pack",
           ship: "Ship",
         },
         pickingFinished: {
