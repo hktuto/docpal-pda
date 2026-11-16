@@ -83,8 +83,8 @@ export interface CustItemLookupResult {
   partNo: string | null;
   /** parts.description for wcl_item_no = 物料號; null when no part row. */
   itemDescription: string | null;
-  /** parts.moq for wcl_item_no = 物料號; 0 when the column/row is null or missing. */
-  moq: number;
+  /** parts.moq, else MOQ= in description; null when both miss. */
+  moq: number | null;
   /** picking_orders.delivery_date as YYYY-MM-DD; null when the order row misses. */
   deliveryDate: string | null;
 }

@@ -27,17 +27,23 @@ export interface CustItemLookupResult extends CustItemLookupLine {
   partNo: string | null;
   /** parts.description for wcl_item_no = 物料號; null when no part row. */
   itemDescription: string | null;
-  /** parts.moq for wcl_item_no = 物料號; 0 when the column/row is null or missing. */
-  moq: number;
+  /** parts.moq, else MOQ= in description; null when both miss. */
+  moq: number | null;
   /** picking_orders.delivery_date as YYYY-MM-DD; null when the order row misses. */
   deliveryDate: string | null;
 }
 
-/** Coerce a nullable parts.moq (string | number) to a finite number; else 0. */
-export function extractMoq(value: string | number | null | undefined): number {
-  if (value == null || value === "") return 0;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
+/** Prefer parts.moq; if null, parse `MOQ=xxx` from description; else null. */
+export function extractMoq(
+  moq: string | number | null | undefined,
+  description?: string | null
+): number | null {
+  if (moq != null && moq !== "") {
+    const n = Number(moq);
+    if (Number.isFinite(n)) return n;
+  }
+  const m = description?.match(/MOQ\s*=\s*(\d+)/i);
+  return m ? Number(m[1]) : null;
 }
 
 interface CrossRefRow {
@@ -170,7 +176,7 @@ export async function lookupCustItems(db: DbOrTx, rawLines: CustItemLookupLine[]
         accountNumber && l.wclItemNo ? custItemByPair.get(`${accountNumber}${PAIR_SEP}${l.wclItemNo}`) ?? null : null,
       partNo: part?.partNo ?? null,
       itemDescription: part?.itemDescription ?? null,
-      moq: extractMoq(part?.moq),
+      moq: extractMoq(part?.moq, part?.itemDescription),
       deliveryDate: deliveryByOrder.get(l.orderNo) ?? null,
     };
   });
