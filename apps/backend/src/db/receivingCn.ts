@@ -174,13 +174,20 @@ export function generateCnBatchNo(at: Date = new Date()): string {
  *  `receiving_invoices_cn.invoice_no` (manual receipts), `receiving_orders_cn.batch_no`
  *  (synced orders) and `receiving_cn_workflows.batch_no` (pdf uploads) — so a
  *  manual TE receipt and a TE pdf upload never collide on the same day. */
-export async function nextCnBrandedNo(db: AppDb, brand: string, at: Date = new Date()): Promise<string> {
+export async function nextCnBrandedNo(db: DbOrTx, brand: string, at: Date = new Date()): Promise<string> {
   const ymd = [
     at.getFullYear(),
     String(at.getMonth() + 1).padStart(2, "0"),
     String(at.getDate()).padStart(2, "0"),
   ].join("");
   const prefix = `${brand}-${ymd}-`;
+  // Serialize numbering per brand+day: the MAX-then-insert scan races under
+  // READ COMMITTED — two concurrent txs read the same max and both take
+  // seq+1. The transaction-scoped advisory lock (released at commit) makes
+  // every reservation of the same brand/day mutually exclusive. Callers MUST
+  // pass a tx (or reserve + insert the first numbered row inside one tx) so
+  // the lock still covers the insert.
+  await queryRun(db, sql`SELECT pg_advisory_xact_lock(hashtext(${`cn-numbering:${brand}-${ymd}`}))`);
   const row = await queryGet<{ max: number | null }>(
     db,
     sql`SELECT MAX(CAST(split_part(no, '-', 3) AS integer)) AS max FROM (
@@ -204,7 +211,10 @@ export async function nextCnBrandedNo(db: AppDb, brand: string, at: Date = new D
  * PDFs — one DocPal document per file, all entries under one workflow kick.
  * The tracking row keeps the first document id and the ", "-joined filenames.
  * A kick failure after the uploads deletes the orphaned attachments before
- * the 502 escapes.
+ * the 502 escapes. For pdf the branded batch no is reserved and the tracking
+ * row written BEFORE the uploads/kick (same short tx, advisory-locked) so two
+ * concurrent uploads can never draw the same seq; the row's docpal ids are
+ * filled in after the kick, and an upload/kick failure deletes the row.
  */
 export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Promise<{ id: string }> {
   const definitionId = input.phase === "excel" ? docpalCnExcelWorkflowId() : docpalCnPdfWorkflowId();
@@ -219,7 +229,51 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
   }
   // pdf uploads are always TE and number like manual receipts
   // (`TE-yyyymmdd-seq`); the retired excel phase keeps the random CN- key.
-  const batchNo = input.phase === "pdf" ? await nextCnBrandedNo(db, "TE") : generateCnBatchNo();
+  // For pdf the number is RESERVED under the advisory lock and the tracking
+  // row is written in the same short tx — before the uploads + workflow kick
+  // (seconds-long) that used to separate the MAX read from the insert, a
+  // window in which two concurrent uploads read the same max and both took
+  // the same seq. The placeholder row has NULL docpal ids, so the status cron
+  // (which filters docpal_process_id IS NOT NULL) ignores it until the kick
+  // fills them in; any upload/kick failure deletes the reservation.
+  const id = newId();
+  const at = now();
+  const filename = input.files.map((f) => f.filename).join(", ");
+  let batchNo: string;
+  if (input.phase === "pdf") {
+    batchNo = await db.transaction(async (tx) => {
+      const no = await nextCnBrandedNo(tx, "TE", at);
+      await tx.insert(receivingCnWorkflows).values({
+        id,
+        phase: input.phase,
+        invoiceNo: null,
+        supplier: null,
+        filename,
+        docpalDocumentId: null,
+        docpalProcessId: null,
+        docpalBusinessKey: null,
+        batchNo: no,
+        status: "workflow_running",
+        payload: {},
+        createdBy: input.actor.username,
+        createdDate: at,
+        lastUpdateDate: at,
+      });
+      await tx.insert(transactionLogs).values({
+        id: newId(),
+        entityType: "receiving_cn_workflow",
+        entityId: id,
+        fromState: null,
+        toState: "workflow_running",
+        actorId: input.actor.id,
+        metadata: { phase: input.phase, filename },
+        createdDate: at,
+      });
+      return no;
+    });
+  } else {
+    batchNo = generateCnBatchNo();
+  }
   // globalThis: this function's DocPal workflow `process` variable (below)
   // shadows the Node global.
   const warehouse = (globalThis.process.env.WAREHOUSE_CODE ?? "hk").toLowerCase();
@@ -232,27 +286,6 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
     name: string;
     response: { data: { fileContent: { mime_type: string }; fileContentExtension: string; id: string; name: string } };
   }[] = [];
-  for (const { filename, mime, bytes } of input.files) {
-    const data = await uploadWorkflowFile(filename, mime, bytes, filename);
-    const extension = filename.includes(".") ? filename.slice(filename.lastIndexOf(".") + 1).toLowerCase() : "";
-    const uploadName = typeof data.name === "string" && data.name ? data.name : filename;
-    fileEntries.push({
-      extension,
-      file_name: filename,
-      id: data.id,
-      mime_type: mime,
-      name: uploadName,
-      response: {
-        data: {
-          fileContent: { mime_type: mime },
-          fileContentExtension: extension,
-          id: data.id,
-          name: uploadName,
-        },
-      },
-    });
-  }
-  const filename = input.files.map((f) => f.filename).join(", ");
   const variables: Record<string, unknown> = {
     start_user_id: input.actor.username,
     batch_no: batchNo,
@@ -269,18 +302,53 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
   }
   let process: { id: string; business_key?: string };
   try {
-    console.log("start workflow", variables)
+    for (const { filename: oneName, mime, bytes } of input.files) {
+      const data = await uploadWorkflowFile(oneName, mime, bytes, oneName);
+      const extension = oneName.includes(".") ? oneName.slice(oneName.lastIndexOf(".") + 1).toLowerCase() : "";
+      const uploadName = typeof data.name === "string" && data.name ? data.name : oneName;
+      fileEntries.push({
+        extension,
+        file_name: oneName,
+        id: data.id,
+        mime_type: mime,
+        name: uploadName,
+        response: {
+          data: {
+            fileContent: { mime_type: mime },
+            fileContentExtension: extension,
+            id: data.id,
+            name: uploadName,
+          },
+        },
+      });
+    }
     process = await startProcess(definitionId, variables);
   } catch (e) {
-    // The attachments are orphaned by the failed kick — best-effort cleanup.
+    // Upload/kick failure: the attachments are orphaned — best-effort cleanup,
+    // and a pdf reservation row (written before the kick) is deleted.
+    if (input.phase === "pdf") {
+      await queryRun(
+        db,
+        sql`DELETE FROM receiving_cn_workflows WHERE id = ${id} AND docpal_process_id IS NULL`
+      ).catch(() => undefined);
+    }
     for (const entry of fileEntries) {
       await deleteWorkflowAttachment(entry.id).catch(() => undefined);
     }
     throw e;
   }
-
-  const id = newId();
-  const at = now();
+  if (input.phase === "pdf") {
+    // The reservation row already exists — fill in the DocPal ids after the
+    // kick (the cron skips it while docpal_process_id is NULL).
+    await queryRun(
+      db,
+      sql`UPDATE receiving_cn_workflows SET docpal_document_id = ${fileEntries[0]!.id},
+            docpal_process_id = ${process.id}, docpal_business_key = ${process.business_key ?? null},
+            last_update_date = ${now()}
+          WHERE id = ${id}`
+    );
+    return { id };
+  }
   await db.transaction(async (tx) => {
     await tx.insert(receivingCnWorkflows).values({
       id,

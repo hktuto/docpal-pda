@@ -10,6 +10,7 @@ import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, TEST_DATABASE_URL, type TestDb } from "../db/test-helper.js";
 import { _setCnReceivingForTests, _resetFlowConfigForTests } from "../config.js";
 import { queryAll, queryGet } from "../db/query.js";
+import { nextCnBrandedNo } from "../db/receivingCn.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 
@@ -333,4 +334,28 @@ test("parts master is authoritative: a TE bare-MPN scan stores the canonical wra
   );
   assert.equal(item!.partNo, "AMP(5172070-CN)");
   assert.equal(item!.wclItemNo, "TE-AMP(5172070-CN)");
+});
+
+test("numbering race: two concurrent txs reserving + inserting get distinct seqs (advisory lock)", async () => {
+  await reseed(client);
+  // Both txs run the full reserve+insert pattern concurrently — without the
+  // pg_advisory_xact_lock inside nextCnBrandedNo, both MAX reads see the same
+  // max and both take seq+1 (the reported batch-no race).
+  const results = await Promise.all(
+    [1, 2].map((n) =>
+      client.db.transaction(async (tx) => {
+        const no = await nextCnBrandedNo(tx, "RACE", new Date("2026-01-15T00:00:00Z"));
+        await tx.execute(
+          sql`INSERT INTO receiving_orders_cn (id, batch_no, status, org_id)
+              VALUES (${`cn-race-${n}`}, ${no}, 'pending', 2)`
+        );
+        return no;
+      })
+    )
+  );
+  assert.notEqual(results[0], results[1]);
+  assert.match(results[0]!, /^RACE-20260115-\d+$/);
+  assert.match(results[1]!, /^RACE-20260115-\d+$/);
+  const seqs = results.map((r) => Number(r!.split("-")[2]!)).sort((a, b) => a - b);
+  assert.deepEqual(seqs, [seqs[0], seqs[0] + 1]); // consecutive, no gap/collision
 });
