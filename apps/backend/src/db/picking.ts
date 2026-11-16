@@ -1313,19 +1313,19 @@ export async function getPickingOrderDetail(
         db,
         sql`
           SELECT
-            id, picking_item_id AS "pickingItemId", qty,
-            date_code AS "dateCode", lot_code AS "lotCode", coo, cow,
-            verified, verify_verified AS "verifyVerified",
-            rescanned_qty AS "rescannedQty", label_barcode AS "labelBarcode",
-            scanned_date_code AS "scannedDateCode", scanned_lot_code AS "scannedLotCode",
-            scanned_coo AS "scannedCoo", scanned_cow AS "scannedCow",
-            shipping_box_id AS "shippingBoxId",
-            source_type AS "sourceType", source_id AS "sourceId",
+            pp.id, pp.picking_item_id AS "pickingItemId", pp.qty,
+            pp.date_code AS "dateCode", pp.lot_code AS "lotCode", pp.coo, pp.cow,
+            pp.verified, pp.verify_verified AS "verifyVerified",
+            pp.rescanned_qty AS "rescannedQty", pp.label_barcode AS "labelBarcode",
+            pp.scanned_date_code AS "scannedDateCode", pp.scanned_lot_code AS "scannedLotCode",
+            pp.scanned_coo AS "scannedCoo", pp.scanned_cow AS "scannedCow",
+            pp.shipping_box_id AS "shippingBoxId",
+            pp.source_type AS "sourceType", pp.source_id AS "sourceId",
             il.drawing_no AS "drawingNo"
           FROM picking_packages pp
           LEFT JOIN inventory_lots il ON pp.source_type = 'inventory_lot' AND il.id = pp.source_id
-          WHERE ${inArray(sql`picking_item_id`, itemIds)}
-          ORDER BY created_date, id
+          WHERE ${inArray(sql`pp.picking_item_id`, itemIds)}
+          ORDER BY pp.created_date, pp.id
         `
       )
     : [];
