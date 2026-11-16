@@ -1,0 +1,14 @@
+{
+ "id": "BUG-056",
+ "dateFound": "2026-11-13",
+ "functionId": "PDA-006",
+ "description": "NCC label scan cannot find the order's part / WCL item no: the receiving-order items queries (scan commit + order detail) INNER-JOIN parts ON p.wcl_item_no = rii.wcl_item_no. Upstream receiving_invoice_items often carry wcl_item_no/part_no with embedded spaces (e.g. \"NCC-EKMV4 01VSN102MA60S\") that do not exist verbatim in parts, so those item rows are silently dropped. The NCC drawing-code lookup (wcl_part_drawno) resolves to the clean WCL item no (\"NCC-EKMV401VSN102MA60S\") but the dropped order line can never match, so the scan reports no_match and the review-dialog candidate list omits the item entirely",
+ "reproSteps": "Open a pending NCC receiving order whose invoice items have spaced wcl_item_no (e.g. BATCH-2026-10-09-000520) on the PDA → scan the reel's ITF QR (28-char, drawing code + lot + qty + serial) → server resolves the drawing code via wcl_part_drawno but returns 409 no_match; the order detail shows only the subset of items that join parts exactly",
+ "severity": "Major",
+ "status": "Fixed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Fix in working tree: INNER JOIN → LEFT JOIN for the parts lookup in apps/backend/src/db/receiving.ts:363 (scan match set) and apps/backend/src/routes/receiving.ts:336 (order detail/candidates); whitespace-insensitive normalizePartNo matching then links the resolved clean WCL key to the spaced order line. Also removed a stray console.log in apps/backend/src/decode/brands/ncc.ts. Verified against the real synced DB: previously-dropped NCC lines now match via the drawno retry. Typecheck clean; full backend suite 582/582"
+}
