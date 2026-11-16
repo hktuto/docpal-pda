@@ -29,7 +29,8 @@ import { actorFrom } from "../../auth/middleware.js";
  * GET /org-options?shelfCode= — the (org_id, sub_inventory_code) pairs the
  * modal's single-select may offer: all org_info pairs, restricted to the
  * shelf's sub_inventory_scopes when the shelf carries them (NULL/[] =
- * unrestricted).
+ * unrestricted). shelfCode is optional — absent (bulk multi-shelf import)
+ * returns ALL pairs unrestricted.
  */
 export const shelfInventoryImportRoute = new Hono();
 
@@ -41,15 +42,16 @@ interface ImportRow {
 }
 
 shelfInventoryImportRoute.get("/org-options", async (c) => {
-  const shelfCode = c.req.query("shelfCode")?.trim();
-  if (!shelfCode) throw new HTTPException(400, { message: "shelfCode is required" });
-  const shelf = await db
-    .select({ subInventoryScopes: shelves.subInventoryScopes })
-    .from(shelves)
-    .where(eq(shelves.code, shelfCode));
-  if (!shelf.length) throw new HTTPException(404, { message: "shelf_not_found" });
-
-  const scopes = (shelf[0].subInventoryScopes ?? []) as { orgId: number; code: string }[];
+  const shelfCode = c.req.query("shelfCode")?.trim() || null;
+  let scopes: { orgId: number; code: string }[] = [];
+  if (shelfCode) {
+    const shelf = await db
+      .select({ subInventoryScopes: shelves.subInventoryScopes })
+      .from(shelves)
+      .where(eq(shelves.code, shelfCode));
+    if (!shelf.length) throw new HTTPException(404, { message: "shelf_not_found" });
+    scopes = (shelf[0].subInventoryScopes ?? []) as { orgId: number; code: string }[];
+  }
   const rows = await db
     .select({
       orgId: subInventories.orgId,

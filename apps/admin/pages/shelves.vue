@@ -84,8 +84,11 @@ async function downloadQr(row: any) {
 const table = ref<{ reload: () => Promise<void> } | null>(null);
 const bulkEdit = ref<{ rows: any[]; clear: () => void } | null>(null);
 // Per-shelf inventory Excel import (ShelfInventoryImportDialog): one dialog at
-// a time, opened from the row-actions "Import" button.
+// a time, opened from the row-actions "Import" button. The top-of-table
+// multi-shelf import (ShelfInventoryImportBulkDialog) reads the same Excel
+// plus a shelf_code column and imports to many shelves at once.
 const importShelf = ref<any | null>(null);
+const importBulk = ref(false);
 
 async function onBulkEditSaved() {
   bulkEdit.value?.clear();
@@ -248,6 +251,9 @@ async function onImportFile(e: Event) {
         <button class="btn" :disabled="!rows.length" @click="printAll(rows)">
           {{ $t("admin.print.printAll", { count: rows.length }) }}
         </button>
+        <button class="btn btn-secondary" @click="importBulk = true">
+          {{ $t("admin.shelves.importInventory.bulkOpen") }}
+        </button>
         <button class="btn btn-secondary" @click="exportExcel">Export Excel</button>
         <button class="btn btn-secondary" :disabled="importing" @click="triggerImport">
           {{ importing ? "Importing..." : "Import Excel" }}
@@ -291,6 +297,11 @@ async function onImportFile(e: Event) {
       :shelf="importShelf"
       @saved="table?.reload()"
       @close="importShelf = null"
+    />
+    <ShelfInventoryImportBulkDialog
+      v-if="importBulk"
+      @saved="table?.reload()"
+      @close="importBulk = false"
     />
   </div>
 </template>

@@ -1855,8 +1855,12 @@ export function useFlowApi() {
     stockSearchOptions: () => api.get<StockSearchOptions>("/stock-search/options"),
     // Per-shelf inventory Excel import (spec 2026-11-13-uat-inventory-tools-
     // design.md) — the modal's org/sub-inventory picker + the row import POST.
-    shelfOrgOptions: (shelfCode: string) =>
-      api.get<ShelfOrgOptions>(`/admin/shelves/import-inventory/org-options?shelfCode=${encodeURIComponent(shelfCode)}`),
+    shelfOrgOptions: (shelfCode?: string) =>
+      api.get<ShelfOrgOptions>(
+        shelfCode
+          ? `/admin/shelves/import-inventory/org-options?shelfCode=${encodeURIComponent(shelfCode)}`
+          : "/admin/shelves/import-inventory/org-options"
+      ),
     importShelfInventory: (payload: ShelfInventoryImportPayload) =>
       api.post<ShelfInventoryImportResult>("/admin/shelves/import-inventory", payload),
     // UAT inventory wipe — always available to admins (type-"DELETE"

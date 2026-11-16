@@ -199,6 +199,10 @@ test("import: org-options reflects the shelf scope", async () => {
   const all = await req("/admin/shelves/import-inventory/org-options?shelfCode=A0101");
   const allBody = await all.json();
   assert.ok(allBody.pairs.length >= 1, "unrestricted shelf offers all org pairs");
+  const noShelf = await req("/admin/shelves/import-inventory/org-options");
+  assert.equal(noShelf.status, 200);
+  const noShelfBody = await noShelf.json();
+  assert.ok(noShelfBody.pairs.length >= allBody.pairs.length, "no shelfCode = all org pairs (bulk import)");
 });
 
 test("import: drawing_no splits lots — same part + date_code, different drawing_no = second lot; blank = null", async () => {
