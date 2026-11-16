@@ -11,12 +11,15 @@ describe('formatCompactQty', () => {
   it('formats thousands with k', () => {
     expect(formatCompactQty(1000)).toBe('1k');
     expect(formatCompactQty(60000)).toBe('60k');
-    expect(formatCompactQty(1234)).toBe('1.2k');
+    expect(formatCompactQty(1234)).toBe('1.234k');
   });
 
-  it('formats millions with M', () => {
+  it('formats millions with M, 3 decimals max', () => {
     expect(formatCompactQty(1_000_000)).toBe('1M');
     expect(formatCompactQty(1_400_000)).toBe('1.4M');
+    expect(formatCompactQty(1_180_000)).toBe('1.18M');
+    expect(formatCompactQty(1_184_500)).toBe('1.185M');
+    expect(formatCompactQty(1_200_000)).toBe('1.2M');
   });
 
   it('formats billions with B', () => {
