@@ -217,6 +217,7 @@ export default {
   },
   manualReceiving: {
     title: "Manual Receiving",
+    boxUnit: "Box",
     addOrderNo: "Add order no.",
     addOrderNoPlaceholder: "Enter order no.",
     confirm: "Confirm",

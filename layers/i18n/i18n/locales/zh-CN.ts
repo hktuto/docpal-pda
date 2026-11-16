@@ -217,6 +217,7 @@ export default {
   },
   manualReceiving: {
     title: "手动收货",
+    boxUnit: "件",
     addOrderNo: "新增订单号",
     addOrderNoPlaceholder: "输入订单号",
     confirm: "确定",

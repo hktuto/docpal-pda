@@ -295,7 +295,7 @@ async function submit() {
           <span class="order-card__no">
             {{ order.orderNo }}
             <span v-if="order.items.length" class="order-card__progress">
-              ({{ order.items.length }}/{{ formatCompactQtyUpper(orderTotalQty(order)) }})
+              ({{ order.items.length }}{{ $t("manualReceiving.boxUnit") }}/{{ formatCompactQtyUpper(orderTotalQty(order)) }})
             </span>
           </span>
           <span class="order-card__actions">
