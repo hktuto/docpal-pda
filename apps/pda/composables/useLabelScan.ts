@@ -182,16 +182,17 @@ export function useLabelScan() {
   async function parseRawValue(
     rawValue: string,
     supplierCode?: string,
-    contextBrands?: string[]
+    contextBrands?: string[],
+    targets?: string[]
   ): Promise<OcrParseResult> {
     const capture = buildRawCapture(rawValue);
     const barcodes = parseBarcodes(capture.barcodes);
 
     if (isQrOnlyCapture(capture, barcodes)) {
-      return decodeLabel(warehouse, rawValue, { supplierCode, brands: contextBrands });
+      return decodeLabel(warehouse, rawValue, { supplierCode, brands: contextBrands, targets });
     }
 
-    return parseAndIdentify({ text: rawValue, barcodes }, []);
+    return parseAndIdentify({ text: rawValue, barcodes }, targets ?? []);
   }
 
   async function scan(context: ScanTaskContext): Promise<LabelScanResult> {

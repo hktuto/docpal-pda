@@ -98,6 +98,21 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
     ...new Set(orderItems.value.map((i) => i.brand).filter((b): b is string => !!b)),
   ]);
 
+  // The order's part keys as decode targets (POST /scan/decode): the backend
+  // gates template matches on them and — for NCC drawing codes / TE truncated
+  // MPNs — accepts the translated identity only when exactly one resolved
+  // wcl_item_no is on this order. Without targets the NCC resolution falls
+  // back to the FIRST database match, which can be the wrong part when one
+  // drawing no maps to several wcl item numbers.
+  const orderTargets = computed(() => {
+    const keys = new Set<string>();
+    for (const item of orderItems.value) {
+      if (item.partNo) keys.add(item.partNo);
+      if (item.wclItemNo) keys.add(item.wclItemNo);
+    }
+    return [...keys];
+  });
+
   /** Set/replace the sticky shelf context from a scan that matched an
    *  allocation's shelf box / shelf code. */
   function setPendingShelfFromMatch(rawValue: string) {
@@ -192,7 +207,7 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
   /** Hardware/camera QR path: supplier label first, receiving carton second
    *  (auto-queue), shelf box/shelf barcode last (pick-from-box dialog). */
   async function handleQrOrBoxScan(rawValue: string): Promise<ScanSessionResult> {
-    const parsedResult = await parseRawValue(rawValue, undefined, orderBrands.value);
+    const parsedResult = await parseRawValue(rawValue, undefined, orderBrands.value, orderTargets.value);
     if (parsedResult.matched) {
       return await handleParsed(ocrResultToInput(parsedResult.parsed), rawValue, "qr");
     }
@@ -214,7 +229,7 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
       boxPickId.value = null;
       return queueCarton(rawValue);
     }
-    const parsedResult = await parseRawValue(rawValue, undefined, orderBrands.value);
+    const parsedResult = await parseRawValue(rawValue, undefined, orderBrands.value, orderTargets.value);
     if (!parsedResult.matched) return { ok: false, message: "no_match" };
     const parsed = ocrResultToInput(parsedResult.parsed);
     // Unwrapped both sides — a TE label's bare MPN must match the box
@@ -299,6 +314,7 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
     boxPickId,
     boxPickEntries,
     orderBrands,
+    orderTargets,
     completed,
     orderMatched,
     shelfWorkRemaining,

@@ -8,7 +8,8 @@ vi.mock('vue', () => ({
 }));
 
 type RawParseResult = { matched: boolean; parsed: Record<string, unknown> };
-const parseRawValue = vi.fn<(raw: string) => Promise<RawParseResult>>();
+type RawParseArgs = [raw: string, supplierCode?: string, brands?: string[], targets?: string[]];
+const parseRawValue = vi.fn<(...args: RawParseArgs) => Promise<RawParseResult>>();
 vi.mock('~/composables/useLabelScan', () => ({
   useLabelScan: () => ({ parseRawValue }),
   ocrResultToInput: (parsed: Record<string, unknown>) => ({
@@ -115,6 +116,22 @@ describe('usePickingScanSession', () => {
     expect(r).toMatchObject({ ok: true, kind: 'queued' });
     expect(session.rows.value).toHaveLength(1);
     expect(session.rows.value[0]).toMatchObject({ itemId: 'item-1', allocationId: 'alloc-1', qty: 1000 });
+  });
+
+  it('sends the order part keys as decode targets (NCC drawing-no disambiguation)', async () => {
+    const { session } = setup('off');
+    parseRawValue.mockResolvedValue(label('PART-1', 1000));
+    await session.handleQrOrBoxScan(':A::1:X:L:S:F');
+    expect(parseRawValue).toHaveBeenCalledWith(':A::1:X:L:S:F', undefined, ['KOA'], ['PART-1', 'PART-2']);
+  });
+
+  it('sends wcl item numbers in the decode targets too', async () => {
+    const items = makeItems();
+    items[0] = { ...items[0], wclItemNo: 'WCL-PART-1' } as Items[number];
+    const { session } = setup('off', undefined, items);
+    parseRawValue.mockResolvedValue(label('PART-1', 1000));
+    await session.handleQrOrBoxScan(':A::1:X:L:S:F');
+    expect(parseRawValue).toHaveBeenCalledWith(':A::1:X:L:S:F', undefined, ['KOA'], ['PART-1', 'WCL-PART-1', 'PART-2']);
   });
 
   it('rejects a duplicate raw label', async () => {
