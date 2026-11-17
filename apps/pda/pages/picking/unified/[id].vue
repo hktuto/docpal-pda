@@ -40,15 +40,6 @@
         <span v-else>{{ $t('picking.scanSession.scanShelfFirst') }}</span>
       </div>
 
-      <div v-if="scanIntoBoxId && !externalArmedBox" class="armed-banner">
-        <span class="armed-banner-label">
-          {{ $t('picking.boxesSection.armedBanner', { box: scanIntoBoxId }) }}
-        </span>
-        <button class="btn btn--small btn--secondary" @click="scanIntoBoxId = null">
-          {{ $t('picking.boxesSection.scanIntoBoxStop') }}
-        </button>
-      </div>
-
       <PickingUnifiedItems
         :items="order.items ?? []"
         :queue-rows="rows"
@@ -68,7 +59,7 @@
 
       <PickingBoxesSection
         v-model:expanded="boxesExpanded"
-        :boxes="order.boxes"
+        :boxes="displayBoxes"
         :box-contents="boxContents"
         :actionable="actionable"
         :creating-box="creatingBox"
@@ -82,8 +73,7 @@
         :removing="removing"
         :scan-into-box-id="scanIntoBoxId"
         :scanning-into-box="scanningIntoBox"
-        :external-box="externalArmedBox?.box"
-        :external-box-contents="externalArmedBox?.boxContents"
+        :foreign-box-ids="foreignBoxIds"
         @create-box="createBox"
         @choose-box="openChooseBox"
         @box-each-unboxed="boxEachUnboxed"
@@ -192,7 +182,7 @@ import ChooseBoxDialog from "~/components/picking/ChooseBoxDialog.vue";
 import PickingUnifiedItems from "~/components/picking/PickingUnifiedItems.vue";
 import LabelPrintPrompt from "~/components/picking/LabelPrintPrompt.vue";
 import type { OcrInput } from "~/utils/ocrNormalize";
-import type { LabelPrintRuleMatch, OpenShippingBox, PickingOrderDetail } from "~/services/types";
+import type { LabelPrintRuleMatch, OpenShippingBox, PickingBox, PickingOrderDetail } from "~/services/types";
 import type { ScanSessionResult } from "~/composables/usePickingScanSession";
 
 definePageMeta({ title: "meta.pickingDetail" });
@@ -616,6 +606,15 @@ const boxContents = computed<Record<string, BoxContentEntry[]>>(() => {
   return map;
 });
 
+/** The chosen cross-order box is "foreign" to this order: its card may pack
+ *  items in (Select box / Add all / scan) but must not be closed/cancelled
+ *  from here. */
+const foreignBoxIds = computed(() =>
+  scanIntoBoxId.value && order.value && !order.value.boxes.some((b) => (b.id === scanIntoBoxId.value))
+    ? [scanIntoBoxId.value]
+    : []
+);
+
 /** Distinct non-null COOs currently in a box. */
 function boxCoos(boxId: string): string[] {
   return [...new Set((boxContents.value[boxId] ?? []).map((e) => e.coo).filter((c): c is string => !!c))];
@@ -662,24 +661,13 @@ async function load() {
   error.value = null;
   try {
     order.value = withVisibleItems(await warehouse.getPickingOrder(orderId));
-    // Disarm only when the armed box is one of THIS order's boxes and left
-    // the open state — a cross-order armed box (chosen via Choose box) has no
-    // card here and stays armed; a stale one fails loudly on the next scan.
+    // Disarm when the armed box is one of THIS order's boxes and left the
+    // open state — a cross-order armed box (chosen via Choose box) stays armed;
+    // a stale one fails loudly on the next scan.
     if (scanIntoBoxId.value) {
       const armed = order.value.boxes.find((b) => b.id === scanIntoBoxId.value);
       if (armed && armed.status !== "open") {
         scanIntoBoxId.value = null;
-      } else if (!armed) {
-        // Cross-order armed box: refresh its card (package count) and disarm
-        // when it is no longer open anywhere.
-        try {
-          const open = await warehouse.listOpenShippingBoxes();
-          const still = open.find((b) => b.id === scanIntoBoxId.value);
-          if (still) chosenBox.value = still;
-          else scanIntoBoxId.value = null;
-        } catch {
-          // ignore — the stale box fails loudly on the next scan
-        }
       }
     }
     const nextBoxSelections: Record<string, string> = {};
@@ -799,25 +787,22 @@ function onChooseBox(boxId: string) {
   boxesExpanded.value = true;
 }
 
-/** The chosen cross-order box, surfaced as a card in the boxes section. */
-const externalArmedBox = computed<{
-  box: OpenShippingBox;
-  boxContents: Record<string, BoxContentEntry[]>;
-} | null>(() => {
-  if (!scanIntoBoxId.value || !order.value) return null;
-  // The order's own boxes already have cards there — nothing extra to show.
-  if (order.value.boxes.some((b) => b.id === scanIntoBoxId.value)) return null;
+/** The boxes rendered in the boxes section: the order's own boxes plus the
+ *  chosen cross-order box, shown as a normal card (Select-box dropdown / Add
+ *  all / contents, no Close/Cancel since this order doesn't own it). */
+const displayBoxes = computed(() => {
+  const own = order.value?.boxes ?? [];
+  const boxId = scanIntoBoxId.value;
+  if (!boxId || !order.value || own.some((b) => b.id === boxId)) return own;
   // Items of OTHER orders already packed in the armed box (cross-order packing
-  // by scans from the armed box's own page) — the card lists/removes them.
-  // This page has no per-order detail fetch: queue rows carry the resolved
-  // order detail reference after a scan is applied.
+  // by scans from the armed box's own page) — surfaced via boxContents.
   const cross: BoxContentEntry[] = [];
   for (const row of rows.value ?? []) {
     const detail = (row as { detail?: PickingOrderDetail["items"][number] }).detail;
     if (!detail) continue;
     const partLabel = detail.wclItemNo ?? detail.partNo;
     for (const pkg of detail.packages ?? []) {
-      if (pkg.shippingBoxId !== scanIntoBoxId.value) continue;
+      if (pkg.shippingBoxId !== boxId) continue;
       cross.push({
         packageId: pkg.id,
         partLabel,
@@ -829,10 +814,9 @@ const externalArmedBox = computed<{
       });
     }
   }
-  const map = { [scanIntoBoxId.value]: cross };
-  const found = chosenBox.value?.id === scanIntoBoxId.value ? chosenBox.value : null;
-  const box = found ?? {
-    id: scanIntoBoxId.value,
+  const found = chosenBox.value?.id === boxId ? chosenBox.value : null;
+  const openBox = found ?? {
+    id: boxId,
     orderId: null,
     orderNo: null,
     packageCount: 0,
@@ -842,7 +826,20 @@ const externalArmedBox = computed<{
     destinationCountry: null,
     createdDate: "",
   };
-  return { box: { ...box, packageCount: cross.length }, boxContents: map };
+  const owned = own as unknown as PickingBox[];
+  // Rendered like an own box but with no creator order: no Close/Cancel row.
+  const mixed: PickingBox = {
+    id: openBox.id,
+    status: "open",
+    packageCount: cross.length,
+    boxSize: openBox.boxSize,
+    netWeight: openBox.netWeight,
+    grossWeight: openBox.grossWeight,
+    destinationCountry: openBox.destinationCountry,
+    shippedAt: null,
+    shippedBy: null,
+  };
+  return [...owned, mixed] as unknown as typeof own;
 });
 
 async function addAllToBox(boxId: string) {

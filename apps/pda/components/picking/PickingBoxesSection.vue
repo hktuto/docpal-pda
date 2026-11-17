@@ -46,86 +46,7 @@
   </div>
 
   <div v-if="expanded" class="boxes-list">
-    <p v-if="!boxes?.length && !externalBox" class="empty">{{ $t('common.noBoxes') }}</p>
-
-    <!-- A cross-order box chosen via "選擇箱" — same card layout as the
-         order's own boxes so the armed scan-into-box state is obvious. -->
-    <div v-if="externalBox" class="card box-card box-card--chosen">
-      <DetailRow :label="$t('picking.boxesSection.boxId')">
-        <span class="card__title">{{ externalBox.id }}</span>
-      </DetailRow>
-      <DetailRow :label="$t('picking.boxesSection.status')">
-        <span class="badge" :class="badgeClass('open')">{{ statusLabel.box('open') }}</span>
-      </DetailRow>
-      <DetailRow v-if="externalBox.orderNo" :label="$t('picking.boxesSection.orderLabel')" :value="externalBox.orderNo" />
-      <DetailRow :label="$t('picking.boxesSection.packages')" :value="externalBox.packageCount" />
-      <p v-if="mixedCoos(externalBox.id).length > 1" class="box-coo-warning" role="alert">
-        ⚠️ {{ $t('picking.boxesSection.mixedCoo', { coos: mixedCoos(externalBox.id).join(' / ') }) }}
-      </p>
-      <div v-if="contentsOf(externalBox.id).length" class="box-contents">
-        <button
-          type="button"
-          class="btn btn--small btn--ghost box-contents__toggle"
-          :aria-expanded="contentsExpanded.has(externalBox.id)"
-          @click="toggleContents(externalBox.id)"
-        >
-          {{ contentsExpanded.has(externalBox.id) ? $t('actions.hide') : $t('actions.show') }}
-          {{ $t('picking.boxesSection.contents') }} ({{ contentsOf(externalBox.id).length }})
-        </button>
-        <div v-if="contentsExpanded.has(externalBox.id)" class="box-contents__list">
-          <div v-for="entry in contentsOf(externalBox.id)" :key="entry.packageId" class="box-contents__row">
-            <span class="box-contents__info">
-              <span class="box-contents__part">{{ entry.partLabel }}</span>
-              {{ entry.qty }} {{ $t('common.pcs') }} ·
-              {{ $t('picking.itemsSection.dateLotCooCow') }}:
-              {{ labelDateCode(entry.dateCode) }} / {{ entry.lotCode || $t('common.noData') }} /
-              {{ entry.coo || $t('common.noData') }} / {{ entry.cow || $t('common.noData') }}
-            </span>
-            <button
-              v-if="actionable"
-              class="btn btn--small btn--secondary"
-              :disabled="removing[entry.packageId]"
-              @click="emit('remove-from-box', entry.packageId)"
-            >
-              <template v-if="removing[entry.packageId]">
-                <InlineSpinner /> {{ $t('picking.boxesSection.movingOut') }}
-              </template>
-              <template v-else>
-                {{ $t('picking.boxesSection.moveOut') }}
-              </template>
-            </button>
-          </div>
-        </div>
-      </div>
-      <div class="box-actions">
-        <button
-          class="btn btn--small"
-          :disabled="anyAddingAll || addingAll[externalBox.id] || unboxedCount === 0"
-          @click="emit('add-all-to-box', externalBox.id)"
-        >
-          <template v-if="addingAll[externalBox.id]">
-            <InlineSpinner /> {{ $t('picking.boxesSection.addAll') }}
-          </template>
-          <template v-else>
-            {{ $t('picking.boxesSection.addAll') }}
-          </template>
-        </button>
-        <button
-          class="btn btn--small"
-          :class="{ 'btn--ghost': scanIntoBoxId !== externalBox.id }"
-          :disabled="scanningIntoBox"
-          @click="emit('toggle-scan-into-box', externalBox.id)"
-        >
-          <template v-if="scanningIntoBox && scanIntoBoxId === externalBox.id">
-            <InlineSpinner />
-          </template>
-          {{ scanIntoBoxId === externalBox.id ? $t('picking.boxesSection.scanIntoBoxStop') : $t('picking.boxesSection.scanIntoBox') }}
-        </button>
-      </div>
-      <p v-if="scanIntoBoxId === externalBox.id" class="scan-into-hint">
-        {{ $t('picking.boxesSection.scanIntoBoxHint') }}
-      </p>
-    </div>
+    <p v-if="!boxes?.length" class="empty">{{ $t('common.noBoxes') }}</p>
 
     <div
       v-for="box in boxes"
@@ -203,7 +124,7 @@
           {{ scanIntoBoxId === box.id ? $t('picking.boxesSection.scanIntoBoxStop') : $t('picking.boxesSection.scanIntoBox') }}
         </button>
         <button
-          v-if="closable"
+          v-if="closable && !isForeign(box.id)"
           class="btn btn--small"
           :disabled="box.packageCount === 0 || closingBox[box.id]"
           @click="$emit('close-box', box.id)"
@@ -211,7 +132,7 @@
           {{ closingBox[box.id] ? $t('actions.confirming') : $t('picking.boxesSection.closeBox') }}
         </button>
         <button
-          v-if="box.packageCount === 0"
+          v-if="box.packageCount === 0 && !isForeign(box.id)"
           class="btn btn--small btn--danger"
           :disabled="cancellingBox[box.id]"
           @click="$emit('cancel-box', box.id)"
@@ -227,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import type { OpenShippingBox, PickingOrderDetail } from "~/services/types";
+import type { PickingOrderDetail } from "~/services/types";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { toLabelDateCode } from "~/utils/dateCode";
 
@@ -271,12 +192,9 @@ const props = defineProps<{
   /** The box armed for cross-order "scan item into box", if any. */
   scanIntoBoxId: string | null;
   scanningIntoBox: boolean;
-  /** A box chosen via the choose-box dialog from ANOTHER order, shown as a
-   *  card above the order's own boxes (null when none / own box armed). */
-  externalBox: OpenShippingBox | null;
-  /** Contents entries for the external box (other orders' packages packed
-   *  into it), merged into the card's contents lookup. */
-  externalBoxContents?: Record<string, BoxContentEntry[]>;
+  /** Box ids this page added but does not own (chosen cross-order boxes) —
+   *  their cards hide Close/Cancel so they can't be closed from here. */
+  foreignBoxIds?: string[];
 }>();
 
 const emit = defineEmits<{
@@ -297,7 +215,13 @@ const expanded = computed({
 });
 
 function contentsOf(boxId: string): BoxContentEntry[] {
-  return (props.externalBoxContents?.[boxId] ?? props.boxContents[boxId]) ?? [];
+  return props.boxContents[boxId] ?? [];
+}
+
+/** True when the card is a cross-order box this page doesn't own — those get
+ *  no Close/Cancel (the creator order's page owns the box lifecycle). */
+function isForeign(boxId: string): boolean {
+  return props.foreignBoxIds?.includes(boxId) ?? false;
 }
 
 /** Distinct non-null COOs in the box — a mixed list (>1) flags the warning. */
