@@ -1324,6 +1324,41 @@ export async function getPickingOrderDetail(
       )
     : [];
 
+  // Order-level dock allocations carry no receiving-line reference (the engine
+  // pooled them from every line without ctn_no), so the join above leaves
+  // invoice/part/PO/date-code empty and the UI shows only the batch number.
+  // Pool the order's matching lines with the same match rule the pick-time FIFO
+  // resolution uses (part_no OR wcl_item_no equality, remaining > 0) so the
+  // allocation chip shows real source detail.
+  for (const a of allocations) {
+    if (!a.receivingOrderId || a.receivingInvoiceItemId || a.lotId) continue;
+    const item = items.find((i) => i.id === a.pickingItemId);
+    if (!item) continue;
+    const lines = await queryAll<{
+      invoiceNo: string | null;
+      partNo: string | null;
+      poNo: string | null;
+      receivedQty: number | null;
+      dateCode: string | null;
+    }>(
+      db,
+      sql`SELECT ri.invoice_no AS "invoiceNo", rii.part_no AS "partNo", rii.po_no AS "poNo",
+                 rii.received_qty AS "receivedQty", rii.date_code AS "dateCode"
+          FROM receiving_invoice_items rii
+          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          WHERE ri.receiving_order_id = ${a.receivingOrderId}
+            AND (rii.part_no = ${item.partNo} OR rii.wcl_item_no = ${item.partNo})
+            AND (rii.received_qty - rii.picked_qty - rii.put_away_qty) > 0
+          ORDER BY rii.date_code ASC NULLS LAST, rii.id`
+    );
+    if (lines.length === 0) continue;
+    a.recvInvoiceNo = lines.map((r) => r.invoiceNo).filter(Boolean).join(", ") || null;
+    a.recvPartNo = lines[0].partNo;
+    a.recvPoNo = lines.map((r) => r.poNo).filter(Boolean).join(", ") || null;
+    a.recvReceivedQty = lines.reduce((s, r) => s + (r.receivedQty ?? 0), 0);
+    a.recvDateCode = lines.map((r) => r.dateCode).filter(Boolean).join(", ") || null;
+  }
+
   const packages = itemIds.length
     ? await queryAll<PickingPackageDetail & { pickingItemId: string }>(
         db,
