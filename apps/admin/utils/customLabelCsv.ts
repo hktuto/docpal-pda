@@ -123,25 +123,51 @@ export async function convertToPrintData(csvData: Record<string, string>[]) {
   // get order CUST_ITEM_NUMBER form mapping
   const api = useApi();
   const custItems = await lookupCustItemNumbers(csvData);
-  const { start } = await api.post('/admin/sequences/next', {
-    "key": "custom_label_weekly_serial",
-    count: 1
-  })
-  const weekly_count = String(start).padStart(6, '0')
+  const VENDER_CODE = 71279;
 
-  const VENDER_CODE = 71279
+  // Resolve the order/part info for a CSV row; null = skipped row (no MOQ or
+  // MOQ exceeds the row qty — these rows produce no labels at all).
+  const resolveCustItem = (row: Record<string, string>) => {
+    const custItem = custItems.find(cu => cu.wclItemNo === row.物料號 && cu.orderNo === row.單號);
+    if (!custItem || !custItem.moq || custItem.moq > Number(row.數量)) return null;
+    return custItem;
+  };
+
+  // 1 label 1 number: pre-count the labels this CSV will produce so one
+  // /admin/sequences/next call can reserve the exact contiguous block from the
+  // weekly counter (custom_label_weekly_serial, resets every Monday) — each
+  // small label copy and each large (box) label then takes the next serial.
+  let preBoxCount = 0;
+  let smallLabelCount = 0;
+  const largeLabelKeys = new Set<string>();
+  for (const row of csvData) {
+    const custItem = resolveCustItem(row);
+    if (!custItem) continue;
+    if (Number(row.物品序列) === 1) preBoxCount++;
+    smallLabelCount += Math.floor(Number(row.數量) / custItem.moq);
+    largeLabelKeys.add(`${preBoxCount}|${custItem.partNo}|${row.LOTNO}`);
+  }
+  const serialTotal = smallLabelCount + largeLabelKeys.size;
+  let nextSerialNo = serialTotal > 0
+    ? (await api.post<{ key: string; start: number; count: number }>("/admin/sequences/next", {
+        key: "custom_label_weekly_serial",
+        count: serialTotal,
+      })).start
+    : 1;
+  const nextWeekly = () => String(nextSerialNo++).padStart(6, "0");
+
   // first step loop all row and group largeLabel
   let currentBoxCount = 0;
 
   const result = csvData.reduce((f, c) => {
     // check if item new box
-    const custItem = custItems.find(cu => cu.wclItemNo === c.物料號 && cu.orderNo === c.單號)
-     const deliverDay = custItem.deliveryDate.replaceAll('-','').replaceAll('/','')
-    // return if MOD is null
-    if (!custItem.moq || custItem.moq > Number(c.數量)) {
+    const custItem = resolveCustItem(c);
+    // skip rows without a usable MOQ (no labels produced)
+    if (!custItem) {
       console.log('no moq item', custItem)
       return f
     }
+     const deliverDay = custItem.deliveryDate.replaceAll('-','').replaceAll('/','')
     // update currentBoxCount
     if (Number(c.物品序列) === 1) {
       currentBoxCount++
@@ -157,16 +183,25 @@ export async function convertToPrintData(csvData: Record<string, string>[]) {
       lotNo: c.LOTNO,
       lotNo2: c.LOTNO,
       partNo: custItem.partNo,
-      qrcode: `${custItem.custItemNumber}*${c.LOTNO}*${c.DATECODE}*${VENDER_CODE}*${custItem.moq}*${VENDER_CODE}${deliverDay}${weekly_count}`,
+      qrcode: "", // overridden per copy — every small label gets its own weekly serial
       qrcode2: `${custItem.orderNo};${custItem.partNo};${custItem.moq};${c.LOTNO};${c.DATECODE}`,
       qty: custItem.moq,
       qty2: custItem.moq,
-      reelno: VENDER_CODE+deliverDay+weekly_count,
+      reelno: "", // overridden per copy
       vendorCode: VENDER_CODE,
       boxId:currentBoxCount
     }
-    const timeToPrint = new Array(Number(c.數量) / custItem.moq).fill(null)
-    f.smalllabel.push(...timeToPrint.map(() => smallLabel))
+    const timeToPrint = new Array(Math.floor(Number(c.數量) / custItem.moq)).fill(null)
+    // every small label copy gets its own weekly serial
+    f.smalllabel.push(...timeToPrint.map(() => {
+      const copyWeekly = nextWeekly()
+      return {
+        ...smallLabel,
+        weekly_count: copyWeekly,
+        qrcode: `${custItem.custItemNumber}*${c.LOTNO}*${c.DATECODE}*${VENDER_CODE}*${custItem.moq}*${VENDER_CODE}${deliverDay}${copyWeekly}`,
+        reelno: VENDER_CODE+deliverDay+copyWeekly,
+      }
+    }))
     // insert to small label
     // time to group large label
     // check if same currentBoxCount + partNo + lotCode in largeLabel
@@ -178,9 +213,11 @@ export async function convertToPrintData(csvData: Record<string, string>[]) {
       const newQty = existLargeLabel.qty + qty
       existLargeLabel.qty = newQty
       existLargeLabel.qty2 = newQty
-      existLargeLabel.qrcode = `${custItem.custItemNumber}*${c.LOTNO}*${c.DATECODE}*${VENDER_CODE}*${newQty}*${VENDER_CODE}${deliverDay}${weekly_count}`,
+      existLargeLabel.qrcode = `${custItem.custItemNumber}*${c.LOTNO}*${c.DATECODE}*${VENDER_CODE}*${newQty}*${VENDER_CODE}${deliverDay}${existLargeLabel.weekly_count}`,
       existLargeLabel.qrcode2 = `${custItem.orderNo};${custItem.partNo};${newQty};${c.LOTNO};${c.DATECODE}`
     } else {
+      // a new large (box) label gets its own weekly serial; merging rows reuse it
+      const largeWeekly = nextWeekly()
       f.largeLabel.push({
         boxId: currentBoxCount,
         barcode1: custItem.custItemNumber,
@@ -193,12 +230,13 @@ export async function convertToPrintData(csvData: Record<string, string>[]) {
         lotNo: c.LOTNO,
         lotNo2: c.LOTNO,
         partNo: custItem.partNo,
-        qrcode: `${custItem.custItemNumber}*${c.LOTNO}*${c.DATECODE}*${VENDER_CODE}*${custItem.moq}*${VENDER_CODE}${deliverDay}${weekly_count}`,
+        qrcode: `${custItem.custItemNumber}*${c.LOTNO}*${c.DATECODE}*${VENDER_CODE}*${custItem.moq}*${VENDER_CODE}${deliverDay}${largeWeekly}`,
         qrcode2: `${custItem.orderNo};${custItem.partNo};${custItem.moq};${c.LOTNO};${c.DATECODE}`,
         qty: Number(c.數量),
         qty2: Number(c.數量),
-        reelno: VENDER_CODE+deliverDay+start,
+        reelno: VENDER_CODE+deliverDay+largeWeekly,
         vendorCode: VENDER_CODE,
+        weekly_count: largeWeekly,
       })
     }
     // update
