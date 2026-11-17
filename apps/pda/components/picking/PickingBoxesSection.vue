@@ -59,7 +59,57 @@
       </DetailRow>
       <DetailRow v-if="externalBox.orderNo" :label="$t('picking.boxesSection.orderLabel')" :value="externalBox.orderNo" />
       <DetailRow :label="$t('picking.boxesSection.packages')" :value="externalBox.packageCount" />
+      <p v-if="mixedCoos(externalBox.id).length > 1" class="box-coo-warning" role="alert">
+        ⚠️ {{ $t('picking.boxesSection.mixedCoo', { coos: mixedCoos(externalBox.id).join(' / ') }) }}
+      </p>
+      <div v-if="contentsOf(externalBox.id).length" class="box-contents">
+        <button
+          type="button"
+          class="btn btn--small btn--ghost box-contents__toggle"
+          :aria-expanded="contentsExpanded.has(externalBox.id)"
+          @click="toggleContents(externalBox.id)"
+        >
+          {{ contentsExpanded.has(externalBox.id) ? $t('actions.hide') : $t('actions.show') }}
+          {{ $t('picking.boxesSection.contents') }} ({{ contentsOf(externalBox.id).length }})
+        </button>
+        <div v-if="contentsExpanded.has(externalBox.id)" class="box-contents__list">
+          <div v-for="entry in contentsOf(externalBox.id)" :key="entry.packageId" class="box-contents__row">
+            <span class="box-contents__info">
+              <span class="box-contents__part">{{ entry.partLabel }}</span>
+              {{ entry.qty }} {{ $t('common.pcs') }} ·
+              {{ $t('picking.itemsSection.dateLotCooCow') }}:
+              {{ labelDateCode(entry.dateCode) }} / {{ entry.lotCode || $t('common.noData') }} /
+              {{ entry.coo || $t('common.noData') }} / {{ entry.cow || $t('common.noData') }}
+            </span>
+            <button
+              v-if="actionable"
+              class="btn btn--small btn--secondary"
+              :disabled="removing[entry.packageId]"
+              @click="emit('remove-from-box', entry.packageId)"
+            >
+              <template v-if="removing[entry.packageId]">
+                <InlineSpinner /> {{ $t('picking.boxesSection.movingOut') }}
+              </template>
+              <template v-else>
+                {{ $t('picking.boxesSection.moveOut') }}
+              </template>
+            </button>
+          </div>
+        </div>
+      </div>
       <div class="box-actions">
+        <button
+          class="btn btn--small"
+          :disabled="anyAddingAll || addingAll[externalBox.id] || unboxedCount === 0"
+          @click="emit('add-all-to-box', externalBox.id)"
+        >
+          <template v-if="addingAll[externalBox.id]">
+            <InlineSpinner /> {{ $t('picking.boxesSection.addAll') }}
+          </template>
+          <template v-else>
+            {{ $t('picking.boxesSection.addAll') }}
+          </template>
+        </button>
         <button
           class="btn btn--small"
           :class="{ 'btn--ghost': scanIntoBoxId !== externalBox.id }"
@@ -224,6 +274,9 @@ const props = defineProps<{
   /** A box chosen via the choose-box dialog from ANOTHER order, shown as a
    *  card above the order's own boxes (null when none / own box armed). */
   externalBox: OpenShippingBox | null;
+  /** Contents entries for the external box (other orders' packages packed
+   *  into it), merged into the card's contents lookup. */
+  externalBoxContents?: Record<string, BoxContentEntry[]>;
 }>();
 
 const emit = defineEmits<{
@@ -244,7 +297,7 @@ const expanded = computed({
 });
 
 function contentsOf(boxId: string): BoxContentEntry[] {
-  return props.boxContents[boxId] ?? [];
+  return (props.externalBoxContents?.[boxId] ?? props.boxContents[boxId]) ?? [];
 }
 
 /** Distinct non-null COOs in the box — a mixed list (>1) flags the warning. */

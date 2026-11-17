@@ -82,7 +82,8 @@
         :removing="removing"
         :scan-into-box-id="scanIntoBoxId"
         :scanning-into-box="scanningIntoBox"
-        :external-box="externalArmedBox"
+        :external-box="externalArmedBox?.box"
+        :external-box-contents="externalArmedBox?.boxContents"
         @create-box="createBox"
         @choose-box="openChooseBox"
         @box-each-unboxed="boxEachUnboxed"
@@ -799,12 +800,38 @@ function onChooseBox(boxId: string) {
 }
 
 /** The chosen cross-order box, surfaced as a card in the boxes section. */
-const externalArmedBox = computed<OpenShippingBox | null>(() => {
+const externalArmedBox = computed<{
+  box: OpenShippingBox;
+  boxContents: Record<string, BoxContentEntry[]>;
+} | null>(() => {
   if (!scanIntoBoxId.value || !order.value) return null;
   // The order's own boxes already have cards there — nothing extra to show.
   if (order.value.boxes.some((b) => b.id === scanIntoBoxId.value)) return null;
+  // Items of OTHER orders already packed in the armed box (cross-order packing
+  // by scans from the armed box's own page) — the card lists/removes them.
+  // This page has no per-order detail fetch: queue rows carry the resolved
+  // order detail reference after a scan is applied.
+  const cross: BoxContentEntry[] = [];
+  for (const row of rows.value ?? []) {
+    const detail = (row as { detail?: PickingOrderDetail["items"][number] }).detail;
+    if (!detail) continue;
+    const partLabel = detail.wclItemNo ?? detail.partNo;
+    for (const pkg of detail.packages ?? []) {
+      if (pkg.shippingBoxId !== scanIntoBoxId.value) continue;
+      cross.push({
+        packageId: pkg.id,
+        partLabel,
+        qty: pkg.qty,
+        dateCode: pkg.dateCode,
+        lotCode: pkg.lotCode,
+        coo: pkg.coo,
+        cow: pkg.cow,
+      });
+    }
+  }
+  const map = { [scanIntoBoxId.value]: cross };
   const found = chosenBox.value?.id === scanIntoBoxId.value ? chosenBox.value : null;
-  return found ?? {
+  const box = found ?? {
     id: scanIntoBoxId.value,
     orderId: null,
     orderNo: null,
@@ -815,6 +842,7 @@ const externalArmedBox = computed<OpenShippingBox | null>(() => {
     destinationCountry: null,
     createdDate: "",
   };
+  return { box: { ...box, packageCount: cross.length }, boxContents: map };
 });
 
 async function addAllToBox(boxId: string) {

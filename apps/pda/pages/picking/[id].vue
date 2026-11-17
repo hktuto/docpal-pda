@@ -46,7 +46,8 @@
         :removing="removing"
         :scan-into-box-id="scanIntoBoxId"
         :scanning-into-box="scanningIntoBox"
-        :external-box="externalArmedBox"
+        :external-box="externalArmedBox?.box"
+        :external-box-contents="externalArmedBox?.boxContents"
         @create-box="createBox"
         @choose-box="openChooseBox"
         @box-each-unboxed="boxEachUnboxed"
@@ -499,13 +500,41 @@ function onChooseBox(boxId: string) {
   boxesExpanded.value = true;
 }
 
+/** Cross-order items of the OTHER orders already packed in the armed box
+ *  (packed by scans from the armed box's own page) — fed to the card so it
+ *  can list them and offer 移出. */
+const externalBoxContents = computed<Record<string, BoxContentEntry[]>>(() => {
+  const boxId = scanIntoBoxId.value;
+  if (!boxId || !order.value || order.value.boxes.some((b) => b.id === boxId)) return {};
+  const cross: BoxContentEntry[] = [];
+  for (const item of order.value.items ?? []) {
+    const partLabel = item.wclItemNo ?? item.partNo;
+    for (const pkg of item.packages ?? []) {
+      if (pkg.shippingBoxId !== boxId) continue;
+      cross.push({
+        packageId: pkg.id,
+        partLabel,
+        qty: pkg.qty,
+        dateCode: pkg.dateCode,
+        lotCode: pkg.lotCode,
+        coo: pkg.coo,
+        cow: pkg.cow,
+      });
+    }
+  }
+  return cross.length ? { [boxId]: cross } : {};
+});
+
 /** The chosen cross-order box, surfaced as a card in the boxes section. */
-const externalArmedBox = computed<OpenShippingBox | null>(() => {
+const externalArmedBox = computed<{
+  box: OpenShippingBox;
+  boxContents: Record<string, BoxContentEntry[]>;
+} | null>(() => {
   if (!scanIntoBoxId.value || !order.value) return null;
   // The order's own boxes already have cards there — nothing extra to show.
   if (order.value.boxes.some((b) => b.id === scanIntoBoxId.value)) return null;
   const found = chosenBox.value?.id === scanIntoBoxId.value ? chosenBox.value : null;
-  return found ?? {
+  const box = found ?? {
     id: scanIntoBoxId.value,
     orderId: null,
     orderNo: null,
@@ -516,6 +545,7 @@ const externalArmedBox = computed<OpenShippingBox | null>(() => {
     destinationCountry: null,
     createdDate: "",
   };
+  return { box, boxContents: externalBoxContents.value };
 });
 
 async function addAllToBox(boxId: string) {
