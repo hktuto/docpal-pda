@@ -73,6 +73,48 @@ function headerString(value: unknown, field: string): string | undefined {
   return value;
 }
 
+/** Validate one upload item (shared by the confirmation and manifest payload
+ *  validators): wire contract — `poNo` carries the sheet's 訂單號 (always
+ *  present), `orderNo` the 发货項 value (may be blank). */
+function validateCnUploadItem(entry: unknown, i: number): CnUploadItem {
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    throw new HTTPException(400, { message: `invalid_payload: items[${i}] must be an object` });
+  }
+  const rawItem = entry as Record<string, unknown>;
+  for (const field of ITEM_STRING_FIELDS) {
+    const v = rawItem[field];
+    if (v !== undefined && v !== null && typeof v !== "string" && typeof v !== "number") {
+      throw new HTTPException(400, { message: `invalid_payload: items[${i}].${field} must be a string` });
+    }
+  }
+  const partNo = typeof rawItem.partNo === "string" ? rawItem.partNo.trim() : "";
+  const orderNo = typeof rawItem.orderNo === "string" ? rawItem.orderNo.trim() : "";
+  const poNo = typeof rawItem.poNo === "string" ? rawItem.poNo.trim() : "";
+  if (!partNo || !poNo) {
+    throw new HTTPException(400, { message: `invalid_payload: items[${i}] needs non-empty partNo and poNo` });
+  }
+  const qty = typeof rawItem.qty === "number" ? rawItem.qty : Number(rawItem.qty);
+  if (!Number.isInteger(qty) || qty <= 0) {
+    throw new HTTPException(400, { message: `invalid_payload: items[${i}].qty must be a positive integer` });
+  }
+  let index: number | undefined;
+  if (rawItem.index !== undefined && rawItem.index !== null) {
+    index = typeof rawItem.index === "number" ? rawItem.index : Number(rawItem.index);
+    if (!Number.isInteger(index) || index <= 0) {
+      throw new HTTPException(400, { message: `invalid_payload: items[${i}].index must be a positive integer` });
+    }
+  }
+  const item: CnUploadItem = { orderNo, partNo, qty };
+  if (index !== undefined) item.index = index;
+  else item.index = i + 1;
+  for (const field of ITEM_STRING_FIELDS) {
+    if (field === "partNo" || field === "orderNo") continue;
+    const v = rawItem[field];
+    if (v !== undefined && v !== null) item[field] = String(v);
+  }
+  return item;
+}
+
 /** Validate the verified upload payload; 400 invalid_payload on any deviation. */
 export function validateCnPayload(raw: unknown): CnUploadPayload {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
@@ -87,45 +129,72 @@ export function validateCnPayload(raw: unknown): CnUploadPayload {
   if (!Array.isArray(body.items) || body.items.length === 0) {
     throw new HTTPException(400, { message: "invalid_payload: items must be a non-empty array" });
   }
-  payload.items = body.items.map((entry, i) => {
+  payload.items = body.items.map((entry, i) => validateCnUploadItem(entry, i));
+  return payload;
+}
+
+// --- truck-manifest (HK) payload: one order, N invoices, arrived + put-away --
+// Spec docs/superpowers/specs/2026-11-17-receiving-cn-manifest-single-order-
+// design.md — the sheet is the verification: the created order skips the
+// confirm/scan chain (received_qty = line_qty, status in_hand, put-away task
+// in the same tx).
+
+export interface CnManifestInvoice {
+  /** The group's INVOICE NO — lands on the invoice row verbatim. */
+  invoiceNo: string;
+  /** Client-counted distinct cartons (merge-aware); optional. */
+  totalCtn?: number;
+  items: CnUploadItem[];
+}
+
+export interface CnManifestPayload {
+  receivedOffice?: string;
+  supplier?: string;
+  /** Truck `Ref :` — the order-number prefix (`[REF]-YYYYMMDD`). */
+  receiptNo?: string;
+  receivedDate?: string;
+  invoices: CnManifestInvoice[];
+}
+
+/** Validate a manifest payload; 400 invalid_payload on any deviation. */
+export function validateCnManifestPayload(raw: unknown): CnManifestPayload {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new HTTPException(400, { message: "invalid_payload" });
+  }
+  const body = raw as Record<string, unknown>;
+  const payload: CnManifestPayload = { invoices: [] };
+  for (const field of ["receivedOffice", "supplier", "receiptNo", "receivedDate"] as const) {
+    const v = headerString(body[field], field);
+    if (v !== undefined) (payload as unknown as Record<string, unknown>)[field] = v;
+  }
+  if (!Array.isArray(body.invoices) || body.invoices.length === 0) {
+    throw new HTTPException(400, { message: "invalid_payload: invoices must be a non-empty array" });
+  }
+  payload.invoices = body.invoices.map((entry, i) => {
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
-      throw new HTTPException(400, { message: `invalid_payload: items[${i}] must be an object` });
+      throw new HTTPException(400, { message: `invalid_payload: invoices[${i}] must be an object` });
     }
-    const rawItem = entry as Record<string, unknown>;
-    for (const field of ITEM_STRING_FIELDS) {
-      const v = rawItem[field];
-      if (v !== undefined && v !== null && typeof v !== "string" && typeof v !== "number") {
-        throw new HTTPException(400, { message: `invalid_payload: items[${i}].${field} must be a string` });
+    const rawInv = entry as Record<string, unknown>;
+    const invoiceNo = typeof rawInv.invoiceNo === "string" ? rawInv.invoiceNo.trim() : "";
+    if (!invoiceNo) {
+      throw new HTTPException(400, { message: `invalid_payload: invoices[${i}].invoiceNo must be non-empty` });
+    }
+    if (!Array.isArray(rawInv.items) || rawInv.items.length === 0) {
+      throw new HTTPException(400, { message: `invalid_payload: invoices[${i}].items must be a non-empty array` });
+    }
+    let totalCtn: number | undefined;
+    if (rawInv.totalCtn !== undefined && rawInv.totalCtn !== null) {
+      totalCtn = typeof rawInv.totalCtn === "number" ? rawInv.totalCtn : Number(rawInv.totalCtn);
+      if (!Number.isInteger(totalCtn) || totalCtn <= 0) {
+        throw new HTTPException(400, { message: `invalid_payload: invoices[${i}].totalCtn must be a positive integer` });
       }
     }
-    const partNo = typeof rawItem.partNo === "string" ? rawItem.partNo.trim() : "";
-    const orderNo = typeof rawItem.orderNo === "string" ? rawItem.orderNo.trim() : "";
-    // Wire contract (swapped vs the sheet/UI): `poNo` carries the sheet's
-    // 訂單號 (always present) and `orderNo` the 发货項 value (may be blank).
-    const poNo = typeof rawItem.poNo === "string" ? rawItem.poNo.trim() : "";
-    if (!partNo || !poNo) {
-      throw new HTTPException(400, { message: `invalid_payload: items[${i}] needs non-empty partNo and poNo` });
-    }
-    const qty = typeof rawItem.qty === "number" ? rawItem.qty : Number(rawItem.qty);
-    if (!Number.isInteger(qty) || qty <= 0) {
-      throw new HTTPException(400, { message: `invalid_payload: items[${i}].qty must be a positive integer` });
-    }
-    let index: number | undefined;
-    if (rawItem.index !== undefined && rawItem.index !== null) {
-      index = typeof rawItem.index === "number" ? rawItem.index : Number(rawItem.index);
-      if (!Number.isInteger(index) || index <= 0) {
-        throw new HTTPException(400, { message: `invalid_payload: items[${i}].index must be a positive integer` });
-      }
-    }
-    const item: CnUploadItem = { orderNo, partNo, qty };
-    if (index !== undefined) item.index = index;
-    else item.index = i + 1;
-    for (const field of ITEM_STRING_FIELDS) {
-      if (field === "partNo" || field === "orderNo") continue;
-      const v = rawItem[field];
-      if (v !== undefined && v !== null) item[field] = String(v);
-    }
-    return item;
+    const invoice: CnManifestInvoice = {
+      invoiceNo,
+      items: rawInv.items.map((item, j) => validateCnUploadItem(item, j)),
+    };
+    if (totalCtn !== undefined) invoice.totalCtn = totalCtn;
+    return invoice;
   });
   return payload;
 }
@@ -198,6 +267,30 @@ export async function nextCnBrandedNo(db: DbOrTx, brand: string, at: Date = new 
         WHERE no ~ ${`^${brand}-[0-9]{8}-[0-9]+$`}`
   );
   return `${prefix}${String((row?.max ?? 0) + 1).padStart(2, "0")}`;
+}
+
+/** Next `[truckRef]-YYYYMMDD(-seq)` order number for a manifest upload (spec
+ *  2026-11-17). The ref (sheet `Ref :`) is sanitized to `[A-Z0-9-]` (blank →
+ *  `CN`), the first candidate is suffix-free, collisions the same day take
+ *  `-2`, `-3`, … — checked against `receiving_orders_cn.batch_no`, the table
+ *  the admin detail resolves by. Serialized per ref+day with the same
+ *  transaction-scoped advisory lock as the branded numbering. */
+export async function nextCnTruckNo(db: DbOrTx, ref: string, at: Date = new Date()): Promise<string> {
+  const ymd = [
+    at.getFullYear(),
+    String(at.getMonth() + 1).padStart(2, "0"),
+    String(at.getDate()).padStart(2, "0"),
+  ].join("");
+  const clean = (ref || "").toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 24) || "CN";
+  await queryRun(db, sql`SELECT pg_advisory_xact_lock(hashtext(${`cn-truckno:${clean}-${ymd}`}))`);
+  for (let n = 0; ; n++) {
+    const candidate = n === 0 ? `${clean}-${ymd}` : `${clean}-${ymd}-${n + 1}`;
+    const clash = await queryGet<{ id: string }>(
+      db,
+      sql`SELECT id FROM receiving_orders_cn WHERE batch_no = ${candidate} LIMIT 1`
+    );
+    if (!clash) return candidate;
+  }
 }
 
 /**
@@ -694,19 +787,20 @@ export async function createCnManualReceipt(
 // rows with a process id, so it ignores these) so the admin list keeps
 // showing supplier + the sheet 編號 via its batch_no join.
 
-export interface CnExcelFileInput {
-  filename: string;
-  /** Numbering brand — `[brand]-YYYYMMDD-seq` batch/invoice no (validated).
-   *  Omitted = derived from the first item's parts-master brand. */
-  brand?: string;
-  payload: CnUploadPayload;
-}
+/** One excel-upload file entry. Default (confirmation / TE sheets): one
+ *  pending order + one invoice, the confirm → PDA scan → finalize chain runs
+ *  afterwards. `mode: "manifest"` (truck 車單, spec 2026-11-17): ONE order
+ *  carrying every invoice, created already arrived (`in_hand`) with the CN
+ *  put-away task in the same tx — no scan step. */
+export type CnExcelFileInput =
+  | { filename: string; mode?: undefined; brand?: string; payload: CnUploadPayload }
+  | { filename: string; mode: "manifest"; payload: CnManifestPayload };
 
 /** Insert one file's order + invoice + items into tx — the pending twin of
  *  createCnManualReceipt (shares its numbering/org-derivation helpers). */
 async function insertCnExcelOrderTx(
   tx: DbOrTx,
-  file: CnExcelFileInput,
+  file: { filename: string; brand?: string; payload: CnUploadPayload },
   actor: { id: string; username: string }
 ): Promise<{ orderId: string; batchNo: string }> {
   const at = now();
@@ -806,6 +900,118 @@ async function insertCnExcelOrderTx(
   return { orderId, batchNo };
 }
 
+/** Insert one manifest file's order + N invoices + items + the CN put-away
+ *  task into tx — the in_hand twin of createCnManualReceipt: the supplier's
+ *  truck manifest is the verification, so every line is received as-declared
+ *  (received_qty = line_qty, scan columns untouched) and the order lands
+ *  arrived with its put-away task already pending. Order number =
+ *  `[truckRef]-YYYYMMDD(-seq)`; each invoice row keeps its real INVOICE NO. */
+async function insertCnManifestOrderTx(
+  tx: DbOrTx,
+  file: { filename: string; payload: CnManifestPayload },
+  actor: { id: string; username: string }
+): Promise<{ orderId: string; batchNo: string }> {
+  const at = now();
+  const payload = file.payload;
+  // Sheet Date : → UTC-midnight Date (the `YYYY-MM-DD 00:00:00` literal the
+  // sync writes); missing/invalid falls back to the creation day, like excel.
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(payload.receivedDate ?? "");
+  const deliveryDate = dm
+    ? new Date(Date.UTC(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3])))
+    : new Date(Date.UTC(at.getFullYear(), at.getMonth(), at.getDate()));
+  const batchNo = await nextCnTruckNo(tx, payload.receiptNo ?? "", at);
+  const orderId = newId();
+  const orderOrgId = deriveCnManualOrgSub(payload.invoices[0]!.items[0]!.poNo!).orgId;
+  await tx.insert(receivingOrdersCn).values({
+    id: orderId,
+    batchNo,
+    deliveryDate,
+    status: "in_hand",
+    arrivedAt: at,
+    arrivedBy: actor.id,
+    orgId: orderOrgId,
+    createdDate: at,
+    lastUpdateDate: at,
+  });
+  for (const inv of payload.invoices) {
+    const invoiceId = newId();
+    await tx.insert(receivingInvoicesCn).values({
+      id: invoiceId,
+      receivingOrderId: orderId,
+      invoiceNo: inv.invoiceNo,
+      deliveryDate,
+      totalQty: inv.items.reduce((s, i) => s + i.qty, 0),
+      totalCtn: inv.totalCtn ?? null,
+      orgId: deriveCnManualOrgSub(inv.items[0]!.poNo!).orgId,
+      createdDate: at,
+      lastUpdateDate: at,
+    });
+    for (const item of inv.items) {
+      // The parts master is authoritative once matched (same rule as the
+      // excel path) so the item joins stock lots keyed by the canonical forms.
+      const master = await resolvePartByKey(tx, item.partNo);
+      const pair = deriveCnManualOrgSub(item.poNo!);
+      await tx.insert(receivingInvoiceItemsCn).values({
+        id: newId(),
+        receivingInvoiceId: invoiceId,
+        partNo: master?.partNo ?? item.partNo,
+        wclItemNo: master?.wclItemNo ?? null,
+        poNo: item.poNo,
+        poLine: String(item.index ?? 0),
+        lineQty: item.qty,
+        receivedQty: item.qty,
+        dateCode: item.dateCode ?? null,
+        ctnNo: item.ctnNo ?? null,
+        // 发货項/箱数/重量/辦事處/備註 are not item columns — they live on the
+        // tracking row's payload jsonb.
+        additionalData: {
+          source: "excel-manifest",
+          filename: file.filename,
+          invoiceNo: inv.invoiceNo,
+        },
+        orgId: pair.orgId,
+        subInventoryCode: pair.subInventoryCode,
+        createdDate: at,
+        lastUpdateDate: at,
+      });
+    }
+  }
+  const derived = await cnOrderPair(tx, orderId);
+  // Same pair rule as the scan finalize / manual receipt: uniform item pair
+  // wins, else the order's org with a NULL sub-inventory.
+  const taskId = newId();
+  await tx.insert(putAwayTasksCn).values({
+    id: taskId,
+    receivingOrderCnId: orderId,
+    orgId: derived.orgId ?? orderOrgId,
+    subInventoryCode: derived.subInventoryCode,
+    status: "pending",
+    createdDate: at,
+    lastUpdateDate: at,
+  });
+  await tx.insert(transactionLogs).values({
+    id: newId(),
+    entityType: "receiving_order_cn",
+    entityId: orderId,
+    fromState: null,
+    toState: "in_hand",
+    actorId: actor.id,
+    metadata: { source: "excel-manifest", filename: file.filename, invoiceNos: payload.invoices.map((i) => i.invoiceNo) },
+    createdDate: at,
+  });
+  await tx.insert(transactionLogs).values({
+    id: newId(),
+    entityType: "put_away_task_cn",
+    entityId: taskId,
+    fromState: null,
+    toState: "pending",
+    actorId: actor.id,
+    metadata: { receivingOrderCnId: orderId },
+    createdDate: at,
+  });
+  return { orderId, batchNo };
+}
+
 /** Commit one local excel upload: all files in one tx (orders + tracking rows
  *  + audit + SSE). 400s come from the route-side validators. */
 export async function createCnExcelUploads(
@@ -817,13 +1023,16 @@ export async function createCnExcelUploads(
   await db.transaction(async (tx) => {
     const at = now();
     for (const file of files) {
-      const { orderId, batchNo } = await insertCnExcelOrderTx(tx, file, actor);
+      const { orderId, batchNo } =
+        file.mode === "manifest"
+          ? await insertCnManifestOrderTx(tx, file, actor)
+          : await insertCnExcelOrderTx(tx, file, actor);
       out.orders.push({ id: orderId, batchNo });
       const wfId = newId();
       await tx.insert(receivingCnWorkflows).values({
         id: wfId,
         phase: "excel",
-        invoiceNo: file.payload.invoiceNo ?? null,
+        invoiceNo: file.mode === "manifest" ? null : (file.payload.invoiceNo ?? null),
         supplier: file.payload.supplier ?? null,
         filename: file.filename,
         batchNo,
@@ -842,13 +1051,20 @@ export async function createCnExcelUploads(
         fromState: null,
         toState: "completed",
         actorId: actor.id,
-        metadata: { receivingOrderCnId: orderId, source: "excel", filename: file.filename },
+        metadata: {
+          receivingOrderCnId: orderId,
+          source: file.mode === "manifest" ? "excel-manifest" : "excel",
+          filename: file.filename,
+        },
         createdDate: at,
       });
     }
+    // A manifest file creates its put-away task in the same tx — the PDA
+    // put-away list reloads on /put-away-tasks, so the topic rides along.
+    const anyManifest = files.some((f) => f.mode === "manifest");
     await emitEvent(tx, {
       type: "receiving_cn.updated",
-      topics: ["/admin/receiving-cn"],
+      topics: ["/admin/receiving-cn", ...(anyManifest ? ["/put-away-tasks" as const] : [])],
       data: { source: "excel", batchNos: out.orders.map((o) => o.batchNo) },
     });
   });

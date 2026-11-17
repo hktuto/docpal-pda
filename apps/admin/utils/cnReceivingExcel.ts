@@ -15,8 +15,11 @@
  * design.md) carry MANY supplier invoices per file in an English-headed table
  * (C/No. | Size | G.W | INVOICE NO | OFFICE NAME | PO NO | Our P/No. |
  * Quantity | 產品 | Description | 產地); `parseCnManifestAoa` decodes those
- * into one payload per INVOICE NO so the existing N-drafts wizard creates one
- * pending order per invoice, each on its own brand.
+ * into one payload per INVOICE NO so the wizard can group the rows back.
+ * Manifest uploads create ONE order for the whole truck — every invoice on
+ * that order, created arrived with its put-away task (spec
+ * 2026-11-17-receiving-cn-manifest-single-order-design.md) — while
+ * confirmation (TE) sheets keep the one-pending-order-per-file scan chain.
  */
 
 export interface CnReceivingItem {
@@ -38,6 +41,9 @@ export interface CnReceivingItem {
   office: string;
   poNo: string;
   remark: string;
+  /** Manifest only: the row's INVOICE NO group (the manifest parser stamps
+   *  it per row so a whole-truck draft can regroup its items per invoice). */
+  invoiceNo?: string;
 }
 
 export interface CnReceivingPayload {
@@ -339,11 +345,13 @@ const MANIFEST_COLUMNS: Record<string, keyof Pick<CnReceivingItem, "ctnNo" | "we
 
 /**
  * Decode a truck-manifest sheet into one payload per INVOICE NO (multi-brand
- * truck: each invoice group is single-brand, so numbering brands derive from
- * the parts master per draft). Continuation rows carry a blank C/No. and
- * belong to the carton above (carried down). Rows without an INVOICE NO —
- * the NIL/reserved-carton rows and the trailing 紙板/合成板/膠板 packing
- * summaries — are not items and are skipped.
+ * truck: each invoice group is single-brand). Continuation rows carry a blank
+ * C/No. and belong to the carton above (carried down). Rows without an
+ * INVOICE NO — the NIL/reserved-carton rows and the trailing 紙板/合成板/膠板
+ * packing summaries — are not items and are skipped. Every item is stamped
+ * with its group's INVOICE NO (`item.invoiceNo`) so the upload page can build
+ * the whole-truck single draft (spec 2026-11-17) and regroup per invoice on
+ * the wire.
  */
 export function parseCnManifestAoa(aoa: unknown[][]): CnReceivingParseResult[] {
   const rows = (aoa ?? []).filter((r) => Array.isArray(r));
@@ -442,6 +450,7 @@ export function parseCnManifestAoa(aoa: unknown[][]): CnReceivingParseResult[] {
       else g.cartons.add(item.ctnNo);
     }
     if (g.office === "") g.office = item.office;
+    item.invoiceNo = invoiceNo; // whole-truck draft regroups per invoice
     g.items.push(item);
   }
 
@@ -471,13 +480,21 @@ export interface CnReceivingDraftItem extends CnReceivingItem {
   uid: number;
 }
 
+/** `manifest` = truck 車單 decoded sheet: ONE order for the whole truck —
+ *  every invoice on it, created arrived with its put-away task, auto-create
+ *  without the verify/edit step (spec 2026-11-17). Absent = a single-invoice
+ *  confirmation (TE) sheet: one pending order, the confirm → scan chain. */
+export type CnReceivingDraftMode = "manifest";
+
 export interface CnReceivingDraft {
   uid: number;
   filename: string;
+  mode?: CnReceivingDraftMode;
   /** Numbering brand (`[brand]-yyyymmdd-seq`) — admin-entered, uppercased.
-   *  shortcut: no prefill from supplier profiles or 編號 parsing; the admin
-   *  types it. Upgrade path: suggest from a single-brand supplier_profiles
-   *  match on header.supplier. */
+   *  Ignored for manifest drafts (the order number comes from the truck
+   *  Ref :). shortcut: no prefill from supplier profiles or 編號 parsing; the
+   *  admin types it. Upgrade path: suggest from a single-brand
+   *  supplier_profiles match on header.supplier. */
   brand: string;
   header: Pick<
     CnReceivingPayload,
@@ -490,15 +507,60 @@ export interface CnReceivingDraft {
   sheetTotals: { carton: number | null; qty: number | null } | null;
 }
 
+/** Swap the wire keys for one item: the sheet's 訂單號 cell value goes as
+ *  `poNo`, the 发货项/PO cell value as `orderNo`. Client-only fields (uid,
+ *  cartonMerged, invoiceNo) are stripped. */
+function cnDraftItemToWire({
+  uid: _uid,
+  cartonMerged: _cm,
+  invoiceNo: _inv,
+  orderNo,
+  poNo,
+  ...rest
+}: CnReceivingDraftItem): Record<string, unknown> {
+  return { ...rest, orderNo: poNo, poNo: orderNo };
+}
+
 /** Build one POST /admin/receiving-cn/excel file entry. Wire contract (same
  *  as the retired DocPal upload): the submitted item keys are swapped
  *  relative to the sheet/UI — the 訂單號 cell value goes as `poNo`, the
- *  发货项 cell value as `orderNo`. */
+ *  发货项 cell value as `orderNo`. Manifest drafts send `mode: "manifest"`
+ *  with the items regrouped per INVOICE NO (one order, N invoices, arrived
+ *  with the put-away task — spec 2026-11-17); no brand. */
 export function cnDraftToEntry(draft: CnReceivingDraft): {
   filename: string;
   brand?: string;
+  mode?: "manifest";
   payload: Record<string, unknown>;
 } {
+  if (draft.mode === "manifest") {
+    const groups = new Map<string, CnReceivingDraftItem[]>();
+    for (const item of draft.items) {
+      const key = (item.invoiceNo ?? "").trim();
+      const list = groups.get(key);
+      if (list) list.push(item);
+      else groups.set(key, [item]);
+    }
+    return {
+      filename: draft.filename,
+      mode: "manifest",
+      payload: {
+        receivedOffice: draft.header.receivedOffice,
+        supplier: draft.header.supplier,
+        receiptNo: draft.header.receiptNo,
+        receivedDate: draft.header.receivedDate,
+        invoices: [...groups.entries()].map(([invoiceNo, items]) => ({
+          invoiceNo,
+          // Merge-aware distinct-carton count per invoice (rows sharing a
+          // carton are merge-marked at parse time).
+          totalCtn: items.reduce((s, i) => s + (i.cartonMerged ? 0 : (toNumber(i.cartonNo) ?? 0)), 0),
+          // Rows with no valid qty are dropped on submit — the gate routes
+          // them to the editor's warning banner, and the backend re-validates.
+          items: items.filter((item) => isCnQtyValid(item.qty)).map(cnDraftItemToWire),
+        })),
+      },
+    };
+  }
   const brand = draft.brand.trim().toUpperCase();
   return {
     filename: draft.filename,
@@ -508,15 +570,7 @@ export function cnDraftToEntry(draft: CnReceivingDraft): {
       // Rows with no valid qty (empty / non-numeric / ≤ 0) stay visible in
       // the verify form but are dropped on confirm — checked at submit time
       // so a qty the admin fixed in the editor is still included.
-      items: draft.items
-        .filter((item) => isCnQtyValid(item.qty))
-        .map(
-        ({ uid: _uid, cartonMerged: _cm, orderNo, poNo, ...rest }) => ({
-          ...rest,
-          orderNo: poNo,
-          poNo: orderNo,
-        })
-      ),
+      items: draft.items.filter((item) => isCnQtyValid(item.qty)).map(cnDraftItemToWire),
     },
   };
 }
@@ -545,18 +599,25 @@ export function isCnQtyValid(qty: string): boolean {
 
 /** Check one decoded draft against the upload rules: 編號 header present and
  *  every item row having 訂單號, a parts-master-resolvable 型號 and a
- *  positive-integer qty. `partKnown` reads the batch-check cache (see
- *  composables/usePartsBrandCheck): true = known, false = not in the parts
- *  master (blocking), "ambiguous" = multiple master rows match (reminder —
- *  the caller decides how to surface it, it is not a data error). */
+ *  positive-integer qty. Manifest drafts have no single 編號 — their rows
+ *  carry the INVOICE NO instead (checked per row). `partKnown` reads the
+ *  batch-check cache (see composables/usePartsBrandCheck): true = known,
+ *  false = not in the parts master (blocking), "ambiguous" = multiple master
+ *  rows match (reminder — the caller decides how to surface it, it is not a
+ *  data error). */
 export function checkCnDraft(
   draft: CnReceivingDraft,
   partKnown: (key: string) => boolean | "ambiguous"
 ): CnDraftIssue[] {
   const issues: CnDraftIssue[] = [];
-  if (draft.header.invoiceNo.trim() === "") issues.push({ code: "noInvoiceNo" });
+  if (draft.mode !== "manifest" && draft.header.invoiceNo.trim() === "") {
+    issues.push({ code: "noInvoiceNo" });
+  }
   const seenUnknown = new Set<string>();
   for (const item of draft.items) {
+    if (draft.mode === "manifest" && (item.invoiceNo ?? "").trim() === "") {
+      issues.push({ code: "noInvoiceNo", row: item.index });
+    }
     if (item.orderNo.trim() === "") issues.push({ code: "noOrderNo", row: item.index });
     const partNo = item.partNo.trim();
     if (partNo === "") issues.push({ code: "noPartNo", row: item.index });

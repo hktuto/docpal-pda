@@ -106,10 +106,13 @@ async function addExcelDraft(picked: File): Promise<CnReceivingDraft[]> {
   // sheets mirror subsets of the master — scan every sheet and use the first
   // one whose item table actually decodes. Truck manifests (車單) carry MANY
   // supplier invoices per file: the confirmation parse finds nothing, so fall
-  // back to the manifest decoder → one draft (one pending order) per INVOICE
-  // NO (spec docs/superpowers/specs/2026-11-10-receiving-cn-truck-manifest-
-  // upload-design.md).
+  // back to the manifest decoder → the rows are stamped per INVOICE NO and
+  // fan out below into ONE whole-truck draft whose order carries every
+  // invoice, created arrived with the put-away task (spec
+  // docs/superpowers/specs/2026-11-17-receiving-cn-manifest-single-order-
+  // design.md).
   let results: CnReceivingParseResult[] | null = null;
+  let isManifest = false;
   for (const name of wb.SheetNames) {
     const ws = wb.Sheets[name];
     if (!ws) continue;
@@ -117,26 +120,58 @@ async function addExcelDraft(picked: File): Promise<CnReceivingDraft[]> {
     if (aoa.length === 0) continue;
     const merged = fillMergedCells(aoa as unknown[][], (ws["!merges"] as AoaMergeRange[] | undefined) ?? []);
     const single = parseCnReceivingAoa(merged.aoa, merged.filled);
-    const sheetResults = single.items.length > 0 ? [single] : parseCnManifestAoa(merged.aoa);
+    const manifestDecode = single.items.length === 0;
+    const sheetResults = manifestDecode ? parseCnManifestAoa(merged.aoa) : [single];
     if (sheetResults.length > 0) {
       results = sheetResults;
+      isManifest = manifestDecode;
       break;
     }
     results ??= [single]; // keep the first decode for the error path below
+    isManifest = false;
   }
   const decoded = (results ?? []).filter((r) => r.items.length > 0);
   if (decoded.length === 0) {
     throw new Error(`${picked.name}: ${t("admin.pages.receivingCn.noItems")}`);
   }
   const created: CnReceivingDraft[] = [];
+  if (isManifest) {
+    // One order for the whole truck: flat items each carrying their INVOICE
+    // NO (the wire builder regroups them per invoice). The Date:/Ref:/office
+    // header fields are truck-level — identical on every decoded group.
+    const truck = decoded[0]!;
+    drafts.value = [
+      ...drafts.value,
+      {
+        uid: nextUid++,
+        filename: picked.name,
+        mode: "manifest",
+        brand: "",
+        header: {
+          receivedOffice: truck.receivedOffice,
+          supplier: "",
+          receiptNo: truck.receiptNo,
+          invoiceNo: "",
+          receivedDate: truck.receivedDate,
+        },
+        items: decoded.flatMap((r) => r.items.map((item) => ({ ...item, uid: nextUid++ }))),
+        totals: {
+          carton: decoded.reduce((s, r) => s + r.totals.carton, 0),
+          qty: decoded.reduce((s, r) => s + r.totals.qty, 0),
+        },
+        sheetTotals: null,
+      },
+    ];
+    // Return the REACTIVE entries (raw-object writes skip the editor's inputs).
+    created.push(drafts.value[drafts.value.length - 1]!);
+    return created;
+  }
   for (const result of decoded) {
     drafts.value = [
       ...drafts.value,
       {
         uid: nextUid++,
-        // Multi-invoice manifest split — tag the source filename so the N
-        // tracking rows stay traceable to their invoice.
-        filename: decoded.length > 1 ? `${picked.name} (${result.invoiceNo})` : picked.name,
+        filename: picked.name,
         brand: "",
         header: {
           receivedOffice: result.receivedOffice,
@@ -157,9 +192,13 @@ async function addExcelDraft(picked: File): Promise<CnReceivingDraft[]> {
 }
 
 // Decode→create gate: batch-check every 型號 once, prefill the brand from
-// the parts master, and auto-create when the data is clean. Problems keep
-// the verify/edit step open with the issues banner (inline fix beats a
-// re-upload round-trip).
+// the parts master, and auto-create when the data is clean. Any issue opens
+// the verify/edit step with the issue banner — for confirmation (TE) sheets
+// AND truck manifests alike (inline fix beats a re-upload round-trip; spec
+// 2026-11-17): ambiguous part keys stay a non-blocking warning (the canonical
+// part keys resolve server-side; manifests without a match keep the raw key
+// and the row stays editable here), invalid-qty rows are highlighted in the
+// editor and dropped from the payload on submit.
 async function gateAndAutoCreate(added: CnReceivingDraft[]) {
   // Fresh gate pass: clear any banner left by a previous attempt so the
   // ambiguous warning isn't shown next to a stale error.
@@ -171,6 +210,8 @@ async function gateAndAutoCreate(added: CnReceivingDraft[]) {
     if (failed) {
       console.error("parts batch check failed — see the network tab for the /admin/parts-lookup response");
       error.value = t("admin.pages.receivingCn.partsCheckFailed");
+      // Step 2 is also the only place drafts are visible/removable — a
+      // draft stranded on step 1 (no file list there) would be a dead end.
       step.value = 2;
       return;
     }
@@ -179,21 +220,25 @@ async function gateAndAutoCreate(added: CnReceivingDraft[]) {
   const warnings: string[] = [];
   let invalidQtySeen = false;
   for (const d of added) {
+    const isManifest = d.mode === "manifest";
     for (const iss of checkCnDraft(d, (k) => {
       const c = parts.check(k);
       return c === undefined ? false : c.ambiguous ? "ambiguous" : c.found;
     })) {
       // Ambiguous part keys are a reminder, not an error — the order still
       // auto-creates (brand falls back to server-side derivation). Invalid
-      // qty rows no longer block: they are shown in the verify form and
-      // dropped from the payload on confirm (never auto-created directly).
+      // qty rows are shown in the verify form and dropped from the payload
+      // on confirm (never auto-created directly). Everything else opens the
+      // editor with the error banner for both sheet kinds.
       if (iss.code === "ambiguousPart") warnings.push(fmtIssue(d.filename, iss));
       else if (iss.code === "invalidQty") {
         warnings.push(fmtIssue(d.filename, iss));
         invalidQtySeen = true;
       } else msgs.push(fmtIssue(d.filename, iss));
     }
-    if (d.brand.trim() === "") {
+    // Brand drives the confirmation-sheet numbering only — manifest orders
+    // number from the truck Ref : and ignore it.
+    if (!isManifest && d.brand.trim() === "") {
       const b = parts.brandOf(d.items[0]?.partNo ?? "");
       if (typeof b === "string") d.brand = b;
     }
@@ -255,8 +300,9 @@ async function submit() {
 }
 
 /** POST all decoded drafts — blank brand derives server-side from each
- *  sheet's first item. Failures land in the verify/edit step with the
- *  message banner (the data is fixable there). */
+ *  confirmation sheet's first item. Failures land in the verify/edit step
+ *  with the message banner (the data is fixable there for both sheet
+ *  kinds). */
 async function submitExcelDrafts() {
   if (submitting.value || drafts.value.length === 0) return;
   submitting.value = true;

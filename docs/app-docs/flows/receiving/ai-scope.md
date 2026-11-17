@@ -94,7 +94,22 @@
   `DOCPAL_WORKFLOW_TOKEN` for all workflow/file calls, the real admin sent as
   the workflow creator) and tracks the workflow in `receiving_cn_workflows`
   (list `GET /admin/receiving-cn`, tracking page
-  `apps/admin/pages/receiving-cn/index.vue`). A status cron
+  `apps/admin/pages/receiving-cn/index.vue`); (c) admin local Excel upload
+  (specs `2026-11-08` + `2026-11-10` + `2026-11-17`) on the same page →
+  `POST /admin/receiving-cn/excel` — the browser decodes the sheet
+  (`apps/admin/utils/cnReceivingExcel.ts`) and posts the verified payload,
+  no DocPal. Format-detected per sheet: a TE 收貨確認 sheet becomes one
+  **pending** order + one invoice + items (`received_qty` 0) — the confirm →
+  scan chain below runs unchanged, with the step-2 verify/edit screen when
+  the gate flags issues; a truck-manifest 車單 sheet becomes **ONE order for
+  the whole truck** — every INVOICE NO on its own `receiving_invoices_cn`
+  row, numbered `[truckRef]-YYYYMMDD(-seq)` from the sheet `Ref :` — created
+  **arrived** (`in_hand` + arrival stamps, `received_qty = line_qty`, the
+  sheet is the verification) with the `put_away_tasks_cn` task in the same
+  tx: no confirm, no PDA receiving scan, straight to CN put-away. Gate
+  issues open the same step-2 verify/edit screen as TE sheets — the manifest
+  variant of the editor hides the brand + single-編號 inputs and shows an
+  editable INVOICE NO column per row (the invoice grouping). A status cron
   (`apps/backend/src/jobs/receivingCnSync.ts`, kill-switch
   `RECEIVING_CN_SYNC=off`) polls running workflows; on completion it reads
   the `receiving_orders_cn` / `receiving_invoices_cn` /
@@ -373,17 +388,22 @@
   `apps/backend/src/db/receivingCn.ts` + `apps/backend/src/docpalWorkflow.ts`
   + `apps/backend/src/jobs/receivingCnSync.ts` — CN customer receiving
   upload: tracking list/detail, PDF upload → DocPal workflow kick (batch_no
-  `TE-yyyymmdd-seq`; the `/admin/receiving-cn/excel` route survives with no
-  admin caller), status
-  cron + finalize; schema `apps/backend/src/db/schema/receivingCn.ts`.
+  `TE-yyyymmdd-seq`), status cron + finalize, and the local Excel create
+  `POST /admin/receiving-cn/excel` (`createCnExcelUploads` — one tx,
+  all-or-nothing: confirmation files → pending orders on the scan chain;
+  `mode: "manifest"` files → one arrived order per truck, N invoices,
+  `put_away_tasks_cn` in the same tx, `nextCnTruckNo` numbering); schema
+  `apps/backend/src/db/schema/receivingCn.ts`.
 - `apps/admin/pages/receiving-cn/index.vue` +
   `apps/admin/pages/receiving-cn/new.vue` +
   `apps/admin/utils/cnReceivingExcel.ts` +
   `apps/admin/components/receiving-cn/ReceivingCnPartNoSelect.vue` — admin CN
-  tracking list and the 2-step upload → verify/edit wizard (inline cell
-  editing; confirming uploads the file + verified JSON and starts the DocPal
-  workflow; each item carries a 1-based `index` = its excel row order, passed
-  through to the workflow payload).
+  tracking list and the local-decoding upload page (per-sheet format
+  detection: confirmation sheets and truck manifests both build drafts and
+  ride the same verify/edit wizard with inline cell editing — each item
+  carries a 1-based `index` = its excel row order; a manifest is ONE
+  whole-truck draft, and its editor variant hides the brand + single-編號
+  inputs for an editable per-row INVOICE NO column).
 - `apps/pda/pages/receiving-cn-scan/index.vue` +
   `apps/pda/pages/receiving-cn-scan/[id].vue` +
   `apps/pda/utils/cnScanGroups.ts` (+ `utils/cnReceivingScan.ts` —

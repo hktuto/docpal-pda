@@ -392,6 +392,82 @@ describe("cnDraftToEntry", () => {
     expect((entry.payload.items as unknown[]).length).toBe(1);
     expect(withBad.items.length).toBe(4);
   });
+
+  it("manifest draft: one entry, no brand, items regrouped per INVOICE NO with per-group carton counts", () => {
+    const item = (invoiceNo: string, uid: number, index: number, qty: string, ctnNo: string, cartonMerged?: boolean) => ({
+      uid,
+      index,
+      orderNo: `PO-${ctnNo}`, // customer PO → wire poNo via the swap
+      ctnNo,
+      cartonNo: "1",
+      ...(cartonMerged ? { cartonMerged: true } : {}),
+      partNo: "KOA+RK73H2BRTTD 4303F",
+      dateCode: "",
+      qty,
+      weight: "",
+      office: "",
+      poNo: "",
+      remark: "",
+      invoiceNo,
+    });
+    const manifestDraft: CnReceivingDraft = {
+      uid: 1,
+      filename: "CSZ00-manifest.xls",
+      mode: "manifest",
+      brand: "", // ignored — the order number comes from the truck Ref :
+      header: { receivedOffice: "北京办", supplier: "", receiptNo: "202611021", invoiceNo: "", receivedDate: "2026-11-02" },
+      items: [
+        item("INV-A", 2, 1, "100", "C1"),
+        item("INV-A", 3, 2, "200", "C2"),
+        item("INV-A", 4, 3, "50", "C2", true), // carton continuation — counts once
+        item("INV-B", 5, 4, "300", "C3"),
+      ],
+      totals: { carton: 3, qty: 650 },
+      sheetTotals: null,
+    };
+    const entry = cnDraftToEntry(manifestDraft);
+    expect(entry.filename).toBe("CSZ00-manifest.xls");
+    expect(entry.mode).toBe("manifest");
+    expect(entry.brand).toBeUndefined();
+    expect(entry.payload.invoiceNo).toBeUndefined(); // no single 編號 on a truck
+    expect(entry.payload.receiptNo).toBe("202611021");
+    expect(entry.payload.receivedDate).toBe("2026-11-02");
+    const invoices = entry.payload.invoices as {
+      invoiceNo: string;
+      totalCtn: number;
+      items: Record<string, unknown>[];
+    }[];
+    expect(invoices.map((i) => i.invoiceNo)).toEqual(["INV-A", "INV-B"]);
+    expect(invoices[0]!.totalCtn).toBe(2); // C1 + C2 once (the merged row skips)
+    expect(invoices[1]!.totalCtn).toBe(1);
+    const wire = invoices[0]!.items[0]!;
+    expect(wire.poNo).toBe("PO-C1"); // 訂單號 slot carries the customer PO
+    expect(wire.orderNo).toBe("");
+    expect(wire.invoiceNo).toBeUndefined(); // client-only grouping key — stripped
+    expect(wire.uid).toBeUndefined();
+    expect(invoices[0]!.items).toHaveLength(3);
+    expect(invoices[1]!.items).toHaveLength(1);
+  });
+
+  it("manifest draft: invalid-qty rows are dropped from their invoice group", () => {
+    const manifestDraft: CnReceivingDraft = {
+      uid: 1,
+      filename: "m.xls",
+      mode: "manifest",
+      brand: "",
+      header: { receivedOffice: "", supplier: "", receiptNo: "R1", invoiceNo: "", receivedDate: "" },
+      items: [
+        { uid: 2, index: 1, orderNo: "PO-1", ctnNo: "C1", cartonNo: "1", partNo: "P-1", dateCode: "", qty: "100", weight: "", office: "", poNo: "", remark: "", invoiceNo: "INV-A" },
+        { uid: 3, index: 2, orderNo: "PO-2", ctnNo: "C2", cartonNo: "1", partNo: "P-1", dateCode: "", qty: "abc", weight: "", office: "", poNo: "", remark: "", invoiceNo: "INV-A" },
+      ],
+      totals: { carton: 2, qty: 100 },
+      sheetTotals: null,
+    };
+    const entry = cnDraftToEntry(manifestDraft);
+    const invoices = entry.payload.invoices as { invoiceNo: string; items: unknown[] }[];
+    expect(invoices).toHaveLength(1);
+    expect(invoices[0]!.items).toHaveLength(1);
+  });
 });
 
 describe("checkCnDraft", () => {
@@ -443,6 +519,21 @@ describe("checkCnDraft", () => {
     expect(issues.filter((i) => i.code === "unknownPart")).toEqual([
       { code: "unknownPart", row: 9, partNo: "P-Z" },
     ]);
+  });
+
+  it("manifest draft: no 編號 header required, but every row needs its INVOICE NO", () => {
+    const manifestDraft: CnReceivingDraft = {
+      ...structuredClone(draft),
+      mode: "manifest",
+      header: { receivedOffice: "", supplier: "", receiptNo: "R1", invoiceNo: "", receivedDate: "" },
+      items: draft.items.map((i, n) => ({ ...i, uid: n + 1, invoiceNo: "INV-A" })),
+    };
+    // Header invoiceNo is blank — fine for a manifest; rows carry it instead.
+    expect(checkCnDraft(manifestDraft, () => true)).toEqual([]);
+    const missingGroup = structuredClone(manifestDraft);
+    missingGroup.items[1]!.invoiceNo = " ";
+    const issues = checkCnDraft(missingGroup, () => true);
+    expect(issues).toEqual([{ code: "noInvoiceNo", row: 2 }]);
   });
 });
 
@@ -500,7 +591,14 @@ describe("parseCnManifestAoa — CSZ00-manifest-20261102.xls", () => {
       office: "北京办",
       poNo: "",
       remark: "",
+      invoiceNo: "BJ-26100009", // stamped per row for the whole-truck draft
     });
+  });
+
+  it("stamps every item with its INVOICE NO group", () => {
+    for (const r of results) {
+      expect(r.items.every((i) => i.invoiceNo === r.invoiceNo)).toBe(true);
+    }
   });
 
   it("carries a blank C/No. down and merge-marks the continuation rows", () => {

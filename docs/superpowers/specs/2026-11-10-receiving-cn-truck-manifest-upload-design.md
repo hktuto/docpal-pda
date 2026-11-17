@@ -3,6 +3,17 @@
 Date: 2026-11-10 · App: admin · Function: ADM-023
 Spec: `2026-11-10-receiving-cn-truck-manifest-upload-design.md`
 
+> **Superseded 2026-11-17** (spec `2026-11-17-receiving-cn-manifest-single-order-
+> design.md`): the per-INVOICE NO split into N pending orders designed here is
+> replaced — a manifest now creates **ONE order** for the whole truck (every
+> INVOICE NO on its own invoice row), created arrived (`in_hand`,
+> `received_qty = line_qty`) with the CN put-away task in the same tx, no
+> confirm/scan step. The sheet decoder (`parseCnManifestAoa`) and the column
+> mapping below are unchanged; the fan-out point moved from "one draft per
+> invoice" to "one whole-truck draft whose items carry their INVOICE NO". The
+> verify/edit step covers manifests too (revised same-day: auto-create-only
+> proved too painful when the gate flagged rows).
+
 ## Problem
 
 The CN receiving Excel upload (spec

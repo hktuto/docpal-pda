@@ -2,6 +2,14 @@
 
 Date: 2026-11-08 · Status: approved · Supersedes the DocPal excel-workflow phase 1 of `2026-10-16-customer-receiving-upload-design.md`
 
+> **Extended 2026-11-17** (spec `2026-11-17-receiving-cn-manifest-single-order-
+> design.md`): the contract below now describes the **confirmation (TE) sheets
+> only** — one pending order per file, the verify/edit step, the branded
+> numbering, the confirm → PDA scan → finalize chain, all unchanged. Truck-
+> manifest (車單) files take the divergent `mode: "manifest"` path: one order
+> with N invoices, created arrived with the put-away task, and the same
+> verify/edit step (auto-create-only was tried and rejected same-day).
+
 ## Problem
 
 The CN receiving upload (admin `POST /receiving-cn/pdf`) sends scanned 收貨確認 PDFs to a DocPal workflow for OCR; the external upstream sync later writes the `receiving_orders_cn` world as `pending`, and the admin confirm / PDA 收貨掃描 steps follow. Phase 1 (Excel upload → verified rows → DocPal excel workflow) was retired with the PDA manual-receiving rewrite (`f9eab952`).

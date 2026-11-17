@@ -381,6 +381,176 @@ test("excel upload: 訂單號 groups route their own org/sub; order org = first 
   assert.equal(order!.deliveryDate.getTime(), expected); // invalid sheet date → creation day
 });
 
+// --- truck-manifest (HK) upload: one order, N invoices, arrived + put-away --
+// Spec docs/superpowers/specs/2026-11-17-receiving-cn-manifest-single-order-
+// design.md
+
+function manifestFile(overrides: Record<string, unknown> = {}) {
+  return { filename: "CSZ00-manifest.xls", mode: "manifest", payload: VALID_MANIFEST_PAYLOAD, ...overrides };
+}
+
+const VALID_MANIFEST_PAYLOAD = {
+  receiptNo: "CSZ00",
+  receivedDate: "2026-11-02",
+  invoices: [
+    {
+      invoiceNo: "TE20261010-2",
+      totalCtn: 3,
+      items: [
+        { orderNo: "", cartonNo: "1", ctnNo: "C1", partNo: "iC-HAUS-001", qty: "500", poNo: "329062100T3" },
+        { orderNo: "", cartonNo: "1", ctnNo: "C2", partNo: "iC-HAUS-001", qty: "700", poNo: "329062100T4", index: 2 },
+      ],
+    },
+    {
+      invoiceNo: "KOA261029K2",
+      totalCtn: 1,
+      items: [{ orderNo: "", cartonNo: "1", ctnNo: "C3", partNo: "iC-HAUS-001", qty: "300", poNo: "329062100T5" }],
+    },
+  ],
+};
+
+function ymdToday(): string {
+  const d = new Date();
+  return d.getFullYear().toString() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+}
+
+test("manifest upload: one file → ONE in_hand order + N invoices + put-away task, no scan step", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  const res = await postExcel(token, [manifestFile()]);
+  assert.equal(res.status, 201);
+  const { orders } = (await res.json()) as { orders: { id: string; batchNo: string }[] };
+  assert.equal(orders.length, 1);
+  const orderId = orders[0].id;
+  assert.equal(orders[0].batchNo, `CSZ00-${ymdToday()}`); // truck Ref : + sheet date day
+
+  const order = await queryGet<{ status: string; orgId: number; arrivedAt: Date | null; arrivedBy: string | null; deliveryDate: Date }>(
+    client.db,
+    sql`SELECT status, org_id AS "orgId", arrived_at AS "arrivedAt", arrived_by AS "arrivedBy",
+               delivery_date AS "deliveryDate"
+        FROM receiving_orders_cn WHERE id = ${orderId}`
+  );
+  assert.equal(order!.status, "in_hand"); // created arrived — the sheet is the verification
+  assert.ok(order!.arrivedAt);
+  assert.ok(order!.arrivedBy);
+  assert.equal(order!.orgId, 14); // first item's 329-prefix po_no → GZSZ org
+  assert.equal(order!.deliveryDate.toISOString(), "2026-11-02T00:00:00.000Z");
+
+  const invoices = await queryAll<{ invoiceNo: string; totalQty: number; totalCtn: number | null }>(
+    client.db,
+    sql`SELECT invoice_no AS "invoiceNo", total_qty AS "totalQty", total_ctn AS "totalCtn"
+        FROM receiving_invoices_cn WHERE receiving_order_id = ${orderId} ORDER BY invoice_no`
+  );
+  assert.deepEqual(invoices, [
+    { invoiceNo: "KOA261029K2", totalQty: 300, totalCtn: 1 },
+    { invoiceNo: "TE20261010-2", totalQty: 1200, totalCtn: 3 },
+  ]);
+
+  const items = await queryAll<{ invoiceNo: string; poNo: string; lineQty: number; receivedQty: number; additionalData: { source: string; invoiceNo: string } }>(
+    client.db,
+    sql`SELECT ri.invoice_no AS "invoiceNo", i.po_no AS "poNo", i.line_qty AS "lineQty",
+               i.received_qty AS "receivedQty", i.additional_data AS "additionalData"
+        FROM receiving_invoice_items_cn i
+        JOIN receiving_invoices_cn ri ON ri.id = i.receiving_invoice_id
+        WHERE ri.receiving_order_id = ${orderId} ORDER BY i.po_no`
+  );
+  assert.equal(items.length, 3);
+  assert.ok(items.every((i) => i.receivedQty === i.lineQty)); // received as-declared
+  assert.ok(items.every((i) => i.additionalData.source === "excel-manifest"));
+  assert.deepEqual(
+    items.map((i) => `${i.invoiceNo}:${i.poNo}`),
+    ["TE20261010-2:329062100T3", "TE20261010-2:329062100T4", "KOA261029K2:329062100T5"]
+  );
+
+  const task = await queryGet<{ status: string; orgId: number | null; sub: string | null }>(
+    client.db,
+    sql`SELECT status, org_id AS "orgId", sub_inventory_code AS sub
+        FROM put_away_tasks_cn WHERE receiving_order_cn_id = ${orderId}`
+  );
+  assert.equal(task!.status, "pending");
+  assert.deepEqual([task!.orgId, task!.sub], [14, "GZSZ"]); // uniform item pair
+
+  const wf = await queryGet<{ status: string; invoiceNo: string | null; payload: { invoices: unknown[] } }>(
+    client.db,
+    sql`SELECT status, invoice_no AS "invoiceNo", payload FROM receiving_cn_workflows WHERE batch_no = ${orders[0].batchNo}`
+  );
+  assert.equal(wf!.status, "completed");
+  assert.equal(wf!.invoiceNo, null); // no single sheet 編號 — invoices live in the payload
+  assert.equal(wf!.payload.invoices.length, 2);
+
+  const logs = await queryAll<{ entity: string; toState: string }>(
+    client.db,
+    sql`SELECT entity_type AS entity, to_state AS "toState" FROM transaction_logs
+        WHERE entity_id = ${orderId} OR entity_id IN
+          (SELECT id FROM receiving_cn_workflows WHERE batch_no = ${orders[0].batchNo})
+          OR entity_id IN (SELECT id FROM put_away_tasks_cn WHERE receiving_order_cn_id = ${orderId})`
+  );
+  assert.deepEqual(logs.map((l) => `${l.entity}:${l.toState}`).sort(), [
+    "put_away_task_cn:pending",
+    "receiving_cn_workflow:completed",
+    "receiving_order_cn:in_hand",
+  ]);
+});
+
+test("manifest upload: same truck ref the same day → -2 suffix", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  const first = await postExcel(token, [manifestFile()]);
+  assert.equal(first.status, 201);
+  const second = await postExcel(token, [manifestFile({ filename: "CSZ00-manifest-2.xls" })]);
+  assert.equal(second.status, 201);
+  const { orders } = (await second.json()) as { orders: { id: string; batchNo: string }[] };
+  assert.equal(orders[0].batchNo, `CSZ00-${ymdToday()}-2`);
+});
+
+test("manifest upload: mixed item org/sub pairs → put-away task keeps order org with NULL sub", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  const payload = {
+    ...VALID_MANIFEST_PAYLOAD,
+    invoices: [
+      { invoiceNo: "INV-A", items: [{ ...VALID_MANIFEST_PAYLOAD.invoices[0].items[0] }] }, // 329 → 14/GZSZ
+      { invoiceNo: "INV-B", items: [{ ...VALID_MANIFEST_PAYLOAD.invoices[0].items[0], poNo: "339062100T9" }] }, // 339 → 5/SHSZ
+    ],
+  };
+  const res = await postExcel(token, [manifestFile({ payload })]);
+  assert.equal(res.status, 201);
+  const { orders } = (await res.json()) as { orders: { id: string; batchNo: string }[] };
+  const task = await queryGet<{ orgId: number | null; sub: string | null }>(
+    client.db,
+    sql`SELECT org_id AS "orgId", sub_inventory_code AS sub
+        FROM put_away_tasks_cn WHERE receiving_order_cn_id = ${orders[0].id}`
+  );
+  assert.deepEqual([task!.orgId, task!.sub], [14, null]); // mixed pair → order org, NULL sub
+});
+
+test("manifest upload: mixed submit stays all-or-nothing — TE file failure rolls the manifest order back", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  const badTe = excelFile({ payload: { ...VALID_PAYLOAD, items: [{ ...VALID_PAYLOAD.items[0], poNo: "" }] } });
+  const res = await postExcel(token, [manifestFile(), badTe]);
+  assert.equal(res.status, 400);
+  assert.match(await res.text(), /invalid_payload/);
+  const n = await queryGet<{ c: number }>(client.db, sql`SELECT COUNT(*)::int AS c FROM receiving_orders_cn`);
+  assert.equal(n!.c, 0); // the manifest order was rolled back with it
+});
+
+test("manifest upload: payload shape errors → 400 invalid_payload", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  const missingInvoices = await postExcel(token, [manifestFile({ payload: { receiptNo: "CSZ00" } })]);
+  assert.equal(missingInvoices.status, 400);
+  assert.match(await missingInvoices.text(), /invoices must be a non-empty array/);
+  const blankInvoiceNo = await postExcel(token, [
+    manifestFile({ payload: { ...VALID_MANIFEST_PAYLOAD, invoices: [{ invoiceNo: " ", items: VALID_MANIFEST_PAYLOAD.invoices[0].items }] } }),
+  ]);
+  assert.equal(blankInvoiceNo.status, 400);
+  assert.match(await blankInvoiceNo.text(), /invoiceNo must be non-empty/);
+  const badMode = await postExcel(token, [excelFile({ mode: "something" })]);
+  assert.equal(badMode.status, 400);
+  assert.match(await badMode.text(), /mode must be "manifest"/);
+});
+
 test("excel upload: created pending order flows through the admin confirm chain", async () => {
   await reseed(client);
   const token = await login("admin", "DocPalAdmin2026!");

@@ -3,19 +3,29 @@ import type { AdminColumnDef } from "~/composables/useAdminTable";
 import { isCnQtyValid, type CnReceivingDraft, type CnReceivingDraftItem } from "~/utils/cnReceivingExcel";
 
 /**
- * One locally decoded Excel receiving confirmation (收貨確認) with inline
- * verify/edit, per spec
- * docs/superpowers/specs/2026-11-08-receiving-cn-excel-local-upload-design.md.
+ * One locally decoded Excel receiving sheet with inline verify/edit: a
+ * confirmation (收貨確認, spec
+ * docs/superpowers/specs/2026-11-08-receiving-cn-excel-local-upload-design.md)
+ * or a truck manifest (車單, spec
+ * docs/superpowers/specs/2026-11-17-receiving-cn-manifest-single-order-design.md).
  * Lifted from the retired upload wizard (f9eab952^) step 2; the draft object
- * is mutated in place (the page keeps the array).
+ * is mutated in place (the page keeps the array). Manifests differ: no brand
+ * (the order number comes from the truck Ref :), no single 編號 (the invoice
+ * numbers live on the rows), and no totals cross-check (the parse-time
+ * fallback sum is self-referential once the admin edits a row).
  */
 const props = defineProps<{ draft: CnReceivingDraft }>();
 const emit = defineEmits<{ remove: [] }>();
 
 const { t } = useI18n();
 
+const isManifest = computed(() => props.draft.mode === "manifest");
+
 const columnDefs = computed<AdminColumnDef<CnReceivingDraftItem>[]>(() => [
   { key: "index", label: t("admin.pages.receivingCn.fields.index"), size: 56 },
+  // Manifests: the INVOICE NO grouping column — the order carries one invoice
+  // row per distinct value (editable: a mis-grouped row can be re-assigned).
+  ...(isManifest.value ? [{ key: "invoiceNo", label: t("admin.pages.receivingCn.fields.invoiceNo"), size: 120 } as AdminColumnDef<CnReceivingDraftItem>] : []),
   { key: "orderNo", label: t("admin.pages.receivingCn.fields.orderNo"), size: 130 },
   { key: "ctnNo", label: t("admin.pages.receivingCn.fields.ctnNo"), size: 90 },
   { key: "cartonNo", label: t("admin.pages.receivingCn.fields.cartonNo"), size: 80 },
@@ -63,6 +73,9 @@ function addItem() {
     office: "",
     poNo: "",
     remark: "",
+    // Manifest rows must land in an invoice group — start blank and let the
+    // gate flag it until the admin fills it (TE sheets ignore the field).
+    ...(isManifest.value ? { invoiceNo: "" } : {}),
   });
 }
 
@@ -81,7 +94,11 @@ const itemTotals = computed(() => ({
 
 const sheetTotals = computed(() => props.draft.sheetTotals ?? props.draft.totals);
 
+// Manifests skip the cross-check: with no printed 合计 row the fallback is
+// the parse-time sum, which any intentional edit departs from — the banner
+// could never clear. The per-row gate + server validation stay the guards.
 const totalsMismatch = computed(() => {
+  if (isManifest.value) return false;
   const sheet = sheetTotals.value;
   return itemTotals.value.carton !== sheet.carton || itemTotals.value.qty !== sheet.qty;
 });
@@ -105,9 +122,13 @@ const invalidQtyCount = computed(() => props.draft.items.filter((i) => !isCnQtyV
           <span class="dt">{{ $t("admin.pages.receivingCn.supplier") }}:</span>
           {{ draft.header.supplier || "—" }}
         </div>
-        <div>
+        <div v-if="!isManifest">
           <span class="dt">{{ $t("admin.pages.receivingCn.invoiceNo") }}:</span>
           {{ draft.header.invoiceNo || "—" }}
+        </div>
+        <div v-else>
+          <span class="dt">{{ $t("admin.pages.receivingCn.fields.receiptNo") }}:</span>
+          {{ draft.header.receiptNo || "—" }}
         </div>
         <div>
           <span class="dt">{{ $t("admin.pages.receivingCn.itemCount") }}:</span>
@@ -120,7 +141,7 @@ const invalidQtyCount = computed(() => props.draft.items.filter((i) => !isCnQtyV
     </div>
 
     <fieldset class="header-form">
-      <div class="form-row">
+      <div v-if="!isManifest" class="form-row">
         <label :for="`cn-brand-${draft.uid}`">{{ $t("admin.pages.receivingCn.fields.brand") }}</label>
         <input :id="`cn-brand-${draft.uid}`" v-model="draft.brand" type="text" :placeholder="$t('admin.pages.receivingCn.brandAuto')" />
       </div>
@@ -132,7 +153,7 @@ const invalidQtyCount = computed(() => props.draft.items.filter((i) => !isCnQtyV
         <label :for="`cn-supplier-${draft.uid}`">{{ $t("admin.pages.receivingCn.fields.supplier") }}</label>
         <input :id="`cn-supplier-${draft.uid}`" v-model="draft.header.supplier" type="text" />
       </div>
-      <div class="form-row">
+      <div v-if="!isManifest" class="form-row">
         <label :for="`cn-invoiceNo-${draft.uid}`">{{ $t("admin.pages.receivingCn.fields.invoiceNo") }}</label>
         <input :id="`cn-invoiceNo-${draft.uid}`" v-model="draft.header.invoiceNo" type="text" />
       </div>
@@ -166,6 +187,9 @@ const invalidQtyCount = computed(() => props.draft.items.filter((i) => !isCnQtyV
 
     <DataTable :table="table" :empty-text="$t('admin.pages.receivingCn.noItems')" :on-reset-columns="resetColumnState">
       <template #cell-index="{ row }">{{ row.index }}</template>
+      <template v-if="isManifest" #cell-invoiceNo="{ row }">
+        <input v-model="row.invoiceNo" class="cell-input" type="text" />
+      </template>
       <template #cell-orderNo="{ row }">
         <input v-model="row.orderNo" class="cell-input" type="text" />
       </template>

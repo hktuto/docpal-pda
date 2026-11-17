@@ -18,8 +18,10 @@ import {
   prepareCnOrderDetail,
   resetCnOrder,
   updateCnReceivingItemFields,
+  validateCnManifestPayload,
   validateCnPayload,
 } from "../../db/receivingCn.js";
+import type { CnExcelFileInput } from "../../db/receivingCn.js";
 import type { OrderLogsParams } from "../../db/receiving.js";
 
 // Customer receiving (CN) upload tracking (spec
@@ -242,11 +244,21 @@ adminReceivingCnRoute.post("/receiving-cn/excel", async (c) => {
   if (!Array.isArray(body.files) || body.files.length === 0) {
     throw new HTTPException(400, { message: "invalid_payload: files must be a non-empty array" });
   }
-  const files = body.files.map((raw, i) => {
+  const files = body.files.map((raw, i): CnExcelFileInput => {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
       throw new HTTPException(400, { message: `invalid_payload: files[${i}] must be an object` });
     }
     const f = raw as Record<string, unknown>;
+    const filename = typeof f.filename === "string" && f.filename.trim() ? f.filename.trim() : "upload.xls";
+    // Truck-manifest (HK) file: one order with N invoices, created arrived
+    // with its put-away task (spec 2026-11-17). No brand — the order number
+    // comes from the truck Ref :, not the branded namespace.
+    if (f.mode === "manifest") {
+      return { filename, mode: "manifest", payload: validateCnManifestPayload(f.payload) };
+    }
+    if (f.mode !== undefined) {
+      throw new HTTPException(400, { message: `invalid_payload: files[${i}].mode must be "manifest"` });
+    }
     let brand: string | undefined;
     if (typeof f.brand === "string" && f.brand.trim() !== "") {
       brand = f.brand.trim().toUpperCase();
@@ -254,7 +266,6 @@ adminReceivingCnRoute.post("/receiving-cn/excel", async (c) => {
         throw new HTTPException(400, { message: `invalid_payload: files[${i}].brand must match ${CN_BRAND_RE}` });
       }
     }
-    const filename = typeof f.filename === "string" && f.filename.trim() ? f.filename.trim() : "upload.xls";
     return { filename, ...(brand ? { brand } : {}), payload: validateCnPayload(f.payload) };
   });
   const result = await createCnExcelUploads(db, { files, actor: actorFrom(c) });

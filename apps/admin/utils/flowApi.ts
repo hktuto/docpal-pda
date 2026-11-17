@@ -1187,16 +1187,24 @@ export async function submitCnPdfUpload(files: File[]): Promise<CnWorkflowRow> {
  *  orderNo the 发货项. */
 export interface CnExcelFileEntry {
   filename: string;
-  /** Drives the `[brand]-yyyymmdd-seq` batch/invoice numbering. Blank =
+  /** Truck-manifest (車單) file: ONE order with every invoice on it, created
+   *  arrived (`in_hand`) with the CN put-away task — no confirm/scan step
+   *  (spec 2026-11-17-receiving-cn-manifest-single-order-design.md). Omitted =
+   *  a single-invoice confirmation sheet → one pending order on the scan
+   *  chain. */
+  mode?: "manifest";
+  /** Drives the `[brand]-yyyymmdd-seq` batch/invoice numbering (confirmation
+   *  files only — manifest orders number from the truck Ref :). Blank =
    *  derived server-side from the first item's parts-master brand. */
   brand?: string;
   payload: unknown;
 }
 
 /** POST /admin/receiving-cn/excel — the verified payloads the browser decoded
- *  from the customer receiving Excel file(s). N files create N pending CN
- *  orders in one upload (no DocPal workflow); the admin confirm + PDA
- *  receiving-scan steps follow. 400 invalid_payload on shape errors. */
+ *  from the customer receiving Excel file(s). One upload creates every file's
+ *  order in one transaction (confirmation files → pending orders for the
+ *  confirm + PDA receiving-scan chain; manifest files → one arrived order with
+ *  the put-away task, N invoices); 400 invalid_payload on shape errors. */
 export async function submitCnExcelUpload(
   files: CnExcelFileEntry[]
 ): Promise<{ orders: { id: string; batchNo: string }[] }> {
