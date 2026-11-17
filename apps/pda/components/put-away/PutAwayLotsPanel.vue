@@ -51,6 +51,9 @@
           <div v-if="group.items.length > 1" class="member-line">
             <span class="member-line__part">{{ line.partNo }}</span>
             <span>{{ $t('viewConfig.fields.remaining_qty') }}: {{ line.remainingQty }}</span>
+            <span v-if="line.ctnNo" class="member-line__carton">
+              {{ $t('viewConfig.fields.box_id') }} {{ line.ctnNo }}
+            </span>
             <span class="member-line__batch">
               {{ putAwayItemFieldValue('date_code', line) }} / {{ putAwayItemFieldValue('lot_code', line) }} / {{ putAwayItemFieldValue('coo', line) }} / {{ putAwayItemFieldValue('cow', line) }}
             </span>
@@ -232,6 +235,9 @@ function groupTitle(group: PutAwayItemGroup): string {
 
 // Collapsed meta line 1: the configured item fields. suggested_shelf gets
 // the dedicated group suggestion (distinct shelves, single box appended).
+// The carton (箱號) rides along when any member line carries one — rendered
+// here rather than only via pdaViewConfig so warehouses whose stored config
+// predates the box_id field still see which physical carton to pick up.
 function fieldsMeta(group: PutAwayItemGroup): string {
   const segments: string[] = [];
   for (const field of detailConfig.value.itemFields) {
@@ -244,6 +250,12 @@ function fieldsMeta(group: PutAwayItemGroup): string {
     const value = putAwayGroupFieldValue(field, group);
     if (value === "—") continue;
     segments.push(`${t(`viewConfig.fields.${field}`)}: ${value}`);
+  }
+  const cartons = [
+    ...new Set(group.items.map((i) => (i.ctnNo ?? "").trim()).filter((v) => v !== "")),
+  ];
+  if (cartons.length > 0) {
+    segments.push(`${t("viewConfig.fields.box_id")}: ${cartons.join(" / ")}`);
   }
   return segments.join(" · ");
 }
@@ -357,6 +369,10 @@ function toggleExpand(groupKey: string) {
 .member-line__batch {
   color: var(--muted);
   font-weight: 400;
+}
+
+.member-line__carton {
+  color: var(--primary);
 }
 
 .scan-row {

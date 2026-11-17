@@ -242,9 +242,13 @@
   cards built on the shared `AppListRow` (same config-driven design as the
   receiving/picking detail rows): identity field = title, collapsed meta =
   the configured `putAwayDetail.itemFields` ("Label: value" segments, empty
-  omitted — `suggested_shelf` renders the group suggestion) + a
-  Total/Scanned/Put-away progress line, expanded = the configured
-  `expandedFields` + member lines + the line's pending scans (per-row
+  omitted — `suggested_shelf` renders the group suggestion) + the carton's
+  箱號 segment when any member line carries a `ctnNo` (hard-rendered, not
+  config-gated, so pre-box_id configs still see it; `box_id` is also wired
+  in `putAwayItemFieldValue` → `item.ctnNo`, so the configured expanded
+  `box_id` DetailRow shows it too) + a Total/Scanned/Put-away progress line,
+  expanded = the configured `expandedFields` + member lines (each showing its
+  per-line carton when present) + the line's pending scans (per-row
   Add-to-shelf / Remove); per-card "Gun scan" button (`arm-scan` emit) +
   armed-card styling driven by the group-key `armedItemId` prop. The detail
   page's app-header title renders through the put-away list's title

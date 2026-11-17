@@ -77,8 +77,9 @@ export function putAwayGroupComplete(group: PutAwayItemGroup): boolean {
 }
 
 /** Qty catalog fields are summed; batch/location fields render the distinct
- *  member values joined (empty excluded, all empty → the no-data dash).
- *  po_no/box_id stay no-data, matching putAwayItemFieldValue. */
+ *  member values joined (empty excluded, all empty → the no-data dash) —
+ *  po_no/box_id included once putAwayItemFieldValue learned the CN DTO
+ *  fields (box_id = carton 箱號 on both backends; po_no CN-only). */
 const GROUP_SUM_FIELDS = new Set(["expected_qty", "received_qty", "remaining_qty"]);
 
 export function putAwayGroupFieldValue(field: string, group: PutAwayItemGroup): string {

@@ -169,4 +169,26 @@ describe('detail field values', () => {
     expect(putAwayItemFieldValue('suggested_shelf', item)).toBe('A-01 / BOX-1');
     expect(putAwayItemFieldValue('suggested_shelf', { ...item, suggestedShelfCode: null })).toBe('—');
   });
+
+  it('putAwayItemFieldValue renders the carton (box_id) and the CN PO no', () => {
+    const item = {
+      partNo: 'PN-1',
+      wclItemNo: 'WCL-1',
+      lineQty: 12,
+      receivedQty: 10,
+      remainingQty: 4,
+      ctnNo: 'C-7',
+      poNo: '329062100T3',
+      dateCode: null,
+      lotCode: null,
+      coo: null,
+      cow: null,
+    };
+    expect(putAwayItemFieldValue('box_id', item)).toBe('C-7');
+    expect(putAwayItemFieldValue('po_no', item)).toBe('329062100T3');
+    // Standard-backend shape: neither field on the DTO → the no-data dash.
+    const standard = { ...item, ctnNo: null, poNo: undefined };
+    expect(putAwayItemFieldValue('box_id', standard)).toBe('—');
+    expect(putAwayItemFieldValue('po_no', standard)).toBe('—');
+  });
 });

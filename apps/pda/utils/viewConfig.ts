@@ -333,6 +333,12 @@ interface PutAwayItemLike {
   lineQty: number | null;
   receivedQty: number;
   remainingQty: number;
+  /** Plain-text carton number (箱號) — both put-away backends send it;
+   *  null/omitted when the receiving line carries none. */
+  ctnNo?: string | null;
+  /** CN put-away only: the invoice item's PO no — standard backends omit
+   *  the field (renders the no-data dash there). */
+  poNo?: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -349,8 +355,8 @@ export function putAwayItemFieldValue(field: string, item: PutAwayItemLike): str
     case "expected_qty": return String(item.lineQty ?? NO_DATA);
     case "received_qty": return String(item.receivedQty);
     case "remaining_qty": return String(item.remainingQty);
-    case "po_no": return NO_DATA; // not carried on the put-away item DTO
-    case "box_id": return NO_DATA;
+    case "po_no": return text(item.poNo);
+    case "box_id": return text(item.ctnNo);
     case "date_code": return text(item.dateCode);
     case "lot_code": return text(item.lotCode);
     case "coo": return text(item.coo);
