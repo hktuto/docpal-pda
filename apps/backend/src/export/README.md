@@ -12,7 +12,11 @@ export/
     data.ts              # SQL + grouping → ShipperDocument (no XLSX types)
     model.ts             # plain document types
     render/default.ts    # ShipperDocument → xlsx buffer via ExcelJS (self-registers)
+    render/hcc.ts        # supplier_code 23 (HCC) config variant
   picking-list/          # same shape
+    render/default.ts    # HK layout — same-part lines merged into one block
+    render/sz.ts         # SZ warehouse variant — one product row per picking
+                         # item line (part_no / order_no / line_number, unmerged)
 ```
 
 Routes (`src/routes/admin/receivingShipper.ts`, `pickingList.ts`) are HTTP
@@ -81,10 +85,11 @@ import "../../export/shipper/render/hcc.js";      // supplier 23 (HCC) variant
 **Resolution order** (first match wins): scoped registration whose **all**
 declared scope keys equal the document's values → the unscoped default.
 Scope keys: `supplierCode` (shipper, from the receiving order),
-`customerCode` (picking list, from the picking order). `warehouse` is
-reserved but unwired — `warehouse_config` has no warehouse identifier
-yet; add one (config row or env) when the first warehouse-scoped variant
-is needed.
+`customerCode` (picking list, from the picking order), `warehouse`
+(the instance's `WAREHOUSE_CODE` env, default `"hk"` — see
+`warehouse.ts`). The current layouts are the HK versions: register another
+warehouse's variant scoped to its code (e.g. `{ warehouse: "sz" }`) and it
+wins on that instance only; HK keeps the default.
 
 Rules:
 

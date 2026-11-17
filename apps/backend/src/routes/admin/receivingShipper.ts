@@ -5,6 +5,7 @@ import { loadShipperDocument, loadShipperDocuments } from "../../export/shipper/
 import "../../export/shipper/render/default.js"; // registers the default renderer
 import "../../export/shipper/render/hcc.js"; // registers the supplier-23 (HCC) variant
 import { resolveRenderer } from "../../export/registry.js";
+import { exportWarehouseCode } from "../../export/warehouse.js";
 import type { ShipperDocument } from "../../export/shipper/model.js";
 
 // Admin shipper download (spec
@@ -50,7 +51,10 @@ adminReceivingShipperRoute.get("/receiving-orders/:id/shipper", async (c) => {
   const finished = c.req.query("mode") === "finished";
   const id = c.req.param("id");
   const render = (doc: ShipperDocument) =>
-    resolveRenderer<ShipperDocument>("shipper", { supplierCode: doc.head.supplierCode }).render(doc);
+    resolveRenderer<ShipperDocument>("shipper", {
+      supplierCode: doc.head.supplierCode,
+      warehouse: exportWarehouseCode(),
+    }).render(doc);
 
   const sections = await loadShipperDocuments(db, id, { finished });
   if (sections.length === 1) {

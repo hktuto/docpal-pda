@@ -11,6 +11,7 @@ import { HTTPException } from "hono/http-exception";
 import { inArray, sql } from "drizzle-orm";
 import type { AppDb } from "../../db.js";
 import { queryAll, queryGet } from "../../db/query.js";
+import { partsMasterByWcl } from "../../db/partsMaster.js";
 import type { PickingListAlloc, PickingListDocument } from "./model.js";
 
 interface OrderHeadRow {
@@ -28,10 +29,13 @@ interface OrderHeadRow {
 
 interface ItemRow {
   id: string;
-  partNo: string;
+  partNo: string; // picking_items.part_no — the WCL item no
+  mfrPartNo: string | null; // parts master part_no (real manufacturer part no)
   qty: number;
   allocatedQty: number;
   pickedQty: number;
+  lineNumber: number | null;
+  orderNo: string | null; // additional_data->>'order_no' (upstream passthrough)
 }
 
 interface AllocRow {
@@ -75,8 +79,16 @@ export async function loadPickingListDocument(db: AppDb, id: string): Promise<Pi
     sql`
       SELECT
         pi.id, pi.part_no AS "partNo",
-        pi.qty, pi.allocated_qty AS "allocatedQty", pi.picked_qty AS "pickedQty"
+        pm.part_no AS "mfrPartNo",
+        pi.qty, pi.allocated_qty AS "allocatedQty", pi.picked_qty AS "pickedQty",
+        pi.line_number AS "lineNumber",
+        pi.additional_data->>'order_no' AS "orderNo"
       FROM picking_items pi
+      -- picking_items.part_no IS the wcl_item_no; the manufacturer's part_no
+      -- comes from the deduplicated parts master (one row per wcl_item_no —
+      -- upstream-synced remotes may carry duplicate parts rows). LEFT so a
+      -- part missing from parts is still listed.
+      LEFT JOIN ${partsMasterByWcl} pm ON pm.wcl_item_no = pi.part_no
       WHERE pi.picking_order_id = ${id}
       ORDER BY pi.created_date, pi.id
     `
@@ -116,19 +128,19 @@ export async function loadPickingListDocument(db: AppDb, id: string): Promise<Pi
 
   // Merge items sharing a part number into one block (first-seen order):
   // summed qty columns, allocation rows from all lines concatenated.
-  const groups: { partNo: string; qty: number; allocatedQty: number; pickedQty: number; itemIds: string[] }[] = [];
+  const groups: { partNo: string; qty: number; allocatedQty: number; pickedQty: number; items: ItemRow[] }[] = [];
   const groupByPart = new Map<string, (typeof groups)[number]>();
   for (const item of items) {
     let g = groupByPart.get(item.partNo);
     if (!g) {
-      g = { partNo: item.partNo, qty: 0, allocatedQty: 0, pickedQty: 0, itemIds: [] };
+      g = { partNo: item.partNo, qty: 0, allocatedQty: 0, pickedQty: 0, items: [] };
       groupByPart.set(item.partNo, g);
       groups.push(g);
     }
     g.qty += item.qty;
     g.allocatedQty += item.allocatedQty;
     g.pickedQty += item.pickedQty;
-    g.itemIds.push(item.id);
+    g.items.push(item);
   }
 
   // Within a part block, allocations from the same location + date code +
@@ -152,31 +164,45 @@ export async function loadPickingListDocument(db: AppDb, id: string): Promise<Pi
     return [...merged.values()];
   }
 
+  function toAlloc(a: AllocRow): PickingListAlloc {
+    return a.lotId
+      ? {
+          kind: "lot",
+          shelfCode: a.shelfCode,
+          boxId: a.boxId,
+          dateCode: a.dateCode,
+          lotCode: a.lotCode,
+          coo: a.coo,
+          cow: a.cow,
+          orgId: a.lotOrgId,
+          subInventoryCode: a.lotSubInventoryCode,
+          qty: a.qty,
+        }
+      : { kind: "receiving", receivingBatchNo: a.receivingBatchNo, qty: a.qty };
+  }
+
   return {
     head: { ...head },
     generatedAt: new Date().toISOString(),
     groups: groups.map((group) => ({
       partNo: group.partNo,
+      mfrPartNo: group.items[0]!.mfrPartNo,
       qty: group.qty,
       allocatedQty: group.allocatedQty,
       pickedQty: group.pickedQty,
-      allocs: mergeAllocs(group.itemIds.flatMap((itemId) => allocsByItem.get(itemId) ?? [])).map(
-        (a): PickingListAlloc =>
-          a.lotId
-            ? {
-                kind: "lot",
-                shelfCode: a.shelfCode,
-                boxId: a.boxId,
-                dateCode: a.dateCode,
-                lotCode: a.lotCode,
-                coo: a.coo,
-                cow: a.cow,
-                orgId: a.lotOrgId,
-                subInventoryCode: a.lotSubInventoryCode,
-                qty: a.qty,
-              }
-            : { kind: "receiving", receivingBatchNo: a.receivingBatchNo, qty: a.qty }
-      ),
+      allocs: mergeAllocs(group.items.flatMap((item) => allocsByItem.get(item.id) ?? [])).map(toAlloc),
+      // Per-line rows keep their own order_no / line_number and their own
+      // merged allocation rows — the SZ layout prints these instead of the
+      // merged group block.
+      lines: group.items.map((item) => ({
+        orderNo: item.orderNo,
+        lineNumber: item.lineNumber,
+        mfrPartNo: item.mfrPartNo,
+        qty: item.qty,
+        allocatedQty: item.allocatedQty,
+        pickedQty: item.pickedQty,
+        allocs: mergeAllocs(allocsByItem.get(item.id) ?? []).map(toAlloc),
+      })),
     })),
   };
 }

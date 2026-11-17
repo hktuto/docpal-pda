@@ -354,3 +354,89 @@ test("GET picking-list: order-info block and flat allocation rows", async () => 
     ],
   ]);
 });
+
+test("GET picking-list-document: per-line rows carry upstream order_no and line_number", async () => {
+  await reseed(client);
+  // Hermetic: the demo seed's picking orders would also draw on this stock.
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  const orderId = randomUUID();
+  await insertPickingOrder(client.db, orderId, {
+    order: { orderNo: "SO-PLIST-LINES", customerCode: "ACME", orgId: 2, subInventoryCode: "STORE1" },
+    items: [
+      { partNo: "RK73H2ATTD1372F", qty: 100, lineNumber: 3 },
+      { partNo: "RK73H2ATTD1372F", qty: 150, lineNumber: 7 },
+    ],
+  });
+  await client.db.execute(sql`
+    UPDATE picking_items SET additional_data = jsonb_build_object('order_no', 'CUST-ORD-42')
+    WHERE picking_order_id = ${orderId} AND line_number = 3
+  `);
+  // Manufacturer part_no distinct from the wcl_item_no (MIN() wins over the
+  // demo seed's RK73… row: "MFR-…" < "RK73…").
+  await client.db.execute(sql`
+    INSERT INTO parts (id, part_no, wcl_item_no, brand, created_date, last_update_date)
+    VALUES ('PART-MFR-1372', 'MFR-XXX-1372', 'RK73H2ATTD1372F', 'KOA', now(), now())
+  `);
+
+  const res = await req(`/admin/picking-orders/${orderId}/picking-list-document`);
+  assert.equal(res.status, 200);
+  const doc = await res.json();
+  assert.equal(doc.groups.length, 1); // merged block (HK default ignores lines)
+  assert.equal(doc.groups[0].mfrPartNo, "MFR-XXX-1372");
+
+  // The merged block still carries both unmerged lines, each with its own
+  // order_no / line_number / qty.
+  const lines = doc.groups[0].lines;
+  assert.deepEqual(
+    lines.map((l: Record<string, unknown>) => [l.mfrPartNo, l.orderNo, l.lineNumber, l.qty]),
+    [
+      ["MFR-XXX-1372", "CUST-ORD-42", 3, 100],
+      ["MFR-XXX-1372", null, 7, 150],
+    ]
+  );
+});
+
+test("GET picking-list: WAREHOUSE_CODE=sz renders the per-line SZ layout", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  const orderId = randomUUID();
+  await insertPickingOrder(client.db, orderId, {
+    order: { orderNo: "SO-PLIST-SZ", customerCode: "ACME", orgId: 2, subInventoryCode: "STORE1" },
+    items: [
+      { partNo: "RK73H2ATTD1372F", qty: 100, lineNumber: 1 },
+      { partNo: "RK73H2ATTD1372F", qty: 150, lineNumber: 2 },
+    ],
+  });
+  await client.db.execute(sql`
+    UPDATE picking_items SET additional_data = jsonb_build_object('order_no', 'CUST-ORD-7')
+    WHERE picking_order_id = ${orderId} AND line_number = 1
+  `);
+  await client.db.execute(sql`
+    INSERT INTO parts (id, part_no, wcl_item_no, brand, created_date, last_update_date)
+    VALUES ('PART-MFR-1372', 'MFR-XXX-1372', 'RK73H2ATTD1372F', 'KOA', now(), now())
+  `);
+
+  process.env.WAREHOUSE_CODE = "sz";
+  try {
+    const res = await req(`/admin/picking-orders/${orderId}/picking-list`);
+    assert.equal(res.status, 200);
+    const rows = sheetRows(await res.arrayBuffer());
+
+    // SZ header: both the manufacturer part no and the wcl_item_no, plus
+    // Order No + Line No columns.
+    assert.deepEqual(rows[11]!.slice(0, 8), [
+      "Part No", "WCL Item No", "Order No", "Line No",
+      "Item Qty", "Allocated Qty", "Picked Qty", "Source",
+    ]);
+
+    // Same-part lines are NOT merged: two product rows, each carrying its
+    // own part_no / wcl_item_no / order_no / line_number.
+    const data = rows.slice(12);
+    assert.deepEqual(data.map((r) => r.slice(0, 5)), [
+      ["MFR-XXX-1372", "RK73H2ATTD1372F", "CUST-ORD-7", 1, 100],
+      ["MFR-XXX-1372", "RK73H2ATTD1372F", "", 2, 150],
+    ]);
+  } finally {
+    delete process.env.WAREHOUSE_CODE;
+  }
+});

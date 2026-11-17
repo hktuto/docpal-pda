@@ -22,11 +22,29 @@ export interface PickingListDocument {
 }
 
 export interface PickingListGroup {
+  // picking_items.part_no — the WCL item no (business key), NOT the
+  // manufacturer's part no; mfrPartNo carries that.
   partNo: string;
+  mfrPartNo: string | null; // parts master part_no (real manufacturer part no)
   qty: number;
   allocatedQty: number;
   pickedQty: number;
   allocs: PickingListAlloc[]; // already merged by location/date-code/COO key
+  // Unmerged per picking-item rows (orderNo from additional_data->>'order_no',
+  // lineNumber from picking_items.line_number). The default (HK) layout merges
+  // same-part lines into one block and ignores this; warehouse variants that
+  // print one product row per order line (e.g. SZ) use it.
+  lines: PickingListLine[];
+}
+
+export interface PickingListLine {
+  orderNo: string | null; // upstream customer order no (additional_data passthrough)
+  lineNumber: number | null; // upstream Oracle line number
+  mfrPartNo: string | null; // same parts-master lookup as the group's
+  qty: number;
+  allocatedQty: number;
+  pickedQty: number;
+  allocs: PickingListAlloc[]; // this line's allocations, merged by location key
 }
 
 export type PickingListAlloc =

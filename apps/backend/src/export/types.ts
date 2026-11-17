@@ -6,9 +6,10 @@
 export type ExportDocType = "shipper" | "picking-list";
 
 export interface RenderContext {
-  // Reserved but UNWIRED in this phase: warehouse_config has no warehouse
-  // identifier today. Add one (config row or env) when the first
-  // warehouse-scoped renderer variant lands.
+  // Wired: the instance's warehouse from WAREHOUSE_CODE (default "hk"),
+  // see warehouse.ts. A renderer registered with { warehouse: "sz" } wins
+  // over the unscoped default on the SZ instance; HK and any other
+  // warehouse fall through to the default renderer.
   warehouse?: string;
   supplierCode?: string | null; // shipper scope
   customerCode?: string | null; // picking-list scope
