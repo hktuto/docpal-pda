@@ -1,0 +1,14 @@
+{
+  "id": "CR-060",
+  "dateRaised": "2026-11-17",
+  "raisedBy": "Sean",
+  "app": "Admin",
+  "functionId": "ADM-040",
+  "feature": "Internal transfer orders with negative line quantities are auto-closed: an order whose lines all have qty <= 0 is marked finished (status done) by the allocation maintenance pass, negative lines no longer misread as \"picked\", and the PDA queue ignores all-negative orders",
+  "reason": "Upstream ERP sometimes sends transfer orders with negative quantities (adjustment rows); they have no pickable demand and previously sat at pending/unallocated forever in the admin list",
+  "priority": "Must have",
+  "status": "Delivered",
+  "owner": "dev",
+  "targetDate": "",
+  "remarks": "Implemented 2026-11-17 — spec docs/superpowers/specs/2026-11-17-internal-transfer-negative-qty-autoclose-design.md. Backend `src/db/internalTransferAllocate.ts` refreshTransferAllocationStatus auto-close (status -> finished + transaction_logs row reason no_positive_qty, system actor) + recomputeTransferItem picked-guard (qty > 0); `src/db/internalTransferPicking.ts` listInternalTransferQueue positive-line filter. Header-only orders untouched (sync may add lines later); mixed orders keep positive lines working. Tests: `src/db/internalTransferAllocate.test.ts` auto-close block."
+}

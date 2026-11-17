@@ -185,8 +185,34 @@ async function loadTransferReceivingSources(
 }
 
 /** internal_transfer_orders.allocation_status recompute — mirror of
- *  refreshAllocationStatus for the transfer demand world. */
+ *  refreshAllocationStatus for the transfer demand world. Runs the
+ *  negative-qty auto-close first (spec
+ *  2026-11-17-internal-transfer-negative-qty-autoclose-design.md): an order
+ *  whose lines all have qty <= 0 has no pickable demand, so it is closed as
+ *  finished instead of sitting pending forever. Header-only orders are NOT
+ *  closed — sync may insert the header before its lines arrive. */
 export async function refreshTransferAllocationStatus(dbOrTx: DbOrTx): Promise<void> {
+  const closable = await queryAll<{ id: string; status: string }>(
+    dbOrTx,
+    sql`SELECT o.id, o.status FROM internal_transfer_orders o
+        WHERE o.status IN ('pending', 'allocated', 'picking')
+          AND EXISTS (SELECT 1 FROM internal_transfer_items iti WHERE iti.transfer_order_id = o.id)
+          AND NOT EXISTS (SELECT 1 FROM internal_transfer_items iti WHERE iti.transfer_order_id = o.id AND iti.qty > 0)`
+  );
+  for (const o of closable) {
+    await dbOrTx.execute(
+      sql`UPDATE internal_transfer_orders SET status = 'finished', working_by = NULL, working_at = NULL, last_update_date = ${now()}
+          WHERE id = ${o.id} AND status = ${o.status}`
+    );
+    await logTransition(dbOrTx, {
+      entityType: "internal_transfer_order",
+      entityId: o.id,
+      fromState: o.status,
+      toState: "finished",
+      actorId: null,
+      metadata: { reason: "no_positive_qty" },
+    });
+  }
   await dbOrTx.execute(sql`
     UPDATE internal_transfer_orders ito
     SET allocation_status = agg.new_status, last_update_date = now()
@@ -213,7 +239,8 @@ export async function refreshTransferAllocationStatus(dbOrTx: DbOrTx): Promise<v
 
 /** internal_transfer_items: allocated_qty = Σ internal_transfer_allocations,
  *  picked_qty = Σ internal_transfer_packages (no boxing concept), status =
- *  'picked' once picked_qty covers qty. Mirrors recomputePickingItem. */
+ *  'picked' once picked_qty covers qty (qty > 0 — a negative line has no
+ *  pickable demand and must not read as picked). Mirrors recomputePickingItem. */
 export async function recomputeTransferItem(tx: DbOrTx, transferItemId: string): Promise<void> {
   const alloc = await queryGet<{ s: number }>(
     tx,
@@ -225,7 +252,7 @@ export async function recomputeTransferItem(tx: DbOrTx, transferItemId: string):
   );
   await tx.execute(
     sql`UPDATE internal_transfer_items SET allocated_qty = ${alloc?.s ?? 0}, picked_qty = ${picked?.s ?? 0},
-           status = CASE WHEN ${picked?.s ?? 0} >= qty THEN 'picked' ELSE 'pending' END,
+           status = CASE WHEN qty > 0 AND ${picked?.s ?? 0} >= qty THEN 'picked' ELSE 'pending' END,
            last_update_date = ${now()}
         WHERE id = ${transferItemId}`
   );

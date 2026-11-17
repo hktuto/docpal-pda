@@ -16,7 +16,10 @@ import {
   addManualInternalTransferAllocation,
   addManualInternalTransferAllocations,
   removeInternalTransferAllocation,
+  refreshTransferAllocationStatus,
+  recomputeTransferItem,
 } from "./internalTransferAllocate.js";
+import { listInternalTransferQueue } from "./internalTransferPicking.js";
 import { allocateForPickingOrder, removePickingAllocation, addManualPickingAllocation } from "./allocate.js";
 import { syncTransferPutAwayTask } from "./internalTransferPutAway.js";
 import { confirmReceivingArrival } from "./receiving.js";
@@ -587,4 +590,68 @@ test("source scope: a pair already at the rule's own org stays raw (local orders
   } finally {
     _resetFlowConfigForTests();
   }
+});
+
+// --- negative-qty auto-close (spec
+// 2026-11-17-internal-transfer-negative-qty-autoclose-design.md) -------------
+
+test("auto-close: an order whose lines are all negative is finished with a system audit row", async () => {
+  const transferId = await insertTransfer("ITO-NEG", { status: "allocated" });
+  await insertTransferItem(transferId, "RK73H1JTTD1002F", -5);
+
+  const res = await allocateForInternalTransferOrder(client.db, transferId);
+  assert.equal(res.demands, 0);
+  assert.equal(res.changed, false);
+
+  const order = await client.db.execute(sql`SELECT status FROM internal_transfer_orders WHERE id = ${transferId}`);
+  assert.equal((order[0] as any).status, "finished");
+
+  const log = await client.db.execute(sql`
+    SELECT from_state AS "fromState", to_state AS "toState", actor_id AS "actorId", metadata
+    FROM transaction_logs
+    WHERE entity_type = 'internal_transfer_order' AND entity_id = ${transferId}`);
+  assert.equal((log[0] as any).fromState, "allocated");
+  assert.equal((log[0] as any).toState, "finished");
+  assert.equal((log[0] as any).actorId, null);
+  assert.equal((log[0] as any).metadata.reason, "no_positive_qty");
+});
+
+test("auto-close: a mixed order stays open and only the positive line carries demand", async () => {
+  const transferId = await insertTransfer("ITO-MIX");
+  const posItem = await insertTransferItem(transferId, "RK73H1JTTD1002F", 600);
+  const negItem = await insertTransferItem(transferId, "RK73H1JTTD4702F", -10);
+
+  const res = await allocateForInternalTransferOrder(client.db, transferId);
+  assert.equal(res.demands, 1);
+  assert.equal(res.fullyAllocated, 1);
+
+  const order = await client.db.execute(sql`SELECT status FROM internal_transfer_orders WHERE id = ${transferId}`);
+  assert.equal((order[0] as any).status, "pending"); // open demand remains
+
+  const pos = await client.db.execute(sql`
+    SELECT allocated_qty AS "allocatedQty" FROM internal_transfer_items WHERE id = ${posItem}`);
+  assert.equal(Number((pos[0] as any).allocatedQty), 600);
+
+  // a negative line must not read as "picked" (0 >= -10 used to flip it)
+  await recomputeTransferItem(client.db, negItem);
+  const neg = await client.db.execute(sql`SELECT status FROM internal_transfer_items WHERE id = ${negItem}`);
+  assert.equal((neg[0] as any).status, "pending");
+});
+
+test("auto-close: a header-only order is NOT closed (sync may add its lines later)", async () => {
+  const transferId = await insertTransfer("ITO-EMPTY");
+  await refreshTransferAllocationStatus(client.db);
+  const order = await client.db.execute(sql`SELECT status FROM internal_transfer_orders WHERE id = ${transferId}`);
+  assert.equal((order[0] as any).status, "pending");
+});
+
+test("auto-close: an all-negative allocated order never reaches the PDA queue", async () => {
+  const negId = await insertTransfer("ITO-NEGQ", { status: "allocated" });
+  await insertTransferItem(negId, "RK73H1JTTD1002F", -5);
+  const okId = await insertTransfer("ITO-OKQ", { status: "allocated" });
+  await insertTransferItem(okId, "RK73H1JTTD1002F", 5);
+
+  const queue = await listInternalTransferQueue(client.db);
+  assert.ok(!queue.some((q) => q.id === negId));
+  assert.ok(queue.some((q) => q.id === okId));
 });

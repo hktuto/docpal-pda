@@ -96,7 +96,12 @@ export interface InternalTransferQueueRow {
 
 /** PDA queue: pickable orders (allocated/picking/issue) plus finished
  *  unlinked orders with unshelved packages (put-away pending — the detail
- *  page switches to put-away mode for those). */
+ *  page switches to put-away mode for those). Pickable orders must have at
+ *  least one positive-qty line — an all-negative order has no demand and is
+ *  auto-closed finished by refreshTransferAllocationStatus anyway (spec
+ *  2026-11-17-internal-transfer-negative-qty-autoclose-design.md); this covers
+ *  the window before the first allocation pass (e.g. sync wrote `allocated`
+ *  directly). */
 export async function listInternalTransferQueue(db: AppDb): Promise<InternalTransferQueueRow[]> {
   return queryAll<InternalTransferQueueRow>(
     db,
@@ -113,7 +118,9 @@ export async function listInternalTransferQueue(db: AppDb): Promise<InternalTran
                ito.working_by AS "workingBy", u.display_name AS "workingByName"
         FROM internal_transfer_orders ito
         LEFT JOIN users u ON u.id = ito.working_by
-        WHERE ito.status IN ('allocated', 'picking', 'issue')
+        WHERE (ito.status IN ('allocated', 'picking', 'issue')
+               AND EXISTS (SELECT 1 FROM internal_transfer_items iti_p
+                           WHERE iti_p.transfer_order_id = ito.id AND iti_p.qty > 0))
            OR (ito.status = 'finished'
                AND EXISTS (SELECT 1 FROM internal_transfer_packages itp
                            WHERE itp.transfer_order_id = ito.id AND itp.shelf_code IS NULL))
