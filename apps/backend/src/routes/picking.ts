@@ -289,7 +289,7 @@ pickingRoute.post("/picking-orders/:id/box-each-unboxed", async (c) => {
   return c.json(result, 201);
 });
 
-// All open shipping boxes, oldest first (the PDA choose-box dialog;
+// All open shipping boxes, newest first (the PDA choose-box dialog;
 // unscoped — cross-order packing means any open box is a valid target).
 pickingRoute.get("/shipping-boxes", async (c) => {
   return c.json({ boxes: await listOpenShippingBoxes(db) }, 200);

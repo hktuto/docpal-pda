@@ -40,7 +40,7 @@
         <span v-else>{{ $t('picking.scanSession.scanShelfFirst') }}</span>
       </div>
 
-      <div v-if="scanIntoBoxId" class="armed-banner">
+      <div v-if="scanIntoBoxId && !externalArmedBox" class="armed-banner">
         <span class="armed-banner-label">
           {{ $t('picking.boxesSection.armedBanner', { box: scanIntoBoxId }) }}
         </span>
@@ -82,6 +82,7 @@
         :removing="removing"
         :scan-into-box-id="scanIntoBoxId"
         :scanning-into-box="scanningIntoBox"
+        :external-box="externalArmedBox"
         @create-box="createBox"
         @choose-box="openChooseBox"
         @box-each-unboxed="boxEachUnboxed"
@@ -236,6 +237,8 @@ const boxingEach = ref(false);
 const closingBox = ref<Record<string, boolean>>({});
 const chooseBoxOpen = ref(false);
 const chooseBoxes = ref<OpenShippingBox[] | null>(null);
+/** The OpenShippingBox row of the last chosen cross-order box (for the card). */
+const chosenBox = ref<OpenShippingBox | null>(null);
 
 const review = ref<{
   rows: { parsed: OcrInput; options: CandidateOptions }[];
@@ -665,6 +668,17 @@ async function load() {
       const armed = order.value.boxes.find((b) => b.id === scanIntoBoxId.value);
       if (armed && armed.status !== "open") {
         scanIntoBoxId.value = null;
+      } else if (!armed) {
+        // Cross-order armed box: refresh its card (package count) and disarm
+        // when it is no longer open anywhere.
+        try {
+          const open = await warehouse.listOpenShippingBoxes();
+          const still = open.find((b) => b.id === scanIntoBoxId.value);
+          if (still) chosenBox.value = still;
+          else scanIntoBoxId.value = null;
+        } catch {
+          // ignore — the stale box fails loudly on the next scan
+        }
       }
     }
     const nextBoxSelections: Record<string, string> = {};
@@ -780,9 +794,28 @@ async function openChooseBox() {
 function onChooseBox(boxId: string) {
   chooseBoxOpen.value = false;
   scanIntoBoxId.value = boxId;
+  chosenBox.value = chooseBoxes.value?.find((b) => b.id === boxId) ?? null;
   boxesExpanded.value = true;
-  showToast(t("picking.boxesSection.armedBanner", { box: boxId }));
 }
+
+/** The chosen cross-order box, surfaced as a card in the boxes section. */
+const externalArmedBox = computed<OpenShippingBox | null>(() => {
+  if (!scanIntoBoxId.value || !order.value) return null;
+  // The order's own boxes already have cards there — nothing extra to show.
+  if (order.value.boxes.some((b) => b.id === scanIntoBoxId.value)) return null;
+  const found = chosenBox.value?.id === scanIntoBoxId.value ? chosenBox.value : null;
+  return found ?? {
+    id: scanIntoBoxId.value,
+    orderId: null,
+    orderNo: null,
+    packageCount: 0,
+    boxSize: null,
+    netWeight: null,
+    grossWeight: null,
+    destinationCountry: null,
+    createdDate: "",
+  };
+});
 
 async function addAllToBox(boxId: string) {
   if (anyAddingAll.value) return;

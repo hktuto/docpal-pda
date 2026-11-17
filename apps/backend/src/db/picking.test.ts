@@ -2514,7 +2514,7 @@ test("shipping-boxes list: open boxes only, oldest first, package counts + creat
   await client.db.execute(sql`UPDATE shipping_boxes SET status = 'closed' WHERE id = ${boxIds[1]}`);
 
   const boxes = await listOpenShippingBoxes(client.db);
-  assert.deepEqual(boxes.map((b) => b.id), [boxIds[0], emptyBox.id]);
+  assert.deepEqual(boxes.map((b) => b.id), [emptyBox.id, boxIds[0]]);
   for (const b of boxes) {
     assert.equal(b.orderId, orderId);
     assert.equal(b.orderNo, "SO-DEMO-0001");
@@ -2523,8 +2523,8 @@ test("shipping-boxes list: open boxes only, oldest first, package counts + creat
     assert.equal(b.grossWeight, null);
     assert.ok(b.createdDate instanceof Date);
   }
-  assert.equal(boxes[0].packageCount, 1);
-  assert.equal(boxes[1].packageCount, 0);
+  assert.equal(boxes[0].packageCount, 0);
+  assert.equal(boxes[1].packageCount, 1);
 
   // orderless box → null orderId/orderNo (LEFT JOIN)
   await client.db.execute(

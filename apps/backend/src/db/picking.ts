@@ -786,7 +786,7 @@ export interface OpenShippingBoxRow {
   createdDate: Date;
 }
 
-/** All open shipping boxes, oldest first. */
+/** All open shipping boxes, newest first. */
 export async function listOpenShippingBoxes(db: AppDb): Promise<OpenShippingBoxRow[]> {
   return queryAll<OpenShippingBoxRow>(
     db,
@@ -797,7 +797,7 @@ export async function listOpenShippingBoxes(db: AppDb): Promise<OpenShippingBoxR
         FROM shipping_boxes sb
         LEFT JOIN picking_orders po ON po.id = sb.picking_order_id
         WHERE sb.status = 'open'
-        ORDER BY sb.created_date ASC, sb.id ASC`
+        ORDER BY sb.created_date DESC, sb.id DESC`
   );
 }
 

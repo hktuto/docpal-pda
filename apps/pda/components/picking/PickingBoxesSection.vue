@@ -46,7 +46,36 @@
   </div>
 
   <div v-if="expanded" class="boxes-list">
-    <p v-if="!boxes?.length" class="empty">{{ $t('common.noBoxes') }}</p>
+    <p v-if="!boxes?.length && !externalBox" class="empty">{{ $t('common.noBoxes') }}</p>
+
+    <!-- A cross-order box chosen via "選擇箱" — same card layout as the
+         order's own boxes so the armed scan-into-box state is obvious. -->
+    <div v-if="externalBox" class="card box-card box-card--chosen">
+      <DetailRow :label="$t('picking.boxesSection.boxId')">
+        <span class="card__title">{{ externalBox.id }}</span>
+      </DetailRow>
+      <DetailRow :label="$t('picking.boxesSection.status')">
+        <span class="badge" :class="badgeClass('open')">{{ statusLabel.box('open') }}</span>
+      </DetailRow>
+      <DetailRow v-if="externalBox.orderNo" :label="$t('picking.boxesSection.orderLabel')" :value="externalBox.orderNo" />
+      <DetailRow :label="$t('picking.boxesSection.packages')" :value="externalBox.packageCount" />
+      <div class="box-actions">
+        <button
+          class="btn btn--small"
+          :class="{ 'btn--ghost': scanIntoBoxId !== externalBox.id }"
+          :disabled="scanningIntoBox"
+          @click="emit('toggle-scan-into-box', externalBox.id)"
+        >
+          <template v-if="scanningIntoBox && scanIntoBoxId === externalBox.id">
+            <InlineSpinner />
+          </template>
+          {{ scanIntoBoxId === externalBox.id ? $t('picking.boxesSection.scanIntoBoxStop') : $t('picking.boxesSection.scanIntoBox') }}
+        </button>
+      </div>
+      <p v-if="scanIntoBoxId === externalBox.id" class="scan-into-hint">
+        {{ $t('picking.boxesSection.scanIntoBoxHint') }}
+      </p>
+    </div>
 
     <div
       v-for="box in boxes"
@@ -148,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import type { PickingOrderDetail } from "~/services/types";
+import type { OpenShippingBox, PickingOrderDetail } from "~/services/types";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { toLabelDateCode } from "~/utils/dateCode";
 
@@ -192,6 +221,9 @@ const props = defineProps<{
   /** The box armed for cross-order "scan item into box", if any. */
   scanIntoBoxId: string | null;
   scanningIntoBox: boolean;
+  /** A box chosen via the choose-box dialog from ANOTHER order, shown as a
+   *  card above the order's own boxes (null when none / own box armed). */
+  externalBox: OpenShippingBox | null;
 }>();
 
 const emit = defineEmits<{
@@ -255,6 +287,10 @@ function toggleContents(boxId: string) {
 
 .box-card {
   margin-bottom: 1rem;
+}
+
+.box-card--chosen {
+  border-left: 3px solid var(--primary, #2563eb);
 }
 
 .box-actions {
