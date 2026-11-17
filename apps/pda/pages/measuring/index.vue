@@ -1,5 +1,8 @@
 <template>
   <AppListPage
+    v-model:search="search"
+    search-placeholder="measuring.searchPlaceholder"
+    :apply-on-search="false"
     :loading="loading"
     :error="loadError"
     :empty="orders.length === 0"
@@ -10,23 +13,13 @@
     hide-footer
     :reload="load"
   >
-    <template #header>
-      <input
-        v-model="search"
-        type="search"
-        class="search-input"
-        :placeholder="$t('measuring.searchPlaceholder')"
-        @click.stop
-      />
-      <p class="page-hint">{{ $t('measuring.hint') }}</p>
-    </template>
 
     <AppListRow
       v-for="order in orders"
       :key="order.orderId"
       :to="`/measuring/order/${order.orderId}`"
       :title="order.orderNo"
-      :meta="[t('measuring.boxCount', { count: order.boxes.length })]"
+      :meta="[t('measuring.boxCount', { count: order.boxCount })]"
     />
   </AppListPage>
 </template>
@@ -95,20 +88,3 @@ useHardwareScanner({
 });
 </script>
 
-<style scoped>
-.search-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  color: var(--text);
-}
-
-.page-hint {
-  margin: -0.25rem 0 1rem;
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-</style>
