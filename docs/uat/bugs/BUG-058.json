@@ -1,0 +1,14 @@
+{
+ "id": "BUG-058",
+ "dateFound": "2026-11-17",
+ "functionId": "PDA-010",
+ "description": "Put-away stamped the inventory lot with a different brand's wcl_item_no than the receiving line: assignScanToBoxTx resolved the lot's wcl_item_no via `SELECT wcl_item_no FROM parts WHERE part_no = ? LIMIT 1`, and parts.part_no is NOT unique — the upstream master carries several rows per part_no under different brands/wcl item nos (ABLIC→SII rename: same bare part_no S-8261AAJMD-G2JT2G as ABLIC/S-8261AAJMD-G2JT2G and SII+S-8261AAJMD-G2JT2G; KOA rows with +/*// separator variants). The arbitrary LIMIT 1 pick stamped an ABLIC receiving order's lot with SII+S-8261AAJMD-G2JT2G (order 01M7KS0CSGSGYNNF1W49TDBHRV, 192.168.3.99, 2026-11-17; second case same day KOA*RK73H2ATTD 1003F vs KOA+RK73H2ATTD 1003F), so stock search shows the wrong brand and the lot joins a different parts-master row",
+ "reproSteps": "Put away a receiving line whose part_no exists in the parts master under more than one brand/wcl_item_no (e.g. any ABLIC part also listed under SII) → the materialized inventory lot's wcl_item_no may be the other brand's value",
+ "severity": "Major",
+ "status": "Fixed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Backfill — fix in apps/backend/src/db/putaway.ts assignScanToBoxTx: the parts lookup now orders by exact wcl_item_no match with the receiving line first (ORDER BY (wcl_item_no IS NOT DISTINCT FROM <item wcl>) DESC) before LIMIT 1; regression test in apps/backend/src/db/putaway.test.ts (assign: lot wcl_item_no prefers the parts row matching the receiving line). Prod data correction for the two 2026-11-17 lots (update inventory_lots.wcl_item_no back to the receiving line's value) is a separate manual step"
+}

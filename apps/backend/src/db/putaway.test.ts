@@ -465,6 +465,56 @@ test("assign: materializes lot with shelf location, sources, put_away_qty, ledge
   }
 });
 
+test("assign: lot wcl_item_no prefers the parts row matching the receiving line (duplicate part_no, brand rename)", async () => {
+  await reseed(client);
+  // Upstream master carries an SII and an ABLIC row for the same bare part_no
+  // (ABLIC→SII rename, prod 2026-11-17). The receiving line is the ABLIC
+  // identity — the lot must be stamped with the ABLIC wcl item no, not an
+  // arbitrary parts row for the part_no.
+  const partNo = "S-8261AAJMD-G2JT2G";
+  await queryRun(
+    client.db,
+    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no, description) VALUES
+        ('test-part-sii', 'SII', ${partNo}, 'SII+S-8261AAJMD-G2JT2G', 'dup'),
+        ('test-part-ablic', 'ABLIC', ${partNo}, 'ABLIC/S-8261AAJMD-G2JT2G', 'dup')`
+  );
+  const actorId = await actorIdOf("operator");
+  await insertReceivingOrder(client.db, "04958210", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-11-17" },
+    invoices: [
+      {
+        invoiceNo: "INV-ABLIC-01",
+        wclCompanyName: "WCL Components Ltd",
+        totalQty: 9000,
+        totalCtn: 1,
+        items: [
+          {
+            partNo,
+            wclItemNo: "ABLIC/S-8261AAJMD-G2JT2G",
+            poNo: "PO-ABLIC-1",
+            poLine: "1",
+            lineQty: 9000,
+            orgId: 2,
+            subInventoryCode: "STORE1",
+          },
+        ],
+      },
+    ],
+  });
+  const orderId = await orderIdOf("04958210");
+  await confirmReceivingArrival(client.db, orderId, actorId);
+  const itemId = await itemIdOf(orderId, partNo);
+  const scan = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 9000 });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
+  await assignScanToBox(client.db, { scanId: scan.id, shelfBoxId: box.id, actorId });
+
+  const lot = await queryGet<{ wclItemNo: string | null }>(
+    client.db,
+    sql`SELECT wcl_item_no AS "wclItemNo" FROM inventory_lots WHERE box_id = ${box.id}`
+  );
+  assert.equal(lot!.wclItemNo, "ABLIC/S-8261AAJMD-G2JT2G");
+});
+
 test("assign: dateCodeFormat \"yyww\" stores the label code unchanged (identity conversion)", async () => {
   await reseed(client);
   _setDateCodeFormatForTests("yyww");

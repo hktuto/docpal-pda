@@ -1091,11 +1091,19 @@ async function assignScanToBoxTx(
 
   // The lot's wcl_item_no is the parts-master value (stock search joins
   // parts ON p.wcl_item_no = il.wcl_item_no); fall back to the item's copy.
+  // parts.part_no is NOT unique — the upstream master can carry several rows
+  // for one part_no under different brands/wcl item nos (ABLIC→SII rename,
+  // KOA +/* separator variants), so prefer the row whose wcl_item_no matches
+  // the receiving line's; a bare LIMIT 1 pick is arbitrary and has stamped
+  // lots with a different brand's wcl item no (prod 2026-11-17).
   const partWclItemNo =
     (
       await queryGet<{ wclItemNo: string | null }>(
         tx,
-        sql`SELECT wcl_item_no AS "wclItemNo" FROM parts WHERE part_no = ${item.partNo} LIMIT 1`
+        sql`SELECT wcl_item_no AS "wclItemNo" FROM parts
+            WHERE part_no = ${item.partNo}
+            ORDER BY (wcl_item_no IS NOT DISTINCT FROM ${item.wclItemNo}) DESC
+            LIMIT 1`
       )
     )?.wclItemNo ?? item.wclItemNo;
 
