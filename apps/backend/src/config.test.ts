@@ -110,6 +110,21 @@ test("parseFlowConfig: put-away task key validation", () => {
   assert.throws(() => parseFlowConfig('{"steps":{"picking":{"skipScan":true}}}'), /unknown key "skipScan"/);
 });
 
+test("parseFlowConfig: goods-verify mode merges over the \"confirm\" default", () => {
+  const cfg = parseFlowConfig('{"steps":{"goods-verify":{"mode":"count"}}}');
+  assert.equal(cfg.goodsVerify.mode, "count");
+  assert.equal(cfg.steps["goods-verify"].enabled, true);
+  // default when unset
+  assert.equal(parseFlowConfig(undefined).goodsVerify.mode, "confirm");
+});
+
+test("parseFlowConfig: goods-verify mode validation", () => {
+  assert.throws(() => parseFlowConfig('{"steps":{"goods-verify":{"mode":"magic"}}}'), /mode must be "confirm" or "count"/);
+  assert.throws(() => parseFlowConfig('{"steps":{"goods-verify":{"mode":true}}}'), /mode must be "confirm" or "count"/);
+  // the key only exists on goods-verify
+  assert.throws(() => parseFlowConfig('{"steps":{"picking":{"mode":"count"}}}'), /unknown key "mode"/);
+});
+
 test("parseFlowConfig: allowedOrgIds merges over the [] default", () => {
   assert.deepEqual(parseFlowConfig(undefined).allowedOrgIds, []);
   assert.deepEqual(parseFlowConfig("{}").allowedOrgIds, []);

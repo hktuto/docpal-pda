@@ -35,6 +35,9 @@ const KNOWN_EVENT_TYPES = [
   "picking_order.updated",
   "shipping_box.shipped",
   "goods_verify.tasks_created",
+  "goods_verify.count_updated",
+  "goods_verify.task_confirmed",
+  "goods_verify.task_rejected",
   "receiving_order.upserted",
 ] as const;
 

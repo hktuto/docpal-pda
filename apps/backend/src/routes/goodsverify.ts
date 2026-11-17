@@ -7,6 +7,7 @@ import {
   getGoodsVerifyTaskDetail,
   getGoodsVerifyTaskRow,
   listGoodsVerifyTasks,
+  saveGoodsVerifyCount,
   verifyGoodsVerifyTask,
 } from "../db/goodsverify.js";
 import { actorFrom } from "../auth/middleware.js";
@@ -46,9 +47,29 @@ goodsVerifyRoute.get("/goods-verify-tasks", async (c) => {
   );
 });
 
-// Task with its full movement summary.
+// Task with its full movement summary + count-mode lines/progress.
 goodsVerifyRoute.get("/goods-verify-tasks/:id", async (c) => {
   return c.json(await getGoodsVerifyTaskDetail(db, c.req.param("id")), 200);
+});
+
+// Count mode (spec 2026-11-18-goods-verify-count-mode-design.md): per-line
+// blind-count submission — {partNo, qty}, upsert keyed by (task_id, part_no);
+// the first saved line flips pending → counted and the admin sees it live.
+// Actor from the JWT; 409 when the flow runs in "confirm" mode.
+goodsVerifyRoute.post("/goods-verify-tasks/:id/counts", async (c) => {
+  const body = await readJson<{ partNo?: string; qty?: unknown }>(c);
+  if (typeof body.partNo !== "string" || body.partNo.trim() === "") {
+    throw new HTTPException(400, { message: "part_no_required" });
+  }
+  return c.json(
+    await saveGoodsVerifyCount(db, {
+      taskId: c.req.param("id"),
+      partNo: body.partNo.trim(),
+      qty: body.qty,
+      actorId: actorFrom(c).id,
+    }),
+    200
+  );
 });
 
 // Verify a pending task — pure confirmation. Stamps verified_by/at

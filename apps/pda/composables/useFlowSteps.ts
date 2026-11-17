@@ -65,6 +65,13 @@ const dateCodeFormat = ref<DateCodeFormat>("wwyy");
 // first fetch resolves, and backends predating the key omit it.
 const cnReceiving = ref<boolean>(false);
 
+// Resolved goodsVerify mode (GET /config goodsVerify.mode): "confirm"
+// (default — one-press pure confirmation) | "count" (PDA blind-counts per
+// line; an admin compares against live totals and confirms/rejects). Default
+// "confirm" — pages behave as before until the first fetch resolves, and
+// backends predating the key omit it.
+const goodsVerifyMode = ref<"confirm" | "count">("confirm");
+
 let loading: Promise<void> | null = null;
 
 async function loadFlowSteps(): Promise<void> {
@@ -88,6 +95,9 @@ async function loadFlowSteps(): Promise<void> {
       }
       if (config.cnReceiving) {
         cnReceiving.value = config.cnReceiving;
+      }
+      if (config.goodsVerify?.mode) {
+        goodsVerifyMode.value = config.goodsVerify.mode;
       }
       if (config.viewConfig) {
         applyViewConfig(config.viewConfig);
@@ -114,6 +124,7 @@ export function useFlowSteps() {
     pickingShelfScan: readonly(pickingShelfScan),
     dateCodeFormat: readonly(dateCodeFormat),
     cnReceiving: readonly(cnReceiving),
+    goodsVerifyMode: readonly(goodsVerifyMode),
     loadFlowSteps,
   };
 }

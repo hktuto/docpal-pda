@@ -321,10 +321,26 @@ export const PICKING_SHELF_SCAN_MODES: readonly PickingShelfScanMode[] = ["off",
 
 export const DATE_CODE_FORMATS: readonly DateCodeFormat[] = ["wwyy", "yyww"];
 
+/** Goods-verify (每日盤點) mode (spec
+ *  docs/superpowers/specs/2026-11-18-goods-verify-count-mode-design.md):
+ *  confirm — PDA one-press pure confirmation of the shelf movement summary
+ *            (the HK way, default);
+ *  count   — PDA blind-counts per-line quantities, an admin compares them
+ *            against live shelf totals and confirms or rejects (other
+ *            warehouses). */
+export type GoodsVerifyMode = "confirm" | "count";
+
+export const GOODS_VERIFY_MODES: readonly GoodsVerifyMode[] = ["confirm", "count"];
+
+export interface GoodsVerifyConfig {
+  mode: GoodsVerifyMode;
+}
+
 export interface FlowConfig {
   steps: Record<FlowStep, { enabled: boolean }>;
   pickingAllocation: PickingAllocationConfig;
   putAway: PutAwayConfig;
+  goodsVerify: GoodsVerifyConfig;
   /** Org partitions this warehouse accepts; [] = all orgs (no filtering). */
   allowedOrgIds: number[];
   /** Stock age threshold (years): a lot whose WWYY date code is older counts
@@ -503,6 +519,7 @@ function defaultFlowConfig(): FlowConfig {
     steps,
     pickingAllocation: { allowDockStock: true },
     putAway: { autoCreateTasks: false, suggestShelf: "existing-stock", skipScan: false },
+    goodsVerify: { mode: "confirm" },
     allowedOrgIds: [],
     outdatedStockYears: 2,
     receivingSubInventoryRules: [],
@@ -904,6 +921,11 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
             throw new Error('[config] flow config.steps["put-away"].skipScan must be a boolean');
           }
           cfg.putAway.skipScan = stepValue;
+        } else if (stepKey === "mode" && step === "goods-verify") {
+          if (typeof stepValue !== "string" || !(GOODS_VERIFY_MODES as readonly string[]).includes(stepValue)) {
+            throw new Error('[config] flow config.steps["goods-verify"].mode must be "confirm" or "count"');
+          }
+          cfg.goodsVerify.mode = stepValue as GoodsVerifyMode;
         } else {
           throw new Error(`[config] flow config.steps["${step}"]: unknown key "${stepKey}"`);
         }
@@ -973,6 +995,11 @@ export function allowDockStock(): boolean {
 /** Put-away config (spec 2026-08-10-put-away-tasks-design.md). */
 export function putAwayConfig(): PutAwayConfig {
   return flowConfig.putAway;
+}
+
+/** Goods-verify mode (spec 2026-11-18-goods-verify-count-mode-design.md). */
+export function goodsVerify(): GoodsVerifyConfig {
+  return flowConfig.goodsVerify;
 }
 
 /** Org partitions this warehouse accepts; [] = all orgs (no filtering). */
@@ -1087,6 +1114,11 @@ export function _setPickingAllocationForTests(allocation: Partial<PickingAllocat
 /** Test-only override for the put-away config. */
 export function _setPutAwayConfigForTests(putAway: Partial<PutAwayConfig>): void {
   flowConfig.putAway = { ...flowConfig.putAway, ...putAway };
+}
+
+/** Test-only override for the goods-verify mode. */
+export function _setGoodsVerifyConfigForTests(goodsVerifyCfg: Partial<GoodsVerifyConfig>): void {
+  flowConfig.goodsVerify = { ...flowConfig.goodsVerify, ...goodsVerifyCfg };
 }
 
 /** Test-only override for the accepted org partitions. */

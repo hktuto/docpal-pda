@@ -141,6 +141,29 @@ export const goodsVerifyTasks = pgTable(
   })
 );
 
+// Per-line blind-count submissions in "count" mode (spec
+// 2026-11-18-goods-verify-count-mode-design.md): the operator saves the qty
+// they found on the shelf per moved part; the admin compares these against
+// live shelf totals. Unique (task_id, part_no) — re-counts overwrite.
+export const goodsVerifyTaskCounts = pgTable(
+  "goods_verify_task_counts",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id").notNull().references(() => goodsVerifyTasks.id),
+    partNo: text("part_no").notNull(), // must exist in the task's movements jsonb
+    countedQty: integer("counted_qty").notNull(), // physical count (>= 0)
+    countedBy: text("counted_by").references(() => users.id),
+    countedAt: timestamp("counted_at", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+  },
+  (t) => ({
+    taskPartUq: uniqueIndex("goods_verify_task_counts_task_part_unique").on(t.taskId, t.partNo),
+    taskIdx: index("idx_goods_verify_task_counts_task").on(t.taskId),
+    qtyCheck: check("chk_goods_verify_task_counts_qty", sql`counted_qty >= 0`),
+  })
+);
+
 // Put-away tasks (spec 2026-08-10-put-away-tasks-design.md): one task per
 // receiving order, auto-created on arrival when FLOW_CONFIG
 // steps.put-away.autoCreateTasks is on; completed by the auto-clear in

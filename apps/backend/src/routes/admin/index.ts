@@ -46,6 +46,7 @@ import { adminVmiPickingOrderRoute } from "./vmiPickingOrder.js";
 import { adminReceivingCnRoute } from "./receivingCn.js";
 import { adminTaskAssignmentsRoute } from "./taskAssignments.js";
 import { adminCancelRecordsRoute } from "./cancelRecords.js";
+import { adminGoodsVerifyRoute } from "./goodsVerify.js";
 import { adminInternalTransferRoute } from "./internalTransferOrders.js";
 import { adminBugReportsRoute } from "./bugReports.js";
 import { adminSequencesRoute } from "./sequences.js";
@@ -502,6 +503,9 @@ adminRoute.route("/", adminTaskAssignmentsRoute);
 adminRoute.route("/", adminCancelRecordsRoute);
 // Internal transfer orders — read-only view of the upstream-synced tables.
 adminRoute.route("/", adminInternalTransferRoute);
+// Goods-verify count-mode actions — admin confirm/reject (spec
+// 2026-11-18-goods-verify-count-mode-design.md).
+adminRoute.route("/", adminGoodsVerifyRoute);
 
 // Bug report triage queue (spec 2026-11-05-in-app-bug-report-design.md) —
 // sub-router uses relative paths, mounted at the resource path.

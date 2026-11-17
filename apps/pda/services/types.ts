@@ -1546,6 +1546,11 @@ export interface FlowConfig {
    *  read /put-away-cn/* instead of the standard put-away endpoints.
    *  Optional — backends predating the key omit it (= off). */
   cnReceiving?: boolean;
+  /** Resolved steps.goods-verify section: mode "confirm" (default, HK —
+   *  one-press pure confirmation) | "count" (PDA blind-counts per line, an
+   *  admin compares against live totals and confirms/rejects). Optional —
+   *  backends predating the key omit it (= "confirm"). */
+  goodsVerify?: { mode?: "confirm" | "count" };
 }
 
 /** GET /config viewConfig section (fully resolved server-side; the client
@@ -1566,11 +1571,15 @@ export interface PdaViewConfigDto {
 // ------------------------------------------------------------------
 // Goods verify — DTOs matching apps/backend (:3002), see
 // docs/backend/api-design.md §Goods verify (redesigned 2026-10-17 —
-// shelf summary). Day-end generation creates one pending task per shelf
-// with net on-hand movement that day (idempotent per task_date + shelf_code).
-// The `movements` array carries the per-part summary. Verify is a pure
-// confirmation — no countedQty, no adjustment.
-// Statuses are plain strings (pending | verified | skipped).
+// shelf summary; count mode added 2026-11-18). Day-end generation
+// creates one pending task per shelf with net on-hand movement that day
+// (idempotent per task_date + shelf_code). The `movements` array carries
+// the per-part summary.
+// Mode "confirm" (default): verify is a pure confirmation — no countedQty,
+// no adjustment. Mode "count": the operator blind-counts per line; an admin
+// compares against live totals and confirms/rejects.
+// Statuses are plain strings (pending | counted | verified; skipped is
+// declared but unused).
 // ------------------------------------------------------------------
 
 /** One part's movement summary within a shelf task. */
@@ -1578,13 +1587,14 @@ export interface GoodsVerifyMovement {
   partNo: string;
   wclItemNo: string | null;
   description: string | null;
-  /** Net on-hand quantity change this day (+/-). */
+  /** Net on-hand quantity change this day (+/-). NEVER render this on the
+   *  PDA in count mode — the count must be blind. */
   qtyChange: number;
   /** Current total on-hand quantity across all lots for this part on this shelf. */
   currentTotal: number;
 }
 
-/** GET /goods-verify-tasks row (also the verify response shape). */
+/** GET /goods-verify-tasks row (also the verify/count response shape). */
 export interface GoodsVerifyTaskListRow {
   id: string;
   /** YYYY-MM-DD. */
@@ -1593,6 +1603,8 @@ export interface GoodsVerifyTaskListRow {
   status: string;
   movements: GoodsVerifyMovement[];
   movementsCount: number;
+  /** Count-mode lines submitted (0 in confirm mode). */
+  countsCount: number;
   verifiedBy: string | null;
   verifiedAt: string | null;
 }
@@ -1605,11 +1617,23 @@ export interface GoodsVerifyTaskFilters {
   shelfCode?: string;
 }
 
-/** GET /goods-verify-tasks/:id — task with its full movement summary. */
+/** A movement line enriched server-side: the snapshot fields plus the LIVE
+ *  shelf total (the admin's comparison baseline — the currentTotal snapshot
+ *  goes stale after later stock moves) and the submitted count. */
+export interface GoodsVerifyTaskLine extends GoodsVerifyMovement {
+  liveTotal: number;
+  countedQty: number | null;
+  countedBy: string | null;
+  countedAt: string | null;
+}
+
+/** GET /goods-verify-tasks/:id — task + enriched lines + count progress. */
 export interface GoodsVerifyTaskDetail {
   task: GoodsVerifyTaskListRow & {
     createdDate: string;
   };
+  lines: GoodsVerifyTaskLine[];
+  progress: { countedLines: number; totalLines: number };
 }
 
 // ------------------------------------------------------------------

@@ -9,10 +9,14 @@ import { allocateAll } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
 import { assignScanToBox, closeShelfBox, createShelfBox, recordPutAwayScan } from "./putaway.js";
 import { runGoodsVerifyDayEnd } from "../jobs/goodsVerifyDayEnd.js";
+import { _resetFlowConfigForTests, _setGoodsVerifyConfigForTests } from "../config.js";
 import {
+  confirmGoodsVerifyTask,
   generateGoodsVerifyTasks,
   getGoodsVerifyTaskDetail,
   listGoodsVerifyTasks,
+  rejectGoodsVerifyTask,
+  saveGoodsVerifyCount,
   verifyGoodsVerifyTask,
 } from "./goodsverify.js";
 
@@ -298,4 +302,180 @@ test("runGoodsVerifyDayEnd: covers yesterday's movements, idempotent re-run", as
 
   const r2 = await runGoodsVerifyDayEnd(client.db);
   assert.equal(r2.created, 0);
+});
+
+// --- count mode (spec 2026-11-18-goods-verify-count-mode-design.md) ---------
+
+/** Seed a pending task on A0103 (two moved parts, live totals 600 + 1200). */
+async function countFixture(t: { after: (fn: () => void) => void }) {
+  await reseed(client);
+  _setGoodsVerifyConfigForTests({ mode: "count" });
+  t.after(() => _resetFlowConfigForTests());
+  const actorId = await actorIdOf();
+  await putAwayFixture({ close: true });
+  await generateGoodsVerifyTasks(client.db, {});
+  const row = (await listGoodsVerifyTasks(client.db, {}))[0];
+  return { actorId, taskId: row.id };
+}
+
+const PART_A = "RK73B1JTTD181G"; // live total 600 on A0103
+const PART_B = "RK73H1JTTD4702F"; // live total 1200 on A0103
+
+test("count mode: save line flips pending→counted, upsert overwrites, detail lines carry live totals + progress", async (t) => {
+  const { actorId, taskId } = await countFixture(t);
+
+  // one-press verify is the operator's action in confirm mode only
+  const verifyBlocked = await catchHttp(verifyGoodsVerifyTask(client.db, { taskId, actorId }));
+  assert.equal(verifyBlocked.status, 409);
+  assert.equal(verifyBlocked.message, "goods_verify_confirm_mode_disabled");
+
+  const saved = await saveGoodsVerifyCount(client.db, { taskId, partNo: PART_A, qty: 600, actorId });
+  assert.equal(saved.status, "counted");
+  assert.equal(saved.countsCount, 1);
+
+  // re-count the same line overwrites (unique (task_id, part_no))
+  const again = await saveGoodsVerifyCount(client.db, { taskId, partNo: PART_A, qty: 599, actorId });
+  assert.equal(again.countsCount, 1);
+
+  const detail = await getGoodsVerifyTaskDetail(client.db, taskId);
+  assert.equal(detail.task.status, "counted");
+  assert.equal(detail.progress.totalLines, 2);
+  assert.equal(detail.progress.countedLines, 1);
+  const lineA = detail.lines.find((l) => l.partNo === PART_A)!;
+  assert.equal(lineA.liveTotal, 600);
+  assert.equal(lineA.countedQty, 599);
+  assert.equal(lineA.countedBy, actorId);
+  assert.ok(lineA.countedAt);
+  const lineB = detail.lines.find((l) => l.partNo === PART_B)!;
+  assert.equal(lineB.liveTotal, 1200);
+  assert.equal(lineB.countedQty, null);
+  assert.equal(lineB.countedBy, null);
+  // the generation-time snapshot is still carried alongside
+  assert.equal(lineB.currentTotal, 1200);
+
+  await saveGoodsVerifyCount(client.db, { taskId, partNo: PART_B, qty: 1200, actorId });
+  const full = await getGoodsVerifyTaskDetail(client.db, taskId);
+  assert.equal(full.progress.countedLines, 2);
+  assert.equal((await listGoodsVerifyTasks(client.db, {}))[0].countsCount, 2);
+});
+
+test("count mode save guards: 404, mode, status, unknown part, bad qty", async (t) => {
+  const { actorId, taskId } = await countFixture(t);
+
+  const notFound = await catchHttp(
+    saveGoodsVerifyCount(client.db, { taskId: randomUUID(), partNo: PART_A, qty: 1, actorId })
+  );
+  assert.equal(notFound.status, 404);
+
+  // confirm mode disables the count endpoints
+  _setGoodsVerifyConfigForTests({ mode: "confirm" });
+  const modeBlocked = await catchHttp(saveGoodsVerifyCount(client.db, { taskId, partNo: PART_A, qty: 1, actorId }));
+  assert.equal(modeBlocked.status, 409);
+  assert.equal(modeBlocked.message, "goods_verify_count_mode_disabled");
+  _setGoodsVerifyConfigForTests({ mode: "count" });
+
+  const unknownPart = await catchHttp(saveGoodsVerifyCount(client.db, { taskId, partNo: "NOPE", qty: 1, actorId }));
+  assert.equal(unknownPart.status, 400);
+  assert.equal(unknownPart.message, "goods_verify_part_not_found");
+
+  for (const qty of [-1, 1.5, "5"]) {
+    const badQty = await catchHttp(saveGoodsVerifyCount(client.db, { taskId, partNo: PART_A, qty, actorId }));
+    assert.equal(badQty.status, 400);
+    assert.equal(badQty.message, "invalid_count_qty");
+  }
+
+  // a verified task can no longer be counted
+  await saveGoodsVerifyCount(client.db, { taskId, partNo: PART_A, qty: 600, actorId });
+  await saveGoodsVerifyCount(client.db, { taskId, partNo: PART_B, qty: 1200, actorId });
+  await confirmGoodsVerifyTask(client.db, { taskId, actorId });
+  const verified = await catchHttp(saveGoodsVerifyCount(client.db, { taskId, partNo: PART_A, qty: 1, actorId }));
+  assert.equal(verified.status, 409);
+  assert.equal(verified.message, "goods_verify_task_not_countable");
+});
+
+test("count mode confirm: all lines matching live totals → verified with transition log", async (t) => {
+  const { actorId, taskId } = await countFixture(t);
+  const adminId = await actorIdOf("admin");
+
+  const tooEarly = await catchHttp(confirmGoodsVerifyTask(client.db, { taskId, actorId: adminId }));
+  assert.equal(tooEarly.status, 409);
+  assert.equal(tooEarly.message, "goods_verify_task_not_counted");
+
+  await saveGoodsVerifyCount(client.db, { taskId, partNo: PART_A, qty: 600, actorId });
+  const incomplete = await catchHttp(confirmGoodsVerifyTask(client.db, { taskId, actorId: adminId }));
+  assert.equal(incomplete.status, 409);
+  assert.equal(incomplete.message, "goods_verify_task_incomplete");
+
+  // recount part A wrong → mismatch against the LIVE total
+  await saveGoodsVerifyCount(client.db, { taskId, partNo: PART_A, qty: 599, actorId });
+  await saveGoodsVerifyCount(client.db, { taskId, partNo: PART_B, qty: 1200, actorId });
+  const mismatch = await catchHttp(confirmGoodsVerifyTask(client.db, { taskId, actorId: adminId }));
+  assert.equal(mismatch.status, 409);
+  assert.equal(mismatch.message, "goods_verify_task_mismatch");
+  assert.equal((await listGoodsVerifyTasks(client.db, {}))[0].status, "counted");
+
+  // fix the line → confirm succeeds
+  await saveGoodsVerifyCount(client.db, { taskId, partNo: PART_A, qty: 600, actorId });
+  const confirmed = await confirmGoodsVerifyTask(client.db, { taskId, actorId: adminId });
+  assert.equal(confirmed.status, "verified");
+  assert.equal(confirmed.verifiedBy, adminId);
+  assert.ok(confirmed.verifiedAt);
+
+  const taskLog = await queryGet<{ fromState: string; toState: string; actorId: string }>(
+    client.db,
+    sql`SELECT from_state AS "fromState", to_state AS "toState", actor_id AS "actorId"
+        FROM transaction_logs WHERE entity_type = 'goods_verify_task' AND entity_id = ${taskId}
+        ORDER BY created_date DESC LIMIT 1`
+  );
+  assert.deepEqual(taskLog, { fromState: "counted", toState: "verified", actorId: adminId });
+});
+
+test("count mode reject: counted → pending with counts cleared; re-count then confirm works", async (t) => {
+  const { actorId, taskId } = await countFixture(t);
+  const adminId = await actorIdOf("admin");
+
+  const tooEarly = await catchHttp(rejectGoodsVerifyTask(client.db, { taskId, actorId: adminId }));
+  assert.equal(tooEarly.status, 409);
+
+  await saveGoodsVerifyCount(client.db, { taskId, partNo: PART_A, qty: 599, actorId });
+  await saveGoodsVerifyCount(client.db, { taskId, partNo: PART_B, qty: 1200, actorId });
+
+  const rejected = await rejectGoodsVerifyTask(client.db, { taskId, actorId: adminId });
+  assert.equal(rejected.status, "pending");
+  assert.equal(rejected.countsCount, 0);
+  assert.equal(
+    (await queryAll(client.db, sql`SELECT id FROM goods_verify_task_counts WHERE task_id = ${taskId}`)).length,
+    0
+  );
+
+  // the rejected counts are kept in the transition log for traceability
+  const taskLog = await queryGet<{ fromState: string; toState: string; metadata: { rejectedCounts: { partNo: string; countedQty: number }[] } }>(
+    client.db,
+    sql`SELECT from_state AS "fromState", to_state AS "toState", metadata
+        FROM transaction_logs WHERE entity_type = 'goods_verify_task' AND entity_id = ${taskId}`
+  );
+  assert.equal(taskLog!.fromState, "counted");
+  assert.equal(taskLog!.toState, "pending");
+  assert.deepEqual(
+    taskLog!.metadata.rejectedCounts.map((c) => [c.partNo, c.countedQty]).sort(),
+    [[PART_A, 599], [PART_B, 1200]]
+  );
+
+  // re-count after rejection → counted again → confirm
+  await saveGoodsVerifyCount(client.db, { taskId, partNo: PART_A, qty: 600, actorId });
+  await saveGoodsVerifyCount(client.db, { taskId, partNo: PART_B, qty: 1200, actorId });
+  assert.equal((await listGoodsVerifyTasks(client.db, {}))[0].status, "counted");
+  const confirmed = await confirmGoodsVerifyTask(client.db, { taskId, actorId: adminId });
+  assert.equal(confirmed.status, "verified");
+});
+
+test("count mode confirm/reject are disabled in confirm mode", async (t) => {
+  const { actorId, taskId } = await countFixture(t);
+  _setGoodsVerifyConfigForTests({ mode: "confirm" });
+  const confirmBlocked = await catchHttp(confirmGoodsVerifyTask(client.db, { taskId, actorId }));
+  assert.equal(confirmBlocked.status, 409);
+  assert.equal(confirmBlocked.message, "goods_verify_count_mode_disabled");
+  const rejectBlocked = await catchHttp(rejectGoodsVerifyTask(client.db, { taskId, actorId }));
+  assert.equal(rejectBlocked.status, 409);
+  assert.equal(rejectBlocked.message, "goods_verify_count_mode_disabled");
 });
