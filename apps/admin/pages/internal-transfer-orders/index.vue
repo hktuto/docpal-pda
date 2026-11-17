@@ -114,7 +114,7 @@ function fmtLoc(orgId: number | null, code: string | null): string {
           <tr v-for="row in rows" :key="row.id">
             <td>
               <NuxtLink :to="`/internal-transfer-orders/${row.id}`">{{ row.orderNo }}</NuxtLink>
-              <span v-if="row.linked" :title="$t('internalTransfer.assignTitle')"> 🔗</span>
+              <span v-if="row.promisedItems > 0" :title="$t('internalTransfer.promisedItems', { n: row.promisedItems })"> 🔗</span>
             </td>
             <td>{{ fmtLoc(row.fromOrgId, row.fromSubInventoryCode) }}</td>
             <td>{{ fmtLoc(row.toOrgId, row.toSubInventoryCode) }}</td>

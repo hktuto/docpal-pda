@@ -11,7 +11,6 @@ import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { HTTPException } from "hono/http-exception";
 import { allocateForInternalTransferOrder } from "./internalTransferAllocate.js";
-import { assignTransferPickingOrder } from "./internalTransfer.js";
 import {
   listInternalTransferQueue,
   getInternalTransferPickingDetail,
@@ -98,6 +97,15 @@ async function rejects(fn: () => Promise<unknown>, message: string): Promise<voi
     return;
   }
   assert.fail(`expected HTTPException ${message}`);
+}
+
+/** Insert a picking promise on a transfer item (allocations.internal_transfer_item_id). */
+async function insertPromise(pickingItemId: string, transferItemId: string, qty: number): Promise<string> {
+  const id = randomUUID();
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, internal_transfer_item_id, qty, manual, created_date, last_update_date)
+    VALUES (${id}, ${pickingItemId}, ${transferItemId}, ${qty}, false, now(), now())`);
+  return id;
 }
 
 /** Fully pick one transfer item off its (single) allocation. */
@@ -211,13 +219,13 @@ test("package removal: restores the lot + allocation, un-picks", async () => {
   assert.equal(Number((pkgs[0] as any).n), 0);
 });
 
-test("finish linked: unshelved lots land at the delegated order's pair and feed its allocation", async () => {
-  const transferId = await insertTransfer("ITO-FINISH-LINKED");
+test("finish promised: lots land at each promised order's pair, feed its allocation, no task when fully promised", async () => {
+  const transferId = await insertTransfer("ITO-FINISH-PROMISED");
   const itemId = await insertTransferItem(transferId, "RK73H1JTTD1002F", 100);
   await allocateForInternalTransferOrder(client.db, transferId);
   await overrideInternalTransferStatus(client.db, { transferOrderId: transferId, status: "allocated", actorId: ACTOR });
-  const delegated = await insertPickingOrder("SO-FEED", 5, "RK73H1JTTD1002F", 50, "CHECKING");
-  await assignTransferPickingOrder(client.db, transferId, delegated.orderId, ACTOR);
+  const promised = await insertPickingOrder("SO-FEED", 5, "RK73H1JTTD1002F", 100, "CHECKING");
+  await insertPromise(promised.itemId, itemId, 100);
 
   // finish guard: not everything picked and no issue recorded
   await rejects(() => finishInternalTransferOrder(client.db, transferId, ACTOR), "not_all_items_picked");
@@ -225,11 +233,11 @@ test("finish linked: unshelved lots land at the delegated order's pair and feed 
   await pickFully(transferId, itemId);
   const result = await finishInternalTransferOrder(client.db, transferId, ACTOR);
   assert.equal(result.status, "finished");
-  assert.ok(result.allocation, "the delegated re-allocation should have run");
-  assert.equal(result.allocation!.fullyAllocated, 1);
+  assert.ok(result.allocations[promised.orderId], "the promised re-allocation should have run");
+  assert.equal(result.allocations[promised.orderId]!.fullyAllocated, 1);
 
-  // the stock materialized at the DELEGATED order's pair (5/CHECKING),
-  // unshelved, and the delegated item reserved it
+  // the stock materialized at the PROMISED order's pair (5/CHECKING),
+  // unshelved, and the promised item reserved it
   const lots = await client.db.execute(sql`
     SELECT total_qty, shelf_code, org_id, sub_inventory_code FROM inventory_lots
     WHERE part_no = 'RK73H1JTTD1002F' AND org_id = 5`);
@@ -237,15 +245,46 @@ test("finish linked: unshelved lots land at the delegated order's pair and feed 
   assert.equal(Number((lots[0] as any).total_qty), 100);
   assert.equal((lots[0] as any).shelf_code, null);
   assert.equal((lots[0] as any).sub_inventory_code, "CHECKING");
-  const delegatedAlloc = await client.db.execute(sql`
-    SELECT a.inventory_lot_id AS lot, a.qty FROM allocations a WHERE a.picking_item_id = ${delegated.itemId}`);
-  assert.equal(delegatedAlloc.length, 1);
-  assert.equal(Number((delegatedAlloc[0] as any).qty), 50);
+  const promisedAlloc = await client.db.execute(sql`
+    SELECT a.inventory_lot_id AS lot, a.qty FROM allocations a WHERE a.picking_item_id = ${promised.itemId}`);
+  assert.equal(promisedAlloc.length, 1);
+  assert.equal(Number((promisedAlloc[0] as any).qty), 100);
 
   const arrive = await client.db.execute(sql`
     SELECT COUNT(*)::int AS n FROM inventory_transactions
     WHERE txn_type = 'ADJUST' AND txn_reason = 'internal transfer: arrive'`);
   assert.equal(Number((arrive[0] as any).n), 1);
+
+  // fully promised → NO put-away task, nothing left in the queue
+  const task = await client.db.execute(sql`
+    SELECT id FROM put_away_tasks WHERE internal_transfer_order_id = ${transferId}`);
+  assert.equal(task.length, 0);
+  const queue = await listInternalTransferQueue(client.db);
+  assert.equal(queue.some((r) => r.id === transferId), false);
+});
+
+test("finish partially promised: remainder packages go to the put-away task", async () => {
+  const transferId = await insertTransfer("ITO-FINISH-MIXED");
+  const itemId = await insertTransferItem(transferId, "RK73H1JTTD1002F", 100);
+  await allocateForInternalTransferOrder(client.db, transferId);
+  await overrideInternalTransferStatus(client.db, { transferOrderId: transferId, status: "allocated", actorId: ACTOR });
+  const promised = await insertPickingOrder("SO-MIX", 5, "RK73H1JTTD1002F", 60, "CHECKING");
+  await insertPromise(promised.itemId, itemId, 60);
+  await pickFully(transferId, itemId);
+
+  const result = await finishInternalTransferOrder(client.db, transferId, ACTOR);
+  assert.ok(result.allocations[promised.orderId]);
+  // 60 crossed to the promised order; 40 remain unshelved → task created
+  const lots = await client.db.execute(sql`
+    SELECT total_qty FROM inventory_lots WHERE part_no = 'RK73H1JTTD1002F' AND org_id = 5`);
+  assert.equal(Number((lots[0] as any).total_qty), 60);
+  const task = await client.db.execute(sql`
+    SELECT id, org_id FROM put_away_tasks WHERE internal_transfer_order_id = ${transferId}`);
+  assert.equal(task.length, 1);
+  const queue = await listInternalTransferQueue(client.db);
+  const row = queue.find((r) => r.id === transferId);
+  assert.ok(row);
+  assert.equal(row!.unshelvedQty, 40);
 });
 
 test("finish unlinked: put-away task + native shelving to the last package", async () => {
@@ -256,7 +295,8 @@ test("finish unlinked: put-away task + native shelving to the last package", asy
   await pickFully(transferId, itemId);
 
   const result = await finishInternalTransferOrder(client.db, transferId, ACTOR);
-  assert.equal(result.allocation, null);
+  assert.equal(result.status, "finished");
+  assert.deepEqual(result.allocations, {});
   let task = await client.db.execute(sql`
     SELECT id, status, org_id FROM put_away_tasks WHERE internal_transfer_order_id = ${transferId}`);
   assert.equal(task.length, 1);

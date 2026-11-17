@@ -463,6 +463,13 @@
       "when": 1794809662335,
       "tag": "0066_narrow_firebrand",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1794900991703,
+      "tag": "0067_needy_wallop",
+      "breakpoints": true
     }
   ]
 }

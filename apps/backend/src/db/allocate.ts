@@ -11,6 +11,7 @@ import { matchSubInventoryRule } from "./receiving.js";
 import { logTransition, recomputeLot, recomputePickingItem } from "./picking.js";
 import { locationMatches } from "./locationMatch.js";
 import { StepTimer } from "./stepTimer.js";
+import { syncTransferPutAwayTask, syncTransferPutAwayTasksForPickingItems } from "./internalTransferPutAway.js";
 
 // ---------------------------------------------------------------------------
 // Allocation engine (concepts 5-6 in docs/backend/concepts.md).
@@ -390,6 +391,144 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow, netAllRemainin
   );
 }
 
+export interface TransferSupplyRow {
+  internalTransferItemId: string;
+  transferOrderId: string;
+  transferOrderNo: string;
+  /** Resolved supply-pair org (= the transfer order's to_org_id). */
+  orgId: number | null;
+  /** Resolved supply-pair sub-inventory. */
+  subInventoryCode: string | null;
+  /** item.qty − Σ picking promises on the item (netted per scope). */
+  available: number;
+}
+
+interface TransferSupplyRawRow {
+  internalTransferItemId: string;
+  transferOrderId: string;
+  transferOrderNo: string;
+  poNo: string | null;
+  toOrgId: number | null;
+  toSubInventoryCode: string | null;
+  available: number;
+}
+
+/**
+ * Transfer-item supply pair (spec
+ * 2026-11-17-internal-transfer-allocation-supply-design.md): the TN-style
+ * conversion — receivingSubInventoryRules evaluated with the item's po_no
+ * under to_org_id, falling back to the order's to_sub_inventory_code when no
+ * rule matches. The pair (not the raw to_ columns) is what picking demand
+ * matches on.
+ */
+export function resolveTransferSupplyPair(
+  r: Pick<TransferSupplyRawRow, "toOrgId" | "toSubInventoryCode" | "poNo">
+): { orgId: number | null; subInventoryCode: string | null } {
+  if (r.toOrgId === null) return { orgId: null, subInventoryCode: r.toSubInventoryCode };
+  return {
+    orgId: r.toOrgId,
+    subInventoryCode:
+      matchSubInventoryRule(r.toOrgId, r.poNo, receivingSubInventoryRules()) ?? r.toSubInventoryCode,
+  };
+}
+
+/**
+ * Pair matching for the JS-resolved transfer supply pair — mirrors
+ * loadLotSources' SQL semantics exactly: org equality (org-agnostic demand
+ * matches any org), case-insensitive sub equality, and
+ * sub_inventory_share_members widening (both memberships in one share
+ * group, org-scoped).
+ */
+export function transferSupplyPairMatches(
+  shareMembers: { orgId: number; code: string; shareGroup: string }[],
+  d: Pick<DemandRow, "orgId" | "subInventoryCode">,
+  org: number | null,
+  sub: string | null
+): boolean {
+  if (d.orgId !== null && org !== d.orgId) return false;
+  if (d.subInventoryCode === null) return true;
+  if (sub === null) return false;
+  if (sub.toUpperCase() === d.subInventoryCode.toUpperCase()) return true;
+  const demandGroups = new Set(
+    shareMembers
+      .filter((m) => m.orgId === d.orgId && m.code.toUpperCase() === d.subInventoryCode!.toUpperCase())
+      .map((m) => m.shareGroup)
+  );
+  if (demandGroups.size === 0) return false;
+  return shareMembers.some(
+    (m) =>
+      m.orgId === org &&
+      sub !== null &&
+      m.code.toUpperCase() === sub.toUpperCase() &&
+      demandGroups.has(m.shareGroup)
+  );
+}
+
+/**
+ * Confirmed internal transfer items as picking supply (spec
+ * 2026-11-17-internal-transfer-allocation-supply-design.md). Only orders in
+ * `allocated | picking | issue` participate — Confirm is the gate (the admin
+ * has settled the from_-partition sourcing first). Finished orders are NOT
+ * supply: their promised packages materialized at the promised orders'
+ * pairs at finish; the remainder waits for shelving.
+ *
+ * Availability nets out picking promises with the same per-scope rule as
+ * loadReceivingSources: part-key scope subtracts manual pins + live work
+ * locks (the wiped participating items' rows are rebuilt in-run), order-only
+ * scope subtracts EVERY remaining row (all other orders survive the wipe).
+ */
+async function loadTransferSupplySources(
+  dbOrTx: DbOrTx,
+  d: DemandRow,
+  netAllRemaining = false
+): Promise<TransferSupplyRow[]> {
+  const expiry = workLockExpiry();
+  const rows = await queryAll<TransferSupplyRawRow>(
+    dbOrTx,
+    sql`SELECT iti.id AS "internalTransferItemId",
+               ito.id AS "transferOrderId", ito.order_no AS "transferOrderNo",
+               iti.po_no AS "poNo",
+               ito.to_org_id AS "toOrgId", ito.to_sub_inventory_code AS "toSubInventoryCode",
+               (iti.qty - COALESCE(promised.qty, 0)) AS "available"
+        FROM internal_transfer_items iti
+        JOIN internal_transfer_orders ito ON ito.id = iti.transfer_order_id
+        LEFT JOIN (
+          SELECT a.internal_transfer_item_id AS iti_id, SUM(a.qty)::int AS qty
+          FROM allocations a
+          JOIN picking_items pi ON pi.id = a.picking_item_id
+          JOIN picking_orders po ON po.id = pi.picking_order_id
+          WHERE a.internal_transfer_item_id IS NOT NULL
+            ${netAllRemaining
+              ? sql``
+              : sql`AND (a.manual OR (po.working_by IS NOT NULL AND po.working_at >= ${expiry}))`}
+          GROUP BY a.internal_transfer_item_id
+        ) promised ON promised.iti_id = iti.id
+        WHERE (iti.part_no = ${d.partNo} OR iti.wcl_item_no = ${d.partNo})
+          AND ito.status IN ('allocated', 'picking', 'issue')
+          AND iti.qty - COALESCE(promised.qty, 0) > 0
+        ORDER BY ito.priority_seq, ito.created_date, iti.id`
+  );
+  if (rows.length === 0) return [];
+  const shareMembers = await queryAll<{ orgId: number; code: string; shareGroup: string }>(
+    dbOrTx,
+    sql`SELECT org_id AS "orgId", code, share_group AS "shareGroup" FROM sub_inventory_share_members`
+  );
+  const result: TransferSupplyRow[] = [];
+  for (const r of rows) {
+    const pair = resolveTransferSupplyPair(r);
+    if (!transferSupplyPairMatches(shareMembers, d, pair.orgId, pair.subInventoryCode)) continue;
+    result.push({
+      internalTransferItemId: r.internalTransferItemId,
+      transferOrderId: r.transferOrderId,
+      transferOrderNo: r.transferOrderNo,
+      orgId: pair.orgId,
+      subInventoryCode: pair.subInventoryCode,
+      available: r.available,
+    });
+  }
+  return result;
+}
+
 /**
  * Recompute picking_orders.allocation_status for all open (pending/picking)
  * orders: Σ allocated_qty vs Σ open qty (qty − Σ packages), 'allocated' when
@@ -457,6 +596,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       inventoryLotId: string | null;
       receivingInvoiceItemId: string | null;
       receivingOrderId: string | null;
+      internalTransferItemId: string | null;
       qty: number;
       manual: boolean;
       partNo: string;
@@ -473,7 +613,9 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       tx,
       sql`SELECT a.id, a.picking_item_id AS "pickingItemId", a.inventory_lot_id AS "inventoryLotId",
                  a.receiving_invoice_item_id AS "receivingInvoiceItemId",
-                 a.receiving_order_id AS "receivingOrderId", a.qty, a.manual,
+                 a.receiving_order_id AS "receivingOrderId",
+                 a.internal_transfer_item_id AS "internalTransferItemId",
+                 a.qty, a.manual,
                  COALESCE(il.part_no, rii.part_no, pi.part_no) AS "partNo",
                  COALESCE(il.date_code, rii.date_code) AS "dateCode",
                  COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
@@ -497,10 +639,11 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       inventoryLotId: string | null,
       receivingInvoiceItemId: string | null,
       receivingOrderId: string | null,
+      internalTransferItemId: string | null,
       qty: number
-    ) => `${pickingItemId}|${inventoryLotId ?? ""}|${receivingInvoiceItemId ?? ""}|${receivingOrderId ?? ""}|${qty}`;
+    ) => `${pickingItemId}|${inventoryLotId ?? ""}|${receivingInvoiceItemId ?? ""}|${receivingOrderId ?? ""}|${internalTransferItemId ?? ""}|${qty}`;
     const beforeKeys = existing.filter((a) => !a.manual).map((a) =>
-      allocationKey(a.pickingItemId, a.inventoryLotId, a.receivingInvoiceItemId, a.receivingOrderId, a.qty)
+      allocationKey(a.pickingItemId, a.inventoryLotId, a.receivingInvoiceItemId, a.receivingOrderId, a.internalTransferItemId, a.qty)
     );
     const afterKeys: string[] = [];
     const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
@@ -558,6 +701,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
     // In-run availability trackers (sources are shared across demands).
     const lotUsed = new Map<string, number>(); // lotId → qty allocated this run
     const recvUsed = new Map<string, number>(); // receiving source key → qty allocated this run
+    const transferUsed = new Map<string, number>(); // internal transfer item id → qty allocated this run
 
     for (const raw of demands) {
       // Transfer items match stock at the converted source location, never
@@ -565,7 +709,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       const d = resolveDemandLocation(raw);
       // Pinned manual allocations pre-cover part (or all) of the open demand.
       let remaining = Math.max(0, d.openQty - (manualQtyByItem.get(d.pickingItemId) ?? 0));
-      const allocatedForItem: { qty: number; lotId?: string; recv?: ReceivingRow }[] = [];
+      const allocatedForItem: { qty: number; lotId?: string; recv?: ReceivingRow; transfer?: TransferSupplyRow }[] = [];
 
       // 1. shelf stock, FIFO by date_code
       const lots = await loadLotSources(tx, d);
@@ -602,6 +746,25 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
         }
       }
 
+      // 3. confirmed internal transfer items (supply tier — spec
+      // 2026-11-17-internal-transfer-allocation-supply-design.md), FIFO by
+      // transfer priority_seq / created_date. Gated under allowDockStock()
+      // like the dock tier: an unshelved transfer item is conceptually dock
+      // stock (physically still on the from_ shelves until the transfer's
+      // own picking runs).
+      if (remaining > 0 && allowDockStock()) {
+        const rows = await loadTransferSupplySources(tx, d);
+        for (const r of rows) {
+          if (remaining <= 0) break;
+          const usable = r.available - (transferUsed.get(r.internalTransferItemId) ?? 0);
+          if (usable <= 0) continue;
+          const take = Math.min(usable, remaining);
+          allocatedForItem.push({ qty: take, transfer: r });
+          transferUsed.set(r.internalTransferItemId, (transferUsed.get(r.internalTransferItemId) ?? 0) + take);
+          remaining -= take;
+        }
+      }
+
       // Items covered only by pinned manual rows still pass through here so
       // their allocated_qty cache is refreshed (manual + auto).
       if (d.openQty - remaining <= 0) continue;
@@ -616,6 +779,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
           inventoryLotId: alloc.lotId ?? null,
           receivingInvoiceItemId: alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
           receivingOrderId: alloc.recv && !alloc.recv.ctnNo ? alloc.recv.receivingOrderId : null,
+          internalTransferItemId: alloc.transfer?.internalTransferItemId ?? null,
           qty: alloc.qty,
         });
         summary.allocationsCreated += 1;
@@ -625,6 +789,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
             alloc.lotId ?? null,
             alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
             alloc.recv && !alloc.recv.ctnNo ? alloc.recv.receivingOrderId : null,
+            alloc.transfer?.internalTransferItemId ?? null,
             alloc.qty
           )
         );
@@ -691,6 +856,9 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       data: { ...summary, changed },
     });
     await refreshAllocationStatus(tx);
+    // Put-away task lifecycle for transfers touched by this run (spec
+    // 2026-11-17-internal-transfer-allocation-supply-design.md).
+    await syncTransferPutAwayTasksForPickingItems(tx, itemIds);
     return summary;
   });
 }
@@ -881,6 +1049,7 @@ export async function removePickingAllocation(
       id: string;
       inventoryLotId: string | null;
       receivingInvoiceItemId: string | null;
+      internalTransferItemId: string | null;
       qty: number;
       partNo: string;
       dateCode: string | null;
@@ -893,7 +1062,8 @@ export async function removePickingAllocation(
     }>(
       tx,
       sql`SELECT a.id, a.inventory_lot_id AS "inventoryLotId",
-                 a.receiving_invoice_item_id AS "receivingInvoiceItemId", a.qty,
+                 a.receiving_invoice_item_id AS "receivingInvoiceItemId",
+                 a.internal_transfer_item_id AS "internalTransferItemId", a.qty,
                  COALESCE(il.part_no, rii.part_no, pi.part_no) AS "partNo",
                  COALESCE(il.date_code, rii.date_code) AS "dateCode",
                  COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
@@ -916,6 +1086,11 @@ export async function removePickingAllocation(
       await recomputeLot(tx, existing.inventoryLotId);
     }
     await recomputePickingItem(tx, pickingItemId);
+    // Removing a transfer promise may bring the put-away task back (spec
+    // 2026-11-17-internal-transfer-allocation-supply-design.md).
+    if (existing.internalTransferItemId) {
+      await syncTransferPutAwayTask(tx, { transferItemId: existing.internalTransferItemId });
+    }
 
     await tx.insert(inventoryTransactions).values({
       id: newId(),
@@ -1145,16 +1320,17 @@ export async function addManualPickingAllocation(
   db: AppDb,
   pickingOrderId: string,
   pickingItemId: string,
-  input: { qty: number; inventoryLotId?: string; receivingInvoiceItemId?: string; override?: boolean },
+  input: { qty: number; inventoryLotId?: string; receivingInvoiceItemId?: string; internalTransferItemId?: string; override?: boolean },
   actorId: string
 ): Promise<{ allocationId: string; qty: number }> {
   const qty = input.qty;
   if (!Number.isInteger(qty) || qty <= 0) {
     throw new HTTPException(400, { message: "invalid_qty" });
   }
-  const hasLot = !!input.inventoryLotId;
-  const hasRecv = !!input.receivingInvoiceItemId;
-  if (hasLot === hasRecv) {
+  const sourceCount = [input.inventoryLotId, input.receivingInvoiceItemId, input.internalTransferItemId].filter(
+    (v) => !!v
+  ).length;
+  if (sourceCount !== 1) {
     throw new HTTPException(400, { message: "source_required" });
   }
 
@@ -1200,7 +1376,8 @@ export async function addManualPickingAllocation(
       boxId: string | null;
       available: number;
     };
-    if (hasLot) {
+    let transferOrderId: string | null = null;
+    if (sourceCount >= 1 && input.inventoryLotId) {
       const lot = await queryGet<{
         id: string;
         partNo: string;
@@ -1227,7 +1404,7 @@ export async function addManualPickingAllocation(
       // the engine's shelf-FK orphan exclusion.
       if (!lot.shelfKnown) throw new HTTPException(409, { message: "shelf_not_found" });
       source = lot;
-    } else {
+    } else if (input.receivingInvoiceItemId) {
       const recv = await queryGet<{
         id: string;
         partNo: string;
@@ -1259,6 +1436,46 @@ export async function addManualPickingAllocation(
       );
       if (!recv) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
       source = { ...recv, shelfCode: null };
+    } else {
+      // Internal transfer item supply pin (spec
+      // 2026-11-17-internal-transfer-allocation-supply-design.md): item-level
+      // promise — availability = item.qty − Σ picking promises (all rows,
+      // manual pins are persistent). Only confirmed orders are pinnable.
+      const supply = await queryGet<{
+        transferOrderId: string;
+        partNo: string;
+        available: number;
+        status: string;
+      }>(
+        tx,
+        sql`SELECT ito.id AS "transferOrderId",
+                   COALESCE(iti.wcl_item_no, iti.part_no) AS "partNo",
+                   ito.status,
+                   (iti.qty - COALESCE(promised.qty, 0)) AS "available"
+            FROM internal_transfer_items iti
+            JOIN internal_transfer_orders ito ON ito.id = iti.transfer_order_id
+            LEFT JOIN (
+              SELECT internal_transfer_item_id AS iti_id, SUM(qty)::int AS qty
+              FROM allocations WHERE internal_transfer_item_id IS NOT NULL
+              GROUP BY internal_transfer_item_id
+            ) promised ON promised.iti_id = iti.id
+            WHERE iti.id = ${input.internalTransferItemId!}`
+      );
+      if (!supply) throw new HTTPException(404, { message: "internal_transfer_item_not_found" });
+      if (supply.status !== "allocated" && supply.status !== "picking" && supply.status !== "issue") {
+        throw new HTTPException(409, { message: "transfer_not_confirmed" });
+      }
+      source = {
+        partNo: supply.partNo,
+        dateCode: null,
+        lotCode: null,
+        coo: null,
+        cow: null,
+        shelfCode: null,
+        boxId: null,
+        available: supply.available,
+      };
+      transferOrderId = supply.transferOrderId;
     }
     if (qty > source.available) {
       await stealAllocationsOnSource(tx, {
@@ -1297,6 +1514,7 @@ export async function addManualPickingAllocation(
       inventoryLotId: input.inventoryLotId ?? null,
       receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
       receivingOrderId: null,
+      internalTransferItemId: input.internalTransferItemId ?? null,
       qty,
       manual: true,
     });
@@ -1305,6 +1523,11 @@ export async function addManualPickingAllocation(
       await recomputeLot(tx, input.inventoryLotId);
     }
     await recomputePickingItem(tx, pickingItemId);
+    // Allocation actions drive the transfer's put-away task lifecycle (spec
+    // 2026-11-17-internal-transfer-allocation-supply-design.md).
+    if (transferOrderId) {
+      await syncTransferPutAwayTask(tx, { transferOrderId });
+    }
 
     await tx.insert(inventoryTransactions).values({
       id: newId(),
@@ -1343,6 +1566,7 @@ export async function addManualPickingAllocation(
         qty,
         inventoryLotId: input.inventoryLotId ?? null,
         receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
+        internalTransferItemId: input.internalTransferItemId ?? null,
       },
     });
 
@@ -1723,8 +1947,9 @@ async function runScopedAllocation(
     inventoryLotId: string | null,
     receivingInvoiceItemId: string | null,
     receivingOrderIdKey: string | null,
+    internalTransferItemId: string | null,
     qty: number
-  ) => `${pickingItemId}|${inventoryLotId ?? ""}|${receivingInvoiceItemId ?? ""}|${receivingOrderIdKey ?? ""}|${qty}`;
+  ) => `${pickingItemId}|${inventoryLotId ?? ""}|${receivingInvoiceItemId ?? ""}|${receivingOrderIdKey ?? ""}|${internalTransferItemId ?? ""}|${qty}`;
 
   const beforeKeys: string[] = [];
   const afterKeys: string[] = [];
@@ -1745,6 +1970,7 @@ async function runScopedAllocation(
       inventoryLotId: string | null;
       receivingInvoiceItemId: string | null;
       receivingOrderId: string | null;
+      internalTransferItemId: string | null;
       qty: number;
       manual: boolean;
       partNo: string;
@@ -1761,7 +1987,9 @@ async function runScopedAllocation(
       tx,
       sql`SELECT a.id, a.picking_item_id AS "pickingItemId", a.inventory_lot_id AS "inventoryLotId",
                  a.receiving_invoice_item_id AS "receivingInvoiceItemId",
-                 a.receiving_order_id AS "receivingOrderId", a.qty, a.manual,
+                 a.receiving_order_id AS "receivingOrderId",
+                 a.internal_transfer_item_id AS "internalTransferItemId",
+                 a.qty, a.manual,
                  COALESCE(il.part_no, rii.part_no, pi.part_no) AS "partNo",
                  COALESCE(il.date_code, rii.date_code) AS "dateCode",
                  COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
@@ -1786,7 +2014,7 @@ async function runScopedAllocation(
         manualQtyByItem.set(a.pickingItemId, (manualQtyByItem.get(a.pickingItemId) ?? 0) + a.qty);
         continue;
       }
-      beforeKeys.push(allocationKey(a.pickingItemId, a.inventoryLotId, a.receivingInvoiceItemId, a.receivingOrderId, a.qty));
+      beforeKeys.push(allocationKey(a.pickingItemId, a.inventoryLotId, a.receivingInvoiceItemId, a.receivingOrderId, a.internalTransferItemId, a.qty));
     }
 
     for (const a of existing) {
@@ -1894,6 +2122,7 @@ async function runScopedAllocation(
               null,
               p.recv.ctnNo ? p.recv.receivingInvoiceItemId : null,
               p.recv.ctnNo ? null : p.recv.receivingOrderId,
+              null,
               p.qty
             )
           );
@@ -2006,12 +2235,13 @@ async function runScopedAllocation(
 
     const lotUsed = new Map<string, number>();
     const recvUsed = new Map<string, number>();
+    const transferUsed = new Map<string, number>();
 
     for (const raw of demands) {
       const d = resolveDemandLocation(raw);
       // Pinned manual allocations pre-cover part (or all) of the open demand.
       let remaining = Math.max(0, d.openQty - (manualQtyByItem.get(d.pickingItemId) ?? 0));
-      const allocatedForItem: { qty: number; lotId?: string; recv?: ReceivingRow }[] = [];
+      const allocatedForItem: { qty: number; lotId?: string; recv?: ReceivingRow; transfer?: TransferSupplyRow }[] = [];
 
       const lots = await timer.measure("main.loadLots", () => loadLotSources(tx, d));
       for (const lot of lots) {
@@ -2042,6 +2272,22 @@ async function runScopedAllocation(
         }
       }
 
+      // 3. confirmed internal transfer items (supply tier — spec
+      // 2026-11-17-internal-transfer-allocation-supply-design.md). Same
+      // allowDockStock() gate and scope netting as the dock tier.
+      if (remaining > 0 && allowDockStock()) {
+        const rows = await timer.measure("main.loadTransfer", () => loadTransferSupplySources(tx, d, orderOnly));
+        for (const r of rows) {
+          if (remaining <= 0) break;
+          const usable = r.available - (transferUsed.get(r.internalTransferItemId) ?? 0);
+          if (usable <= 0) continue;
+          const take = Math.min(usable, remaining);
+          allocatedForItem.push({ qty: take, transfer: r });
+          transferUsed.set(r.internalTransferItemId, (transferUsed.get(r.internalTransferItemId) ?? 0) + take);
+          remaining -= take;
+        }
+      }
+
       // Items covered only by pinned manual rows still pass through here so
       // their allocated_qty cache is refreshed (manual + auto).
       if (d.openQty - remaining <= 0) continue;
@@ -2057,6 +2303,7 @@ async function runScopedAllocation(
             inventoryLotId: alloc.lotId ?? null,
             receivingInvoiceItemId: alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
             receivingOrderId: alloc.recv && !alloc.recv.ctnNo ? alloc.recv.receivingOrderId : null,
+            internalTransferItemId: alloc.transfer?.internalTransferItemId ?? null,
             qty: alloc.qty,
           });
           summary.allocationsCreated += 1;
@@ -2066,6 +2313,7 @@ async function runScopedAllocation(
               alloc.lotId ?? null,
               alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
               alloc.recv && !alloc.recv.ctnNo ? alloc.recv.receivingOrderId : null,
+              alloc.transfer?.internalTransferItemId ?? null,
               alloc.qty
             )
           );
@@ -2138,6 +2386,14 @@ async function runScopedAllocation(
     })
   );
   await timer.measure("refreshStatus", () => refreshAllocationStatus(tx));
+  // Put-away task lifecycle for transfers touched by this run (spec
+  // 2026-11-17-internal-transfer-allocation-supply-design.md).
+  if (demands.length > 0) {
+    await syncTransferPutAwayTasksForPickingItems(
+      tx,
+      demands.map((d) => d.pickingItemId)
+    );
+  }
   return { ...summary, partKeys, changed, durationMs: timer.total() };
 }
 

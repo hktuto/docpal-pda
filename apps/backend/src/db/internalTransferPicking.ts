@@ -114,7 +114,7 @@ export async function listInternalTransferQueue(db: AppDb): Promise<InternalTran
         FROM internal_transfer_orders ito
         LEFT JOIN users u ON u.id = ito.working_by
         WHERE ito.status IN ('allocated', 'picking', 'issue')
-           OR (ito.status = 'finished' AND ito.picking_order_id IS NULL
+           OR (ito.status = 'finished'
                AND EXISTS (SELECT 1 FROM internal_transfer_packages itp
                            WHERE itp.transfer_order_id = ito.id AND itp.shelf_code IS NULL))
         ORDER BY ito.priority_seq, ito.created_date DESC, ito.order_no`
@@ -145,8 +145,19 @@ export async function getInternalTransferPickingDetail(
     db,
     sql`SELECT iti.id, iti.part_no AS "partNo", iti.wcl_item_no AS "wclItemNo",
                iti.qty, iti.picked_qty AS "pickedQty", iti.allocated_qty AS "allocatedQty",
-               iti.status, iti.line_number AS "lineNumber", iti.po_no AS "poNo"
+               iti.status, iti.line_number AS "lineNumber", iti.po_no AS "poNo",
+               COALESCE(prm.qty, 0) AS "promisedQty",
+               prm.order_nos AS "promisedOrders"
         FROM internal_transfer_items iti
+        LEFT JOIN (
+          SELECT a.internal_transfer_item_id AS iti_id, SUM(a.qty)::int AS qty,
+                 string_agg(DISTINCT po.order_no, ', ') AS order_nos
+          FROM allocations a
+          JOIN picking_items pi ON pi.id = a.picking_item_id
+          JOIN picking_orders po ON po.id = pi.picking_order_id
+          WHERE a.internal_transfer_item_id IS NOT NULL
+          GROUP BY a.internal_transfer_item_id
+        ) prm ON prm.iti_id = iti.id
         WHERE iti.transfer_order_id = ${transferOrderId}
         ORDER BY iti.line_number NULLS LAST, iti.part_no`
   );
@@ -870,22 +881,153 @@ export async function reportInternalTransferIssue(
 
 // --- finish + branches --------------------------------------------------------
 
+/** Consumed package shape for the finish cross-dock materialization. */
+interface TakenPackage {
+  partNo: string;
+  wclItemNo: string | null;
+  qty: number;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+}
+
+/**
+ * Consume `qty` of unshelved packages of one transfer item, FIFO by
+ * created_date — splitting the boundary package when the promise lands
+ * mid-package (the remainder stays for shelving / the next promise).
+ */
+async function takeTransferPackages(
+  tx: DbOrTx,
+  transferOrderId: string,
+  transferItemId: string,
+  qty: number
+): Promise<TakenPackage[]> {
+  const pkgs = await queryAll<{
+    id: string;
+    partNo: string;
+    wclItemNo: string | null;
+    qty: number;
+    dateCode: string | null;
+    lotCode: string | null;
+    coo: string | null;
+    cow: string | null;
+  }>(
+    tx,
+    sql`SELECT itp.id, iti.part_no AS "partNo", iti.wcl_item_no AS "wclItemNo", itp.qty,
+               itp.date_code AS "dateCode", itp.lot_code AS "lotCode", itp.coo, itp.cow
+        FROM internal_transfer_packages itp
+        JOIN internal_transfer_items iti ON iti.id = itp.transfer_item_id
+        WHERE itp.transfer_order_id = ${transferOrderId}
+          AND itp.transfer_item_id = ${transferItemId}
+          AND itp.shelf_code IS NULL
+        ORDER BY itp.created_date, itp.id`
+  );
+  const taken: TakenPackage[] = [];
+  let need = qty;
+  const at = now();
+  for (const p of pkgs) {
+    if (need <= 0) break;
+    const take = Math.min(p.qty, need);
+    taken.push({ partNo: p.partNo, wclItemNo: p.wclItemNo, qty: take, dateCode: p.dateCode, lotCode: p.lotCode, coo: p.coo, cow: p.cow });
+    if (take === p.qty) {
+      // Whole package consumed — remove it (its stock now lives as a lot).
+      await queryRun(tx, sql`DELETE FROM internal_transfer_packages WHERE id = ${p.id}`);
+    } else {
+      // Split: the original row IS the remainder — shrink it in place. No
+      // clone: the remainder stays on the original package's FIFO position.
+      await queryRun(tx, sql`UPDATE internal_transfer_packages SET qty = qty - ${take}, last_update_date = ${at} WHERE id = ${p.id}`);
+    }
+    need -= take;
+  }
+  return taken;
+}
+
+/**
+ * Materialize consumed packages as unshelved stock at the destination pair
+ * (natural lot-key merge, ADJUST on_hand ledger rows). Appends to the
+ * caller's ledger batch; no put-away task involvement — the remainder is
+ * handled by the finish caller.
+ */
+async function materializePackages(
+  tx: DbOrTx,
+  packages: TakenPackage[],
+  destOrg: number | null,
+  destSub: string | null,
+  transferOrderId: string,
+  at: Date,
+  actorId: string,
+  txnRows: (typeof inventoryTransactions.$inferInsert)[]
+): Promise<void> {
+  for (const p of packages) {
+    const lot = await queryGet<{ id: string }>(
+      tx,
+      sql`SELECT id FROM inventory_lots
+          WHERE part_no = ${p.partNo}
+            AND org_id = ${destOrg}
+            AND sub_inventory_code IS NOT DISTINCT FROM ${destSub}
+            AND shelf_code IS NULL
+            AND date_code IS NOT DISTINCT FROM ${p.dateCode}
+            AND lot_code IS NOT DISTINCT FROM ${p.lotCode}
+            AND coo IS NOT DISTINCT FROM ${p.coo}
+            AND cow IS NOT DISTINCT FROM ${p.cow}
+          LIMIT 1`
+    );
+    let lotId = lot?.id;
+    if (!lotId) {
+      lotId = newId();
+      await queryRun(
+        tx,
+        sql`INSERT INTO inventory_lots (id, part_no, wcl_item_no, org_id, sub_inventory_code, shelf_code, box_id,
+                                        date_code, lot_code, coo, cow, total_qty, allocated_qty, created_date, last_update_date)
+            VALUES (${lotId}, ${p.partNo}, ${p.wclItemNo}, ${destOrg}, ${destSub}, NULL, NULL,
+                    ${p.dateCode}, ${p.lotCode}, ${p.coo}, ${p.cow}, ${p.qty}, 0, ${at}, ${at})`
+      );
+    } else {
+      await queryRun(
+        tx,
+        sql`UPDATE inventory_lots SET total_qty = total_qty + ${p.qty}, last_update_date = ${at} WHERE id = ${lotId}`
+      );
+    }
+    txnRows.push({
+      id: newId(),
+      inventoryLotId: lotId,
+      partNo: p.partNo,
+      txnType: "ADJUST",
+      qtyType: "on_hand",
+      qtyDelta: p.qty,
+      dateCode: p.dateCode,
+      lotCode: p.lotCode,
+      coo: p.coo,
+      cow: p.cow,
+      referenceType: "internal_transfer_order",
+      referenceId: transferOrderId,
+      actorId,
+      txnReason: "internal transfer: arrive",
+      txnAt: at,
+    });
+  }
+}
+
 export interface FinishInternalTransferResult {
   id: string;
   status: string;
-  /** Linked branch: the awaited delegated re-allocation (null when the
-   *  scoped run failed — its demand stays stale until the next Re-allocate,
-   *  confirm-arrival semantics). */
-  allocation: Awaited<ReturnType<typeof allocateForPickingOrder>> | null;
+  /** Per promised picking order re-allocation result (null when that
+   *  scoped run failed — its demand stays stale until the next
+   *  Re-allocate, confirm-arrival semantics). */
+  allocations: Record<string, Awaited<ReturnType<typeof allocateForPickingOrder>> | null>;
 }
 
 /**
  * Explicit PDA finish. Guard: status in allocated/picking/issue and every
- * item fully picked OR a recorded issue (409 not_all_items_picked). Linked
- * branch: packages materialize as unshelved lots at the `to_` pair (natural
- * lot-key merge, ADJUST on_hand ledger) and the delegated picking order's
- * allocation re-runs awaited, outside the tx. Unlinked: one put_away_tasks
- * row (pending) for the native shelve flow.
+ * item fully picked OR a recorded issue (409 not_all_items_picked). The
+ * transfer's picking promises (allocations.internal_transfer_item_id — spec
+ * 2026-11-17-internal-transfer-allocation-supply-design.md) drive the
+ * fan-out: per distinct promised picking order, its promised packages
+ * materialize as unshelved lots at THAT order's own pair (the pair, not the
+ * transfer's mostly-NULL to_sub, is what the demand matches on). Remaining
+ * unpromised packages → one put_away_tasks row for the native shelve flow;
+ * fully promised transfers create no task at all.
  */
 export async function finishInternalTransferOrder(
   db: AppDb,
@@ -907,10 +1049,32 @@ export async function finishInternalTransferOrder(
     if (!items.every((i) => i.pickedQty >= i.qty) && order.issueReason === null) {
       throw new HTTPException(409, { message: "not_all_items_picked" });
     }
-    if (order.pickingOrderId && order.toOrgId === null) {
-      // Linked finish materializes stock at the to_ partition — impossible
-      // without a destination org (never in practice; upstream always sets it).
-      throw new HTTPException(409, { message: "transfer_has_no_destination_org" });
+
+    // The transfer's picking promises, grouped per distinct promised picking
+    // order and per transfer item. A promise whose order has no open demand
+    // any more (fully picked before finish) still cross-docks — the re-run
+    // below is a no-op for it.
+    const promises = await queryAll<{ pickingOrderId: string; itemId: string; qty: number }>(
+      tx,
+      sql`SELECT pi.picking_order_id AS "pickingOrderId",
+                 a.internal_transfer_item_id AS "itemId",
+                 SUM(a.qty)::int AS qty
+          FROM allocations a
+          JOIN picking_items pi ON pi.id = a.picking_item_id
+          WHERE a.internal_transfer_item_id IN (
+            SELECT id FROM internal_transfer_items WHERE transfer_order_id = ${order.id}
+          )
+          GROUP BY pi.picking_order_id, a.internal_transfer_item_id`
+    );
+    const orderPairs = new Map<string, { orgId: number | null; subInventoryCode: string | null }>();
+    const distinctOrderIds = [...new Set(promises.map((p) => p.pickingOrderId))];
+    for (const poId of distinctOrderIds) {
+      const po = await queryGet<{ orgId: number | null; subInventoryCode: string | null }>(
+        tx,
+        sql`SELECT org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
+            FROM picking_orders WHERE id = ${poId}`
+      );
+      orderPairs.set(poId, { orgId: po?.orgId ?? order.toOrgId, subInventoryCode: po?.subInventoryCode ?? order.toSubInventoryCode });
     }
 
     const at = now();
@@ -927,90 +1091,29 @@ export async function finishInternalTransferOrder(
       actorId,
     });
 
-    if (order.pickingOrderId) {
-      // Linked: materialize every package as unshelved stock at the
-      // DELEGATED ORDER's own (org, sub) pair — org already equals to_org
-      // (the link rule), and the pair (not the transfer's mostly-NULL to_sub,
-      // 99.7% of upstream rows) is what the delegated demand matches on, so
-      // the re-run below can actually reserve it. Merged by the natural lot
-      // key so repeat picks of the same material accumulate on one lot.
-      const delegated = await queryGet<{ orgId: number | null; subInventoryCode: string | null }>(
-        tx,
-        sql`SELECT po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode"
-            FROM picking_orders po WHERE po.id = ${order.pickingOrderId}`
-      );
-      const destOrg = delegated?.orgId ?? order.toOrgId;
-      const destSub = delegated?.subInventoryCode ?? order.toSubInventoryCode;
-      const packages = await queryAll<{
-        id: string;
-        partNo: string;
-        wclItemNo: string | null;
-        qty: number;
-        dateCode: string | null;
-        lotCode: string | null;
-        coo: string | null;
-        cow: string | null;
-      }>(
-        tx,
-        sql`SELECT itp.id, iti.part_no AS "partNo", iti.wcl_item_no AS "wclItemNo", itp.qty,
-                   itp.date_code AS "dateCode", itp.lot_code AS "lotCode", itp.coo, itp.cow
-            FROM internal_transfer_packages itp
-            JOIN internal_transfer_items iti ON iti.id = itp.transfer_item_id
-            WHERE itp.transfer_order_id = ${order.id}`
-      );
-      const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
-      for (const p of packages) {
-        const lot = await queryGet<{ id: string }>(
-          tx,
-          sql`SELECT id FROM inventory_lots
-              WHERE part_no = ${p.partNo}
-                AND org_id = ${destOrg}
-                AND sub_inventory_code IS NOT DISTINCT FROM ${destSub}
-                AND shelf_code IS NULL
-                AND date_code IS NOT DISTINCT FROM ${p.dateCode}
-                AND lot_code IS NOT DISTINCT FROM ${p.lotCode}
-                AND coo IS NOT DISTINCT FROM ${p.coo}
-                AND cow IS NOT DISTINCT FROM ${p.cow}
-              LIMIT 1`
-        );
-        let lotId = lot?.id;
-        if (!lotId) {
-          lotId = newId();
-          await queryRun(
-            tx,
-            sql`INSERT INTO inventory_lots (id, part_no, wcl_item_no, org_id, sub_inventory_code, shelf_code, box_id,
-                                            date_code, lot_code, coo, cow, total_qty, allocated_qty, created_date, last_update_date)
-                VALUES (${lotId}, ${p.partNo}, ${p.wclItemNo}, ${destOrg}, ${destSub}, NULL, NULL,
-                        ${p.dateCode}, ${p.lotCode}, ${p.coo}, ${p.cow}, ${p.qty}, 0, ${at}, ${at})`
-          );
-        } else {
-          await queryRun(
-            tx,
-            sql`UPDATE inventory_lots SET total_qty = total_qty + ${p.qty}, last_update_date = ${at} WHERE id = ${lotId}`
-          );
-        }
-        txnRows.push({
-          id: newId(),
-          inventoryLotId: lotId,
-          partNo: p.partNo,
-          txnType: "ADJUST",
-          qtyType: "on_hand",
-          qtyDelta: p.qty,
-          dateCode: p.dateCode,
-          lotCode: p.lotCode,
-          coo: p.coo,
-          cow: p.cow,
-          referenceType: "internal_transfer_order",
-          referenceId: order.id,
-          actorId,
-          txnReason: "internal transfer: arrive",
-          txnAt: at,
-        });
+    const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
+    // Per promised picking order: consume its promised packages (FIFO per
+    // transfer item, splitting the boundary package when the promise lands
+    // mid-package) and materialize them at THAT order's own pair.
+    for (const poId of distinctOrderIds) {
+      const pair = orderPairs.get(poId)!;
+      for (const p of promises.filter((x) => x.pickingOrderId === poId)) {
+        const taken = await takeTransferPackages(tx, order.id, p.itemId, p.qty);
+        await materializePackages(tx, taken, pair.orgId, pair.subInventoryCode, order.id, at, actorId, txnRows);
       }
-      if (txnRows.length > 0) await tx.insert(inventoryTransactions).values(txnRows);
-    } else {
-      // Unlinked: one put-away task for the native shelve flow (unique index
-      // guards duplicates; the status window makes a double finish impossible).
+    }
+    if (txnRows.length > 0) await tx.insert(inventoryTransactions).values(txnRows);
+
+    // Remainder (unpromised packages — unallocated items, issue shortfall)
+    // → one put-away task for the native shelve flow (unique index guards
+    // duplicates; the status window makes a double finish impossible). A
+    // fully promised transfer creates no task.
+    const remainder = await queryGet<{ qty: number }>(
+      tx,
+      sql`SELECT COALESCE(SUM(qty), 0)::int AS qty FROM internal_transfer_packages
+          WHERE transfer_order_id = ${order.id} AND shelf_code IS NULL`
+    );
+    if ((remainder?.qty ?? 0) > 0) {
       await queryRun(
         tx,
         sql`INSERT INTO put_away_tasks (id, internal_transfer_order_id, org_id, sub_inventory_code, status, created_date, last_update_date)
@@ -1023,22 +1126,22 @@ export async function finishInternalTransferOrder(
       topics: ["/internal-transfer-orders"],
       data: { transferOrderId: order.id, status: "finished" },
     });
-    return order;
+    return { ...order, promisedOrderIds: distinctOrderIds };
   });
 
-  // Linked branch: re-run the delegated order's allocation AFTER the finish
-  // tx commits (confirm-arrival sequencing — the scoped core opens its own
-  // tx). A failure leaves the picking demand stale until the next
-  // Re-allocate; the finish itself stands.
-  if (orderState.pickingOrderId) {
+  // Promised orders: re-run each one's allocation AFTER the finish tx
+  // commits (confirm-arrival sequencing — the scoped core opens its own tx).
+  // A failure leaves that picking demand stale until the next Re-allocate;
+  // the finish itself stands.
+  const allocations: FinishInternalTransferResult["allocations"] = {};
+  for (const poId of orderState.promisedOrderIds) {
     try {
-      const allocation = await allocateForPickingOrder(db, orderState.pickingOrderId);
-      return { id: orderState.id, status: "finished", allocation };
+      allocations[poId] = await allocateForPickingOrder(db, poId);
     } catch {
-      return { id: orderState.id, status: "finished", allocation: null };
+      allocations[poId] = null;
     }
   }
-  return { id: orderState.id, status: "finished", allocation: null };
+  return { id: orderState.id, status: "finished", allocations };
 }
 
 // --- native shelving (unlinked put-away branch) -------------------------------
@@ -1058,7 +1161,6 @@ export async function shelveInternalTransferPackages(
   return db.transaction(async (tx) => {
     const order = await loadTransferForWrite(tx, transferOrderId);
     if (order.status !== "finished") throw new HTTPException(409, { message: "transfer_not_finished" });
-    if (order.pickingOrderId) throw new HTTPException(409, { message: "transfer_is_linked" });
     await assertActor(tx, input.actorId);
     const shelf = await queryGet<{ code: string }>(
       tx,

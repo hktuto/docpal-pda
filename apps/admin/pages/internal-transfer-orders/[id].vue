@@ -4,7 +4,7 @@ import TransferAllocateModal from "~/components/internal-transfer-orders/Transfe
 
 // Detail view of one upstream-synced internal transfer order + its item
 // lines. Stage 1 (spec 2026-11-10-internal-transfer-admin-allocate-design.md):
-// per-order Re-allocate, delegated picking order assignment, manual
+// per-order Re-allocate, allocation-supply promise display, manual
 // allocation add/remove. PDA picking + the finish branches are stage 2.
 const flow = useFlowApi();
 const { t } = useI18n();
@@ -93,62 +93,6 @@ async function setStatus(status: "pending" | "allocated") {
     reallocErr.value = describeError(e);
   } finally {
     reallocating.value = false;
-  }
-}
-
-// --- delegated picking order assignment (org-validated, open orders only) ---
-
-const ASSIGNABLE_STATUSES = ["pending", "allocated", "picking", "issue"];
-const assignSearch = ref("");
-const assignSearching = ref(false);
-const suggestions = ref<{ id: string; orderNo: string; status: string; customerCode: string | null; orgId: number | null }[]>([]);
-const assigning = ref(false);
-const assignErr = ref("");
-let searchTimer: ReturnType<typeof setTimeout> | undefined;
-let searchSeq = 0;
-
-const canEditAssignment = computed(() => ["pending", "allocated"].includes(order.value?.status ?? ""));
-
-function scheduleAssignSearch(raw: string) {
-  clearTimeout(searchTimer);
-  const q = raw?.trim();
-  if (!q) {
-    suggestions.value = [];
-    return;
-  }
-  searchTimer = setTimeout(async () => {
-    const seq = ++searchSeq;
-    assignSearching.value = true;
-    try {
-      const res = await flow.listPickingOrders({ search: q, status: ASSIGNABLE_STATUSES, page: 1, pageSize: 15 });
-      if (seq !== searchSeq) return;
-      const toOrg = order.value?.toOrgId ?? null;
-      suggestions.value = res.rows
-        .filter((r) => toOrg === null || r.orgId === null || r.orgId === toOrg)
-        .map((r) => ({ id: r.id, orderNo: r.orderNo, status: r.status, customerCode: r.customerCode, orgId: r.orgId }));
-    } catch {
-      if (seq !== searchSeq) return;
-      suggestions.value = [];
-    } finally {
-      if (seq === searchSeq) assignSearching.value = false;
-    }
-  }, 300);
-}
-
-async function assign(pickingOrderId: string | null) {
-  if (!order.value || assigning.value) return;
-  if (pickingOrderId === null && !window.confirm(t("internalTransfer.assignClearConfirm"))) return;
-  assigning.value = true;
-  assignErr.value = "";
-  try {
-    await flow.assignInternalTransferPickingOrder(order.value.id, pickingOrderId);
-    suggestions.value = [];
-    assignSearch.value = "";
-    await load();
-  } catch (e: any) {
-    assignErr.value = describeError(e);
-  } finally {
-    assigning.value = false;
   }
 }
 
@@ -243,48 +187,6 @@ function allocationSource(a: InternalTransferAllocationRow): string {
         <div><div class="dt">{{ $t("internalTransfer.colRemark") }}</div><div class="dd">{{ order.remark ?? "—" }}</div></div>
       </div>
 
-      <div class="assign-card">
-        <h2 class="section-title">{{ $t("internalTransfer.assignTitle") }}</h2>
-        <div v-if="assignErr" class="error-banner">{{ assignErr }}</div>
-        <template v-if="order.pickingOrderId">
-          <p class="assign-line">
-            <NuxtLink :to="`/picking-orders/${order.pickingOrderId}`">{{ order.pickingOrderNo }}</NuxtLink>
-            <span class="muted">
-              · {{ $t(`status.picking.${order.pickingOrderStatus ?? "pending"}`) }}
-              · {{ fmtLoc(order.pickingOrderOrgId, order.pickingOrderSubInventoryCode) }}
-              <template v-if="order.pickingOrderCustomerCode"> · {{ order.pickingOrderCustomerCode }}</template>
-            </span>
-          </p>
-          <button v-if="canEditAssignment" class="btn" :disabled="assigning" @click="assign(null)">
-            {{ $t("internalTransfer.assignClear") }}
-          </button>
-        </template>
-        <template v-else>
-          <p class="muted">{{ $t("internalTransfer.assignNone") }}</p>
-          <template v-if="canEditAssignment">
-            <input
-              v-model="assignSearch"
-              class="assign-input"
-              type="text"
-              :placeholder="$t('internalTransfer.assignSearch', { org: order.toOrgId ?? '?' })"
-              @input="scheduleAssignSearch(assignSearch)"
-            />
-            <div v-if="assignSearching" class="muted">…</div>
-            <div v-else-if="suggestions.length === 0 && assignSearch.trim()" class="muted">
-              {{ $t("internalTransfer.assignNoMatches", { org: order.toOrgId ?? "?" }) }}
-            </div>
-            <ul v-else-if="suggestions.length > 0" class="assign-suggestions">
-              <li v-for="s in suggestions" :key="s.id">
-                <button type="button" :disabled="assigning" @click="assign(s.id)">
-                  <span class="sug-no">{{ s.orderNo }}</span>
-                  <span class="muted">{{ $t(`status.picking.${s.status}`) }}<template v-if="s.customerCode"> · {{ s.customerCode }}</template></span>
-                </button>
-              </li>
-            </ul>
-          </template>
-        </template>
-      </div>
-
       <h2 class="section-title">{{ $t("internalTransfer.items") }}</h2>
       <div class="table-wrap">
         <table class="data">
@@ -309,7 +211,12 @@ function allocationSource(a: InternalTransferAllocationRow): string {
               <td>{{ item.wclItemNo ?? "—" }}</td>
               <td class="num">{{ item.qty }}</td>
               <td class="num">{{ item.pickedQty }}</td>
-              <td class="num">{{ item.allocatedQty }}</td>
+              <td class="num">
+                {{ item.allocatedQty }}
+                <div v-if="item.promisedQty > 0" class="muted promise-line">
+                  {{ $t("internalTransfer.promised", { qty: item.promisedQty, orders: item.promisedOrders ?? "" }) }}
+                </div>
+              </td>
               <td>
                 <template v-for="a in item.allocations" :key="a.id">
                   <AllocationsStockAllocationRow
@@ -371,42 +278,8 @@ function allocationSource(a: InternalTransferAllocationRow): string {
 .num {
   text-align: right;
 }
-.assign-card {
-  margin: 1rem 0;
-}
-.assign-line {
-  margin: 0.25rem 0;
-}
-.assign-input {
-  width: 24ch;
-  font: inherit;
-}
-.assign-suggestions {
-  list-style: none;
-  margin: 0.25rem 0;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  max-width: 30rem;
-}
-.assign-suggestions button {
-  display: flex;
-  gap: 0.75rem;
-  width: 100%;
-  padding: 0.3125rem 0.5rem;
-  font: inherit;
-  font-size: 0.875rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-}
-.assign-suggestions button:hover {
-  background: #eef4f6;
-}
-.sug-no {
-  font-weight: 600;
-  color: var(--brand-teal-dark);
+.promise-line {
+  font-size: 0.75rem;
 }
 .shelf-warning {
   cursor: help;

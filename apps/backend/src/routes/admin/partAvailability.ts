@@ -4,7 +4,13 @@ import { inArray, sql } from "drizzle-orm";
 import { db } from "../../db.js";
 import { queryAll } from "../../db/query.js";
 import { allowDockStock, outdatedStockYears, dateCodeFormat } from "../../config.js";
-import { resolveDemandLocation, workLockExpiry, type DemandRow as AllocateDemandRow } from "../../db/allocate.js";
+import {
+  resolveDemandLocation,
+  resolveTransferSupplyPair,
+  transferSupplyPairMatches,
+  workLockExpiry,
+  type DemandRow as AllocateDemandRow,
+} from "../../db/allocate.js";
 import { transferFromScope } from "../../db/internalTransferAllocate.js";
 import { dateCodeRank, isOutdatedRank, outdatedThresholdRank, toCanonicalDateCode } from "../../db/dateCode.js";
 import { locationMatches, type LocationMatchContext } from "../../db/locationMatch.js";
@@ -19,6 +25,13 @@ import { locationMatches, type LocationMatchContext } from "../../db/locationMat
 // same sub-inventory or a sibling in the same `sub_inventory_share_members`
 // group), so the dialogs can hide non-applicable rows while the exact-match
 // highlight still tells the two cases apart.
+// `/part-availability` also returns `transferSupply` — confirmed internal
+// transfer items as picking supply (spec
+// 2026-11-17-internal-transfer-allocation-supply-design.md): order status in
+// `allocated | picking | issue`, available = item qty − Σ picking allocations
+// on the item (all picking orders), pair resolved per item like the engine's
+// resolveTransferSupplyPair, `matched` computed with the engine's pair rule
+// (transferSupplyPairMatches, share-members widened).
 // `/part-availability` additionally accepts repeated `pickingItemId` /
 // `transferItemId` params: the context is then resolved server-side per item
 // via the engine's transfer conversion (resolveDemandLocation — a tn line
@@ -67,6 +80,21 @@ interface ReceivingRow {
   subInventoryCode: string | null;
   ctnNo: string | null;
   dateCode: string | null;
+  matched: boolean;
+}
+
+interface TransferSupplyRow {
+  internalTransferItemId: string;
+  transferOrderId: string;
+  transferOrderNo: string;
+  poNo: string | null;
+  /** Resolved supply pair (spec 2026-11-17 — rule match over to_org_id/po_no,
+   *  falling back to the order's to_sub_inventory_code). */
+  orgId: number | null;
+  subInventoryCode: string | null;
+  /** item.qty − Σ picking allocations on the item (all picking orders). */
+  available: number;
+  /** Row satisfies the requested org / sub-inventory context (see header). */
   matched: boolean;
 }
 
@@ -306,7 +334,63 @@ adminPartAvailabilityRoute.get("/part-availability", async (c) => {
       )
     : [];
 
-  return c.json({ stock, receiving, dockStockAllowed: dockStock, context: itemCtx ?? transferCtx });
+  // Confirmed internal transfer items as picking supply — same supply pool
+  // and part match as loadTransferSupplySources, but netted across ALL
+  // picking orders (a read-only view: no wipe/scope semantics apply).
+  const transferRaw = await queryAll<{
+    internalTransferItemId: string;
+    transferOrderId: string;
+    transferOrderNo: string;
+    poNo: string | null;
+    toOrgId: number | null;
+    toSubInventoryCode: string | null;
+    available: number;
+  }>(
+    db,
+    sql`
+      SELECT
+        iti.id AS "internalTransferItemId",
+        ito.id AS "transferOrderId",
+        ito.order_no AS "transferOrderNo",
+        iti.po_no AS "poNo",
+        ito.to_org_id AS "toOrgId",
+        ito.to_sub_inventory_code AS "toSubInventoryCode",
+        (iti.qty - COALESCE(promised.qty, 0))::int AS "available"
+      FROM internal_transfer_items iti
+      JOIN internal_transfer_orders ito ON ito.id = iti.transfer_order_id
+      LEFT JOIN (
+        SELECT internal_transfer_item_id AS iti_id, SUM(qty)::int AS qty
+        FROM allocations
+        WHERE internal_transfer_item_id IS NOT NULL
+        GROUP BY internal_transfer_item_id
+      ) promised ON promised.iti_id = iti.id
+      WHERE ito.status IN ('allocated', 'picking', 'issue')
+        AND iti.qty - COALESCE(promised.qty, 0) > 0
+        AND (iti.part_no = ${partNo}
+             OR (${wclItemNo} <> '' AND (iti.part_no = ${wclItemNo} OR iti.wcl_item_no = ${wclItemNo}))
+             OR iti.wcl_item_no = ${partNo})
+      ORDER BY ito.priority_seq, ito.created_date, iti.id
+    `
+  );
+  const shareMembers = await queryAll<{ orgId: number; code: string; shareGroup: string }>(
+    db,
+    sql`SELECT org_id AS "orgId", code, share_group AS "shareGroup" FROM sub_inventory_share_members`
+  );
+  const transferSupply: TransferSupplyRow[] = transferRaw.map((r) => {
+    const pair = resolveTransferSupplyPair(r);
+    return {
+      internalTransferItemId: r.internalTransferItemId,
+      transferOrderId: r.transferOrderId,
+      transferOrderNo: r.transferOrderNo,
+      poNo: r.poNo,
+      orgId: pair.orgId,
+      subInventoryCode: pair.subInventoryCode,
+      available: r.available,
+      matched: transferSupplyPairMatches(shareMembers, ctx, pair.orgId, pair.subInventoryCode),
+    };
+  });
+
+  return c.json({ stock, receiving, transferSupply, dockStockAllowed: dockStock, context: itemCtx ?? transferCtx });
 });
 
 interface AllocationBreakdownRow {

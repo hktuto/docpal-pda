@@ -4,6 +4,7 @@ import { queryAll } from "./query.js";
 import { partsMasterByWcl } from "./partsMaster.js";
 import { normalizePartNo } from "../decode/codecs.js";
 import { allowedOrgFilter } from "./org-filter.js";
+import { resolveTransferSupplyPair } from "./allocate.js";
 import { userScopeFilter, type UserScopeEntry } from "./user-scope.js";
 import { outdatedStockYears } from "../config.js";
 import { dateCodeRank, outdatedThresholdRank } from "./dateCode.js";
@@ -141,6 +142,30 @@ export interface StockSearchOptions {
 export interface StockSearchResult {
   parts: StockSearchPartRow[];
   lots: StockSearchLotRow[];
+  /** Confirmed internal transfer items as picking supply (spec
+   *  2026-11-17-internal-transfer-allocation-supply-design.md) — populated
+   *  only when the partNo filter is set; pair-resolved per item like the
+   *  engine's resolveTransferSupplyPair, netted against ALL picking
+   *  allocations on the item, filtered by the org/sub/location filters on the
+   *  RESOLVED pair. */
+  internalTransfers: StockSearchInternalTransferRow[];
+}
+
+export interface StockSearchInternalTransferRow {
+  transferOrderNo: string;
+  transferOrderId: string;
+  internalTransferItemId: string;
+  poNo: string | null;
+  /** Resolved supply pair (rule match over to_org_id/po_no, falling back to
+   *  the order's to_sub_inventory_code). */
+  orgId: number | null;
+  subInventoryCode: string | null;
+  /** Internal transfer order status (`allocated | picking | issue` — the
+   *  Confirm-gated supply pool). */
+  status: string;
+  createdDate: string | null;
+  /** item.qty − Σ picking allocations on the item (all picking orders). */
+  available: number;
 }
 
 /** Opt-in paging/sorting for searchStock. When `page` is defined the result
@@ -337,7 +362,79 @@ export async function searchStock(
       parts[idx].onHandQty += row.totalQty;
     }
   }
-  return { parts, lots };
+  return { parts, lots, internalTransfers: await internalTransferSupplyRows(db, filters) };
+}
+
+/** Confirmed internal transfer items as picking supply for the partNo filter
+ *  (see StockSearchResult.internalTransfers). Without a partNo filter the
+ *  whole supply pool would come back — meaningless next to a lot search — so
+ *  the caller only invokes this when partNo is set. */
+async function internalTransferSupplyRows(db: AppDb, filters: StockSearchFilters): Promise<StockSearchInternalTransferRow[]> {
+  if (!filters.partNo) return [];
+  const partNoNorm = normalizePartNo(filters.partNo);
+  const raw = await queryAll<{
+    transferOrderNo: string;
+    transferOrderId: string;
+    internalTransferItemId: string;
+    poNo: string | null;
+    toOrgId: number | null;
+    toSubInventoryCode: string | null;
+    status: string;
+    createdDate: Date | string | null;
+    available: number;
+  }>(
+    db,
+    sql`
+      SELECT
+        ito.order_no AS "transferOrderNo",
+        ito.id AS "transferOrderId",
+        iti.id AS "internalTransferItemId",
+        iti.po_no AS "poNo",
+        ito.to_org_id AS "toOrgId",
+        ito.to_sub_inventory_code AS "toSubInventoryCode",
+        ito.status,
+        ito.created_date AS "createdDate",
+        (iti.qty - COALESCE(promised.qty, 0))::int AS "available"
+      FROM internal_transfer_items iti
+      JOIN internal_transfer_orders ito ON ito.id = iti.transfer_order_id
+      LEFT JOIN (
+        SELECT internal_transfer_item_id AS iti_id, SUM(qty)::int AS qty
+        FROM allocations
+        WHERE internal_transfer_item_id IS NOT NULL
+        GROUP BY internal_transfer_item_id
+      ) promised ON promised.iti_id = iti.id
+      WHERE ito.status IN ('allocated', 'picking', 'issue')
+        AND iti.qty - COALESCE(promised.qty, 0) > 0
+        AND (strpos(regexp_replace(upper(iti.part_no), '\\s', '', 'g'), ${partNoNorm}) > 0
+             OR strpos(regexp_replace(upper(iti.wcl_item_no), '\\s', '', 'g'), ${partNoNorm}) > 0)
+        ${allowedOrgFilter(sql`ito.to_org_id`)}
+      ORDER BY ito.priority_seq, ito.created_date, iti.id
+    `
+  );
+  // The org/sub-inventory/location filters target the RESOLVED pair (the
+  // engine matches demand against the pair, not the raw to_ columns).
+  const wantOrg = filters.orgId?.length ? new Set(filters.orgId) : null;
+  const wantSub = filters.subInventoryCode?.length ? new Set(filters.subInventoryCode.map((v) => v.toUpperCase())) : null;
+  const wantLoc = filters.location?.length ? filters.location : null;
+  const rows: StockSearchInternalTransferRow[] = [];
+  for (const r of raw) {
+    const pair = resolveTransferSupplyPair(r);
+    if (wantOrg && (pair.orgId === null || !wantOrg.has(pair.orgId))) continue;
+    if (wantSub && (pair.subInventoryCode === null || !wantSub.has(pair.subInventoryCode.toUpperCase()))) continue;
+    if (wantLoc && !wantLoc.some((l) => l.orgId === pair.orgId && l.code === pair.subInventoryCode)) continue;
+    rows.push({
+      transferOrderNo: r.transferOrderNo,
+      transferOrderId: r.transferOrderId,
+      internalTransferItemId: r.internalTransferItemId,
+      poNo: r.poNo,
+      orgId: pair.orgId,
+      subInventoryCode: pair.subInventoryCode,
+      status: r.status,
+      createdDate: r.createdDate ? new Date(r.createdDate).toISOString() : null,
+      available: r.available,
+    });
+  }
+  return rows;
 }
 
 /** Shared WHERE fragment for the lot search and the summary aggregate —

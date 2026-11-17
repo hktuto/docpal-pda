@@ -532,7 +532,7 @@ export function createBackendWarehouseService(
     async reportInternalTransferIssue(id: string, input: { reason: string; qty?: number; note?: string | null }): Promise<void> {
       await client.post(`/internal-transfer-orders/${id}/report-issue`, input);
     },
-    async finishInternalTransferOrder(id: string): Promise<{ id: string; status: string; allocation: { fullyAllocated: number; demands: number } | null }> {
+    async finishInternalTransferOrder(id: string): Promise<{ id: string; status: string; allocations: Record<string, { fullyAllocated: number; demands: number } | null> }> {
       return client.post(`/internal-transfer-orders/${id}/finish`, {});
     },
     async shelveInternalTransferPackages(

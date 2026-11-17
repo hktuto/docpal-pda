@@ -29,6 +29,7 @@
             <span>{{ item.wclItemNo ?? item.partNo }}</span>
           </DetailRow>
           <DetailRow :label="$t('internalTransfer.colQty')" :value="`${item.pickedQty} / ${item.qty}`" />
+          <p v-if="item.promisedQty > 0 && item.promisedOrders" class="promised-line">{{ $t('internalTransfer.pda.promisedOrders', { orders: item.promisedOrders }) }}</p>
           <p v-if="item.allocations.length > 0" class="guide-title">{{ $t('internalTransfer.pda.pickFrom') }}</p>
           <div v-for="a in item.allocations" :key="a.id" class="guide-row">
             <span class="guide-source">{{ allocSource(a) }} × {{ a.qty }}</span>
@@ -397,8 +398,9 @@ async function finish(): Promise<void> {
   error.value = null;
   try {
     const res = await warehouse.finishInternalTransferOrder(orderId);
-    if (res.allocation) {
-      showToast(t("internalTransfer.pda.finishDelegated", { fully: res.allocation.fullyAllocated, demands: res.allocation.demands }));
+    const notified = Object.keys(res.allocations).length;
+    if (notified > 0) {
+      showToast(t("internalTransfer.pda.finishPromised", { count: notified }));
     } else {
       showToast(t("internalTransfer.pda.finishDone"));
     }
@@ -498,6 +500,11 @@ useVisibleReload(load);
 }
 .item-card {
   margin-bottom: 0.75rem;
+}
+.promised-line {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
 }
 .guide-title {
   margin: 0.25rem 0 0.125rem;

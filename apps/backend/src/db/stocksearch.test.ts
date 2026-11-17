@@ -256,7 +256,7 @@ test("partNo: case-insensitive substring, whitespace-normalized like scan matchi
 test("partNo: no match returns empty parts and lots", async () => {
   await reseed(client);
   const r = await searchStock(client.db, { partNo: "DOES-NOT-EXIST" });
-  assert.deepEqual(r, { parts: [], lots: [] });
+  assert.deepEqual(r, { parts: [], lots: [], internalTransfers: [] });
 });
 
 test("partNo: also matches wcl_item_no (substring with '/', full match)", async () => {
@@ -300,7 +300,7 @@ test("drawingNo: case-insensitive substring on inventory_lots.drawing_no, whites
 
   // non-matching keyword → empty
   r = await searchStock(client.db, { drawingNo: "NO-SUCH-DRAWING" });
-  assert.deepEqual(r, { parts: [], lots: [] });
+  assert.deepEqual(r, { parts: [], lots: [], internalTransfers: [] });
 });
 
 // --- paging / sorting (opt-in { rows, total } mode) --------------------------------
@@ -354,11 +354,11 @@ test("shelfCode: any-of match", async () => {
 
   // prefix is not a match — the filter is exact
   r = await searchStock(client.db, { shelfCode: ["A-01"] });
-  assert.deepEqual(r, { parts: [], lots: [] });
+  assert.deepEqual(r, { parts: [], lots: [], internalTransfers: [] });
 
   // a seeded shelf with no stock
   r = await searchStock(client.db, { shelfCode: ["A0103"] });
-  assert.deepEqual(r, { parts: [], lots: [] });
+  assert.deepEqual(r, { parts: [], lots: [], internalTransfers: [] });
 });
 
 // --- supplierCode filter --------------------------------------------------------
@@ -373,7 +373,7 @@ test("supplierCode: lot traces via lot sources to the receiving order's supplier
 
   // DAITO has no receiving orders — no lots trace to it
   const empty = await searchStock(client.db, { supplierCode: ["DAITO"] });
-  assert.deepEqual(empty, { parts: [], lots: [] });
+  assert.deepEqual(empty, { parts: [], lots: [], internalTransfers: [] });
 });
 
 // --- combined filters -----------------------------------------------------------
@@ -390,7 +390,7 @@ test("combined: all provided filters must match (AND)", async () => {
 
   // same supplier, but the part is on a different shelf → empty
   const conflict = await searchStock(client.db, { partNo: "1002", shelfCode: ["A0102"], supplierCode: ["KOA"] });
-  assert.deepEqual(conflict, { parts: [], lots: [] });
+  assert.deepEqual(conflict, { parts: [], lots: [], internalTransfers: [] });
 });
 
 // --- brand / zone / location filters ----------------------------------------------
@@ -408,7 +408,7 @@ test("brand: any-of match on the part's brand", async () => {
 
   // a seeded supplier/brand with no stocked parts
   const empty = await searchStock(client.db, { brand: ["DAITO"] });
-  assert.deepEqual(empty, { parts: [], lots: [] });
+  assert.deepEqual(empty, { parts: [], lots: [], internalTransfers: [] });
 });
 
 test("zone: any-of match on the shelf's zone", async () => {
@@ -424,7 +424,7 @@ test("zone: any-of match on the shelf's zone", async () => {
 
   // seeded zone with no stock
   const empty = await searchStock(client.db, { zone: ["GZ"] });
-  assert.deepEqual(empty, { parts: [], lots: [] });
+  assert.deepEqual(empty, { parts: [], lots: [], internalTransfers: [] });
 });
 
 test("orgId/subInventoryCode: any-of match on the lot's location pair", async () => {
@@ -443,8 +443,8 @@ test("orgId/subInventoryCode: any-of match on the lot's location pair", async ()
   assert.equal((await searchStock(client.db, { subInventoryCode: ["STORE1", "WSTORE1"] })).lots.length, 6);
 
   // seeded org/sub-inventory with no stock
-  assert.deepEqual(await searchStock(client.db, { orgId: [140] }), { parts: [], lots: [] });
-  assert.deepEqual(await searchStock(client.db, { orgId: [2], subInventoryCode: ["WSTORE1"] }), { parts: [], lots: [] });
+  assert.deepEqual(await searchStock(client.db, { orgId: [140] }), { parts: [], lots: [], internalTransfers: [] });
+  assert.deepEqual(await searchStock(client.db, { orgId: [2], subInventoryCode: ["WSTORE1"] }), { parts: [], lots: [], internalTransfers: [] });
 });
 
 test("location: exact (org, sub-inventory) pairs, no cross-product", async () => {
@@ -464,8 +464,8 @@ test("location: exact (org, sub-inventory) pairs, no cross-product", async () =>
   );
   // Cross pairs have no stock — a cross-product org × sub-inventory match
   // would return rows here.
-  assert.deepEqual(await searchStock(client.db, { location: [{ orgId: 2, code: "CHECKING" }] }), { parts: [], lots: [] });
-  assert.deepEqual(await searchStock(client.db, { location: [{ orgId: 5, code: "STORE1" }] }), { parts: [], lots: [] });
+  assert.deepEqual(await searchStock(client.db, { location: [{ orgId: 2, code: "CHECKING" }] }), { parts: [], lots: [], internalTransfers: [] });
+  assert.deepEqual(await searchStock(client.db, { location: [{ orgId: 5, code: "STORE1" }] }), { parts: [], lots: [], internalTransfers: [] });
 
   // The summary follows the same filter.
   assert.equal((await stockSearchSummary(client.db, { location: [{ orgId: 5, code: "CHECKING" }] })).lotCount, 1);
@@ -599,7 +599,7 @@ test("dateCode range: canonical YYWW bounds, swapped bounds normalized", async (
   r = await searchStock(client.db, { dateCodeTo: "0326" });
   assert.deepEqual(r.lots.map((l) => l.partNo), ["RK73H1JTTD1002F", "RK73H1JTTD2202F"]);
   r = await searchStock(client.db, { dateCodeFrom: "2701" }); // 2027w01 — nothing this new
-  assert.deepEqual(r, { parts: [], lots: [] });
+  assert.deepEqual(r, { parts: [], lots: [], internalTransfers: [] });
 });
 
 test("dateCode ordering: canonical YYWW lexicographic order is chronological across a year boundary", async () => {

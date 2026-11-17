@@ -124,7 +124,13 @@ adminAllocationRoute.post("/receiving-orders/:id/confirm-picking-allocations", a
 // `override: true` the shortfall above the source's availability is reclaimed
 // from other orders' non-manual allocations on that source.
 adminAllocationRoute.post("/picking-orders/:id/items/:itemId/allocations", async (c) => {
-  const body = await c.req.json<{ qty?: number; inventoryLotId?: string; receivingInvoiceItemId?: string; override?: boolean }>();
+  const body = await c.req.json<{
+    qty?: number;
+    inventoryLotId?: string;
+    receivingInvoiceItemId?: string;
+    internalTransferItemId?: string;
+    override?: boolean;
+  }>();
   const result = await addManualPickingAllocation(
     db,
     c.req.param("id"),
@@ -133,6 +139,7 @@ adminAllocationRoute.post("/picking-orders/:id/items/:itemId/allocations", async
       qty: Number(body.qty),
       inventoryLotId: body.inventoryLotId,
       receivingInvoiceItemId: body.receivingInvoiceItemId,
+      internalTransferItemId: body.internalTransferItemId,
       override: body.override === true,
     },
     actorFrom(c).id

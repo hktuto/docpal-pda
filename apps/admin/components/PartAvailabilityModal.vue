@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PartAvailability, PartAvailabilityReceivingRow, PartAvailabilityStockRow } from "~/utils/flowApi";
+import type { PartAvailability, PartAvailabilityReceivingRow, PartAvailabilityStockRow, PartAvailabilityTransferRow } from "~/utils/flowApi";
 
 // "Part availability" modal: stock lots + open receiving sources for a part,
 // across all orgs/sub-inventories (rows matching the context partition are
@@ -113,6 +113,11 @@ const filteredReceiving = computed(() =>
     dateCodeInRange(toCanonicalDateCode(r.dateCode, dcFormat.format.value), dcFromDate.value, dcToDate.value)
   )
 );
+// Internal transfer supply lines (2026-11-17 allocation-supply model): the
+// same `matched` partition filter as stock rows. Unlike the stock/receiving
+// sections these rows are NOT part of the final-state Confirm payload — each
+// row has its own single-row pin action instead.
+const applicableTransfer = computed(() => (data.value?.transferSupply ?? []).filter((r) => r.matched));
 // Receiving dock stock is not allocatable when the flow config turns it off.
 const showReceiving = computed(() => data.value?.dockStockAllowed === true);
 
@@ -225,6 +230,40 @@ const formDirty = computed(
 const overridingRows = computed(() => sentStock.value.filter(needsOverride));
 const canSubmit = computed(() => allocatable.value && !formInvalid.value && formDirty.value && !saving.value);
 
+// --- per-row pin for transfer-supply rows (not part of the Confirm payload) ---
+
+const pinTarget = computed(() =>
+  props.pickingOrderId && props.pickingItem ? { orderId: props.pickingOrderId, itemId: props.pickingItem.id } : null
+);
+const pinQty = ref<Record<string, string>>({});
+const pinBusy = ref(false);
+const pinErr = ref("");
+
+async function pinTransferRow(r: PartAvailabilityTransferRow) {
+  const raw = pinQty.value[r.internalTransferItemId];
+  const qty = Number(raw);
+  if (!pinTarget.value || !Number.isInteger(qty) || qty <= 0 || qty > r.available) return;
+  pinBusy.value = true;
+  pinErr.value = "";
+  try {
+    await flow.addManualPickingAllocation(pinTarget.value.orderId, pinTarget.value.itemId, {
+      qty,
+      internalTransferItemId: r.internalTransferItemId,
+    });
+    pinQty.value = { ...pinQty.value, [r.internalTransferItemId]: "" };
+    await onAllocationsChanged();
+  } catch (e: any) {
+    try {
+      const body = JSON.parse(e?.message ?? "");
+      pinErr.value = typeof body?.error === "string" ? body.error : (e?.message ?? String(e));
+    } catch {
+      pinErr.value = e?.message ?? String(e);
+    }
+  } finally {
+    pinBusy.value = false;
+  }
+}
+
 function highlight(row: { orgId: number | null; subInventoryCode: string | null }): boolean {
   return row.orgId === effContext.value.orgId && row.subInventoryCode === effContext.value.subInventoryCode;
 }
@@ -336,6 +375,8 @@ watch(
     error.value = "";
     plan.value = {};
     saving.value = false;
+    pinQty.value = {};
+    pinErr.value = "";
     dcFrom.value = "";
     dcTo.value = "";
     stockSort.value = "date-code";
@@ -531,6 +572,52 @@ watch(
             </tbody>
           </table>
           <div v-else class="muted">{{ $t("admin.pages.pickingOrders.availabilityNoneReceiving") }}</div>
+        </template>
+
+        <!-- Internal transfer supply lines: per-row pin only, never in the Confirm payload. -->
+        <template v-if="applicableTransfer.length > 0">
+          <h3 class="avail-section">{{ $t("admin.pages.pickingOrders.availabilityTransfer") }}</h3>
+          <div v-if="pinErr" class="error-banner">{{ pinErr }}</div>
+          <table class="avail-table">
+            <thead>
+              <tr>
+                <th>{{ $t("internalTransfer.colOrderNo") }}</th>
+                <th>{{ $t("internalTransfer.colPoNo") }}</th>
+                <th>{{ $t("admin.pages.shelfBoxes.orgId") }}</th>
+                <th>{{ $t("admin.pages.shelfBoxes.subInventory") }}</th>
+                <th class="num">{{ $t("internalTransfer.mAvailable") }}</th>
+                <th v-if="pinTarget" class="num">{{ $t("internalTransfer.mAllocate") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in applicableTransfer" :key="r.internalTransferItemId" :class="{ 'avail-match': highlight(r) }">
+                <td>{{ r.transferOrderNo }}</td>
+                <td>{{ r.poNo ?? "—" }}</td>
+                <td>{{ r.orgId ?? "—" }}</td>
+                <td>{{ r.subInventoryCode ?? "—" }}</td>
+                <td class="num">{{ r.available }}</td>
+                <td v-if="pinTarget" class="num">
+                  <input
+                    v-model="pinQty[r.internalTransferItemId]"
+                    class="avail-qty"
+                    type="number"
+                    min="1"
+                    :max="r.available"
+                    :disabled="pinBusy"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-small"
+                    :disabled="pinBusy || !pinQty[r.internalTransferItemId] || Number(pinQty[r.internalTransferItemId]) <= 0 || Number(pinQty[r.internalTransferItemId]) > r.available"
+                    :title="$t('internalTransfer.manualPin')"
+                    @click="pinTransferRow(r)"
+                  >
+                    {{ $t("internalTransfer.mAllocate") }} 📌
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </template>
         <div v-if="overOpenDemand" class="warn-text">
           {{ $t("admin.pages.pickingOrders.availabilityOverOpen", { qty: Math.abs(remaining) }) }}

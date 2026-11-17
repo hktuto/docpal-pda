@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../../db.js";
-import { listInternalTransferOrders, getInternalTransferOrder, assignTransferPickingOrder } from "../../db/internalTransfer.js";
+import { listInternalTransferOrders, getInternalTransferOrder } from "../../db/internalTransfer.js";
 import {
   allocateForInternalTransferOrder,
   addManualInternalTransferAllocation,
@@ -66,17 +66,6 @@ adminInternalTransferRoute.post("/internal-transfer-orders/:id/reallocate", asyn
     allocateForInternalTransferOrder(runnerDb, c.req.param("id"))
   );
   return c.json({ allocation });
-});
-
-// Assign or clear the delegated picking order. Body {pickingOrderId: string | null}.
-// 404 transfer_order_not_found / picking_order_not_found; 409
-// transfer_not_editable / picking_order_not_open / org_mismatch.
-adminInternalTransferRoute.put("/internal-transfer-orders/:id/picking-order", async (c) => {
-  const body = await c.req.json<{ pickingOrderId?: string | null }>();
-  const pickingOrderId =
-    body.pickingOrderId === undefined || body.pickingOrderId === null ? null : String(body.pickingOrderId).trim() || null;
-  const result = await assignTransferPickingOrder(db, c.req.param("id"), pickingOrderId, actorFrom(c).id);
-  return c.json(result);
 });
 
 // "Allocate" in the availability modal: pin a manual allocation of `qty`

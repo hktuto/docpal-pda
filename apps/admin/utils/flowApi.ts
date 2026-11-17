@@ -735,8 +735,8 @@ export interface InternalTransferOrderRow {
   toSubInventoryCode: string | null;
   status: string; // pending | allocated | picking | issue | finished
   allocationStatus: string; // unallocated | partial | allocated
-  /** A delegated picking order is linked (spec 2026-11-10 stage 1). */
-  linked: boolean;
+  /** Lines with promised picking demand (2026-11-17 allocation-supply model). */
+  promisedItems: number;
   customerName: string | null;
   remark: string | null;
   createdDate: string;
@@ -805,15 +805,8 @@ export interface TransferAllocateSummary {
 
 /** GET /admin/internal-transfer-orders/:id order header (no aggregates). */
 export interface InternalTransferOrderDetailRow
-  extends Omit<InternalTransferOrderRow, "itemCount" | "totalQty" | "pickedQty" | "allocatedQty"> {
+  extends Omit<InternalTransferOrderRow, "itemCount" | "totalQty" | "pickedQty" | "allocatedQty" | "promisedItems"> {
   prioritySeq: number;
-  pickingOrderId: string | null;
-  /** Delegated picking order summary (joined server-side, null when unassigned). */
-  pickingOrderNo: string | null;
-  pickingOrderStatus: string | null;
-  pickingOrderOrgId: number | null;
-  pickingOrderSubInventoryCode: string | null;
-  pickingOrderCustomerCode: string | null;
   issueReason: string | null;
   issueQty: number | null;
   issueNote: string | null;
@@ -830,6 +823,10 @@ export interface InternalTransferItemRow {
   qty: number;
   pickedQty: number;
   allocatedQty: number;
+  /** Qty promised to picking demand (2026-11-17 allocation-supply model). */
+  promisedQty: number;
+  /** Comma-joined picking order nos holding the promise (null when none). */
+  promisedOrders: string | null;
   status: string; // pending | picked
   poNo: string | null;
   lineId: number | null;
@@ -884,10 +881,25 @@ export interface PartAvailabilityReceivingRow {
   matched: boolean;
 }
 
+export interface PartAvailabilityTransferRow {
+  internalTransferItemId: string;
+  transferOrderId: string;
+  transferOrderNo: string;
+  poNo: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  /** Qty this transfer line can still supply (promised − picked). */
+  available: number;
+  /** Satisfies the requested org / sub-inventory context. */
+  matched: boolean;
+}
+
 export interface PartAvailability {
   stock: PartAvailabilityStockRow[];
   /** Empty when the warehouse config disallows allocation from receiving dock stock. */
   receiving: PartAvailabilityReceivingRow[];
+  /** Internal transfer lines that can supply this part (2026-11-17). */
+  transferSupply: PartAvailabilityTransferRow[];
   dockStockAllowed: boolean;
   /** Server-resolved dialog context when `pickingItemIds` / `transferItemIds`
    *  were passed: the transfer-source partition for tn lines, the tn-converted
@@ -1562,7 +1574,7 @@ export function useFlowApi() {
     addManualPickingAllocation: (
       orderId: string,
       itemId: string,
-      body: { qty: number; inventoryLotId?: string; receivingInvoiceItemId?: string; override?: boolean }
+      body: { qty: number; inventoryLotId?: string; receivingInvoiceItemId?: string; internalTransferItemId?: string; override?: boolean }
     ) =>
       api.post<{ allocationId: string; qty: number }>(
         `/admin/picking-orders/${orderId}/items/${itemId}/allocations`,
@@ -1789,8 +1801,7 @@ export function useFlowApi() {
       ),
     // Internal transfer stage-1 mutations (spec
     // 2026-11-10-internal-transfer-admin-allocate-design.md): per-order
-    // Re-allocate (from_-partition scoped), delegated picking order
-    // assignment (org-validated), manual pin add/remove.
+    // Re-allocate (from_-partition scoped), manual pin add/remove.
     reallocateInternalTransferOrder: (id: string) =>
       api.post<{ allocation: TransferAllocateSummary }>(
         `/admin/internal-transfer-orders/${encodeURIComponent(id)}/reallocate`,
@@ -1802,11 +1813,6 @@ export function useFlowApi() {
       api.patch<{ id: string; status: string }>(
         `/admin/internal-transfer-orders/${encodeURIComponent(id)}/status`,
         { status }
-      ),
-    assignInternalTransferPickingOrder: (id: string, pickingOrderId: string | null) =>
-      api.put<{ pickingOrderId: string | null; pickingOrderNo: string | null }>(
-        `/admin/internal-transfer-orders/${encodeURIComponent(id)}/picking-order`,
-        { pickingOrderId }
       ),
     addInternalTransferAllocation: (
       id: string,

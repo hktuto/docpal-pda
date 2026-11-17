@@ -17,8 +17,8 @@ import {
   addManualInternalTransferAllocations,
   removeInternalTransferAllocation,
 } from "./internalTransferAllocate.js";
-import { assignTransferPickingOrder } from "./internalTransfer.js";
-import { allocateForPickingOrder, removePickingAllocation } from "./allocate.js";
+import { allocateForPickingOrder, removePickingAllocation, addManualPickingAllocation } from "./allocate.js";
+import { syncTransferPutAwayTask } from "./internalTransferPutAway.js";
 import { confirmReceivingArrival } from "./receiving.js";
 import {
   _setPickingFromSubinventoryOrgsForTests,
@@ -52,12 +52,12 @@ beforeEach(async () => {
 
 async function insertTransfer(
   orderNo: string,
-  opts: { fromOrgId?: number; fromSub?: string; toOrgId?: number; status?: string } = {}
+  opts: { fromOrgId?: number; fromSub?: string; toOrgId?: number; toSub?: string; status?: string } = {}
 ): Promise<string> {
   const id = randomUUID();
   await client.db.execute(sql`
-    INSERT INTO internal_transfer_orders (id, order_no, from_org_id, from_sub_inventory_code, to_org_id, status, priority_seq, created_date, last_update_date)
-    VALUES (${id}, ${orderNo}, ${opts.fromOrgId ?? 2}, ${opts.fromSub ?? "STORE1"}, ${opts.toOrgId ?? 5}, ${opts.status ?? "pending"}, 1, now(), now())`);
+    INSERT INTO internal_transfer_orders (id, order_no, from_org_id, from_sub_inventory_code, to_org_id, to_sub_inventory_code, status, priority_seq, created_date, last_update_date)
+    VALUES (${id}, ${orderNo}, ${opts.fromOrgId ?? 2}, ${opts.fromSub ?? "STORE1"}, ${opts.toOrgId ?? 5}, ${opts.toSub ?? null}, ${opts.status ?? "pending"}, 1, now(), now())`);
   return id;
 }
 
@@ -393,56 +393,136 @@ test("manual batch: two pins succeed; over remaining rolls the whole set back", 
   assert.equal(Number((rows[0] as any).n), 0);
 });
 
-test("assign delegated picking order: org match, open window, editable window, clear", async () => {
-  const transferId = await insertTransfer("ITO-ASSIGN", { toOrgId: 5 });
-  const sameOrg = await insertPickingOrder("SO-TO5", 5, "RK73H1JTTD1002F", 10, "pending", "CHECKING");
-  const otherOrg = await insertPickingOrder("SO-TO2", 2, "RK73H1JTTD1002F", 10);
-  const shipped = await insertPickingOrder("SO-SHIP", 5, "RK73H1JTTD1002F", 10, "shipped", "CHECKING");
+test("picking re-allocate: confirmed transfer items are supply at the resolved pair; pending are not", async () => {
+  const transferId = await insertTransfer("ITO-SUPPLY", { toOrgId: 5, toSub: "CHECKING" });
+  const item = await insertTransferItem(transferId, "RK73H1JTTD1002F", 100);
+  // Picking demand at the transfer's resolved supply pair (rules off → sub
+  // falls back to to_sub_inventory_code)
+  const p = await insertPickingOrder("SO-SUPPLY", 5, "RK73H1JTTD1002F", 100, "pending", "CHECKING");
 
-  await rejects(
-    () => assignTransferPickingOrder(client.db, transferId, otherOrg.orderId, ACTOR),
-    "org_mismatch"
-  );
-  await rejects(
-    () => assignTransferPickingOrder(client.db, transferId, shipped.orderId, ACTOR),
-    "picking_order_not_open"
-  );
-  await rejects(() => assignTransferPickingOrder(client.db, randomUUID(), sameOrg.orderId, ACTOR), "transfer_order_not_found");
-  await rejects(() => assignTransferPickingOrder(client.db, transferId, randomUUID(), ACTOR), "picking_order_not_found");
+  // pending → no supply
+  let s = await allocateForPickingOrder(client.db, p.orderId);
+  assert.equal(s.fullyAllocated, 0);
+  let rows = await client.db.execute(sql`
+    SELECT COUNT(*)::int AS n FROM allocations WHERE picking_item_id = ${p.itemId}`);
+  assert.equal(Number((rows[0] as any).n), 0);
 
-  const res = await assignTransferPickingOrder(client.db, transferId, sameOrg.orderId, ACTOR);
-  assert.deepEqual(res, { pickingOrderId: sameOrg.orderId, pickingOrderNo: "SO-TO5" });
-  let order = await client.db.execute(sql`SELECT picking_order_id FROM internal_transfer_orders WHERE id = ${transferId}`);
-  assert.equal((order[0] as any).picking_order_id, sameOrg.orderId);
-
-  const cleared = await assignTransferPickingOrder(client.db, transferId, null, ACTOR);
-  assert.deepEqual(cleared, { pickingOrderId: null, pickingOrderNo: null });
-  order = await client.db.execute(sql`SELECT picking_order_id FROM internal_transfer_orders WHERE id = ${transferId}`);
-  assert.equal((order[0] as any).picking_order_id, null);
-
-  // a transfer past pending/allocated is frozen
-  await client.db.execute(sql`UPDATE internal_transfer_orders SET status = 'picking' WHERE id = ${transferId}`);
-  await rejects(
-    () => assignTransferPickingOrder(client.db, transferId, sameOrg.orderId, ACTOR),
-    "transfer_not_editable"
-  );
+  await client.db.execute(sql`UPDATE internal_transfer_orders SET status = 'allocated' WHERE id = ${transferId}`);
+  s = await allocateForPickingOrder(client.db, p.orderId);
+  assert.equal(s.fullyAllocated, 1);
+  rows = await client.db.execute(sql`
+    SELECT qty, internal_transfer_item_id AS tid FROM allocations WHERE picking_item_id = ${p.itemId}`);
+  assert.equal(rows.length, 1);
+  assert.equal(Number((rows[0] as any).qty), 100);
+  assert.equal((rows[0] as any).tid, item);
 });
 
-test("detail payload embeds item allocations and the assigned picking order", async () => {
+test("picking re-allocate: supply netting — two orders share one transfer item", async () => {
+  const transferId = await insertTransfer("ITO-NET", { toOrgId: 5, toSub: "CHECKING" });
+  await insertTransferItem(transferId, "RK73H1JTTD1002F", 100);
+  await client.db.execute(sql`UPDATE internal_transfer_orders SET status = 'allocated' WHERE id = ${transferId}`);
+  const a = await insertPickingOrder("SO-NET-A", 5, "RK73H1JTTD1002F", 60, "pending", "CHECKING");
+  const b = await insertPickingOrder("SO-NET-B", 5, "RK73H1JTTD1002F", 60, "pending", "CHECKING");
+
+  const sa = await allocateForPickingOrder(client.db, a.orderId);
+  assert.equal(sa.fullyAllocated, 1);
+  // order B nets A's promise out of supply → only 40 left
+  const sb = await allocateForPickingOrder(client.db, b.orderId);
+  assert.equal(sb.partiallyAllocated, 1);
+  const held = await client.db.execute(sql`
+    SELECT COALESCE(SUM(qty), 0)::int AS q FROM allocations WHERE picking_item_id = ${b.itemId}`);
+  assert.equal(Number((held[0] as any).q), 40);
+  const total = await client.db.execute(sql`
+    SELECT COALESCE(SUM(qty), 0)::int AS q FROM allocations
+    WHERE internal_transfer_item_id IN (SELECT id FROM internal_transfer_items WHERE transfer_order_id = ${transferId})`);
+  assert.equal(Number((total[0] as any).q), 100); // never over-promised
+});
+
+async function insertPromise(pickingItemId: string, transferItemId: string, qty: number): Promise<string> {
+  const id = randomUUID();
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, internal_transfer_item_id, qty, manual, created_date, last_update_date)
+    VALUES (${id}, ${pickingItemId}, ${transferItemId}, ${qty}, false, now(), now())`);
+  return id;
+}
+
+async function insertPutAwayTask(transferOrderId: string): Promise<string> {
+  const id = randomUUID();
+  await client.db.execute(sql`
+    INSERT INTO put_away_tasks (id, internal_transfer_order_id, org_id, sub_inventory_code, status, created_date, last_update_date)
+    VALUES (${id}, ${transferOrderId}, 5, NULL, 'pending', now(), now())`);
+  return id;
+}
+
+test("put-away task lifecycle: allocation actions drive the task", async () => {
+  const transferId = await insertTransfer("ITO-TASK", { toOrgId: 5 });
+  const item = await insertTransferItem(transferId, "RK73H1JTTD1002F", 100);
+  await client.db.execute(sql`UPDATE internal_transfer_orders SET status = 'finished' WHERE id = ${transferId}`);
+  const p = await insertPickingOrder("SO-TASK", 5, "RK73H1JTTD1002F", 100, "pending", "CHECKING");
+
+  // finished with a task (the remainder branch) — fully promising deletes it
+  const taskId = await insertPutAwayTask(transferId);
+  const promiseId = await insertPromise(p.itemId, item, 100);
+  await syncTransferPutAwayTask(client.db, { transferOrderId: transferId });
+  let task = await client.db.execute(sql`SELECT id FROM put_away_tasks WHERE internal_transfer_order_id = ${transferId}`);
+  assert.equal(task.length, 0);
+
+  // removing the promise re-opens the remainder → the task returns
+  await client.db.execute(sql`DELETE FROM allocations WHERE id = ${promiseId}`);
+  await syncTransferPutAwayTask(client.db, { transferOrderId: transferId });
+  task = await client.db.execute(sql`SELECT id, status FROM put_away_tasks WHERE internal_transfer_order_id = ${transferId}`);
+  assert.equal(task.length, 1);
+  assert.equal((task[0] as any).status, "pending");
+  void taskId;
+});
+
+test("manual pin: picking supply pin on a transfer item, guards + lifecycle sync", async () => {
+  const transferId = await insertTransfer("ITO-PIN-P", { toOrgId: 5 });
+  const item = await insertTransferItem(transferId, "RK73H1JTTD1002F", 100);
+  await client.db.execute(sql`UPDATE internal_transfer_orders SET status = 'allocated' WHERE id = ${transferId}`);
+  const p = await insertPickingOrder("SO-PIN-P", 5, "RK73H1JTTD1002F", 80, "pending", "CHECKING");
+
+  // pending transfers are not pinnable
+  const pendingId = (await insertTransfer("ITO-PIN-P2", { toOrgId: 5 })) ;
+  const pendingItem = await insertTransferItem(pendingId, "RK73H1JTTD1002F", 100);
+  await rejects(
+    () => addManualPickingAllocation(client.db, p.orderId, p.itemId, { qty: 10, internalTransferItemId: pendingItem }, ACTOR),
+    "transfer_not_confirmed"
+  );
+
+  const added = await addManualPickingAllocation(client.db, p.orderId, p.itemId, { qty: 60, internalTransferItemId: item }, ACTOR);
+  assert.equal(added.qty, 60);
+  let rows = await client.db.execute(sql`
+    SELECT qty, manual FROM allocations WHERE picking_item_id = ${p.itemId}`);
+  assert.equal(rows.length, 1);
+  assert.equal(Number((rows[0] as any).qty), 60);
+  assert.equal((rows[0] as any).manual, true);
+
+  // over the item's supply (60 pinned + 60 more > 100)
+  await rejects(
+    () => addManualPickingAllocation(client.db, p.orderId, p.itemId, { qty: 60, internalTransferItemId: item }, ACTOR),
+    "insufficient_available"
+  );
+  void transferId;
+});
+
+test("detail payload embeds item allocations and per-item picking promises", async () => {
   const transferId = await insertTransfer("ITO-DETAIL");
   const item = await insertTransferItem(transferId, "RK73H1JTTD1002F", 100);
   await client.db.execute(sql`
     INSERT INTO internal_transfer_allocations (id, transfer_item_id, inventory_lot_id, qty, created_date, last_update_date)
     VALUES (${randomUUID()}, ${item}, ${LOT_18}, 100, now(), now())`);
   const p = await insertPickingOrder("SO-DET", 5, "RK73H1JTTD1002F", 10, "pending", "CHECKING");
-  await assignTransferPickingOrder(client.db, transferId, p.orderId, ACTOR);
+  await insertPromise(p.itemId, item, 40);
 
   const { getInternalTransferOrder } = await import("./internalTransfer.js");
   const detail = await getInternalTransferOrder(client.db, transferId);
   assert.ok(detail);
-  assert.equal((detail.order as any).pickingOrderNo, "SO-DET");
+  assert.equal((detail.order as any).promisedItems, 1);
   const items = detail.items as any[];
   assert.equal(items.length, 1);
+  assert.equal(items[0].promisedQty, 40);
+  assert.equal(items[0].promisedOrders, "SO-DET");
   assert.equal(items[0].allocations.length, 1);
   const a = items[0].allocations[0];
   assert.equal(a.qty, 100);

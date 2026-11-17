@@ -892,6 +892,10 @@ export interface InternalTransferPickingItem {
   status: string; // pending | picked
   lineNumber: number | null;
   poNo: string | null;
+  /** Picking allocations promised from this item (allocations.internal_transfer_item_id). */
+  promisedQty: number;
+  /** Promised picking order numbers (comma-joined, from the detail payload). */
+  promisedOrders: string | null;
   allocations: InternalTransferPickingAllocation[];
 }
 
