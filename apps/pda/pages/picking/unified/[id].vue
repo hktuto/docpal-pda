@@ -71,8 +71,6 @@
         :any-adding-all="anyAddingAll"
         :unboxed-count="unboxedCountForOrder"
         :removing="removing"
-        :scan-into-box-id="scanIntoBoxId"
-        :scanning-into-box="scanningIntoBox"
         :foreign-box-ids="foreignBoxIds"
         @create-box="createBox"
         @choose-box="openChooseBox"
@@ -80,7 +78,6 @@
         @close-box="closeBox"
         @cancel-box="cancelBox"
         @add-all-to-box="addAllToBox"
-        @toggle-scan-into-box="toggleScanIntoBox"
         @remove-from-box="removeFromBox"
       />
 
@@ -311,9 +308,7 @@ const collapsedStyle = computed(() => viewConfig.value.pickingDetail.collapsedSt
 // Cross-order packing: with a box armed ("scan into box"), item barcode
 // scans from ANY order pick straight into that box (404
 // no_matching_picking_item / 409 ambiguous_picking_item surface as toasts).
-function toggleScanIntoBox(boxId: string) {
-  scanIntoBoxId.value = scanIntoBoxId.value === boxId ? null : boxId;
-}
+
 
 async function scanIntoBox(boxId: string, barcode: string): Promise<boolean> {
   if (scanningIntoBox.value) return false;

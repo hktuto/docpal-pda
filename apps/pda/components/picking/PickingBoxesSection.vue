@@ -113,17 +113,6 @@
           </template>
         </button>
         <button
-          class="btn btn--small"
-          :class="{ 'btn--ghost': scanIntoBoxId !== box.id }"
-          :disabled="scanningIntoBox"
-          @click="emit('toggle-scan-into-box', box.id)"
-        >
-          <template v-if="scanningIntoBox && scanIntoBoxId === box.id">
-            <InlineSpinner />
-          </template>
-          {{ scanIntoBoxId === box.id ? $t('picking.boxesSection.scanIntoBoxStop') : $t('picking.boxesSection.scanIntoBox') }}
-        </button>
-        <button
           v-if="closable && !isForeign(box.id)"
           class="btn btn--small"
           :disabled="box.packageCount === 0 || closingBox[box.id]"
@@ -140,9 +129,6 @@
           {{ cancellingBox[box.id] ? $t('actions.canceling') : $t('picking.boxesSection.cancelBox') }}
         </button>
       </div>
-      <p v-if="box.status === 'open' && scanIntoBoxId === box.id" class="scan-into-hint">
-        {{ $t('picking.boxesSection.scanIntoBoxHint') }}
-      </p>
     </div>
   </div>
 </template>
@@ -189,9 +175,6 @@ const props = defineProps<{
   unboxedCount: number;
   expanded: boolean;
   removing: Record<string, boolean>;
-  /** The box armed for cross-order "scan item into box", if any. */
-  scanIntoBoxId: string | null;
-  scanningIntoBox: boolean;
   /** Box ids this page added but does not own (chosen cross-order boxes) —
    *  their cards hide Close/Cancel so they can't be closed from here. */
   foreignBoxIds?: string[];
@@ -204,7 +187,6 @@ const emit = defineEmits<{
   "close-box": [boxId: string];
   "cancel-box": [boxId: string];
   "add-all-to-box": [boxId: string];
-  "toggle-scan-into-box": [boxId: string];
   "remove-from-box": [packageId: string];
   "update:expanded": [value: boolean];
 }>();
