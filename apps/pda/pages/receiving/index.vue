@@ -13,6 +13,7 @@
     :has-more="hasMore"
     :reload="refresh"
     :topics="['/receiving-orders']"
+    :applyOnSearch="true"
     @apply="load(true)"
     @load-more="load(false)"
   >

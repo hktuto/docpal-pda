@@ -1,11 +1,14 @@
 <template>
   <AppListPage
+    v-model:search="search"
+    search-placeholder="putAway.searchPlaceholder"
+    :apply-on-search="false"
     :loading="pending"
     :error="error"
-    :empty="taskMode ? tasks.length === 0 : candidates.length === 0"
+    :empty="taskMode ? visibleTasks.length === 0 : visibleCandidates.length === 0"
     :empty-text="taskMode ? 'putAway.noTasks' : 'common.noReceivingOrdersNeedPutAway'"
-    :shown="taskMode ? tasks.length : candidates.length"
-    :total="taskMode ? tasks.length : candidates.length"
+    :shown="taskMode ? visibleTasks.length : visibleCandidates.length"
+    :total="taskMode ? visibleTasks.length : visibleCandidates.length"
     :has-more="false"
     hide-footer
     :reload="load"
@@ -39,7 +42,7 @@
 
     <template v-if="taskMode">
       <AppListRow
-        v-for="task in tasks"
+        v-for="task in visibleTasks"
         :key="task.id"
         :to="`/put-away/${task.receivingOrderId}?task=${task.id}`"
         :title="rowView(task).title"
@@ -51,7 +54,7 @@
     </template>
     <template v-else>
       <AppListRow
-        v-for="ro in candidates"
+        v-for="ro in visibleCandidates"
         :key="ro.id"
         :to="`/put-away/${ro.id}`"
         :title="rowView(ro).title"
@@ -104,6 +107,32 @@ function rowChip(row: PutAwayCandidate | PutAwayTaskListRow) {
     })
   );
 }
+
+// Client-side search over the loaded rows (the list endpoints return the
+// whole queue; no server-side search param) — match title/meta text plus the
+// common identity fields, mirroring goods-verify.
+const search = ref("");
+function rowHaystack(row: PutAwayCandidate | PutAwayTaskListRow): string {
+  return [
+    row.displayName ?? "",
+    row.batchNo,
+    row.supplierName ?? "",
+    row.supplierCode ?? "",
+    row.invoiceNos ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+const visibleTasks = computed(() => {
+  const term = search.value.trim().toLowerCase();
+  if (!term) return tasks.value;
+  return tasks.value.filter((task) => rowHaystack(task).includes(term));
+});
+const visibleCandidates = computed(() => {
+  const term = search.value.trim().toLowerCase();
+  if (!term) return candidates.value;
+  return candidates.value.filter((ro) => rowHaystack(ro).includes(term));
+});
 
 useHead({ title: t("putAway.title") });
 

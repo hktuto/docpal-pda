@@ -512,7 +512,8 @@ async function submit() {
 }
 .item-meta {
   color: var(--muted);
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .scan-banner {
   font-weight: 600;

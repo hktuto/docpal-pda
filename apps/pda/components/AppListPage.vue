@@ -118,8 +118,17 @@ const hasActions = computed(() => Boolean(slots["toolbar-actions"]));
 // (dismissing the keyboard does not always blur the input).
 // `lastAppliedSearch` skips a redundant reload when the value has not changed
 // since the last apply.
+//
+// Background-window timer throttling (BUG: occluded windows clamp
+// setTimeout to ≥1s, and heavily-hidden ones to 1/min — observed when
+// operating the app through remote control): the debounced apply would not
+// fire until the window became visible again. A `searchDirty` flag plus a
+// visibility/focus flush ensures a typed-but-unapplied search is committed
+// as soon as the page is seen again, instead of only on the next unrelated
+// reload.
 let lastAppliedSearch = props.search ?? "";
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+let searchDirty = false;
 
 function applySearch() {
   if (props.applyOnSearch === false) return;
@@ -131,23 +140,46 @@ function applySearch() {
 
 function onSearchInput(event: Event) {
   emit("update:search", (event.target as HTMLInputElement).value);
+  searchDirty = props.applyOnSearch !== false;
   if (searchDebounce) clearTimeout(searchDebounce);
   searchDebounce = setTimeout(() => {
     searchDebounce = null;
+    searchDirty = false;
     applySearch();
   }, 400);
 }
 
-function onSearchCommit() {
+/** Commit a typed-but-unapplied search right away — on Enter/blur, and when
+ *  the window becomes visible/focused again (timer-throttled background). */
+function flushSearch() {
   if (searchDebounce) {
     clearTimeout(searchDebounce);
     searchDebounce = null;
   }
-  applySearch();
+  if (searchDirty) {
+    searchDirty = false;
+    applySearch();
+  }
+}
+
+function onSearchCommit() {
+  flushSearch();
 }
 
 onBeforeUnmount(() => {
   if (searchDebounce) clearTimeout(searchDebounce);
+});
+
+// Wake flush: visibility regain / window focus (covers the timer-throttled
+// occluded-window case; harmless no-op when nothing is pending).
+function onWakeFlush() {
+  flushSearch();
+}
+document.addEventListener("visibilitychange", onWakeFlush);
+window.addEventListener("focus", onWakeFlush);
+onBeforeUnmount(() => {
+  document.removeEventListener("visibilitychange", onWakeFlush);
+  window.removeEventListener("focus", onWakeFlush);
 });
 
 watch(

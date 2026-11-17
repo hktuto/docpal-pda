@@ -164,9 +164,12 @@ function groupProgress(group: ReceivingItemGroup): string {
   font-weight: 700;
   color: var(--muted);
   min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .group__progress {

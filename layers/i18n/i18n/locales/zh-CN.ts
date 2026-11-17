@@ -557,6 +557,7 @@ export default {
       addAllConfirm: "将所有未装箱包裹加入此箱？",
       scanIntoBox: "扫描物料入箱",
       scanIntoBoxStop: "停止扫描",
+      orderLabel: "拣货单",
       scanIntoBoxHint: "已启用——扫描任意拣货单的物料条码即可装入此箱。",
       scanIntoBoxSuccess: "已装入箱子 {box}",
       contents: "箱内明细",
@@ -639,6 +640,7 @@ export default {
   },
   putAway: {
     title: "上架",
+    searchPlaceholder: "搜索单号 / 供应商 / 发票号",
     hint: "尚有库存停留在收货区的收货单。",
     tasksHint: "待上架任务，由最早建立的开始。",
     noTasks: "没有待上架任务。",

@@ -143,6 +143,8 @@ useVisibleReload(load, ["/labeling-orders", "/picking-orders"]);
 .order-header__title {
   margin: 0;
   font-size: 1.125rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .info-line {

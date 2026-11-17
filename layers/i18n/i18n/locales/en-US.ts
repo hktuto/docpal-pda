@@ -558,6 +558,7 @@ export default {
       addAllConfirm: "Add all unboxed packages to this box?",
       scanIntoBox: "Scan item into box",
       scanIntoBoxStop: "Stop scanning",
+      orderLabel: "Order",
       scanIntoBoxHint: "Armed — scan an item barcode from any order to pack it into this box.",
       scanIntoBoxSuccess: "Packed into box {box}",
       contents: "Contents",
@@ -640,6 +641,7 @@ export default {
   },
   putAway: {
     title: "Put-away",
+    searchPlaceholder: "Search order no / supplier / invoice no",
     hint: "Receiving orders with stock still in the receiving area.",
     tasksHint: "Pending put-away tasks, oldest first.",
     noTasks: "No pending put-away tasks.",

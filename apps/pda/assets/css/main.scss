@@ -88,6 +88,7 @@ a:hover {
   font-size: 1.125rem;
   font-weight: 600;
   margin: 0 0 0.25rem;
+  overflow-wrap: anywhere;
 }
 
 .card__meta {
@@ -376,9 +377,12 @@ input:focus {
   font-weight: 700;
   color: var(--text);
   min-width: 0;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .list-row__meta {
@@ -655,7 +659,7 @@ input:focus {
 }
 
 .app-list-row__title {
-  flex: 1 0 auto;
+  flex: 1 1 auto; /* must be shrinkable, otherwise long titles overflow instead of wrapping */
   min-width: 0;
   font-size: 1rem;
   font-weight: 700;
