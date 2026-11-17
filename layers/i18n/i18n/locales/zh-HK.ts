@@ -3127,8 +3127,6 @@ export default {
       issueBanner: "異常：{reason} × {qty} {note}",
       pickFrom: "取貨位置",
       pick: "取貨",
-      pickQtyPrompt: "取貨數量（最多 {max}）",
-      pickQtyInvalid: "請輸入不大於 {max} 的整數",
       noMatch: "此單沒有匹配的料號。",
       noShelfMatch: "未識別的貨架。",
       pickedToast: "已取貨 {qty} × {part}。",

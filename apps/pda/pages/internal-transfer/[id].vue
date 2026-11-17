@@ -248,19 +248,13 @@ interface LabelFields {
   cow?: string;
 }
 
-/** Guidance-row tap: prompt for qty (capped at the reservation). Label scans
- *  never come here — their qty is the pick qty. */
+/** Guidance-row tap: pick the WHOLE reservation row (capped at the item's
+ *  remaining qty) — one press, no qty prompt. Label scans never came here
+ *  either (their qty is the pick qty). */
 async function pick(item: InternalTransferPickingItem, a: InternalTransferPickingAllocation): Promise<void> {
   const remaining = item.qty - item.pickedQty;
-  const max = Math.min(a.qty, remaining);
-  if (max <= 0) return;
-  const input = window.prompt(t("internalTransfer.pda.pickQtyPrompt", { max }), String(max));
-  if (input === null) return;
-  const qty = Number(input);
-  if (!Number.isInteger(qty) || qty <= 0 || qty > max) {
-    showToast(t("internalTransfer.pda.pickQtyInvalid", { max }));
-    return;
-  }
+  const qty = Math.min(a.qty, remaining);
+  if (qty <= 0) return;
   busy.value = true;
   error.value = null;
   try {
@@ -351,7 +345,8 @@ async function handlePickScan(raw: string): Promise<boolean> {
       busy.value = false;
     }
   }
-  // No label qty (bare part scan / decode without qty) — prompt, capped.
+  // No label qty (bare part scan / decode without qty) — one-press pick of
+  // the first remaining allocation row, same as tapping its Pick button.
   if (item.allocations.length > 0) {
     await pick(item, item.allocations[0]);
     return true;

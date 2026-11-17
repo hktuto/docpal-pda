@@ -3132,8 +3132,6 @@ export default {
       issueBanner: "Issue: {reason} × {qty} {note}",
       pickFrom: "Pick from",
       pick: "Pick",
-      pickQtyPrompt: "Qty to pick (max {max})",
-      pickQtyInvalid: "Enter a whole qty ≤ {max}",
       noMatch: "No matching item on this order.",
       noShelfMatch: "Unknown shelf.",
       pickedToast: "Picked {qty} × {part}.",

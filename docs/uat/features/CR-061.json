@@ -1,0 +1,14 @@
+{
+  "id": "CR-061",
+  "dateRaised": "2026-11-17",
+  "raisedBy": "Sean",
+  "app": "PDA",
+  "functionId": "PDA-029",
+  "feature": "Internal transfer picking is one-press: tapping a guidance row's Pick button (or a bare part scan) picks the whole reservation row capped at the item's remaining qty — the qty prompt is gone; the admin internal-transfer order list gains a per-row Confirm/Unconfirm button (same pending ↔ allocated endpoint as the detail page)",
+  "reason": "Requiring operators to type the qty every pick is slow and error-prone — pressing Pick should just mark that reservation picked; and with ~10k synced orders, opening each detail page to confirm is impractical",
+  "priority": "Must have",
+  "status": "Delivered",
+  "owner": "dev",
+  "targetDate": "",
+  "remarks": "Implemented 2026-11-17. PDA `pages/internal-transfer/[id].vue` pick() picks min(row qty, remaining) with no prompt; unused pickQtyPrompt/pickQtyInvalid i18n keys removed from the three locales. Admin `pages/internal-transfer-orders/index.vue` new actions column with Confirm (pending → allocated) / Unconfirm (allocated → pending) via flow.setInternalTransferStatus + per-row busy state. The PDA queue already only lists confirmed (allocated/picking/issue) orders — no change needed there."
+}

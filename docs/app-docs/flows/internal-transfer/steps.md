@@ -29,8 +29,10 @@
    item's QR label (hardware scanner or the camera FAB — decoded through the
    backend scan authority): **the label's qty is the pick qty, no prompt**
    — multiple labels of the same part accumulate, spanning reservations when
-   one label crosses two lots (toast confirms each pick). Bare part scans
-   (no qty on the label) fall back to a capped prompt. A shelf scan first
+   one label crosses two lots (toast confirms each pick). Tapping a
+   guidance row's Pick button (or a bare part scan with no qty on the label)
+   picks the whole row in one press — capped at the item's remaining qty, no
+   prompt. A shelf scan first
    sets the pending shelf (pickingShelfScan require-match). Remove (✗)
    un-picks a package.
 3. **Report issue** — record a shortage (reason + actual qty + note);

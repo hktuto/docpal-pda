@@ -68,6 +68,30 @@ onMounted(load);
 function fmtLoc(orgId: number | null, code: string | null): string {
   return orgId === null && !code ? "—" : `${orgId ?? "?"} / ${code ?? "?"}`;
 }
+
+// --- confirm / unconfirm straight from the list (same endpoint as the
+// detail page — the PDA queue gate). Per-row busy flag; the row reloads
+// after each action. ---
+const busyId = ref("");
+const actionMsg = ref("");
+const actionErr = ref("");
+
+async function setStatus(row: InternalTransferOrderRow, status: "pending" | "allocated") {
+  if (busyId.value) return;
+  if (status === "pending" && !window.confirm(t("internalTransfer.unconfirmConfirm"))) return;
+  busyId.value = row.id;
+  actionMsg.value = "";
+  actionErr.value = "";
+  try {
+    await flow.setInternalTransferStatus(row.id, status);
+    actionMsg.value = t(status === "allocated" ? "internalTransfer.confirmed" : "internalTransfer.unconfirmed");
+    await load();
+  } catch (e: any) {
+    actionErr.value = e?.message ?? String(e);
+  } finally {
+    busyId.value = "";
+  }
+}
 </script>
 
 <template>
@@ -93,6 +117,8 @@ function fmtLoc(orgId: number | null, code: string | null): string {
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <div v-if="actionErr" class="error-banner">{{ actionErr }}</div>
+    <div v-if="actionMsg" class="success-banner">{{ actionMsg }}</div>
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <div class="table-wrap table-wrap--fill">
@@ -108,6 +134,7 @@ function fmtLoc(orgId: number | null, code: string | null): string {
             <th class="num">{{ $t("internalTransfer.colPicked") }}</th>
             <th>{{ $t("internalTransfer.colCustomer") }}</th>
             <th>{{ $t("internalTransfer.colCreated") }}</th>
+            <th>{{ $t("internalTransfer.colActions") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -124,9 +151,27 @@ function fmtLoc(orgId: number | null, code: string | null): string {
             <td class="num">{{ row.pickedQty }} / {{ row.allocatedQty }}</td>
             <td>{{ row.customerName ?? "—" }}</td>
             <td>{{ new Date(row.createdDate).toLocaleString() }}</td>
+            <td>
+              <button
+                v-if="row.status === 'pending'"
+                class="btn btn-small btn-primary"
+                :disabled="busyId !== ''"
+                @click="setStatus(row, 'allocated')"
+              >
+                {{ busyId === row.id ? "…" : $t("internalTransfer.confirm") }}
+              </button>
+              <button
+                v-else-if="row.status === 'allocated'"
+                class="btn btn-small"
+                :disabled="busyId !== ''"
+                @click="setStatus(row, 'pending')"
+              >
+                {{ busyId === row.id ? "…" : $t("internalTransfer.unconfirm") }}
+              </button>
+            </td>
           </tr>
           <tr v-if="rows.length === 0">
-            <td :colspan="9" class="muted">{{ $t("internalTransfer.none") }}</td>
+            <td :colspan="10" class="muted">{{ $t("internalTransfer.none") }}</td>
           </tr>
         </tbody>
       </table>
