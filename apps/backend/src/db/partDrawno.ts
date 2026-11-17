@@ -8,7 +8,9 @@
 // Resolution is exact-match first, then a substring fallback (some drawno
 // values embed the code in a longer string, e.g. `REF#826558`). A drawing
 // code can map to several wcl_part_no values — all are returned and the
-// caller disambiguates.
+// caller disambiguates. Rows exist across many upstream orgs (160/161/…);
+// the lookup is scoped to the served org (DRAWNO_ORG_ID) so the same
+// drawing does not resolve to duplicate items.
 // ---------------------------------------------------------------------------
 
 import { sql } from "drizzle-orm";
@@ -38,6 +40,8 @@ async function queryDrawno(db: DbOrTx, q: ReturnType<typeof sql>): Promise<Drawn
   }
 }
 
+const DRAWNO_ORG_ID = 160;
+
 const SELECT = sql`SELECT DISTINCT d.wcl_part_no AS "wclItemNo", p.part_no AS "partNo"
   FROM wcl_part_drawno d
   LEFT JOIN parts p ON p.wcl_item_no = d.wcl_part_no`;
@@ -48,8 +52,8 @@ const SELECT = sql`SELECT DISTINCT d.wcl_part_no AS "wclItemNo", p.part_no AS "p
 export async function lookupPartsByDrawingNo(db: DbOrTx, drawno: string): Promise<DrawnoPartMatch[]> {
   const code = drawno.trim();
   if (!code) return [];
-  const exact = await queryDrawno(db, sql`${SELECT} WHERE d.drawno = ${code}`);
+  const exact = await queryDrawno(db, sql`${SELECT} WHERE d.organization_id = ${DRAWNO_ORG_ID} AND d.drawno = ${code}`);
   if (exact.length > 0) return exact;
   const pattern = `%${code.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
-  return queryDrawno(db, sql`${SELECT} WHERE d.drawno LIKE ${pattern} ESCAPE '\\'`);
+  return queryDrawno(db, sql`${SELECT} WHERE d.organization_id = ${DRAWNO_ORG_ID} AND d.drawno LIKE ${pattern} ESCAPE '\\'`);
 }

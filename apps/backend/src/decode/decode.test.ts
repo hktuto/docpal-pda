@@ -30,9 +30,12 @@ before(async () => {
     wcl_part_no varchar(255) NOT NULL,
     drawno varchar(2000) NOT NULL
   )`);
+  // real table carries the upstream org id and the lookup is org-scoped
+  // (DRAWNO_ORG_ID) — add it idempotently for pre-existing test-db tables.
+  await client.db.execute(sql`ALTER TABLE wcl_part_drawno ADD COLUMN IF NOT EXISTS organization_id bigint`);
   await client.db.execute(sql`DELETE FROM wcl_part_drawno`);
   await client.db.execute(
-    sql`INSERT INTO wcl_part_drawno (id, wcl_part_no, drawno) VALUES (${randomUUID()}, ${NCC_WCL_ITEM_NO}, '424307')`
+    sql`INSERT INTO wcl_part_drawno (id, wcl_part_no, drawno, organization_id) VALUES (${randomUUID()}, ${NCC_WCL_ITEM_NO}, '424307', 160)`
   );
   const nccProfile = builtinSupplierProfiles.find((p) => p.supplierCode === "23")!;
   await client.db.execute(

@@ -610,6 +610,9 @@ async function setupNccDrawnoWorld(): Promise<void> {
     wcl_part_no varchar(255) NOT NULL,
     drawno varchar(2000) NOT NULL
   )`);
+  // real table carries the upstream org id and the lookup is org-scoped
+  // (DRAWNO_ORG_ID) — add it idempotently for pre-existing test-db tables.
+  await client.db.execute(sql`ALTER TABLE wcl_part_drawno ADD COLUMN IF NOT EXISTS organization_id bigint`);
   await client.db.execute(sql`DELETE FROM wcl_part_drawno`);
   // the scan query joins supplier_profiles via suppliers — both must exist.
   await client.db.execute(
@@ -636,7 +639,7 @@ test("scan: NCC raw QR matches via the wcl_part_drawno drawing-number lookup", a
   const actorId = await actorIdOf("operator");
   await setupNccDrawnoWorld();
   await client.db.execute(
-    sql`INSERT INTO wcl_part_drawno (id, wcl_part_no, drawno) VALUES (${randomUUID()}, 'NCC-EKLJ401ELL470MM20S', '424307')`
+    sql`INSERT INTO wcl_part_drawno (id, wcl_part_no, drawno, organization_id) VALUES (${randomUUID()}, 'NCC-EKLJ401ELL470MM20S', '424307', 160)`
   );
   const orderId = await insertReceivingOrder(client.db, "NCC-SCAN-1", {
     order: { supplierCode: "23" },
