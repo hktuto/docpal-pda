@@ -183,7 +183,21 @@ async function save() {
       suggestShelf: suggestShelf.value,
       skipScan: skipScan.value,
     };
-    state.value = await flow.saveFlowConfig({ steps, allowedOrgIds, outdatedStockYears, receivingSubInventoryRules, pickingFromSubinventoryOrgs, pickingShelfScan: pickingShelfScan.value, dateCodeFormat: dateCodeFormat.value });
+    // The backend PUT stores the raw body as the whole "flow" row, so merge
+    // over the stored JSON — otherwise keys owned by the other config editors
+    // (dateCodeDisplayTemplate / receivingOrderNameTemplate on display-config,
+    // pdaListTemplates / pdaViewConfig on pda-view-config) are wiped back to
+    // defaults (same convention as those pages).
+    state.value = await flow.saveFlowConfig({
+      ...(state.value?.stored ?? {}),
+      steps,
+      allowedOrgIds,
+      outdatedStockYears,
+      receivingSubInventoryRules,
+      pickingFromSubinventoryOrgs,
+      pickingShelfScan: pickingShelfScan.value,
+      dateCodeFormat: dateCodeFormat.value,
+    });
     saved.value = true;
     // Nav visibility (e.g. the CN receiving link) follows the saved steps.
     await loadFlowSteps(useApi());

@@ -1,0 +1,14 @@
+{
+ "id": "BUG-059",
+ "dateFound": "2026-11-17",
+ "functionId": "ADM-044",
+ "description": "Saving /admin/flow-config wiped the display-config and PDA view-config back to defaults: the backend PUT /admin/flow-config stores the request body as the WHOLE warehouse_config \"flow\" row (replace, not merge), and the flow-config page sent only its own keys — dateCodeDisplayTemplate, receivingOrderNameTemplate, pdaListTemplates and pdaViewConfig were dropped from the stored row and reverted to built-in defaults on the next resolve (display-config showed the default [date_code][coo] template again; PDA list/detail view overrides lost)",
+ "reproSteps": "1. Set a custom date-code display template (or PDA view config) on the display-config / pda-view-config pages and save. 2. Open /admin/flow-config, change any knob (e.g. toggle a step) and save. 3. Re-open display-config / pda-view-config → the custom values are back to defaults",
+ "severity": "Major",
+ "status": "Fixed",
+ "retestResult": "",
+ "owner": "dev",
+ "closedDate": "",
+ "tester": "",
+ "remarks": "Fix in apps/admin/pages/flow-config.vue — the save now spreads ...(state.stored ?? {}) before its own keys, the same merge convention display-config.vue and pda-view-config.vue already used. Affected rows (warehouse_config key \"flow\") lost their custom display/view keys at the 2026-11-17 save and need the templates re-entered"
+}

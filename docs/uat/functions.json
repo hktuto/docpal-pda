@@ -801,5 +801,16 @@
     "result": "",
     "bugIds": "",
     "remarks": "Spec docs/superpowers/specs/2026-11-13-uat-inventory-tools-design.md; UAT tooling — no env flag, remove/re-gate before production release"
+  },
+  {
+    "id": "ADM-044",
+    "app": "Admin",
+    "module": "Settings",
+    "name": "Flow config / display config / PDA view config — warehouse flow steps + allocation/put-away knobs, date-code + receiving-order-name display templates, PDA list/detail view templates; all three pages save through PUT /admin/flow-config (whole-row replace, so each editor must merge over the stored row)",
+    "tester": "",
+    "testDate": "",
+    "result": "",
+    "bugIds": "",
+    "remarks": "BUG-059: the flow-config page saved without merging the stored row, wiping the display/view config keys back to defaults"
   }
 ]
