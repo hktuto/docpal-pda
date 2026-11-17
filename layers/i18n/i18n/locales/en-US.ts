@@ -3123,6 +3123,7 @@ export default {
       detailTitle: "Internal Transfer",
       hint: "Confirmed internal transfer orders — pick the reserved stock; finished unlinked orders shelve it at the destination.",
       noTasks: "No transfer orders.",
+      searchPlaceholder: "Search order no / status / user",
       pickedProgress: "Picked {picked}/{total}",
       toShelve: "To shelve: {qty}",
       putAwayPending: "Put-away pending",

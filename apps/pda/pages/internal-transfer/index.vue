@@ -1,11 +1,14 @@
 <template>
   <AppListPage
+    v-model:search="search"
+    search-placeholder="internalTransfer.pda.searchPlaceholder"
+    :apply-on-search="false"
     :loading="loading"
     :error="loadError"
-    :empty="rows.length === 0"
+    :empty="visibleRows.length === 0"
     empty-text="internalTransfer.pda.noTasks"
-    :shown="rows.length"
-    :total="rows.length"
+    :shown="visibleRows.length"
+    :total="visibleRows.length"
     :has-more="false"
     hide-footer
     :reload="load"
@@ -16,7 +19,7 @@
     </template>
 
     <AppListRow
-      v-for="row in rows"
+      v-for="row in visibleRows"
       :key="row.id"
       :to="`/internal-transfer/${row.id}`"
       :title="row.orderNo"
@@ -60,6 +63,20 @@ function chipText(row: InternalTransferQueueRow): string {
     ? t("internalTransfer.pda.putAwayPending")
     : t(`internalTransfer.status.${row.status}`);
 }
+
+// Client-side search over the loaded queue (no server-side search param) —
+// match order no, status label and the working user, mirroring put-away.
+const search = ref("");
+const visibleRows = computed(() => {
+  const term = search.value.trim().toLowerCase();
+  if (!term) return rows.value;
+  return rows.value.filter(
+    (row) =>
+      row.orderNo.toLowerCase().includes(term) ||
+      chipText(row).toLowerCase().includes(term) ||
+      (row.workingBy?.toLowerCase().includes(term) ?? false)
+  );
+});
 
 async function load() {
   loading.value = true;

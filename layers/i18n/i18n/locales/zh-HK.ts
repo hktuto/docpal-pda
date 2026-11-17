@@ -3118,6 +3118,7 @@ export default {
       detailTitle: "內部轉倉",
       hint: "已確認的內部轉倉單 — 按分配取貨；未委派的完成單需在目標位置上架。",
       noTasks: "沒有調撥單。",
+      searchPlaceholder: "搜尋單號 / 狀態 / 用戶",
       pickedProgress: "已揀 {picked}/{total}",
       toShelve: "待上架：{qty}",
       putAwayPending: "待上架",
