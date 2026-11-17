@@ -560,9 +560,15 @@ const allItemsFullyBoxed = computed(
 );
 const headerBadgeClass = computed(() => badgeClass(order.value?.status));
 const headerStatus = computed(() => statusLabel.picking(order.value?.status ?? ""));
-const openBoxes = computed(() =>
-  (order.value?.boxes ?? []).filter((b) => b.status === "open")
-);
+const anyAddingAll = computed(() => Object.values(addingAll.value).some(Boolean));
+
+const unboxedCountForOrder = computed(() => {
+  return (order.value?.items ?? []).reduce((sum, item) => {
+    const unboxed = (item.packages ?? []).filter((p) => !p.shippingBoxId);
+    return sum + unboxed.length;
+  }, 0);
+});
+
 const actionable = computed(
   () =>
     order.value?.status !== "picking_finished" &&
@@ -570,13 +576,6 @@ const actionable = computed(
     order.value?.status !== "issue" &&
     !heldByOther.value
 );
-const unboxedCountForOrder = computed(() => {
-  return (order.value?.items ?? []).reduce((sum, item) => {
-    const unboxed = (item.packages ?? []).filter((p) => !p.shippingBoxId);
-    return sum + unboxed.length;
-  }, 0);
-});
-const anyAddingAll = computed(() => Object.values(addingAll.value).some(Boolean));
 
 // The boxes' contents derived from the order's packages — feeds each box
 // card's expandable contents list, the mixed-COO warning chip, and the
@@ -785,6 +784,8 @@ function onChooseBox(boxId: string) {
 /** The boxes rendered in the boxes section: the order's own boxes plus the
  *  chosen cross-order box, shown as a normal card (Select-box dropdown / Add
  *  all / contents, no Close/Cancel since this order doesn't own it). */
+
+
 const displayBoxes = computed(() => {
   const own = order.value?.boxes ?? [];
   const boxId = scanIntoBoxId.value;
@@ -836,6 +837,10 @@ const displayBoxes = computed(() => {
   };
   return [...owned, mixed] as unknown as typeof own;
 });
+
+// openBoxes feeds the unboxed-package "Select box" dropdown — derived from
+// displayBoxes so a chosen cross-order box is a valid target too.
+const openBoxes = computed(() => displayBoxes.value.filter((b) => b.status === "open"));
 
 async function addAllToBox(boxId: string) {
   if (anyAddingAll.value) return;
