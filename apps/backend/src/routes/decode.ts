@@ -6,6 +6,7 @@ import { dateCodeFormat } from "../config.js";
 import { decodeScan } from "../decode/index.js";
 import { getDecodeData } from "../decode/cache.js";
 import { formatKoaLotDateCodes, resolveKoaLotDate, encodeKoaLotDate, getIsoWeekMonday } from "../decode/codecs.js";
+import { lookupPartDetails } from "../db/partDetails.js";
 
 async function readJson<T>(c: Context): Promise<T> {
   const text = await c.req.text();
@@ -148,4 +149,37 @@ scanDecodeRoute.post("/scan/koa-lot-code", async (c) => {
   }
   const { lotCodeDigits, counter, day } = encoding;
   return c.json({ lotCodeDigits, counter, day }, 200);
+});
+
+// Public parts-master lookup (2026-11-18): an external system holding a
+// part_no / wcl_item_no (e.g. from our receiving data) fetches the master
+// row(s) — identity, brand, description, MOQ. Body: exactly one of
+// { partNo, wclItemNo }. part_no is NOT unique, so a partNo query can return
+// several rows (the same part stored under several wcl keys); wcl_item_no is
+// the unique business key. The match is exact + normalized (whitespace/case,
+// TE "AMP(...)" unwrap — the scan-time canonical rule, idx_parts_norm_*);
+// there is deliberately NO substring fallback: a detail API must never return
+// sibling parts. Unknown keys → 200 with found:false + reason (same
+// philosophy as matched:false). Usage doc: docs/backend/scan-decode-api.md.
+scanDecodeRoute.post("/scan/part-details", async (c) => {
+  const body = await readJson<{ partNo?: unknown; wclItemNo?: unknown }>(c);
+  const provided = (["partNo", "wclItemNo"] as const).filter(
+    (k) => body[k] !== undefined && body[k] !== null
+  );
+  if (provided.length !== 1) {
+    throw new HTTPException(400, { message: "invalid_payload: exactly one of partNo, wclItemNo is required" });
+  }
+  const key = provided[0];
+  const value = body[key];
+  if (typeof value !== "string" || !value.trim()) {
+    throw new HTTPException(400, { message: `invalid_payload: ${key} must be a non-empty string` });
+  }
+  const rows = await lookupPartDetails(
+    db,
+    key === "partNo" ? { partNo: value } : { wclItemNo: value }
+  );
+  if (rows.length === 0) {
+    return c.json({ found: false, parts: [], reason: "part_not_found" }, 200);
+  }
+  return c.json({ found: true, parts: rows }, 200);
 });

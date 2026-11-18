@@ -25,6 +25,10 @@ function isOpenPath(path: string, method: string): boolean {
   if (path === "/scan/koa-date-code" && method === "POST") return true;
   // Public date-code → KOA lot-code helper (reverse direction, 2026-11-18).
   if (path === "/scan/koa-lot-code" && method === "POST") return true;
+  // Public parts-master lookup (2026-11-18): same read-only, no-user-data
+  // rationale as /scan/decode — external systems resolve a part_no /
+  // wcl_item_no to the master row(s) (identity, brand, description, MOQ).
+  if (path === "/scan/part-details" && method === "POST") return true;
   if (path.startsWith("/dev/lab")) return true; // Dev Lab stays open (browser page, read-only)
   // /dev/allocate requires a bearer token (audit 2026-11-06 #1).
   return false;

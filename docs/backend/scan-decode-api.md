@@ -181,6 +181,51 @@ curl -X POST "http://127.0.0.1:3002/scan/koa-lot-code" \
 { "lotCodeDigits": "5420", "counter": 54, "day": 20 }
 ```
 
+## 料號 / WCL 貨號 → 物料明細（查詢接口）
+
+`POST /scan/part-details` 用 part_no 或 wcl_item_no 查詢物料主檔（parts master）：品牌、描述、MOQ 等明細。適用情境：外部系統握有料號（例如本系統收貨資料中的 part_no / wcl_item_no），需要取得對應的物料資料。
+
+- 同樣自 2026-11-18 起**對第三方系統公開**，**不需要 Bearer Token**，只讀操作。
+- **請求體兩個欄位必須恰好填一個**：
+
+| 欄位 | 說明 |
+|---|---|
+| `partNo` | 供應商料號（part_no）。注意 part_no **不是唯一 key**：同一個料號可能對應多個 WCL 貨號，此時會全部回傳 |
+| `wclItemNo` | WCL 貨號（wcl_item_no，唯一業務 key） |
+
+- 比對為**精確比對（已規範化）**：忽略大小寫、空白字元，並自動拆解 TE 的 `AMP(...)` / `TE-AMP(...)` 包裝（與 PDA 掃碼解析同一套規則）。沒有模糊 / 子字串比對——查不到的 key 就是查不到，不會回傳相近料號。
+
+### 响应
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `found` | boolean | 是否有命中 |
+| `parts` | object[] | 命中的物料主檔列（見下） |
+| `reason` | string | 只有查無資料時出現，固定為 `"part_not_found"` |
+
+`parts` 每一列：`{ id, partNo, wclItemNo, brand, description, moq }` — `description` / `moq` 可能為 `null`；`moq` 以十進位字串回傳。
+
+### 请求示例
+
+```bash
+curl -X POST "http://127.0.0.1:3002/scan/part-details" \
+  -H "Content-Type: application/json" \
+  -d '{ "partNo": "1-1571983-1" }'
+```
+
+### 响应示例
+
+```json
+{
+  "found": true,
+  "parts": [
+    { "id": "…", "partNo": "TE-AMP(1-1571983-1)", "wclItemNo": "TE-1571983-1", "brand": "TE", "description": "…", "moq": null }
+  ]
+}
+```
+
+查無資料時回 **HTTP 200**，`found` 為 `false`、`parts` 為空陣列並附 `reason`（與 `/scan/decode` 的 `matched:false` 同一套理念）。
+
 ## 注意事项
 
 1. **无需鉴权**：任何人能访问到后端地址即可调用，请确保后端只在内网 / 受控网络中暴露。

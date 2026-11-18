@@ -51,6 +51,19 @@ before(async () => {
         VALUES (${randomUUID()}, 'NCC', 'EKLJ401ELL470MM20S', ${NCC_WCL_ITEM_NO})
         ON CONFLICT (wcl_item_no) DO NOTHING`
   );
+  // /scan/part-details fixtures: one TE part_no stored under TWO wcl keys
+  // (part_no is not unique) — the AMP-wrapped stored form also exercises the
+  // normalized-equality lookup (unwrapped query key vs wrapped column value).
+  await client.db.execute(
+    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no)
+        VALUES (${randomUUID()}, 'TE', 'TE-AMP(1-1571983-1)', 'TE-1571983-1')
+        ON CONFLICT (wcl_item_no) DO NOTHING`
+  );
+  await client.db.execute(
+    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no)
+        VALUES (${randomUUID()}, 'TE', 'TE-AMP(1-1571983-1)', 'TE-1571983-1-B')
+        ON CONFLICT (wcl_item_no) DO NOTHING`
+  );
 });
 
 after(async () => {
@@ -319,6 +332,85 @@ test("POST /scan/koa-lot-code validates the payload", async () => {
   const badDate = await postKoaLotCode({ yymmdd: "220230" }); // Feb 30
   assert.equal(badDate.status, 400);
   assert.match(await badDate.text(), /not a real calendar date/);
+});
+
+// --- POST /scan/part-details (public parts-master lookup) -------------------
+
+function postPartDetails(body: unknown) {
+  // No bearer token (open-path since 2026-11-18, same as the other /scan/*
+  // external-system endpoints).
+  return app.request("/scan/part-details", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+test("POST /scan/part-details is public and looks up by partNo", async () => {
+  const res = await postPartDetails({ partNo: "EKLJ401ELL470MM20S" });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.found, true);
+  assert.equal(body.parts.length, 1);
+  assert.equal(body.parts[0].partNo, "EKLJ401ELL470MM20S");
+  assert.equal(body.parts[0].wclItemNo, NCC_WCL_ITEM_NO);
+  assert.equal(body.parts[0].brand, "NCC");
+  assert.equal(body.parts[0].description, null);
+  assert.equal(body.parts[0].moq, null);
+  assert.ok(body.parts[0].id);
+});
+
+test("POST /scan/part-details looks up by wclItemNo", async () => {
+  const res = await postPartDetails({ wclItemNo: NCC_WCL_ITEM_NO });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.found, true);
+  assert.equal(body.parts.length, 1);
+  assert.equal(body.parts[0].partNo, "EKLJ401ELL470MM20S");
+});
+
+test("POST /scan/part-details returns every wcl key under a non-unique partNo", async () => {
+  const res = await postPartDetails({ partNo: "1-1571983-1" });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.found, true);
+  // Same TE part_no stored under two wcl keys — both master rows come back.
+  assert.deepEqual(
+    body.parts.map((p: { wclItemNo: string }) => p.wclItemNo).sort(),
+    ["TE-1571983-1", "TE-1571983-1-B"]
+  );
+});
+
+test("POST /scan/part-details normalizes the key (case, whitespace, TE-AMP unwrap)", async () => {
+  // Stored as "TE-AMP(1-1571983-1)" — lowercase + stray whitespace + wrapped
+  // query key still resolves through the idx_parts_norm_* expression.
+  const res = await postPartDetails({ partNo: "  te-amp(1-1571983-1) " });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.found, true);
+  assert.equal(body.parts.length, 2);
+});
+
+test("POST /scan/part-details returns found:false for unknown parts", async () => {
+  const res = await postPartDetails({ partNo: "NO-SUCH-PART-000" });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { found: false, parts: [], reason: "part_not_found" });
+});
+
+test("POST /scan/part-details validates the payload", async () => {
+  const none = await postPartDetails({});
+  assert.equal(none.status, 400);
+  assert.match(await none.text(), /exactly one of partNo, wclItemNo/);
+
+  const two = await postPartDetails({ partNo: "EKLJ401ELL470MM20S", wclItemNo: NCC_WCL_ITEM_NO });
+  assert.equal(two.status, 400);
+
+  const notString = await postPartDetails({ partNo: 123 });
+  assert.equal(notString.status, 400);
+
+  const blank = await postPartDetails({ wclItemNo: "   " });
+  assert.equal(blank.status, 400);
+  assert.match(await blank.text(), /wclItemNo must be a non-empty string/);
 });
 
 // --- NCC drawing-number → wcl_item_no resolution (spec 2026-11-03-ncc-drawno-part-lookup) ---
