@@ -87,7 +87,9 @@
         :open="chooseBoxOpen"
         :boxes="chooseBoxes"
         :current-order-id="orderId"
+        :chosen-box-id="scanIntoBoxId"
         @select="onChooseBox"
+        @unchoose="onUnchooseBox"
         @close="chooseBoxOpen = false"
       />
     </template>
@@ -458,6 +460,13 @@ function onChooseBox(boxId: string) {
   scanIntoBoxId.value = boxId;
   chosenBox.value = chooseBoxes.value?.find((b) => b.id === boxId) ?? null;
   boxesExpanded.value = true;
+}
+
+function onUnchooseBox(boxId: string) {
+  if (scanIntoBoxId.value !== boxId) return;
+  scanIntoBoxId.value = null;
+  chosenBox.value = null;
+  chooseBoxOpen.value = false;
 }
 
 /** The boxes rendered in the boxes section: the order's own boxes plus the

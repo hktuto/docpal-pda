@@ -570,6 +570,7 @@ export default {
       loading: "載入中…",
       empty: "沒有已開箱",
       thisOrder: "本訂單",
+      unchoose: "取消選擇",
       packages: "{count} 件"
     },
     issueBanner: {

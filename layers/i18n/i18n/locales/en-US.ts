@@ -571,6 +571,7 @@ export default {
       loading: "Loading…",
       empty: "No open boxes",
       thisOrder: "This order",
+      unchoose: "Remove",
       packages: "{count} pkg"
     },
     issueBanner: {

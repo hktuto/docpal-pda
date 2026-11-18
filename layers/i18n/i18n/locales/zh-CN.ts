@@ -570,6 +570,7 @@ export default {
       loading: "加载中…",
       empty: "没有已开箱",
       thisOrder: "本订单",
+      unchoose: "取消选择",
       packages: "{count} 件"
     },
     issueBanner: {

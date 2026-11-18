@@ -18,24 +18,37 @@
         <p v-if="boxes === null" class="muted">{{ $t('picking.chooseBoxDialog.loading') }}</p>
         <p v-else-if="boxes.length === 0" class="muted">{{ $t('picking.chooseBoxDialog.empty') }}</p>
         <div v-else class="box-list">
-          <button
+          <div
             v-for="box in boxes"
             :key="box.id"
-            type="button"
             class="box-row"
-            @click="emit('select', box.id)"
+            :class="{ 'box-row--current': box.id === chosenBoxId }"
           >
-            <span class="box-row__main">
-              <span class="box-row__id">{{ box.id }}</span>
-              <span v-if="box.orderId === currentOrderId" class="box-row__chip">
-                {{ $t('picking.chooseBoxDialog.thisOrder') }}
+            <button
+              type="button"
+              class="box-row__select"
+              @click="emit('select', box.id)"
+            >
+              <span class="box-row__main">
+                <span class="box-row__id">{{ box.id }}</span>
+                <span v-if="box.orderId === currentOrderId" class="box-row__chip">
+                  {{ $t('picking.chooseBoxDialog.thisOrder') }}
+                </span>
+                <span v-else-if="box.orderNo" class="box-row__order">{{ box.orderNo }}</span>
               </span>
-              <span v-else-if="box.orderNo" class="box-row__order">{{ box.orderNo }}</span>
-            </span>
-            <span class="box-row__meta">
-              {{ $t('picking.chooseBoxDialog.packages', { count: box.packageCount }) }}<template v-if="box.destinationCountry"> · {{ box.destinationCountry }}</template><template v-if="box.boxSize"> · {{ box.boxSize }}</template>
-            </span>
-          </button>
+              <span class="box-row__meta">
+                {{ $t('picking.chooseBoxDialog.packages', { count: box.packageCount }) }}<template v-if="box.destinationCountry"> · {{ box.destinationCountry }}</template><template v-if="box.boxSize"> · {{ box.boxSize }}</template>
+              </span>
+            </button>
+            <button
+              v-if="box.id === chosenBoxId"
+              type="button"
+              class="btn btn--small btn--danger box-row__remove"
+              @click="emit('unchoose', box.id)"
+            >
+              {{ $t('picking.chooseBoxDialog.unchoose') }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -50,10 +63,13 @@ defineProps<{
   /** null = still loading. */
   boxes: OpenShippingBox[] | null;
   currentOrderId: string;
+  /** The currently chosen box (its row shows the unchoose button). */
+  chosenBoxId?: string | null;
 }>();
 
 const emit = defineEmits<{
   select: [boxId: string];
+  unchoose: [boxId: string];
   close: [];
 }>();
 
@@ -122,21 +138,38 @@ function close() {
 
 .box-row {
   display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border-bottom: 1px dashed var(--muted-light, #e5e7eb);
+  padding: 0.6rem 0.25rem;
+}
+
+.box-row:last-child {
+  border-bottom: none;
+}
+
+.box-row--current {
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: var(--radius);
+}
+
+.box-row__select {
+  flex: 1;
+  display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  width: 100%;
   text-align: left;
   background: transparent;
   border: none;
-  border-bottom: 1px dashed var(--muted-light, #e5e7eb);
-  padding: 0.6rem 0.25rem;
+  padding: 0;
   cursor: pointer;
   color: inherit;
   font: inherit;
 }
 
-.box-row:last-child {
-  border-bottom: none;
+.box-row__remove {
+  flex-shrink: 0;
 }
 
 .box-row__main {
