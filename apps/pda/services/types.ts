@@ -950,6 +950,9 @@ export interface PutAwayExpectedItem {
    *  sorts by po_line, then part_no. Standard backends omit the fields. */
   poNo?: string | null;
   poLine?: string | null;
+  /** CN put-away only: the parent CN invoice's no — carton-QR box targeting
+   *  scopes boxes per invoice. Standard backends omit the field. */
+  invoiceNo?: string | null;
   /** Expected qty; null = unknown upstream. */
   lineQty: number | null;
   receivedQty: number;

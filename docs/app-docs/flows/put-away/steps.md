@@ -62,6 +62,15 @@ onto it). The quantities and batch values come from the receiving
 declaration; no label check and no serial capture, same trade-off as skip
 scanning.
 
+**Carton QR — CN flow only:** each shipping carton carries a printed QR
+label. Scanning it opens a **box dialog** listing exactly what is inside that
+carton (part, qty left, suggested shelf). Scan the part's label — or tap its
+row — to select it, then scan the shelf to put it away; repeat per item,
+then scan the next carton's QR. Wrong-order or unknown boxes show a message
+and change nothing. (The app identifies the box from the order data, not
+from what the QR claims is inside, so a misprinted label cannot put the
+wrong stock away.)
+
 ## 5. Scan the shelf
 
 Scan the barcode of the shelf where the goods belong. If pieces are pending,

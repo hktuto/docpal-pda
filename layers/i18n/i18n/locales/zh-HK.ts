@@ -676,6 +676,16 @@ export default {
       scanToOpen: "掃描開啟上架任務",
       scanToOpenPlaceholder: "掃描任務二維碼…",
       scanToOpenInvalid: "無效的二維碼",
+      box: {
+        title: "箱號 {ctnNo}",
+        subtitle: "{invoiceNo} · 第 {boxSeq}/{totalBoxes} 箱",
+        qty: "{remaining} / {line}",
+        done: "已完成",
+        hint: "掃描或點選一個貨品，然後掃描貨架",
+        selectFirst: "請先選擇箱內的一個貨品",
+        wrongOrder: "此貨箱屬於 {invoiceNo}，不在此訂單",
+        notFound: "此訂單找不到第 {boxSeq}/{totalBoxes} 箱",
+      },
     },
     pendingPanel: {
       title: "待上架（{count}）",

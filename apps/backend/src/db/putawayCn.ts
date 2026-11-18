@@ -98,6 +98,9 @@ export interface CnPutAwayItemRow {
   id: string;
   partNo: string;
   wclItemNo: string | null;
+  /** The parent CN invoice's no — carton-QR box targeting scopes boxes
+   *  per invoice (one order can carry several invoices). */
+  invoiceNo: string;
   lineQty: number | null;
   receivedQty: number;
   pickedQty: number;
@@ -176,6 +179,7 @@ export async function getCnPutAwayTaskDetail(db: AppDb, taskId: string, username
     sql`
       SELECT
         rii.id, rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo",
+        ri.invoice_no AS "invoiceNo",
         rii.line_qty AS "lineQty", rii.received_qty AS "receivedQty", rii.picked_qty AS "pickedQty",
         rii.put_away_qty AS "putAwayQty",
         (rii.received_qty - rii.picked_qty - rii.put_away_qty)::int AS "remainingQty",

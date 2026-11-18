@@ -49,6 +49,18 @@
   `POST /put-away-cn/tasks/:id/complete` call. Label matching uses
   `findCnPutAwayTargets` in `utils/putAwayScan.ts` (part keys + `ctnNo`,
   since CN items carry carton numbers).
+  **Carton-QR box dialog (spec
+  `docs/superpowers/specs/2026-11-18-cn-putaway-box-qr-design.md`)**: a scan
+  of the carton's printed QR (`0;INVOICE;boxSeq;totalBoxes;itemCount;…;Made
+  In China;`, parsed by `utils/cnBoxQr.ts`) opens a box-scoped dialog on the
+  detail page — the invoice's items filtered to the resolved `ctn_no`
+  (distinct numeric ctn_no sorted numerically, 1-based boxSeq index; the
+  aggregate's items carry `invoiceNo` for per-invoice scoping). Inside the
+  dialog an item label scan or a row tap selects the line, and the next
+  shelf scan stages the piece with `boxId = ctn_no` (the complete call
+  already persists box_id onto the lot); closing the dialog keeps staged
+  pieces for the unchanged batch commit. The QR's item tail is never parsed
+  — the DB is authoritative.
 - Show the put-away detail as **one aggregate read**
   (`GET /receiving-orders/:id/put-away`): expected invoice items (with
   remaining qty and a per-item shelf/box suggestion —

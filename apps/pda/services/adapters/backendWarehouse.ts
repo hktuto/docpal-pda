@@ -131,6 +131,7 @@ interface CnPutAwayItemRaw {
   id: string;
   partNo: string;
   wclItemNo: string | null;
+  invoiceNo: string;
   lineQty: number | null;
   receivedQty: number;
   pickedQty: number;
@@ -646,6 +647,7 @@ export function createBackendWarehouseService(
           id: i.id,
           partNo: i.partNo,
           wclItemNo: i.wclItemNo,
+          invoiceNo: i.invoiceNo,
           lineQty: i.lineQty,
           receivedQty: i.receivedQty,
           pickedQty: i.pickedQty,

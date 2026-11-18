@@ -676,6 +676,16 @@ export default {
       scanToOpen: "扫描打开上架任务",
       scanToOpenPlaceholder: "扫描任务二维码…",
       scanToOpenInvalid: "无效的二维码",
+      box: {
+        title: "箱号 {ctnNo}",
+        subtitle: "{invoiceNo} · 第 {boxSeq}/{totalBoxes} 箱",
+        qty: "{remaining} / {line}",
+        done: "已完成",
+        hint: "扫描或点击选择一个货品，然后扫描货架",
+        selectFirst: "请先选择箱内的一个货品",
+        wrongOrder: "此货箱属于 {invoiceNo}，不在此订单",
+        notFound: "此订单找不到第 {boxSeq}/{totalBoxes} 箱",
+      },
     },
     pendingPanel: {
       title: "待上架（{count}）",

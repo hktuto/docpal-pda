@@ -677,6 +677,16 @@ export default {
       scanToOpen: "Scan to open a put-away task",
       scanToOpenPlaceholder: "Scan the task QR code…",
       scanToOpenInvalid: "Not a valid put-away task QR",
+      box: {
+        title: "Box {ctnNo}",
+        subtitle: "{invoiceNo} · box {boxSeq} of {totalBoxes}",
+        qty: "{remaining} / {line}",
+        done: "done",
+        hint: "Scan or tap an item, then scan a shelf",
+        selectFirst: "Select an item in the box first",
+        wrongOrder: "This carton belongs to {invoiceNo}, not this order",
+        notFound: "Box {boxSeq} of {totalBoxes} not found on this order",
+      },
     },
     pendingPanel: {
       title: "Pending ({count})",

@@ -116,6 +116,7 @@ test("detail: items with remaining + lots; unknown id → 404", async () => {
   assert.equal(detail.order.batchNo, "TE20261010-9");
   assert.equal(detail.items.length, 1);
   assert.equal(detail.items[0].remainingQty, 100);
+  assert.equal(detail.items[0].invoiceNo, "INV-CN-9");
   assert.deepEqual(detail.lots, []);
   const err = await getCnPutAwayTaskDetail(client.db, "00000000-0000-4000-8000-000000000000").catch((e) => e);
   assert.equal(err.status, 404);

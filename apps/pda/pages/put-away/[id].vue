@@ -67,6 +67,16 @@
       @applied="onApplied"
       @retake="onRetake"
     />
+
+      <!-- CN carton-QR box dialog: scan a box label to work that physical
+           carton line by line (spec 2026-11-18-cn-putaway-box-qr-design.md). -->
+      <CnBoxDialog
+        v-model="boxDialogOpen"
+        :box="boxDialog"
+        :lines="boxDialogLines"
+        :selected-item-id="boxSelectedItemId"
+        @select="onBoxLineTap"
+      />
   </div>
 </template>
 
@@ -89,6 +99,7 @@ import { useToast } from "~/composables/useToast";
 import { scrollToItem } from "~/utils/scroll";
 import { rawCode } from "~/utils/text";
 import { decodeLabel } from "~/utils/labelDecode";
+import { parseCnBoxQr, resolveCnBox, type CnBoxQr } from "~/utils/cnBoxQr";
 import { compareByPoLineThenPartNo, compareNumericAware, findCnPutAwayTargets, findPutAwayTargets, matchPutAwayCarton } from "~/utils/putAwayScan";
 import {
   groupPutAwayItems,
@@ -105,6 +116,7 @@ import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import ScanMultiItemModal from "~/components/ScanMultiItemModal.vue";
 import PutAwayLotsPanel from "~/components/put-away/PutAwayLotsPanel.vue";
+import CnBoxDialog from "~/components/put-away/CnBoxDialog.vue";
 import { viewListRow } from "~/utils/viewConfig";
 import type {
   CnPutAwayCompleteItem,
@@ -368,6 +380,27 @@ useHardwareScanner({
   onScan: async (rawValue: string) => {
     if (!order.value) return false;
     const value = rawValue.trim();
+
+    // Carton-QR box dialog (CN mode): a shelf scan stages the selected item
+    // onto that shelf; an item label selects within the box; another carton
+    // QR switches boxes. Routed before the standard shelf branch so the
+    // dialog's shelf scan never falls through to the sticky-shelf logic.
+    if (boxDialog.value) {
+      const dialogShelf = shelves.value.find(
+        (s) => s.code.toUpperCase() === value.toUpperCase()
+      );
+      if (dialogShelf) {
+        if (!boxSelection.value) {
+          showToast(t("putAway.cn.box.selectFirst"));
+          return false;
+        }
+        return stageBoxSelection(dialogShelf.code);
+      }
+      const switchQr = parseCnBoxQr(value);
+      if (switchQr) return openBoxDialog(switchQr);
+      return scanBoxItem(value);
+    }
+
     const shelf = shelves.value.find((s) => s.code.toUpperCase() === value.toUpperCase());
     if (shelf) {
       // Skip-scan: a shelf scan with checked groups shelves the selection
@@ -383,6 +416,16 @@ useHardwareScanner({
     if (/^box-/i.test(value)) {
       showToast(t("putAway.boxScanIgnored"));
       return false;
+    }
+    // CN carton QR (0;INVOICE;boxSeq;totalBoxes;count;…): open the box dialog.
+    // In standard mode it is not a usable identity — same ignore toast.
+    const boxQr = parseCnBoxQr(value);
+    if (boxQr) {
+      if (!cnMode.value) {
+        showToast(t("putAway.boxScanIgnored"));
+        return false;
+      }
+      return openBoxDialog(boxQr);
     }
     scanning.value = true;
     try {
@@ -607,10 +650,183 @@ async function handleCartonScan(raw: string, cartonItems: PutAwayExpectedItem[])
 // scans[] locally (shelf-first — a shelf must be sticky before item scans)
 // and post in one batch via POST /put-away-cn/tasks/:id/complete.
 
+// --- CN carton-QR box dialog (spec 2026-11-18-cn-putaway-box-qr-design.md) ----
+// A scanned carton QR (0;INVOICE;boxSeq;totalBoxes;itemCount;…;Made In China;)
+// opens a dialog scoped to that physical box: the invoice's items filtered to
+// the resolved ctn_no (distinct numeric ctn_no values sorted numerically,
+// 1-based index). The operator scans or taps an item, then scans a shelf —
+// the piece stages locally with boxId = ctn_no; the batch commit is unchanged.
+
+const boxDialog = ref<{
+  invoiceNo: string;
+  ctnNo: string;
+  boxSeq: number;
+  totalBoxes: number;
+} | null>(null);
+// Line ids, not a line snapshot: a reload after the batch commit refreshes
+// quantities while the dialog stays on the same box.
+const boxDialogLineIds = ref<string[]>([]);
+const boxSelection = ref<{
+  portions: { item: PutAwayExpectedItem; qty: number }[];
+  batch: {
+    dateCode: string | null;
+    lotCode: string | null;
+    coo: string | null;
+    cow: string | null;
+    serialNo: string | null;
+  };
+} | null>(null);
+
+const boxDialogOpen = computed({
+  get: () => boxDialog.value !== null,
+  set: (open: boolean) => {
+    if (!open) {
+      boxDialog.value = null;
+      boxSelection.value = null;
+    }
+  },
+});
+
+const boxDialogItems = computed(() =>
+  items.value.filter((it) => boxDialogLineIds.value.includes(it.id))
+);
+
+const boxDialogLines = computed(() =>
+  boxDialogItems.value.map((item) => {
+    const staged = scans.value
+      .filter((s) => s.receivingInvoiceItemId === item.id)
+      .reduce((sum, s) => sum + s.qty, 0);
+    return { item, staged, remaining: Math.max(0, item.remainingQty - staged) };
+  })
+);
+
+const boxSelectedItemId = computed(
+  () => boxSelection.value?.portions[0]?.item.id ?? null
+);
+
+/** Carton QR scanned (page idle or dialog open — both may switch/switch boxes). */
+function openBoxDialog(qr: CnBoxQr): boolean {
+  // items.value — the CN detail's expected-item rows (order.value is only
+  // the header shape in CN mode, no items on it).
+  const target = resolveCnBox(qr, items.value);
+  if ("error" in target) {
+    showToast(
+      t(
+        target.error === "wrong_order"
+          ? "putAway.cn.box.wrongOrder"
+          : "putAway.cn.box.notFound",
+        target.error === "wrong_order"
+          ? { invoiceNo: qr.invoiceNo }
+          : { boxSeq: qr.boxSeq, totalBoxes: qr.totalBoxes }
+      )
+    );
+    return false;
+  }
+  boxDialog.value = {
+    invoiceNo: qr.invoiceNo,
+    ctnNo: target.ctnNo,
+    boxSeq: qr.boxSeq,
+    totalBoxes: qr.totalBoxes,
+  };
+  boxDialogLineIds.value = target.lines.map((l) => l.id);
+  boxSelection.value = null;
+  return true;
+}
+
+/** Shelf scan while the dialog is open: stage the selected item onto it. */
+function stageBoxSelection(shelfCode: string): boolean {
+  const dialog = boxDialog.value;
+  const selection = boxSelection.value;
+  if (!dialog || !selection) return false;
+  addCnPieces(selection.portions, selection.batch, {
+    shelfCode,
+    boxId: dialog.ctnNo,
+  });
+  showToast(t("common.scanSuccess"));
+  boxSelection.value = null;
+  return true;
+}
+
+/** Row tap: select the line's full remaining qty (receiving-declaration batch
+ *  fields — same rule as the whole-carton path). */
+function onBoxLineTap(itemId: string) {
+  const line = boxDialogLines.value.find((l) => l.item.id === itemId);
+  if (!line || line.remaining <= 0) return;
+  boxSelection.value = {
+    portions: [{ item: line.item, qty: line.remaining }],
+    batch: {
+      dateCode: rawCode(line.item.dateCode),
+      lotCode: rawCode(line.item.lotCode),
+      coo: rawCode(line.item.coo),
+      cow: rawCode(line.item.cow),
+      serialNo: null,
+    },
+  };
+}
+
+/** Item-label scan while the dialog is open: decode and select within the
+ *  box's lines (COO/COW guard + serial dedup mirror handleCnItemScan). */
+async function scanBoxItem(raw: string): Promise<boolean> {
+  if (!boxDialog.value) return false;
+  scanning.value = true;
+  try {
+    const parsedResult = await parseRawValue(
+      raw,
+      order.value?.supplier?.code ?? undefined
+    );
+    const parsed = ocrResultToInput(parsedResult.parsed);
+    const qty = typeof parsed.qty === "number" ? parsed.qty : Number(parsed.qty);
+    const portions = findCnPutAwayTargets(
+      boxDialogItems.value,
+      parsed.partNo,
+      qty,
+      parsed.wclItemNo
+    );
+    if (!portions) {
+      showToast(t("errors.scanned_part_does_not_match_item"));
+      return false;
+    }
+    for (const portion of portions) {
+      const cooErr = checkBatchAttr("coo", portion.item.coo, parsed.coo);
+      if (cooErr) {
+        showToast(t(cooErr, { scanned: parsed.coo, expected: portion.item.coo }));
+        return false;
+      }
+      const cowErr = checkBatchAttr("cow", portion.item.cow, parsed.cow);
+      if (cowErr) {
+        showToast(t(cowErr, { scanned: parsed.cow, expected: portion.item.cow }));
+        return false;
+      }
+    }
+    const serial = rawCode(parsed.serialNo);
+    if (serial && cnSeenSerials.value.has(serial)) {
+      showToast(t("adHocPutAway.duplicateSerial", { serialNo: serial }));
+      return false;
+    }
+    boxSelection.value = {
+      portions,
+      batch: {
+        dateCode: rawCode(parsed.dateCode),
+        lotCode: rawCode(parsed.lotCode),
+        coo: rawCode(parsed.coo),
+        cow: rawCode(parsed.cow),
+        serialNo: serial,
+      },
+    };
+    return true;
+  } catch (e) {
+    showToast(errorMessage(e));
+    return false;
+  } finally {
+    scanning.value = false;
+  }
+}
+
 /** Stage one scanned label's portions onto the locally pending list. */
 function addCnPieces(
   portions: { item: PutAwayExpectedItem; qty: number }[],
-  batch: { dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null; serialNo: string | null }
+  batch: { dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null; serialNo: string | null },
+  opts: { shelfCode?: string | null; boxId?: string | null } = {}
 ) {
   for (const [idx, portion] of portions.entries()) {
     scans.value.push({
@@ -623,10 +839,10 @@ function addCnPieces(
       lotCode: batch.lotCode,
       coo: batch.coo,
       cow: batch.cow,
-      // The CN complete call is per item + shelf; a scanned physical box QR
-      // could ride here later — CN boxes are plain text, no entities.
-      shelfCode: selectedShelf.value,
-      boxId: null,
+      // Box-dialog pieces carry the resolved carton number so the created
+      // lot's box_id matches the allocation view of the box.
+      shelfCode: opts.shelfCode ?? selectedShelf.value,
+      boxId: opts.boxId ?? null,
     });
     // The label's serial rides on the first split portion only (same rule as
     // the standard path's backend-side dedup).

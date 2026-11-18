@@ -1,0 +1,14 @@
+{
+  "id": "CR-064",
+  "dateRaised": "2026-11-18",
+  "raisedBy": "Sean",
+  "app": "PDA",
+  "functionId": "PDA-010",
+  "feature": "CN put-away carton-QR box dialog: scanning a carton's printed QR (0;INVOICE;boxSeq;totalBoxes;itemCount;…;Made In China;) opens a box-scoped dialog on the CN put-away detail page listing that carton's lines from the DB (invoice items filtered to the resolved ctn_no — distinct numeric ctn_no sorted numerically, 1-based boxSeq index; items now carry invoiceNo for per-invoice scoping). The operator scans an item label or taps a row to select it, then scans a shelf — the piece stages locally with boxId = ctn_no and the existing batch confirm posts it (the complete call already persisted box_id onto the lot). Another carton QR while the dialog is open switches boxes. The QR's item tail is never parsed — the DB is authoritative. Wrong-order / unknown-box scans toast and change nothing. Hardware/wedge scans only (the page's camera path is the per-group review modal).",
+  "reason": "HK-style CN orders span several physical cartons per invoice and staff work carton by carton; without box targeting they had to read the paper packing list and hunt the item list for every line",
+  "priority": "Must have",
+  "status": "In progress",
+  "owner": "dev",
+  "targetDate": "",
+  "remarks": "Spec docs/superpowers/specs/2026-11-18-cn-putaway-box-qr-design.md. Parser + resolver utils/cnBoxQr.ts (unit-tested against the real warehouse_sz invoices GZ-26110068 → ctn 38 box 1/4 and SZ-26110077 → ctn 25 box 1/2). Backend change is one column on the CN task-detail aggregate (invoiceNo on items)."
+}
