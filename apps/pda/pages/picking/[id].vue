@@ -462,10 +462,32 @@ function onChooseBox(boxId: string) {
 }
 
 /** Remove the chosen cross-order box from this page (the box itself stays
- *  open on its own order — this only unchooses it here). */
-function onUnchooseBox() {
+ *  open on its own order — this only unchooses it here). Packages of THIS
+ *  order sitting in the box are moved out first. */
+async function onUnchooseBox() {
+  const boxId = scanIntoBoxId.value;
+  if (!boxId || !order.value) return;
+  const mine = order.value.items
+    .flatMap((i) => i.packages ?? [])
+    .filter((p) => p.shippingBoxId === boxId);
+  if (mine.length > 0) {
+    const confirmed = window.confirm(
+      t("picking.boxesSection.unchooseConfirm", { count: mine.length })
+    );
+    if (!confirmed) return;
+    try {
+      for (const pkg of mine) {
+        await warehouse.removePackageFromBox(boxId, pkg.id);
+      }
+    } catch (e) {
+      error.value = errorMessage(e);
+      await load();
+      return;
+    }
+  }
   scanIntoBoxId.value = null;
   chosenBox.value = null;
+  await load();
 }
 
 

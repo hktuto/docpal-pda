@@ -554,6 +554,7 @@ export default {
       qty: "數量",
       cancelBox: "取消箱號",
       unchooseBox: "取消選箱",
+      unchooseConfirm: "本訂單有 {count} 件物品喺此箱入面，取消選箱會將佢哋移出箱子。繼續？",
       addAll: "全部加入",
       addAllConfirm: "將所有未裝箱包裹加入此箱？",
       scanIntoBox: "掃描物料入箱",

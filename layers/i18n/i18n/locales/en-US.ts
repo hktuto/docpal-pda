@@ -555,6 +555,7 @@ export default {
       qty: "Qty",
       cancelBox: "Cancel box",
       unchooseBox: "Cancel Box",
+      unchooseConfirm: "This order has {count} package(s) in this box. Cancel and move them out of the box?",
       addAll: "Add all",
       addAllConfirm: "Add all unboxed packages to this box?",
       scanIntoBox: "Scan item into box",
