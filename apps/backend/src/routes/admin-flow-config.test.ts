@@ -399,6 +399,26 @@ test("PUT /admin/flow-config: pickingShelfScan round-trips and reaches GET /conf
   }
 });
 
+test("PUT /admin/flow-config: goods-verify mode round-trips and reaches GET /config", async () => {
+  await reseed(client);
+  try {
+    const get0 = await (await req("/admin/flow-config")).json();
+    assert.equal(get0.config.goodsVerify.mode, "confirm"); // default
+    const payload = { steps: { "goods-verify": { enabled: true, mode: "count" } } };
+    const res = await req("/admin/flow-config", { method: "PUT", body: JSON.stringify(payload) });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).config.goodsVerify.mode, "count");
+    // runtime applied: the PDA-facing GET /config resolves it
+    const config = await (await req("/config")).json();
+    assert.equal(config.goodsVerify.mode, "count");
+    // invalid mode rejected
+    const bad = await req("/admin/flow-config", { method: "PUT", body: JSON.stringify({ steps: { "goods-verify": { mode: "sometimes" } } }) });
+    assert.equal(bad.status, 400);
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
 test("PUT /admin/flow-config: invalid JSON shapes → 400, row untouched", async () => {
   await reseed(client);
   try {

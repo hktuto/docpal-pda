@@ -2766,6 +2766,13 @@ export default {
           wwyy: "WWYY（週-年，例如 3726）",
           yyww: "YYWW（年-週，例如 2637）"
         },
+        goodsVerifySection: "每日盤點（查貨）",
+        goodsVerifyMode: "盤點模式",
+        goodsVerifyModeHint: "「一鍵確認」＝ PDA 操作員睇住貨架異動摘要一鍵確認（香港做法）。「回填數量」＝ PDA 操作員只見架位同產品，逐行回填實盤數量，管理員對照系統最新數量確認或駁回重新盤（其他倉做法）。",
+        goodsVerifyModes: {
+          confirm: "一鍵確認（香港）",
+          count: "回填數量（盲盤＋管理員對數）"
+        },
         rulesSection: "收貨子庫存規則（確認到貨）",
         ruleOrgIds: "Org ID（例如 140, 143）",
         rulePoPattern: "PO 模式（例如 319*、11*W）",

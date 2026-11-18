@@ -1060,6 +1060,10 @@ export interface FlowConfigState {
     steps: Record<string, { enabled: boolean }>;
     pickingAllocation: { allowDockStock: boolean };
     putAway: { autoCreateTasks: boolean; suggestShelf: "existing-stock" | "off"; skipScan?: boolean };
+    /** Goods-verify mode: "confirm" (one-press pure confirmation) | "count"
+     *  (PDA blind-counts per line; admin compares against live totals and
+     *  confirms/rejects). Optional — backends predating the key omit it. */
+    goodsVerify?: { mode?: "confirm" | "count" };
     /** Org partitions this warehouse accepts; [] = all orgs (no filtering). */
     allowedOrgIds: number[];
     /** Stock age threshold (years) for the stock-search outdated count. */

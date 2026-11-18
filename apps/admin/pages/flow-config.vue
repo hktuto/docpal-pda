@@ -41,6 +41,7 @@ const suggestShelf = ref<"existing-stock" | "off">("existing-stock");
 const skipScan = ref(false);
 const pickingShelfScan = ref<"off" | "require-match" | "require-any">("off");
 const dateCodeFormat = ref<"wwyy" | "yyww">("wwyy");
+const goodsVerifyMode = ref<"confirm" | "count">("confirm");
 
 const pickingShelfScanOptions = computed<SearchableSelectOption[]>(() => [
   { value: "off", label: t("admin.pages.flowConfig.pickingShelfScanModes.off") },
@@ -51,6 +52,11 @@ const pickingShelfScanOptions = computed<SearchableSelectOption[]>(() => [
 const dateCodeFormatOptions = computed<SearchableSelectOption[]>(() => [
   { value: "wwyy", label: t("admin.pages.flowConfig.dateCodeFormatValues.wwyy") },
   { value: "yyww", label: t("admin.pages.flowConfig.dateCodeFormatValues.yyww") },
+]);
+
+const goodsVerifyModeOptions = computed<SearchableSelectOption[]>(() => [
+  { value: "confirm", label: t("admin.pages.flowConfig.goodsVerifyModes.confirm") },
+  { value: "count", label: t("admin.pages.flowConfig.goodsVerifyModes.count") },
 ]);
 
 const suggestShelfOptions = computed<SearchableSelectOption[]>(() => [
@@ -86,6 +92,7 @@ async function load() {
     skipScan.value = state.value.config.putAway.skipScan ?? false;
     pickingShelfScan.value = state.value.config.pickingShelfScan ?? "off";
     dateCodeFormat.value = state.value.config.dateCodeFormat ?? "wwyy";
+    goodsVerifyMode.value = state.value.config.goodsVerify?.mode ?? "confirm";
     allowedOrgIdsText.value = state.value.config.allowedOrgIds.join(", ");
     outdatedStockYearsText.value = String(state.value.config.outdatedStockYears);
     groups.value = state.value.config.receivingSubInventoryRules.map((g) => ({
@@ -183,6 +190,10 @@ async function save() {
       suggestShelf: suggestShelf.value,
       skipScan: skipScan.value,
     };
+    // Carry the goods-verify mode inside its step key (hoisted to
+    // goodsVerify.mode by the boot merge) — without this the rebuilt steps
+    // object would wipe the mode back to the default on every save.
+    steps["goods-verify"] = { ...steps["goods-verify"], mode: goodsVerifyMode.value };
     // The backend PUT stores the raw body as the whole "flow" row, so merge
     // over the stored JSON — otherwise keys owned by the other config editors
     // (dateCodeDisplayTemplate / receivingOrderNameTemplate on display-config,
@@ -274,6 +285,23 @@ onMounted(load);
             :show-all="false"
           />
         </div>
+      </div>
+
+      <div class="card form-card">
+        <h2>{{ $t("admin.pages.flowConfig.goodsVerifySection") }}</h2>
+        <div class="form-row">
+          <label for="fc-goods-verify-mode">{{ $t("admin.pages.flowConfig.goodsVerifyMode") }}</label>
+          <SearchableSelect
+            id="fc-goods-verify-mode"
+            v-model="goodsVerifyMode"
+            :options="goodsVerifyModeOptions"
+            :all-label="$t('admin.pages.flowConfig.goodsVerifyMode')"
+            :aria-label="$t('admin.pages.flowConfig.goodsVerifyMode')"
+            :multiple="false"
+            :show-all="false"
+          />
+        </div>
+        <p class="hint-text">{{ $t("admin.pages.flowConfig.goodsVerifyModeHint") }}</p>
       </div>
 
       <div class="card form-card">

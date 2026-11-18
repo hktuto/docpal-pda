@@ -2766,6 +2766,13 @@ export default {
           wwyy: "WWYY（周-年，例如 3726）",
           yyww: "YYWW（年-周，例如 2637）"
         },
+        goodsVerifySection: "每日盘点（查货）",
+        goodsVerifyMode: "盘点模式",
+        goodsVerifyModeHint: "「一键确认」＝ PDA 操作员查看货架异动摘要后一键确认（香港做法）。「回填数量」＝ PDA 操作员只见架位和产品，逐行回填实盘数量，管理员对照系统最新数量确认或驳回重新盘（其他仓做法）。",
+        goodsVerifyModes: {
+          confirm: "一键确认（香港）",
+          count: "回填数量（盲盘＋管理员对数）"
+        },
         rulesSection: "收货子库存规则（确认到货）",
         ruleOrgIds: "Org ID（例如 140, 143）",
         rulePoPattern: "PO 模式（例如 319*、11*W）",

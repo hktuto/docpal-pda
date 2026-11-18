@@ -2771,6 +2771,13 @@ export default {
           wwyy: "WWYY (week-year, e.g. 3726)",
           yyww: "YYWW (year-week, e.g. 2637)"
         },
+        goodsVerifySection: "Daily stocktake (goods verify)",
+        goodsVerifyMode: "Stocktake mode",
+        goodsVerifyModeHint: "\"One-press confirm\" = the PDA operator reviews the shelf movement summary and confirms with one press (the HK way). \"Count entry\" = the PDA operator sees only the shelf and products, keys in the physical count per line, and an admin compares against the system's live totals to confirm or send back for a re-count (other warehouses).",
+        goodsVerifyModes: {
+          confirm: "One-press confirm (HK)",
+          count: "Count entry (blind count + admin check)"
+        },
         rulesSection: "Receiving sub-inventory rules (confirm arrival)",
         ruleOrgIds: "Org IDs (e.g. 140, 143)",
         rulePoPattern: "PO pattern (e.g. 319*, 11*W)",
