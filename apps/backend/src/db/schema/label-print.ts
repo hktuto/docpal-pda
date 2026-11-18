@@ -15,7 +15,8 @@ export const labelPrintRules = pgTable(
     labelType: text("label_type").notNull(), // carton | item_box | item
     conditions: jsonb("conditions").notNull(),
     printTemplateId: text("print_template_id").notNull(), // upstream print-service template slug
-    // internal = we print; external = the customer provides the label (no print button).
+    // internal = we print; external = the customer provides the label (no print
+    // button); auto_machine = the auto labeling machine prints it (2026-11-12).
     labelSource: text("label_source").notNull().default("internal"),
     priority: integer("priority").notNull().default(100),
     active: boolean("active").notNull().default(true),
@@ -24,6 +25,9 @@ export const labelPrintRules = pgTable(
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
-    labelSourceCheck: check("chk_label_print_rules_label_source", sql`label_source IN ('internal', 'external')`),
+    labelSourceCheck: check(
+      "chk_label_print_rules_label_source",
+      sql`label_source IN ('internal', 'external', 'auto_machine')`
+    ),
   })
 );

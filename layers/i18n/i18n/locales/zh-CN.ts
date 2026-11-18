@@ -505,7 +505,11 @@ export default {
       printed: "已打印",
       printFailed: "打印失败——点击重试",
       noMatchingRules: "此订单没有符合的标签打印规则",
-      externalNote: "标签由客户提供"
+      externalNote: "标签由客户提供",
+      autoMachineNote: "自动贴标机",
+      autoSubmit: "提交到机器",
+      autoSubmitted: "已提交",
+      autoLoadHint: "已提交打印任务——请装载材料并按自动贴标机的开始键"
     },
     itemsSection: {
       title: "明细",

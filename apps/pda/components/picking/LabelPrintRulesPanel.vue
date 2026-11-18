@@ -19,9 +19,18 @@
         <span v-if="match.labelSource === 'external'" class="match-meta match-external">
           {{ $t('picking.printLabels.externalNote') }}
         </span>
+        <span v-if="match.labelSource === 'auto_machine'" class="match-meta match-auto">
+          {{ $t('picking.printLabels.autoMachineNote') }}
+        </span>
+        <span v-if="match.labelSource === 'auto_machine' && stateOf(match.ruleId) === 'printed'" class="match-meta match-auto">
+          {{ $t('picking.printLabels.autoLoadHint') }}
+        </span>
       </div>
       <!-- External labels are provided by the customer — info row only,
-           never printable (spec 2026-10-30). -->
+           never printable (spec 2026-10-30). Auto-machine labels create a
+           print job for the auto labeling machine (spec 2026-11-12): the
+           button is "submit", the operator then loads material and presses
+           the machine's physical button. -->
       <button
         v-if="match.labelSource !== 'external'"
         class="btn btn--small"
@@ -36,13 +45,13 @@
           <InlineSpinner /> {{ $t('picking.printLabels.printing') }}
         </template>
         <template v-else-if="stateOf(match.ruleId) === 'printed'">
-          {{ $t('picking.printLabels.printed') }}
+          {{ match.labelSource === 'auto_machine' ? $t('picking.printLabels.autoSubmitted') : $t('picking.printLabels.printed') }}
         </template>
         <template v-else-if="stateOf(match.ruleId) === 'failed'">
           {{ $t('picking.printLabels.printFailed') }}
         </template>
         <template v-else>
-          {{ $t('picking.printLabels.print') }}
+          {{ match.labelSource === 'auto_machine' ? $t('picking.printLabels.autoSubmit') : $t('picking.printLabels.print') }}
         </template>
       </button>
     </li>
@@ -72,6 +81,7 @@ const props = defineProps<{
 }>();
 
 const { showToast } = useToast();
+const { t } = useI18n();
 const getErrorMessage = useErrorMessage();
 const warehouse = useWarehouse();
 
@@ -126,11 +136,21 @@ async function printMatch(match: LabelPrintRuleMatch): Promise<void> {
   if (stateOf(match.ruleId) === "printing") return;
   rowStates.value = { ...rowStates.value, [match.ruleId]: "printing" };
   try {
-    const { jobs } = await warehouse.printPickingLabel(props.order.id, match.ruleId, selectedPrinter.value);
-    for (const job of jobs) {
-      await waitForPrintJob(job.jobId);
+    if (match.labelSource === "auto_machine") {
+      // Auto labeling machine (spec 2026-11-12): no print-service call — the
+      // backend records a pending job; the machine claims it at its physical
+      // button after the operator loads the material.
+      await warehouse.createAutoLabelingJob(props.order.id, match.ruleId);
+    } else {
+      const { jobs } = await warehouse.printPickingLabel(props.order.id, match.ruleId, selectedPrinter.value);
+      for (const job of jobs) {
+        await waitForPrintJob(job.jobId);
+      }
     }
     rowStates.value = { ...rowStates.value, [match.ruleId]: "printed" };
+    if (match.labelSource === "auto_machine") {
+      showToast(t("picking.printLabels.autoLoadHint"));
+    }
   } catch (e) {
     rowStates.value = { ...rowStates.value, [match.ruleId]: "failed" };
     showToast(getErrorMessage(e));
@@ -214,6 +234,10 @@ defineExpose({ printAll, reset, printingAll, allPrinted });
 
 .match-external {
   color: var(--warning);
+}
+
+.match-auto {
+  color: var(--primary);
 }
 
 .match-print--printed {

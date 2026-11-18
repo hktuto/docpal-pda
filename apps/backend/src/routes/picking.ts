@@ -36,6 +36,7 @@ import {
 import { shipPickingOrder } from "../db/shipping.js";
 import { resolveLabelPrintRulesForOrder } from "../db/labelPrint.js";
 import { labelCountForMatch, printOrderLabel } from "../db/labelPrintParams.js";
+import { createAutoLabelingJob, latestAutoLabelingJobForOrder } from "../db/autoLabeling.js";
 import { actorFrom, visibilityUsername } from "../auth/middleware.js";
 import { getUserScope } from "../db/user-scope.js";
 
@@ -159,6 +160,33 @@ pickingRoute.post("/picking-orders/:id/label-print", async (c) => {
     printer: body.serviceId ? { serviceId: body.serviceId, deviceKey: body.deviceKey! } : undefined,
   });
   return c.json(result, 200);
+});
+
+// Auto labeling machine job creation (spec 2026-11-12): the PDA calls this
+// for auto_machine rules instead of /label-print — the backend converts the
+// labels (same conversion as the internal path), snapshots the order + the
+// pick-time scan records, and inserts a pending job; the PDA then prompts the
+// operator to load material. Nothing is written to label_prints (the machine
+// verifies itself).
+pickingRoute.post("/picking-orders/:id/auto-labeling-job", async (c) => {
+  const body = await readJson<{ ruleId?: string }>(c);
+  if (!body.ruleId) throw new HTTPException(400, { message: "rule_id_required" });
+  const actor = actorFrom(c);
+  const scope = await getUserScope(db, actor.username);
+  const result = await createAutoLabelingJob(db, {
+    orderId: c.req.param("id"),
+    ruleId: body.ruleId,
+    actorId: actor.id,
+    scope,
+    username: visibilityUsername(c),
+  });
+  return c.json(result, 200);
+});
+
+// Latest auto-labeling job for the order (status display on the detail page).
+pickingRoute.get("/picking-orders/:id/auto-labeling-job", async (c) => {
+  const result = await latestAutoLabelingJobForOrder(db, c.req.param("id"));
+  return c.json({ job: result }, 200);
 });
 
 // Shelf presence check (flow config pickingShelfScan require-match): stock of

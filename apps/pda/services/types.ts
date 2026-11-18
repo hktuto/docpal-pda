@@ -444,9 +444,11 @@ export interface LabelPrintRuleMatch {
   labelType: "carton" | "item_box" | "item";
   printTemplateId: string;
   labelCount: number;
-  /** Label source (spec 2026-10-30): internal = we print; external = the
-   *  customer provides the label (info row only, never printable). */
-  labelSource: "internal" | "external";
+  /** Label source (spec 2026-10-30 + 2026-11-12): internal = we print;
+   *  external = the customer provides the label (info row only, never
+   *  printable); auto_machine = the auto labeling machine prints it (the PDA
+   *  creates a job, then the operator loads material). */
+  labelSource: "internal" | "external" | "auto_machine";
 }
 
 export interface PrintJob {
@@ -458,6 +460,20 @@ export interface PrintJob {
 /** POST /picking-orders/:id/label-print result (spec 2026-10-29). */
 export interface PrintPickingLabelResult {
   jobs: PrintJob[];
+  labelCount: number;
+}
+
+/** POST /picking-orders/:id/auto-labeling-job result (spec 2026-11-12). */
+export interface AutoLabelingJob {
+  id: string;
+  pickingOrderId: string;
+  status: "pending" | "printing" | "completed" | "failed";
+  statusNote: string | null;
+  createdBy: string;
+  fetchedDate: string | null;
+  completedDate: string | null;
+  createdDate: string;
+  lastUpdateDate: string;
   labelCount: number;
 }
 

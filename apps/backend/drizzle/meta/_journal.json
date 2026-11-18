@@ -477,6 +477,13 @@
       "when": 1794954456954,
       "tag": "0068_gorgeous_jane_foster",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1795020412985,
+      "tag": "0069_foamy_kingpin",
+      "breakpoints": true
     }
   ]
 }

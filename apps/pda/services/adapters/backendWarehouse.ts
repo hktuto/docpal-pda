@@ -15,6 +15,7 @@ import type {
   PickingWorkLock,
   LabelPrintRuleMatch,
   PrintPickingLabelResult,
+  AutoLabelingJob,
   LabelingOrderListQuery,
   LabelingOrderRow,
   LabelPrintingOrderListQuery,
@@ -293,6 +294,19 @@ export function createBackendWarehouseService(
         ruleId,
         ...printer,
       });
+    },
+    // Auto labeling machine (spec 2026-11-12): create the pending print job;
+    // the machine claims it when the operator presses its physical button.
+    async createAutoLabelingJob(orderId: string, ruleId: string): Promise<AutoLabelingJob> {
+      return client.post<AutoLabelingJob>(`/picking-orders/${orderId}/auto-labeling-job`, {
+        ruleId,
+      });
+    },
+    async getAutoLabelingJob(orderId: string): Promise<AutoLabelingJob | null> {
+      const res = await client.get<{ job: AutoLabelingJob | null }>(
+        `/picking-orders/${orderId}/auto-labeling-job`
+      );
+      return res.job;
     },
     // The one canonical scan-to-pick (covers lot and receiving-area sources;
     // the old applyOcrPick path is gone). Null batch fields are omitted so the

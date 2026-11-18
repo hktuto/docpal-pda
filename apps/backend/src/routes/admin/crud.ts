@@ -110,8 +110,8 @@ export function reqLabelType(body: Record<string, unknown>, field: string): stri
   return v;
 }
 
-// Label-print rules: label_source ∈ internal | external.
-const LABEL_SOURCES = new Set(["internal", "external"]);
+// Label-print rules: label_source ∈ internal | external | auto_machine.
+const LABEL_SOURCES = new Set(["internal", "external", "auto_machine"]);
 
 export function reqLabelSource(body: Record<string, unknown>, field: string): string {
   const v = reqStr(body, field);

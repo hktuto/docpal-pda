@@ -15,6 +15,7 @@ import type {
   PickingWorkLock,
   LabelPrintRuleMatch,
   PrintPickingLabelResult,
+  AutoLabelingJob,
   LabelingOrderListQuery,
   LabelingOrderRow,
   LabelPrintingOrderListQuery,
@@ -119,6 +120,10 @@ export interface WarehouseService {
     ruleId: string,
     printer?: { serviceId: string; deviceKey: string }
   ): Promise<PrintPickingLabelResult>;
+  // Auto labeling machine (spec 2026-11-12): create the pending print job
+  // for an auto_machine rule; the machine claims it at its physical button.
+  createAutoLabelingJob(orderId: string, ruleId: string): Promise<AutoLabelingJob>;
+  getAutoLabelingJob(orderId: string): Promise<AutoLabelingJob | null>;
   scanPickingItem(
     itemId: string,
     input: ScanPickingItemInput

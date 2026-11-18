@@ -82,6 +82,9 @@ services:
       # (printer list, template print, job status) to it. Default is the LAN
       # print host; override in .env when it moves.
       PRINT_API_BASE_URL: ${PRINT_API_BASE_URL:-http://192.168.5.116:9003}
+      # Auto labeling machine API token — the machine calls
+      # /auto-labeling/* with this bearer (spec 2026-11-12).
+      MACHINE_API_TOKEN: ${MACHINE_API_TOKEN:-}
     # Published release APK + version.json (built by `pnpm build:apk` on the
     # host), served via GET /admin/app-download/file.
     volumes:

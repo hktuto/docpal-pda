@@ -382,9 +382,13 @@ export async function printOrderLabel(
   const { matches } = await resolveLabelPrintRulesForOrder(db, input.orderId);
   const match = matches.find((m) => m.ruleId === input.ruleId);
   if (!match) throw new HTTPException(409, { message: "label_rule_no_longer_matches" });
-  // External labels are provided by the customer — nothing to print.
+  // External labels are provided by the customer — nothing to print. Auto
+  // machine labels go through POST /picking-orders/:id/auto-labeling-job.
   if (match.labelSource === "external") {
     throw new HTTPException(409, { message: "label_rule_external" });
+  }
+  if (match.labelSource === "auto_machine") {
+    throw new HTTPException(409, { message: "label_rule_auto_machine" });
   }
 
   const order = await getPickingOrderDetail(db, input.orderId, input.scope);

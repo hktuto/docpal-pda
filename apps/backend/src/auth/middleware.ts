@@ -47,6 +47,14 @@ export const authMiddleware: MiddlewareHandler<{ Variables: AuthVariables }> = a
   if (!token && c.req.method === "GET" && path === "/events") {
     token = c.req.query("token");
   }
+  // Auto labeling machine endpoints (2026-11-12): the fixed machine token
+  // (MACHINE_API_TOKEN) is accepted instead of a user JWT. Fail closed when
+  // the env is unset (falls through to 401).
+  if (path.startsWith("/auto-labeling")) {
+    const machineToken = process.env.MACHINE_API_TOKEN?.trim();
+    if (machineToken && token === machineToken) return next();
+    throw new HTTPException(401, { message: "unauthorized" });
+  }
   if (token) {
     try {
       c.set("user", await verifyAuthToken(token));

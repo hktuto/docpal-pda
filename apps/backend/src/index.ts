@@ -26,6 +26,7 @@ import { scanTemplatesRoute } from "./routes/scantemplates.js";
 import { scanDecodeRoute } from "./routes/decode.js";
 import { eventsRoute } from "./routes/events.js";
 import { printRoute } from "./routes/print.js";
+import { autoLabelingRoute } from "./routes/autoLabeling.js";
 import { devRoute } from "./routes/dev.js";
 import { devLabRoute } from "./routes/devLab.js";
 import { bugReportsRoute } from "./routes/bugReports.js";
@@ -71,6 +72,7 @@ app.route("/", scanTemplatesRoute);
 app.route("/", scanDecodeRoute);
 app.route("/", eventsRoute);
 app.route("/", printRoute);
+app.route("/", autoLabelingRoute);
 app.route("/", bugReportsRoute);
 // Dev-only routes (/dev/allocate needs a token; /dev/lab* stays tokenless for
 // the browser page); disable the whole mount with DEV_ROUTES=off.

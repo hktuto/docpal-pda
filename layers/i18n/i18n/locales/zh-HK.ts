@@ -505,7 +505,11 @@ export default {
       printed: "已列印",
       printFailed: "列印失敗——點擊重試",
       noMatchingRules: "此訂單沒有符合的標籤列印規則",
-      externalNote: "標籤由客戶提供"
+      externalNote: "標籤由客戶提供",
+      autoMachineNote: "自動貼標機",
+      autoSubmit: "提交到機器",
+      autoSubmitted: "已提交",
+      autoLoadHint: "已提交打印任務——請裝載材料並按自動貼標機的開始鍵"
     },
     itemsSection: {
       title: "項目",

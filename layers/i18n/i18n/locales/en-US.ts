@@ -506,7 +506,11 @@ export default {
       printed: "Printed",
       printFailed: "Failed — tap to retry",
       noMatchingRules: "No label print rules match this order",
-      externalNote: "Label provided by customer"
+      externalNote: "Label provided by customer",
+      autoMachineNote: "Auto labeling machine",
+      autoSubmit: "Submit to machine",
+      autoSubmitted: "Submitted",
+      autoLoadHint: "Job submitted — please load the material and press START on the auto labeling machine"
     },
     itemsSection: {
       title: "Items",
