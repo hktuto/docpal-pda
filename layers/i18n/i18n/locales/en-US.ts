@@ -554,6 +554,7 @@ export default {
       packages: "Packages",
       qty: "Qty",
       cancelBox: "Cancel box",
+      unchooseBox: "Cancel Box",
       addAll: "Add all",
       addAllConfirm: "Add all unboxed packages to this box?",
       scanIntoBox: "Scan item into box",
@@ -571,7 +572,6 @@ export default {
       loading: "Loading…",
       empty: "No open boxes",
       thisOrder: "This order",
-      unchoose: "Remove",
       packages: "{count} pkg"
     },
     issueBanner: {

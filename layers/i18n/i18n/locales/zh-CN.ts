@@ -553,6 +553,7 @@ export default {
       packages: "包裹",
       qty: "数量",
       cancelBox: "取消箱子",
+      unchooseBox: "取消选箱",
       addAll: "全部加入",
       addAllConfirm: "将所有未装箱包裹加入此箱？",
       scanIntoBox: "扫描物料入箱",
@@ -570,7 +571,6 @@ export default {
       loading: "加载中…",
       empty: "没有已开箱",
       thisOrder: "本订单",
-      unchoose: "取消选择",
       packages: "{count} 件"
     },
     issueBanner: {

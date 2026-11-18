@@ -74,6 +74,7 @@
         :foreign-box-ids="foreignBoxIds"
         @create-box="createBox"
         @choose-box="openChooseBox"
+        @unchoose-box="onUnchooseBox"
         @box-each-unboxed="boxEachUnboxed"
         @close-box="closeBox"
         @cancel-box="cancelBox"
@@ -132,9 +133,7 @@
         :open="chooseBoxOpen"
         :boxes="chooseBoxes"
         :current-order-id="orderId"
-        :chosen-box-id="scanIntoBoxId"
         @select="onChooseBox"
-        @unchoose="onUnchooseBox"
         @close="chooseBoxOpen = false"
       />
 
@@ -733,12 +732,14 @@ function onChooseBox(boxId: string) {
   boxesExpanded.value = true;
 }
 
-function onUnchooseBox(boxId: string) {
-  if (scanIntoBoxId.value !== boxId) return;
+/** Remove the chosen cross-order box from this page (the box itself stays
+ *  open on its own order — this only unchooses it here). */
+function onUnchooseBox() {
   scanIntoBoxId.value = null;
   chosenBox.value = null;
-  chooseBoxOpen.value = false;
 }
+
+
 
 /** The boxes rendered in the boxes section: the order's own boxes plus the
  *  chosen cross-order box, shown as a normal card (Select-box dropdown / Add

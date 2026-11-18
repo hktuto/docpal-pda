@@ -128,6 +128,13 @@
         >
           {{ cancellingBox[box.id] ? $t('actions.canceling') : $t('picking.boxesSection.cancelBox') }}
         </button>
+        <button
+          v-if="isForeign(box.id)"
+          class="btn btn--small btn--danger"
+          @click="emit('unchoose-box', box.id)"
+        >
+          {{ $t('picking.boxesSection.unchooseBox') }}
+        </button>
       </div>
     </div>
   </div>
@@ -183,6 +190,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   "create-box": [];
   "choose-box": [];
+  "unchoose-box": [boxId: string];
   "box-each-unboxed": [];
   "close-box": [boxId: string];
   "cancel-box": [boxId: string];
