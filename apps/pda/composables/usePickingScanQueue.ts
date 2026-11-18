@@ -302,6 +302,13 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
     rows.value = rows.value.filter((r) => r.key !== key || r.status === "applied");
   }
 
+  /** Forget an applied label so it can be re-scanned after its package is
+   *  removed (un-scan) — otherwise the duplicate guard would reject the
+   *  legitimate re-pick. */
+  function forgetAppliedRaw(raw: string) {
+    appliedRaws.delete(raw);
+  }
+
   function matchBy(
     raw: string,
     ids: (a: PickingAllocation) => (string | null | undefined)[]
@@ -554,5 +561,5 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
     return rows.value.filter((r) => r.status === "failed").length;
   }
 
-  return { rows, queuedRows, queuedQtyByItem, addScan, findTargets, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, reresolveQueued, applyAll };
+  return { rows, queuedRows, queuedQtyByItem, addScan, findTargets, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, forgetAppliedRaw, reresolveQueued, applyAll };
 }

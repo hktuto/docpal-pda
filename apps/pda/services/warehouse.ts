@@ -142,7 +142,10 @@ export interface WarehouseService {
   updateShippingBox(id: string, fields: ShippingBoxUpdateInput): Promise<void>;
   addPackageToBox(packageId: string, boxId: string): Promise<void>;
   removePackageFromBox(boxId: string, packageId: string): Promise<void>;
-  addAllUnboxedPackagesToBox(boxId: string): Promise<number>;
+  // Add all unboxed packages of ONE order into an open shipping box. A chosen
+  // cross-order box is a valid target; `pickingOrderId` = the calling page's
+  // order (the box may belong to another order).
+  addAllUnboxedPackagesToBox(boxId: string, pickingOrderId: string): Promise<number>;
   cancelShippingBox(id: string): Promise<void>;
   closeShippingBox(id: string): Promise<void>;
   // Cross-order packing: scan ANY order's item barcode straight into this

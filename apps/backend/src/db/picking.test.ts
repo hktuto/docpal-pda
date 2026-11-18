@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
-import { allocateAll } from "./allocate.js";
+import { allocateAll, allocateForPickingOrder } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
 import { _setPickingShelfScanForTests, _setPickingFromSubinventoryOrgsForTests, _setReceivingSubInventoryRulesForTests, _setOutdatedStockYearsForTests, _setFlowStepsDisabledForTests, _resetFlowConfigForTests } from "../config.js";
 import { dateToDateCode } from "./dateCode.js";
@@ -920,13 +920,33 @@ test("boxes: add-all-unboxed is exempt from the one-COO-per-box guard (mixed COO
   await client.db.execute(sql`UPDATE picking_packages SET coo = 'CN' WHERE id = ${p2}`);
 
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
-  const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, pickingOrderId: orderId, actorId });
   assert.equal(packed, 2);
   const coos = await queryGet<{ c: number }>(
     client.db,
     sql`SELECT COUNT(DISTINCT coo)::int AS c FROM picking_packages WHERE shipping_box_id = ${box.id}`
   );
   assert.equal(coos!.c, 2);
+});
+
+test("boxes: add-all-unboxed on a foreign box packs the CALLING order's packages", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  // this order's unboxed package
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const mine = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 100 })).packageIds[0];
+
+  // a second, independent order provides the foreign box
+  const otherOrderId = await insertPickingOrder("SO-XADD-0002", "allocated");
+  const foreignBox = await createShippingBox(client.db, { pickingOrderId: otherOrderId, actorId });
+
+  const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: foreignBox.id, pickingOrderId: orderId, actorId });
+  assert.equal(packed, 1);
+  const inBox = await queryGet<{ shippingBoxId: string | null }>(
+    client.db,
+    sql`SELECT shipping_box_id AS "shippingBoxId" FROM picking_packages WHERE id = ${mine}`
+  );
+  assert.equal(inBox!.shippingBoxId, foreignBox.id);
 });
 
 // --- close flow + manual finish ---------------------------------------------------------
@@ -946,7 +966,7 @@ test("close flow: add-all-unboxed does not finish; explicit finish → verify �
   assert.equal(emptyClose.status, 409);
   assert.equal(emptyClose.message, "cannot_close_empty_shipping_box");
 
-  const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, pickingOrderId: orderId, actorId });
   assert.equal(packed, 3);
 
   // boxing never finishes the order anymore (2026-10-16) — explicit finish does
@@ -1058,7 +1078,7 @@ test("finish: explicit finish + guards (unfinished, empty, already finished)", a
   await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 });
   await scanPickingItem(client.db, item3, { actorId, allocationId: (await allocationOf(item3)).id, qty: 300 });
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
-  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, pickingOrderId: orderId, actorId });
   await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
 
   const already = await catchHttp(finishPickingOrder(client.db, { pickingOrderId: orderId, actorId }));
@@ -1111,7 +1131,7 @@ test("verify: guard cascade — unboxed, open box ok, duplicate, closed box re-s
   const p2 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 500 })).packageIds[0];
   const p3 = (await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 })).packageIds[0];
   const p4 = (await scanPickingItem(client.db, item3, { actorId, allocationId: (await allocationOf(item3)).id, qty: 300 })).packageIds[0];
-  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, pickingOrderId: orderId, actorId });
 
   await verifyPackage(client.db, { packageId: p2, actorId });
   await verifyPackage(client.db, { packageId: p3, actorId });
@@ -1638,7 +1658,7 @@ test("picking order logs: order + item/package/box rows with actor name, newest 
   ).packageIds[0]!;
   await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 });
   await scanPickingItem(client.db, item3, { actorId, allocationId: (await allocationOf(item3)).id, qty: 300 });
-  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, pickingOrderId: orderId, actorId });
   await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
   await verifyPackage(client.db, { packageId: p1, actorId });
 
@@ -1908,7 +1928,7 @@ test("pack path: boxing packages prefills the box from the source carton's addit
   // an operator-set field is kept; NULL fields are filled from the carton
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   await updateShippingBox(client.db, box.id, { actorId, netWeightKg: 9 });
-  const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, pickingOrderId: orderId, actorId });
   assert.equal(packed, 2);
 
   const filled = await queryGet<{ boxSize: string | null; netWeight: number | null; grossWeight: number | null }>(
@@ -2553,7 +2573,7 @@ test("close flow (measuring off): close skips the rescan and size/weights guards
     assert.equal(emptyClose.status, 409);
     assert.equal(emptyClose.message, "cannot_close_empty_shipping_box");
 
-    const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+    const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, pickingOrderId: orderId, actorId });
     assert.equal(packed, 2);
 
     // no verifyPackage, no box size, no weights → still closes

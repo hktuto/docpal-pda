@@ -386,10 +386,10 @@ export function createBackendWarehouseService(
     async removePackageFromBox(boxId: string, packageId: string): Promise<void> {
       await client.del(`/shipping-boxes/${boxId}/packages/${packageId}`);
     },
-    async addAllUnboxedPackagesToBox(boxId: string): Promise<number> {
+    async addAllUnboxedPackagesToBox(boxId: string, pickingOrderId: string): Promise<number> {
       const result = await client.post<{ packed: number }>(
         `/shipping-boxes/${boxId}/add-all-unboxed`,
-        {}
+        { pickingOrderId }
       );
       return result.packed;
     },

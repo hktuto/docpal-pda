@@ -218,12 +218,13 @@ describe('backendWarehouse receiving flow', () => {
     expect(lastCall().init.body).toBeUndefined();
   });
 
-  it('addAllUnboxedPackagesToBox returns the packed count', async () => {
+  it('addAllUnboxedPackagesToBox posts the calling order id (cross-order targets)', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ packed: 4 }));
 
-    const count = await service().addAllUnboxedPackagesToBox('box1');
+    const count = await service().addAllUnboxedPackagesToBox('box1', 'order-9');
 
     expect(lastCall().url).toBe(`${BASE_URL}/shipping-boxes/box1/add-all-unboxed`);
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({ pickingOrderId: 'order-9' });
     expect(count).toBe(4);
   });
 });

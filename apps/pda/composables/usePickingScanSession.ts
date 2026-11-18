@@ -60,6 +60,7 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
     allocationRemaining,
     addAllocationScan,
     removeRow,
+    forgetAppliedRaw,
     reresolveQueued,
     applyAll,
   } = usePickingScanQueue(orderItems, { dateCodeFormat: options.dateCodeFormat });
@@ -322,6 +323,7 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
     clearPendingShelf,
     closeBoxPick,
     removeGroup,
+    forgetAppliedRaw,
     handleParsed,
     queueCarton,
     openBoxPick,

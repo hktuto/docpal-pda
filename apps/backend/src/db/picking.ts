@@ -2691,25 +2691,31 @@ export async function addPackageToBox(
   });
 }
 
-/** Add every unboxed package of the box's order into the box → {packed}.
+/** Add every unboxed package of the CALLING order into the box → {packed}.
  *  Deliberately exempt from the one-COO-per-box check (spec 2026-10-16): the
  *  operator packs everything in one action and the PDA flags a mixed-COO box
- *  with a warning chip instead of blocking. Never finishes the order. */
+ *  with a warning chip instead of blocking. Never finishes the order.
+ *
+ *  Cross-order aware: `pickingOrderId` selects the order whose unboxed
+ *  packages are packed (the PDA page the operator is standing on), NOT the
+ *  box's creator order — Add all on a chosen box from another order must pack
+ *  THIS order's packages. */
 export async function addAllUnboxedToShippingBox(
   db: AppDb,
-  input: { shippingBoxId: string; actorId: string }
+  input: { shippingBoxId: string; pickingOrderId: string; actorId: string }
 ): Promise<{ packed: number }> {
   return db.transaction(async (tx) => {
     const box = await loadShippingBox(tx, input.shippingBoxId);
     await assertActor(tx, input.actorId);
     if (box.status !== "open") throw new HTTPException(409, { message: "shipping_box_not_open" });
-    const order = await loadOrderForWrite(tx, box.pickingOrderId!);
+    // The calling order must be writable, even when the box belongs elsewhere.
+    const order = await loadOrderForWrite(tx, input.pickingOrderId);
     assertOrderWritable(order);
     const packages = await queryAll<{ id: string; pickingItemId: string; qty: number; partNo: string }>(
       tx,
       sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pp.qty, pi.part_no AS "partNo"
           FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
-          WHERE pi.picking_order_id = ${box.pickingOrderId} AND pp.shipping_box_id IS NULL
+          WHERE pi.picking_order_id = ${input.pickingOrderId} AND pp.shipping_box_id IS NULL
           ORDER BY pp.created_date ASC, pp.id ASC`
     );
     for (const pkg of packages) {

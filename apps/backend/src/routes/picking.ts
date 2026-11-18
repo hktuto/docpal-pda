@@ -335,8 +335,13 @@ pickingRoute.delete("/shipping-boxes/:id/packages/:packageId", async (c) => {
 });
 
 pickingRoute.post("/shipping-boxes/:id/add-all-unboxed", async (c) => {
+  // pickingOrderId = the order whose unboxed packages are packed (the calling
+  // PDA page). The box may belong to another order entirely.
+  const body = await readJson<{ pickingOrderId?: string }>(c);
+  if (!body.pickingOrderId) throw new HTTPException(400, { message: "picking_order_id_required" });
   const result = await addAllUnboxedToShippingBox(db, {
     shippingBoxId: c.req.param("id"),
+    pickingOrderId: body.pickingOrderId,
     actorId: actorFrom(c).id,
   });
   return c.json(result, 200);
