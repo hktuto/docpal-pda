@@ -95,19 +95,22 @@
   the workflow creator) and tracks the workflow in `receiving_cn_workflows`
   (list `GET /admin/receiving-cn`, tracking page
   `apps/admin/pages/receiving-cn/index.vue`); (c) admin local Excel upload
-  (specs `2026-11-08` + `2026-11-10` + `2026-11-17`) on the same page →
+  (specs `2026-11-08` + `2026-11-10` + `2026-11-17` + `2026-11-18`) on the same page →
   `POST /admin/receiving-cn/excel` — the browser decodes the sheet
   (`apps/admin/utils/cnReceivingExcel.ts`) and posts the verified payload,
-  no DocPal. Format-detected per sheet: a TE 收貨確認 sheet becomes one
+  no DocPal. Format-detected per sheet, and **every decode — clean or gated —
+  lands on the mandatory step-2 verify/edit screen before anything is
+  created** (the gate no longer auto-creates clean sheets, spec `2026-11-18`):
+  a TE 收貨確認 sheet becomes one
   **pending** order + one invoice + items (`received_qty` 0) — the confirm →
-  scan chain below runs unchanged, with the step-2 verify/edit screen when
-  the gate flags issues; a truck-manifest 車單 sheet becomes **ONE order for
+  scan chain below runs unchanged; a truck-manifest 車單 sheet becomes **ONE order for
   the whole truck** — every INVOICE NO on its own `receiving_invoices_cn`
   row, numbered `[truckRef]-YYYYMMDD(-seq)` from the sheet `Ref :` — created
   **arrived** (`in_hand` + arrival stamps, `received_qty = line_qty`, the
   sheet is the verification) with the `put_away_tasks_cn` task in the same
   tx: no confirm, no PDA receiving scan, straight to CN put-away. Gate
-  issues open the same step-2 verify/edit screen as TE sheets — the manifest
+  issues (ambiguous part key / invalid qty / anything else) ride the same
+  step-2 screen as warning/error banners — the manifest
   variant of the editor hides the brand + single-編號 inputs and shows an
   editable INVOICE NO column per row (the invoice grouping). A status cron
   (`apps/backend/src/jobs/receivingCnSync.ts`, kill-switch

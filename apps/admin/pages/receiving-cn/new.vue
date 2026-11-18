@@ -9,9 +9,11 @@ const parts = usePartsBrandCheck();
 // docs/superpowers/specs/2026-11-08-receiving-cn-excel-local-upload-design.md):
 // - PDF(s): kick the DocPal OCR workflow, one upload per file set (unchanged).
 // - Excel(s): decode LOCALLY in the browser, batch-check every part key and
-//   the row shapes — all clean creates the pending CN orders directly (one
-//   per file); problems open the verify/edit step with the issue list. The
-//   two types never mix in one upload.
+//   the row shapes — the decode ALWAYS lands on the step-2 verify/edit screen
+//   for the user to review and confirm, even when the sheet is clean (spec
+//   2026-11-18-receiving-cn-upload-always-verify-design.md); gate problems
+//   ride along as the error/warning banners. The two types never mix in one
+//   upload.
 const fileInput = ref<HTMLInputElement | null>(null);
 const files = ref<File[]>([]); // PDFs
 const drafts = ref<CnReceivingDraft[]>([]); // decoded Excels
@@ -90,7 +92,7 @@ async function acceptFiles(picked: File[]) {
   try {
     const added: CnReceivingDraft[] = [];
     for (const f of excels) added.push(...(await addExcelDraft(f)));
-    await gateAndAutoCreate(added);
+    await gateDrafts(added);
   } catch (e: any) {
     error.value = e?.message ?? String(e);
   } finally {
@@ -191,15 +193,19 @@ async function addExcelDraft(picked: File): Promise<CnReceivingDraft[]> {
   return created;
 }
 
-// Decode→create gate: batch-check every 型號 once, prefill the brand from
-// the parts master, and auto-create when the data is clean. Any issue opens
-// the verify/edit step with the issue banner — for confirmation (TE) sheets
+// Decode→gate: batch-check every 型號 once and prefill the brand from the
+// parts master. The gate NO LONGER auto-creates a clean sheet (spec
+// 2026-11-18-receiving-cn-upload-always-verify-design.md — operators asked to
+// eyeball every decoded draft before anything is created): every decode opens
+// the step-2 verify/edit screen, and creation happens only from its Create
+// button. The gate's role is now banner-only, for confirmation (TE) sheets
 // AND truck manifests alike (inline fix beats a re-upload round-trip; spec
 // 2026-11-17): ambiguous part keys stay a non-blocking warning (the canonical
 // part keys resolve server-side; manifests without a match keep the raw key
 // and the row stays editable here), invalid-qty rows are highlighted in the
-// editor and dropped from the payload on submit.
-async function gateAndAutoCreate(added: CnReceivingDraft[]) {
+// editor and dropped from the payload on submit, everything else lists as
+// the error banner.
+async function gateDrafts(added: CnReceivingDraft[]) {
   // Fresh gate pass: clear any banner left by a previous attempt so the
   // ambiguous warning isn't shown next to a stale error.
   error.value = "";
@@ -218,23 +224,19 @@ async function gateAndAutoCreate(added: CnReceivingDraft[]) {
   }
   const msgs: string[] = [];
   const warnings: string[] = [];
-  let invalidQtySeen = false;
   for (const d of added) {
     const isManifest = d.mode === "manifest";
     for (const iss of checkCnDraft(d, (k) => {
       const c = parts.check(k);
       return c === undefined ? false : c.ambiguous ? "ambiguous" : c.found;
     })) {
-      // Ambiguous part keys are a reminder, not an error — the order still
-      // auto-creates (brand falls back to server-side derivation). Invalid
-      // qty rows are shown in the verify form and dropped from the payload
-      // on confirm (never auto-created directly). Everything else opens the
-      // editor with the error banner for both sheet kinds.
-      if (iss.code === "ambiguousPart") warnings.push(fmtIssue(d.filename, iss));
-      else if (iss.code === "invalidQty") {
-        warnings.push(fmtIssue(d.filename, iss));
-        invalidQtySeen = true;
-      } else msgs.push(fmtIssue(d.filename, iss));
+      // Ambiguous part keys are a reminder, not an error — they ride the
+      // warning banner into the verify step (brand falls back to server-side
+      // derivation). Invalid qty rows are highlighted in the editor and
+      // dropped from the payload on confirm. Everything else lists as the
+      // error banner. Nothing auto-creates anymore.
+      if (iss.code === "ambiguousPart" || iss.code === "invalidQty") warnings.push(fmtIssue(d.filename, iss));
+      else msgs.push(fmtIssue(d.filename, iss));
     }
     // Brand drives the confirmation-sheet numbering only — manifest orders
     // number from the truck Ref : and ignore it.
@@ -244,18 +246,9 @@ async function gateAndAutoCreate(added: CnReceivingDraft[]) {
     }
   }
   warning.value = warnings.join("\n");
-  if (msgs.length > 0) {
-    error.value = msgs.join("\n");
-    step.value = 2;
-    return;
-  }
-  if (invalidQtySeen) {
-    // Skipped-qty rows need eyes before the order exists — open the verify
-    // form with the warning banner instead of auto-creating.
-    step.value = 2;
-    return;
-  }
-  await submitExcelDrafts();
+  error.value = msgs.join("\n");
+  // Clean or not, the user confirms the decode themselves on step 2.
+  step.value = 2;
 }
 
 function fmtIssue(file: string, iss: CnDraftIssue): string {

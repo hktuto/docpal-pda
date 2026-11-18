@@ -1,0 +1,14 @@
+{
+  "id": "CR-063",
+  "dateRaised": "2026-11-18",
+  "raisedBy": "Sean",
+  "app": "Admin",
+  "functionId": "ADM-023",
+  "feature": "CN receiving local Excel upload always lands on the step-2 verify/edit screen: a clean decode (TE confirmation or truck manifest 車單) no longer auto-creates the order(s) — the operator reviews the decoded rows and presses Create themselves. Gate behavior unchanged: ambiguous part keys and invalid-qty rows ride the warning banner (invalid qty still highlighted and dropped on submit), other issues list as the error banner. PDF upload path untouched.",
+  "reason": "Operators could not see the decoded rows before stock/orders existed; the sheet is the supplier's own document and qty/invoice/part typos are cheaper to catch on the review screen than after creation",
+  "priority": "Must have",
+  "status": "In progress",
+  "owner": "dev",
+  "targetDate": "",
+  "remarks": "Spec docs/superpowers/specs/2026-11-18-receiving-cn-upload-always-verify-design.md. Reverses the 2026-11-17 auto-create-only clean path (spec 2026-11-17); the verify step that replaced it is now mandatory for all decodes. Backend contract unchanged (POST /admin/receiving-cn/excel, same payload)."
+}
