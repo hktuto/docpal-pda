@@ -220,7 +220,6 @@ const boxesExpanded = ref(false);
 const boxSelections = ref<Record<string, string>>({});
 const ocrCapturing = ref(false);
 const scanIntoBoxId = ref<string | null>(null);
-const scanningIntoBox = ref(false);
 const boxingEach = ref(false);
 const closingBox = ref<Record<string, boolean>>({});
 const chooseBoxOpen = ref(false);
@@ -310,43 +309,6 @@ const collapsedStyle = computed(() => viewConfig.value.pickingDetail.collapsedSt
 // no_matching_picking_item / 409 ambiguous_picking_item surface as toasts).
 
 
-async function scanIntoBox(boxId: string, barcode: string): Promise<boolean> {
-  if (scanningIntoBox.value) return false;
-  scanningIntoBox.value = true;
-  try {
-    // The backend's outdated date-code check needs the label's parsed date
-    // code — best-effort supplier-template parse (the barcode may belong to
-    // another order, so a parse miss just sends no dateCode).
-    let dateCode: string | undefined;
-    try {
-      const parsedResult = await parseRawValue(barcode);
-      if (parsedResult.matched) {
-        dateCode = rawCode(ocrResultToInput(parsedResult.parsed).dateCode) ?? undefined;
-      }
-    } catch { /* parsing is best-effort — the scan still goes through */ }
-    // require-* modes: forward the sticky shelf context — the backend needs
-    // it when the barcode resolves to a lot-sourced allocation (409
-    // shelf_scan_required); dock targets ignore it.
-    await warehouse.scanIntoShippingBox(boxId, {
-      barcode,
-      dateCode,
-      shelfCode: requireShelfScan.value ? pendingShelf.value?.shelfCode ?? undefined : undefined,
-      boxId: requireShelfScan.value ? pendingShelf.value?.boxId ?? undefined : undefined,
-    });
-    await load();
-    showToast(t("picking.boxesSection.scanIntoBoxSuccess", { box: boxId }));
-    return true;
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 409 && e.body?.message === "box_coo_mismatch") {
-      showToast(t("errors.box_coo_mismatch", { coos: boxCoos(boxId).join(" / ") }));
-    } else {
-      showToast(errorMessage(e));
-    }
-    return false;
-  } finally {
-    scanningIntoBox.value = false;
-  }
-}
 
 // The scan router: the armed "scan into box" takes every scan, then the
 // pick-from-box dialog, then the scan-session routing (label → carton →
@@ -354,9 +316,6 @@ async function scanIntoBox(boxId: string, barcode: string): Promise<boolean> {
 async function deliverScan(rawValue: string): Promise<boolean> {
   if (!order.value) return false;
   try {
-    if (scanIntoBoxId.value) {
-      return await scanIntoBox(scanIntoBoxId.value, rawValue);
-    }
     const result: ScanSessionResult = boxPickId.value
       ? await session.handleBoxPickScan(rawValue)
       : await session.handleQrOrBoxScan(rawValue);
@@ -655,15 +614,6 @@ async function load() {
   error.value = null;
   try {
     order.value = withVisibleItems(await warehouse.getPickingOrder(orderId));
-    // Disarm when the armed box is one of THIS order's boxes and left the
-    // open state — a cross-order armed box (chosen via Choose box) stays armed;
-    // a stale one fails loudly on the next scan.
-    if (scanIntoBoxId.value) {
-      const armed = order.value.boxes.find((b) => b.id === scanIntoBoxId.value);
-      if (armed && armed.status !== "open") {
-        scanIntoBoxId.value = null;
-      }
-    }
     const nextBoxSelections: Record<string, string> = {};
     for (const item of order.value.items) {
       for (const pkg of item.packages ?? []) {

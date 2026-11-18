@@ -150,7 +150,6 @@ const boxSelections = ref<Record<string, string>>({});
 const { showToast } = useToast();
 const { parseRawValue } = useLabelScan();
 const scanIntoBoxId = ref<string | null>(null);
-const scanningIntoBox = ref(false);
 const boxingEach = ref(false);
 const closingBox = ref<Record<string, boolean>>({});
 const chooseBoxOpen = ref(false);
@@ -200,47 +199,12 @@ async function openPrintPrompt() {
 // no_matching_picking_item / 409 ambiguous_picking_item surface as toasts).
 
 
-async function scanIntoBox(boxId: string, barcode: string): Promise<boolean> {
-  if (scanningIntoBox.value) return false;
-  scanningIntoBox.value = true;
-  try {
-    // The backend's outdated date-code check needs the label's parsed date
-    // code — best-effort supplier-template parse (the barcode may belong to
-    // another order, so a parse miss just sends no dateCode).
-    let dateCode: string | undefined;
-    try {
-      const parsedResult = await parseRawValue(barcode);
-      if (parsedResult.matched) {
-        dateCode = rawCode(ocrResultToInput(parsedResult.parsed).dateCode) ?? undefined;
-      }
-    } catch { /* parsing is best-effort — the scan still goes through */ }
-    await warehouse.scanIntoShippingBox(boxId, { barcode, dateCode });
-    await load();
-    showToast(t("picking.boxesSection.scanIntoBoxSuccess", { box: boxId }));
-    return true;
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 409 && e.body?.message === "box_coo_mismatch") {
-      showToast(t("errors.box_coo_mismatch", { coos: boxCoos(boxId).join(" / ") }));
-    } else {
-      showToast(errorMessage(e));
-    }
-    return false;
-  } finally {
-    scanningIntoBox.value = false;
-  }
-}
 
 useHardwareScanner({
-  enabled: () => actionable.value && !scanningIntoBox.value,
-  onScan: async (rawValue: string) => {
-    // An armed "scan into box" takes every scan — the barcode may belong to
-    // another order, so the usual supplier-template routing below is bypassed
-    // until the operator disarms.
-    if (scanIntoBoxId.value) {
-      return await scanIntoBox(scanIntoBoxId.value, rawValue);
-    }
-    // No scan-to-create-box fallback anymore — any non-armed scan just
-    // points the operator at the scan page.
+  enabled: () => actionable.value,
+  onScan: async () => {
+    // No scan routing on the detail page — scans of products/shelves belong
+    // to the scan page (choose-box adds a box only; it must never hijack scans).
     showToast(t("picking.detail.itemQrUseScanMode"));
     return false;
   },
@@ -379,15 +343,6 @@ async function load() {
     // Cancelled lines (cancel-invoice cron) never reach the PDA — what is
     // withdrawn is not work; the put-back queue handles returning its stock.
     order.value = { ...data, items: (data.items ?? []).filter((i) => i.status !== "cancelled") };
-    // Disarm when the armed box is one of THIS order's boxes and left the
-    // open state — a cross-order armed box (chosen via Choose box) stays armed;
-    // a stale one fails loudly on the next scan.
-    if (scanIntoBoxId.value) {
-      const armed = data.boxes.find((b) => b.id === scanIntoBoxId.value);
-      if (armed && armed.status !== "open") {
-        scanIntoBoxId.value = null;
-      }
-    }
     const nextBoxSelections: Record<string, string> = {};
     for (const item of data.items) {
       for (const pkg of item.packages ?? []) {
