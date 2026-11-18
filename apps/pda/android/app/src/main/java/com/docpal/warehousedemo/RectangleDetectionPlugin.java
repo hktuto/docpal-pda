@@ -15,8 +15,12 @@ public class RectangleDetectionPlugin extends Plugin {
 
   @PluginMethod
   public void scanLabel(PluginCall call) {
+    boolean stream = call.getBoolean("stream", false);
     Intent intent = new Intent(getActivity(), RectangleCameraActivity.class);
-    intent.putExtra(RectangleCameraActivity.EXTRA_MODE, RectangleCameraActivity.MODE_LABEL_SCAN);
+    intent.putExtra(
+      RectangleCameraActivity.EXTRA_MODE,
+      stream ? RectangleCameraActivity.MODE_LABEL_SCAN_STREAM : RectangleCameraActivity.MODE_LABEL_SCAN
+    );
     startActivityForResult(call, intent, "scanLabelResult");
   }
 

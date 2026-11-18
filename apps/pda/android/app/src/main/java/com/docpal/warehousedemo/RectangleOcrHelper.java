@@ -24,6 +24,24 @@ public class RectangleOcrHelper {
       int height,
       @Nullable String rectanglesJson,
       @Nullable String selectedRectJson) {
+    runOcrAndFinish(activity, imagePath, width, height, rectanglesJson, selectedRectJson, null, null);
+  }
+
+  /**
+   * As {@link #runOcrAndFinish(Activity, String, int, int, String, String)}
+   * with stream-decoded fallbacks: when the hi-res ML Kit pass returns empty
+   * text or no barcodes, the streaming analyzer's earlier decode is used so a
+   * usable result is never thrown away (spec 2026-11-18-streaming-label-scan).
+   */
+  public void runOcrAndFinish(
+      Activity activity,
+      String imagePath,
+      int width,
+      int height,
+      @Nullable String rectanglesJson,
+      @Nullable String selectedRectJson,
+      @Nullable String fallbackText,
+      @Nullable String fallbackBarcodesJson) {
     if (activity.isFinishing() || activity.isDestroyed()) {
       return;
     }
@@ -49,11 +67,24 @@ public class RectangleOcrHelper {
         if (currentActivity == null || currentActivity.isFinishing() || currentActivity.isDestroyed()) {
           return;
         }
-        finishWithResult(currentActivity, imagePath, width, height, rectanglesJson, selectedRectJson, text, barcodesJson);
+        String finalText = text != null && !text.isEmpty() ? text : (fallbackText != null ? fallbackText : "");
+        String finalBarcodes = barcodesJson != null && !barcodesJson.equals("[]")
+          ? barcodesJson
+          : (fallbackBarcodesJson != null ? fallbackBarcodesJson : "[]");
+        finishWithResult(currentActivity, imagePath, width, height, rectanglesJson, selectedRectJson, finalText, finalBarcodes);
       });
     } catch (IOException e) {
       Log.e(TAG, "Failed to load image for OCR", e);
-      finishWithResult(activity, imagePath, width, height, rectanglesJson, selectedRectJson, "", "[]");
+      finishWithResult(
+        activity,
+        imagePath,
+        width,
+        height,
+        rectanglesJson,
+        selectedRectJson,
+        fallbackText != null ? fallbackText : "",
+        fallbackBarcodesJson != null ? fallbackBarcodesJson : "[]"
+      );
     }
   }
 

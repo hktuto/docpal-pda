@@ -91,7 +91,7 @@ export function buildRawCapture(value: string): LabelScanCapture {
  */
 export async function captureLabel(): Promise<LabelScanCapture | null> {
   try {
-    const capture = await RectangleDetection.scanLabel();
+    const capture = await RectangleDetection.scanLabel({ stream: true });
     pushLog('scan', `camera: ${captureRawLabelValue(capture).slice(0, 120)}`);
     return capture;
   } catch (e: unknown) {

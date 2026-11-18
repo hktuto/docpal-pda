@@ -19,9 +19,11 @@ import org.opencv.core.Point;
 public class RectangleOverlayView extends View {
 
   private final Paint paint;
+  private final Paint highlightPaint;
   private final List<RectangleDetector.RectResult> rectangles = new ArrayList<>();
   private int imageWidth = 0;
   private int imageHeight = 0;
+  private android.graphics.Rect highlightBox = null;
 
   public RectangleOverlayView(Context context) {
     this(context, null);
@@ -34,6 +36,31 @@ public class RectangleOverlayView extends View {
     paint.setStrokeWidth(6f);
     paint.setColor(0xFF16A34A);
     paint.setAntiAlias(true);
+
+    highlightPaint = new Paint();
+    highlightPaint.setStyle(Paint.Style.STROKE);
+    highlightPaint.setStrokeWidth(8f);
+    highlightPaint.setColor(0xFFF59E0B);
+    highlightPaint.setAntiAlias(true);
+  }
+
+  /** Highlights the current streaming-scan candidate box (image coordinates), or clears it. */
+  public synchronized void setHighlightRect(StreamingLabelGate.Candidate candidate) {
+    if (candidate == null) {
+      highlightBox = null;
+    } else {
+      highlightBox = new android.graphics.Rect(
+        candidate.left,
+        candidate.top,
+        candidate.right,
+        candidate.bottom
+      );
+    }
+    invalidate();
+  }
+
+  public synchronized void clearHighlightRect() {
+    setHighlightRect(null);
   }
 
   public synchronized void setImageSize(int width, int height) {
@@ -85,7 +112,7 @@ public class RectangleOverlayView extends View {
   @Override
   protected synchronized void onDraw(Canvas canvas) {
     super.onDraw(canvas);
-    if (imageWidth == 0 || imageHeight == 0 || rectangles.isEmpty()) {
+    if (imageWidth == 0 || imageHeight == 0) {
       return;
     }
 
@@ -94,6 +121,20 @@ public class RectangleOverlayView extends View {
     float scale = Math.min(viewW / imageWidth, viewH / imageHeight);
     float offsetX = (viewW - imageWidth * scale) / 2f;
     float offsetY = (viewH - imageHeight * scale) / 2f;
+
+    if (highlightBox != null) {
+      canvas.drawRect(
+        offsetX + highlightBox.left * scale,
+        offsetY + highlightBox.top * scale,
+        offsetX + highlightBox.right * scale,
+        offsetY + highlightBox.bottom * scale,
+        highlightPaint
+      );
+    }
+
+    if (rectangles.isEmpty()) {
+      return;
+    }
 
     for (RectangleDetector.RectResult rect : rectangles) {
       Point[] pts = rect.points;

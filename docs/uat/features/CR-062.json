@@ -1,0 +1,14 @@
+{
+  "id": "CR-062",
+  "dateRaised": "2026-11-18",
+  "raisedBy": "Sean",
+  "app": "PDA",
+  "functionId": "",
+  "feature": "Camera label scan is a streaming auto-capture: the camera decodes frames continuously while the operator aims (ML Kit barcode every tick, OCR throttled to every 3rd) and captures one full-resolution frame by itself once the same decoded value stays stable across 2 consecutive ticks and the label box is large/centred enough — no tap or shutter. A hint appears after ~20s without a stable candidate; shutter and tap-rectangle manual capture remain as fallback. Applies to every camera scan entry point (receiving, CN scan, put-away, ad-hoc, shelf exchange, internal transfer, picking, print-product-label, measuring/verify).",
+  "reason": "The tap/shutter → crop → OCR chain costs ~1.5-3s per scan and needs a steady hand; on a shelf full of labels operators want point-and-shoot decoding like a hardware scanner",
+  "priority": "Must have",
+  "status": "In progress",
+  "owner": "dev",
+  "targetDate": "",
+  "remarks": "Spec docs/superpowers/specs/2026-11-18-streaming-label-scan-design.md. Commit a3379001. Native: new StreamingLabelGate (pure-Java stability/prominence gate, 13 unit tests) + StreamingLabelAnalyzer (persistent ML Kit clients, adaptive 100-300ms cadence), RectangleCameraActivity MODE_LABEL_SCAN_STREAM (hi-res confirm capture cropped to candidate, stream values as fallback), plugin scanLabel({stream}) — old APKs ignore the flag and stay manual. Web: captureLabel() passes {stream:true}; capture contract unchanged so all flows adopt automatically. Device tuning on T23X/NLS-MT95 pending."
+}

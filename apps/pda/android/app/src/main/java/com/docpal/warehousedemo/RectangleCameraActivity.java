@@ -6,6 +6,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.Surface;
@@ -34,12 +36,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
 import org.opencv.core.Point;
+import org.opencv.core.Rect;
 import org.opencv.core.Size;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
@@ -49,12 +55,15 @@ public class RectangleCameraActivity extends ComponentActivity {
   public static final String EXTRA_MODE = "mode";
   public static final String MODE_DEFAULT = "default";
   public static final String MODE_LABEL_SCAN = "label_scan";
+  public static final String MODE_LABEL_SCAN_STREAM = "label_scan_stream";
 
   private static final String TAG = "RectangleCamera";
   private static final int PICKER_REQUEST_CODE = 1001;
   private static final int JPEG_QUALITY = 92;
   private static final int DETECTION_MAX_DIMENSION = 1280;
   private static final String CAPTURE_FILE_PREFIX = "rectangle_capture_";
+  private static final long STREAM_HINT_DELAY_MS = 20_000;
+  private static final double STREAM_CROP_PADDING_RATIO = 0.08;
 
   private PreviewView previewView;
   private RectangleOverlayView overlayView;
@@ -77,12 +86,43 @@ public class RectangleCameraActivity extends ComponentActivity {
     NONE,
     SHUTTER,
     TAP_RECT,
+    STREAM_CONFIRM,
   }
 
   private volatile CaptureMode captureMode = CaptureMode.NONE;
   private volatile RectangleDetector.RectResult pendingTapRect = null;
+  private volatile StreamingLabelGate.Candidate pendingStreamCandidate = null;
   private boolean isLabelScan = false;
+  private boolean streamMode = false;
+  private StreamingLabelAnalyzer streamAnalyzer;
+  private final Handler mainHandler = new Handler(Looper.getMainLooper());
   private ActivityResultLauncher<String> requestPermissionLauncher;
+
+  private final StreamingLabelAnalyzer.Listener streamListener = new StreamingLabelAnalyzer.Listener() {
+    @Override
+    public void onAnalysisSize(int width, int height) {
+      streamWidth = width;
+      streamHeight = height;
+    }
+
+    @Override
+    public void onCandidateTick(StreamingLabelGate.Candidate candidate) {
+      overlayView.setHighlightRect(candidate);
+    }
+
+    @Override
+    public void onStableCandidate(StreamingLabelGate.Candidate candidate) {
+      onStreamCandidate(candidate);
+    }
+  };
+
+  private final Runnable streamHintRunnable = () -> {
+    if (streamMode && captureMode == CaptureMode.NONE) {
+      Toast
+        .makeText(RectangleCameraActivity.this, R.string.stream_hint_manual_fallback, Toast.LENGTH_LONG)
+        .show();
+    }
+  };
 
   static {
     OpenCVLoader.initDebug();
@@ -95,7 +135,8 @@ public class RectangleCameraActivity extends ComponentActivity {
 
     String mode = getIntent().getStringExtra(EXTRA_MODE);
     if (mode == null) mode = MODE_DEFAULT;
-    isLabelScan = MODE_LABEL_SCAN.equals(mode);
+    streamMode = MODE_LABEL_SCAN_STREAM.equals(mode);
+    isLabelScan = MODE_LABEL_SCAN.equals(mode) || streamMode;
 
     previewView = findViewById(R.id.previewView);
     overlayView = findViewById(R.id.overlayView);
@@ -139,7 +180,25 @@ public class RectangleCameraActivity extends ComponentActivity {
     analysisExecutor = Executors.newSingleThreadExecutor();
     ocrHelper = new RectangleOcrHelper();
     rectangleTracker = new RectangleTracker();
+    if (streamMode) {
+      streamAnalyzer = new StreamingLabelAnalyzer(this, streamListener, new StreamingLabelGate.Options());
+      mainHandler.postDelayed(streamHintRunnable, STREAM_HINT_DELAY_MS);
+    }
     startCamera();
+  }
+
+  private void onStreamCandidate(StreamingLabelGate.Candidate candidate) {
+    if (captureMode != CaptureMode.NONE || imageCapture == null) {
+      return;
+    }
+    captureMode = CaptureMode.STREAM_CONFIRM;
+    pendingStreamCandidate = candidate;
+    if (streamAnalyzer != null) {
+      streamAnalyzer.setPaused(true);
+    }
+    mainHandler.removeCallbacks(streamHintRunnable);
+    overlayView.clearHighlightRect();
+    takePicture();
   }
 
   private void onShutterClicked() {
@@ -266,6 +325,8 @@ public class RectangleCameraActivity extends ComponentActivity {
       processTapCapture(rotated, originalWidth, originalHeight, tapRect);
     } else if (mode == CaptureMode.SHUTTER) {
       processShutterCapture(rotated, originalWidth, originalHeight);
+    } else if (mode == CaptureMode.STREAM_CONFIRM && pendingStreamCandidate != null) {
+      processStreamCapture(rotated, originalWidth, originalHeight, pendingStreamCandidate);
     } else {
       rotated.release();
       resetCaptureState();
@@ -354,6 +415,95 @@ public class RectangleCameraActivity extends ComponentActivity {
     }
   }
 
+  /**
+   * Streaming auto-fire: crop the full-resolution capture to the stable
+   * candidate's box (scaled from the analysis-stream coordinates), then run
+   * one final ML Kit pass on that high-res crop. Stream-decoded values are
+   * only a fallback — the hi-res decode wins whenever it produces anything.
+   */
+  private void processStreamCapture(
+      Mat rotated,
+      int originalWidth,
+      int originalHeight,
+      StreamingLabelGate.Candidate candidate) {
+    try {
+      double scaleX = streamWidth > 0 ? (double) originalWidth / streamWidth : 1.0;
+      double scaleY = streamHeight > 0 ? (double) originalHeight / streamHeight : 1.0;
+
+      // Pad so a tight stream box never clips label edges on the full-res frame.
+      int padX = (int) Math.round(candidate.width() * STREAM_CROP_PADDING_RATIO);
+      int padY = (int) Math.round(candidate.height() * STREAM_CROP_PADDING_RATIO);
+      int left = clamp((int) Math.round(candidate.left * scaleX) - padX, 0, originalWidth - 1);
+      int top = clamp((int) Math.round(candidate.top * scaleY) - padY, 0, originalHeight - 1);
+      int right = clamp((int) Math.round(candidate.right * scaleX) + padX, left + 1, originalWidth);
+      int bottom = clamp((int) Math.round(candidate.bottom * scaleY) + padY, top + 1, originalHeight);
+
+      RectangleDetector.RectResult cropRect = rectFromBox(left, top, right, bottom);
+      File cropFile = RectangleCropper.cropToFile(
+        rotated,
+        cropRect,
+        JPEG_QUALITY,
+        getCacheDir(),
+        CAPTURE_FILE_PREFIX + "stream_"
+      );
+      String selectedRectJson = RectangleResultJson.toJsonObject(cropRect).toString();
+
+      String fallbackText = candidate.isBarcode ? "" : candidate.value;
+      String fallbackBarcodes = candidate.isBarcode ? singleBarcodeJson(candidate) : "[]";
+
+      runOnUiThread(() ->
+        ocrHelper.runOcrAndFinish(
+          this,
+          cropFile.getAbsolutePath(),
+          originalWidth,
+          originalHeight,
+          null,
+          selectedRectJson,
+          fallbackText,
+          fallbackBarcodes
+        )
+      );
+    } catch (IOException e) {
+      runOnUiThread(() -> {
+        Toast.makeText(this, "Failed to save crop: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        resetCaptureState();
+      });
+    } finally {
+      rotated.release();
+    }
+  }
+
+  private static int clamp(int value, int min, int max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  private static RectangleDetector.RectResult rectFromBox(int left, int top, int right, int bottom) {
+    Point[] points = {
+      new Point(left, top),
+      new Point(right, top),
+      new Point(right, bottom),
+      new Point(left, bottom),
+    };
+    return new RectangleDetector.RectResult(
+      points,
+      new Rect(left, top, right - left, bottom - top),
+      1.0
+    );
+  }
+
+  private static String singleBarcodeJson(StreamingLabelGate.Candidate candidate) {
+    JSONArray array = new JSONArray();
+    try {
+      JSONObject obj = new JSONObject();
+      obj.put("value", candidate.value);
+      obj.put("format", candidate.barcodeFormat != null ? candidate.barcodeFormat : "0");
+      array.put(obj);
+    } catch (JSONException e) {
+      // ignore — worst case the fallback is an empty list
+    }
+    return array.toString();
+  }
+
   private void processShutterCapture(Mat rotated, int originalWidth, int originalHeight) {
     try {
       Mat processingMat = rotated;
@@ -405,6 +555,10 @@ public class RectangleCameraActivity extends ComponentActivity {
   private void resetCaptureState() {
     captureMode = CaptureMode.NONE;
     pendingTapRect = null;
+    pendingStreamCandidate = null;
+    if (streamAnalyzer != null) {
+      streamAnalyzer.resume();
+    }
     runOnUiThread(() -> captureButton.setEnabled(true));
   }
 
@@ -447,7 +601,10 @@ public class RectangleCameraActivity extends ComponentActivity {
       .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
       .build();
 
-    imageAnalysis.setAnalyzer(analysisExecutor, new RectangleAnalyzer());
+    imageAnalysis.setAnalyzer(
+      analysisExecutor,
+      streamMode ? streamAnalyzer : new RectangleAnalyzer()
+    );
 
     imageCapture = new ImageCapture.Builder()
       .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
@@ -516,11 +673,15 @@ public class RectangleCameraActivity extends ComponentActivity {
   @Override
   protected void onDestroy() {
     super.onDestroy();
+    mainHandler.removeCallbacks(streamHintRunnable);
     if (analysisExecutor != null) {
       analysisExecutor.shutdown();
     }
     if (ocrHelper != null) {
       ocrHelper.cancel();
+    }
+    if (streamAnalyzer != null) {
+      streamAnalyzer.close();
     }
     if (rectangleTracker != null) {
       rectangleTracker.clear();

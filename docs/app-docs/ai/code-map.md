@@ -150,6 +150,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Candidate chips UI | `components/CandidateChips.vue` |
 | COO/COW country dropdown (country_list master) | `components/CountrySelect.vue` |
 | Scan orchestration | `composables/useLabelScan.ts` |
+| Native camera streaming auto-capture (decodes while aiming; auto-fires one full-res capture when a candidate is stable — `RectangleDetection.scanLabel({stream:true})`) | native `apps/pda/android/.../StreamingLabelAnalyzer.java` + `StreamingLabelGate.java`, wired in `RectangleCameraActivity` stream mode / `RectangleDetectionPlugin.java` |
 | Receiving scan submission (server-side match, 409 → review) | `composables/useReceivingScan.ts` |
 | Review state wrapper | `composables/useLabelScanReview.ts` |
 | Client-side matchers (picking / put-away / measuring) | `composables/useScanMatchers.ts` |
@@ -163,7 +164,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Mismatch form validation (pure) | `utils/mismatch.ts` |
 | Keyboard-wedge plumbing shared by the two scanner listeners (broadcast-echo suppression windows — a fix landing in only one listener reopens the duplicate-scan race) | `utils/scannerWedge.ts` (`useHardwareScanner.ts` + `useOrderScanNav.ts`) |
 
-- `composables/useLabelScan.ts` — orchestrates native scan; in browsers falls back to `window.prompt()` + JSON.
+- `composables/useLabelScan.ts` — orchestrates native scan; in browsers falls back to `window.prompt()` + JSON. `captureLabel()` requests the streaming auto-capture mode (`{stream:true}`); old native builds ignore the flag and run the manual camera (spec `docs/superpowers/specs/2026-11-18-streaming-label-scan-design.md`).
 - `composables/useLabelScan.ts` — validates prompt JSON and converts it to a capture in browser fallback mode; supplier QR templates come from `GET /scan-templates` via `WarehouseService.getSupplierQrTemplates`.
 - `composables/useReceivingScan.ts` — sends the raw label to `POST /receiving-orders/:id/scan`; on 409 `{message, candidates}` it opens the review modal, and picking a candidate resends with explicit `{partNo, qty}`. A raw label that parses into 2+ item rows (`extractMultiItemRows`) opens the multi-item table modal instead, and `applyRows` applies one explicit `{partNo, qty}` scan per row.
 - `composables/useScanMatchers.ts` — client-side validation for picking (`matchPicking`), put-away (`matchPutAway`), and measuring (`matchMeasuring`); the apply actions go through `WarehouseService`.

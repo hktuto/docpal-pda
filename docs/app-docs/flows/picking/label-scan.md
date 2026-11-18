@@ -15,7 +15,13 @@ Typical label fields:
 
 1. The operator taps the scan button (receiving detail, picking detail,
    put-away detail, or measuring box page).
-2. The label is captured (camera on Android, or a typed/pasted value).
+2. The label is captured. On Android the camera runs a **streaming
+   auto-capture**: it decodes frames continuously while the operator aims
+   (ML Kit barcode every tick, OCR throttled) and captures by itself once the
+   same decoded value stays stable across consecutive frames — no tap or
+   shutter needed. If no candidate stabilises, a hint appears after ~20 s
+   and the shutter / tap-rectangle manual capture remains available.
+   In browsers a typed/pasted value is used instead.
 3. `useLabelScan` + `utils/labelDecode.ts` send the raw value to
    `POST /scan/decode` — the backend (`src/decode/`) applies the supplier QR
    templates and DB lookups. When no template matches, the local OCR-text

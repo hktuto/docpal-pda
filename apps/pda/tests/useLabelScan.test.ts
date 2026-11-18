@@ -1,13 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ParsedFields } from '../utils/parseOcrScan';
 
+const mocks = vi.hoisted(() => ({
+  scanLabel: vi.fn(),
+}));
+
 vi.mock('vue', () => ({
   ref: vi.fn((value) => ({ value })),
 }));
 
 vi.mock('../composables/useRectangleDetection', () => ({
   SCAN_NOT_AVAILABLE_MESSAGE: 'scan_not_available_browser',
-  RectangleDetection: {},
+  RectangleDetection: { scanLabel: mocks.scanLabel },
 }));
 
 vi.mock('../composables/useScanMatchers', () => ({
@@ -34,7 +38,44 @@ vi.mock('../composables/useFlowSteps', () => ({
   useFlowSteps: vi.fn(() => ({ dateCodeFormat: { value: 'wwyy' } })),
 }));
 
-const { ocrResultToInput, parseBrowserScanPromptJson, buildRawCapture, parseBrowserScanPrompt } = await import('../composables/useLabelScan');
+const { ocrResultToInput, parseBrowserScanPromptJson, buildRawCapture, parseBrowserScanPrompt, captureLabel } = await import('../composables/useLabelScan');
+
+describe('captureLabel', () => {
+  it('requests the streaming auto-capture mode', async () => {
+    mocks.scanLabel.mockResolvedValue({ imagePath: '/tmp/x.jpg', text: 'ABC 12345', barcodes: '[]' });
+
+    const result = await captureLabel();
+
+    expect(mocks.scanLabel).toHaveBeenCalledWith({ stream: true });
+    expect(result?.text).toBe('ABC 12345');
+  });
+
+  it('returns null when the user cancels the camera', async () => {
+    mocks.scanLabel.mockRejectedValue(new Error('Cancelled'));
+
+    expect(await captureLabel()).toBeNull();
+  });
+
+  it('falls back to the raw-value prompt when the plugin is unavailable (browser)', async () => {
+    mocks.scanLabel.mockRejectedValue(new Error('scan_not_available_browser'));
+    const prompt = vi.fn().mockReturnValue('RAW123');
+    vi.stubGlobal('window', { prompt });
+
+    const result = await captureLabel();
+
+    expect(prompt).toHaveBeenCalled();
+    expect(result?.text).toBe('RAW123');
+    vi.unstubAllGlobals();
+  });
+
+  it('returns null when the browser prompt is cancelled', async () => {
+    mocks.scanLabel.mockRejectedValue(new Error('scan_not_available_browser'));
+    vi.stubGlobal('window', { prompt: vi.fn().mockReturnValue(null) });
+
+    expect(await captureLabel()).toBeNull();
+    vi.unstubAllGlobals();
+  });
+});
 
 describe('ocrResultToInput', () => {
   it('maps all parsed fields to the matcher input shape', () => {
