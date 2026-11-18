@@ -41,13 +41,29 @@ vi.mock('../composables/useFlowSteps', () => ({
 const { ocrResultToInput, parseBrowserScanPromptJson, buildRawCapture, parseBrowserScanPrompt, captureLabel } = await import('../composables/useLabelScan');
 
 describe('captureLabel', () => {
-  it('requests the streaming auto-capture mode', async () => {
-    mocks.scanLabel.mockResolvedValue({ imagePath: '/tmp/x.jpg', text: 'ABC 12345', barcodes: '[]' });
+  it('requests the streaming auto-capture mode with rules and analysis size', async () => {
+    mocks.scanLabel.mockResolvedValue({ imagePath: '/tmp/x.jpg', text: 'ABC 12345', barcodes: '[]', matchedRule: 'reel' });
 
-    const result = await captureLabel();
+    const result = await captureLabel({
+      rules: [{ name: 'reel', keywords: ['KOA', '1000PCS'] }],
+      analysisSize: 'hd',
+    });
+
+    expect(mocks.scanLabel).toHaveBeenCalledWith({
+      stream: true,
+      rules: [{ name: 'reel', keywords: ['KOA', '1000PCS'] }],
+      analysisSize: 'hd',
+    });
+    expect(result?.text).toBe('ABC 12345');
+    expect(result?.matchedRule).toBe('reel');
+  });
+
+  it('passes no options when none are given', async () => {
+    mocks.scanLabel.mockResolvedValue({ imagePath: '/tmp/x.jpg', text: 'ABC', barcodes: '[]' });
+
+    await captureLabel();
 
     expect(mocks.scanLabel).toHaveBeenCalledWith({ stream: true });
-    expect(result?.text).toBe('ABC 12345');
   });
 
   it('returns null when the user cancels the camera', async () => {

@@ -155,6 +155,7 @@ import { decodeLabel } from "~/utils/labelDecode";
 import { dateToDateCode, toLabelDateCode } from "~/utils/dateCode";
 import { useFlowSteps } from "~/composables/useFlowSteps";
 import { captureLabel } from "~/composables/useLabelScan";
+import type { ScanRule } from "~/composables/useRectangleDetection";
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import SearchableSelect from "~/components/SearchableSelect.vue";
 import ScanFab from "~/components/ScanFab.vue";
@@ -262,8 +263,24 @@ async function handleHardwareScan(code: string): Promise<boolean> {
 }
 
 // OCR capture handler (camera path — beeps are explicit; no composable here)
+// KOA label confirm rules — ALL keywords of ONE rule must appear in a single
+// decode to auto-fire. Tune freely: pick strings the OCR reads reliably
+// (check the [SCAN-RESULT] logs); short strings with digits beat long words.
+const KOA_LABEL_RULES: ScanRule[] = [
+  { name: 'reel', keywords: ['KOA', 'QUABTITY',"MPN", "USE"] },
+  { name: 'box', keywords: ['KOA', 'R47'] },
+];
+
 async function openScan() {
-  const capture = await captureLabel();
+  console.log("openScan")
+  console.log("[ADHOC-SCAN] openScan brand =", selectedBrand.value ?? null);
+  const capture = await captureLabel(
+    selectedBrand.value === 'KOA'
+      ? { rules: KOA_LABEL_RULES, analysisSize: 'hd' }
+      : undefined
+  );
+  prompt(JSON.stringify(capture))
+  console.log("capture", capture)
   if (!capture) return;
   const barcodes = JSON.parse(capture.barcodes || "[]");
   // A single detected barcode always goes through the backend decode
@@ -278,7 +295,9 @@ async function openScan() {
         { text: capture.text, barcodes },
         []
       );
-
+  prompt(JSON.stringify(result))
+  console.log("[ADHOC-SCAN] decode matched =", result.matched, "result =", JSON.stringify(result).slice(0, 400));
+  return
   if (!result.matched) {
     playScanError();
     showToast(t("adHocPutAway.scanError"));
@@ -287,6 +306,7 @@ async function openScan() {
   // Duplicate rejection is an error too — a success chime after the reject
   // toast was exactly the audit #13 bug on this page.
   const added = await addParsedItem(result, single?.value);
+  console.log("[ADHOC-SCAN] added =", added);
   if (added) playScanSuccess();
   else playScanError();
 }

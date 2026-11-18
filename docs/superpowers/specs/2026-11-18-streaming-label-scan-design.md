@@ -181,3 +181,45 @@ seconds long with torch on, so thermal/battery impact is negligible.
 - No multi-candidate accumulation across frames — one best candidate per
   auto-fire.
 - No behavior change to the admin supplier-editor camera preview.
+
+## Amendment 1 (2026-11-18) — rule confirm, stream-frame result, analysis size
+
+Field feedback during device iteration (T23X):
+
+- **Two identical OCR signatures is impractical** — OCR noise (`0`/`O`,
+  dropped chars) resets the streak almost every tick.
+- **Keyword confirm became named all-of rules** (loose any-of keywords were
+  dropped): `rules: [{name, keywords[]}]` — ALL of one rule's keywords in a
+  single decode fires immediately (streak and centre checks waived, 5%
+  minimum-area gate stays); any rule can confirm, covering one brand's
+  several label layouts. The result carries `matchedRule`. First wired
+  context: ad-hoc put-away (KOA brand, KOA_LABEL_RULES in the page).
+- **No full-res capture on fire.** The returned `imagePath` is the firing
+  analysis frame saved as a JPEG (upright grayscale, analysis-stream
+  resolution) — fire→JS is ~100 ms instead of ~0.5–1.5 s. The review modal
+  accepts the lower-quality photo. `text`/`barcodes` come from the firing
+  tick's stream decode; **all barcodes decoded on the firing tick ride
+  along**, so 1D lot codes beside OCR text still reach `POST /scan/decode`.
+- **`analysisSize: 'sd' | 'hd'`** plugin option selects the CameraX analysis
+  stream resolution (480×640 default / 960×720 for small print; slower
+  ticks, better OCR). Set from JS; no UI.
+- **Torch defaults off in label-scan modes** — glare off glossy labels hurt
+  OCR; the toggle button remains.
+- **Timing instrumentation**: `STREAM-TIME` logs (activity open → first
+  frame → gate fire) and a `[SCAN-TIME]` JS round-trip log. Measured on T23X:
+  camera open ≈ 1.2–1.5 s per scan (CameraX bind; dominant cost), decode→fire
+  ≈ 0.4–1 s, fire→JS ≈ 0.1 s. ML Kit warm-up threading was tried and
+  **reverted** (contended with camera startup on the weak SoC); OCR now runs
+  on the first analyzed tick and every 2nd tick after (`ocrEvery = 2`).
+
+Known floor: per-scan camera-activity startup bounds single-shot scans at
+~1.5–2 s. A continuous scan mode (camera stays open, results stream to JS
+via plugin events) is the planned follow-up to amortize it.
+
+## Parked for later design
+
+- **Server-side OCR decode** (`POST /scan/decode-ocr`): port
+  `utils/parseOcrScan.ts` into `src/decode/`, resolve parts via
+  `lookupPartKeyCandidates` / drawing-no / MPN branches, return ranked part
+  candidates for the native preview card and post-capture enrichment.
+- **Native preview card** (Phase 2): in-camera decoded-fields display.

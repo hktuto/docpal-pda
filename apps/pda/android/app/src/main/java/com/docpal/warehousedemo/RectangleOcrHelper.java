@@ -129,10 +129,28 @@ public class RectangleOcrHelper {
       @Nullable String selectedRectJson,
       String text,
       String barcodesJson) {
+    finishWithResult(
+      activity, imagePath, width, height, rectanglesJson, selectedRectJson, text, barcodesJson, null
+    );
+  }
+
+  public static void finishWithResult(
+      Activity activity,
+      String imagePath,
+      int width,
+      int height,
+      @Nullable String rectanglesJson,
+      @Nullable String selectedRectJson,
+      String text,
+      String barcodesJson,
+      @Nullable String matchedRule) {
     if (activity.isFinishing() || activity.isDestroyed()) {
       return;
     }
     Intent resultIntent = new Intent();
+    if (matchedRule != null && !matchedRule.isEmpty()) {
+      resultIntent.putExtra("matchedRule", matchedRule);
+    }
     resultIntent.putExtra("imagePath", imagePath);
     resultIntent.putExtra("width", width);
     resultIntent.putExtra("height", height);

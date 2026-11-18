@@ -8,6 +8,7 @@ import android.graphics.ImageFormat;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.Surface;
@@ -45,7 +46,6 @@ import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
 import org.opencv.core.Point;
-import org.opencv.core.Rect;
 import org.opencv.core.Size;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
@@ -53,6 +53,9 @@ import org.opencv.imgproc.Imgproc;
 public class RectangleCameraActivity extends ComponentActivity {
 
   public static final String EXTRA_MODE = "mode";
+  public static final String EXTRA_KEYWORDS = "keywords";
+  public static final String EXTRA_ANALYSIS_SIZE = "analysisSize";
+  public static final String ANALYSIS_SIZE_HD = "hd";
   public static final String MODE_DEFAULT = "default";
   public static final String MODE_LABEL_SCAN = "label_scan";
   public static final String MODE_LABEL_SCAN_STREAM = "label_scan_stream";
@@ -63,7 +66,6 @@ public class RectangleCameraActivity extends ComponentActivity {
   private static final int DETECTION_MAX_DIMENSION = 1280;
   private static final String CAPTURE_FILE_PREFIX = "rectangle_capture_";
   private static final long STREAM_HINT_DELAY_MS = 20_000;
-  private static final double STREAM_CROP_PADDING_RATIO = 0.08;
 
   private PreviewView previewView;
   private RectangleOverlayView overlayView;
@@ -86,15 +88,15 @@ public class RectangleCameraActivity extends ComponentActivity {
     NONE,
     SHUTTER,
     TAP_RECT,
-    STREAM_CONFIRM,
   }
 
   private volatile CaptureMode captureMode = CaptureMode.NONE;
   private volatile RectangleDetector.RectResult pendingTapRect = null;
-  private volatile StreamingLabelGate.Candidate pendingStreamCandidate = null;
   private boolean isLabelScan = false;
   private boolean streamMode = false;
   private StreamingLabelAnalyzer streamAnalyzer;
+  private long streamOpenMs;
+  private boolean streamFirstTickLogged;
   private final Handler mainHandler = new Handler(Looper.getMainLooper());
   private ActivityResultLauncher<String> requestPermissionLauncher;
 
@@ -103,6 +105,15 @@ public class RectangleCameraActivity extends ComponentActivity {
     public void onAnalysisSize(int width, int height) {
       streamWidth = width;
       streamHeight = height;
+      if (!streamFirstTickLogged) {
+        streamFirstTickLogged = true;
+        Log.i(
+          TAG,
+          "STREAM-TIME first frame analyzed, open→first-tick=" +
+            (SystemClock.elapsedRealtime() - streamOpenMs) +
+            "ms"
+        );
+      }
     }
 
     @Override
@@ -111,8 +122,12 @@ public class RectangleCameraActivity extends ComponentActivity {
     }
 
     @Override
-    public void onStableCandidate(StreamingLabelGate.Candidate candidate) {
-      onStreamCandidate(candidate);
+    public void onStableCandidate(
+        StreamingLabelGate.Candidate candidate,
+        String frameImagePath,
+        String matchedRule,
+        String tickBarcodesJson) {
+      onStreamCandidate(candidate, frameImagePath, matchedRule, tickBarcodesJson);
     }
   };
 
@@ -137,6 +152,10 @@ public class RectangleCameraActivity extends ComponentActivity {
     if (mode == null) mode = MODE_DEFAULT;
     streamMode = MODE_LABEL_SCAN_STREAM.equals(mode);
     isLabelScan = MODE_LABEL_SCAN.equals(mode) || streamMode;
+    if (streamMode) {
+      streamOpenMs = SystemClock.elapsedRealtime();
+      Log.i(TAG, "STREAM-TIME camera activity opened");
+    }
 
     previewView = findViewById(R.id.previewView);
     overlayView = findViewById(R.id.overlayView);
@@ -181,24 +200,58 @@ public class RectangleCameraActivity extends ComponentActivity {
     ocrHelper = new RectangleOcrHelper();
     rectangleTracker = new RectangleTracker();
     if (streamMode) {
-      streamAnalyzer = new StreamingLabelAnalyzer(this, streamListener, new StreamingLabelGate.Options());
+      StreamingLabelGate.Options streamOptions = new StreamingLabelGate.Options();
+      ArrayList<String> rulesJson = getIntent().getStringArrayListExtra(EXTRA_KEYWORDS);
+      if (rulesJson != null && !rulesJson.isEmpty()) {
+        streamOptions.rules = parseRules(rulesJson);
+      }
+      streamAnalyzer = new StreamingLabelAnalyzer(this, streamListener, streamOptions);
       mainHandler.postDelayed(streamHintRunnable, STREAM_HINT_DELAY_MS);
     }
     startCamera();
   }
 
-  private void onStreamCandidate(StreamingLabelGate.Candidate candidate) {
-    if (captureMode != CaptureMode.NONE || imageCapture == null) {
+  /**
+   * Streaming auto-fire: the analyzer's candidate IS the confirmed decode —
+   * no full-res capture, no crop, no second OCR pass. The saved analysis
+   * frame is the evidence photo. Returns to JS in ~100 ms.
+   */
+  private void onStreamCandidate(
+      StreamingLabelGate.Candidate candidate,
+      String frameImagePath,
+      String matchedRule,
+      String tickBarcodesJson) {
+    if (captureMode != CaptureMode.NONE) {
       return;
     }
-    captureMode = CaptureMode.STREAM_CONFIRM;
-    pendingStreamCandidate = candidate;
     if (streamAnalyzer != null) {
       streamAnalyzer.setPaused(true);
     }
     mainHandler.removeCallbacks(streamHintRunnable);
     overlayView.clearHighlightRect();
-    takePicture();
+    Log.i(
+      TAG,
+      "STREAM-TIME gate fired, open→fire=" +
+        (SystemClock.elapsedRealtime() - streamOpenMs) +
+        "ms"
+    );
+    String text = candidate.isBarcode ? "" : candidate.value;
+    String barcodes = tickBarcodesJson != null && !tickBarcodesJson.equals("[]")
+      ? tickBarcodesJson
+      : (candidate.isBarcode ? singleBarcodeJson(candidate) : "[]");
+    runOnUiThread(() ->
+      RectangleOcrHelper.finishWithResult(
+        this,
+        frameImagePath != null ? frameImagePath : "",
+        streamWidth,
+        streamHeight,
+        null,
+        null,
+        text,
+        barcodes,
+        matchedRule
+      )
+    );
   }
 
   private void onShutterClicked() {
@@ -325,8 +378,6 @@ public class RectangleCameraActivity extends ComponentActivity {
       processTapCapture(rotated, originalWidth, originalHeight, tapRect);
     } else if (mode == CaptureMode.SHUTTER) {
       processShutterCapture(rotated, originalWidth, originalHeight);
-    } else if (mode == CaptureMode.STREAM_CONFIRM && pendingStreamCandidate != null) {
-      processStreamCapture(rotated, originalWidth, originalHeight, pendingStreamCandidate);
     } else {
       rotated.release();
       resetCaptureState();
@@ -415,82 +466,6 @@ public class RectangleCameraActivity extends ComponentActivity {
     }
   }
 
-  /**
-   * Streaming auto-fire: crop the full-resolution capture to the stable
-   * candidate's box (scaled from the analysis-stream coordinates), then run
-   * one final ML Kit pass on that high-res crop. Stream-decoded values are
-   * only a fallback — the hi-res decode wins whenever it produces anything.
-   */
-  private void processStreamCapture(
-      Mat rotated,
-      int originalWidth,
-      int originalHeight,
-      StreamingLabelGate.Candidate candidate) {
-    try {
-      double scaleX = streamWidth > 0 ? (double) originalWidth / streamWidth : 1.0;
-      double scaleY = streamHeight > 0 ? (double) originalHeight / streamHeight : 1.0;
-
-      // Pad so a tight stream box never clips label edges on the full-res frame.
-      int padX = (int) Math.round(candidate.width() * STREAM_CROP_PADDING_RATIO);
-      int padY = (int) Math.round(candidate.height() * STREAM_CROP_PADDING_RATIO);
-      int left = clamp((int) Math.round(candidate.left * scaleX) - padX, 0, originalWidth - 1);
-      int top = clamp((int) Math.round(candidate.top * scaleY) - padY, 0, originalHeight - 1);
-      int right = clamp((int) Math.round(candidate.right * scaleX) + padX, left + 1, originalWidth);
-      int bottom = clamp((int) Math.round(candidate.bottom * scaleY) + padY, top + 1, originalHeight);
-
-      RectangleDetector.RectResult cropRect = rectFromBox(left, top, right, bottom);
-      File cropFile = RectangleCropper.cropToFile(
-        rotated,
-        cropRect,
-        JPEG_QUALITY,
-        getCacheDir(),
-        CAPTURE_FILE_PREFIX + "stream_"
-      );
-      String selectedRectJson = RectangleResultJson.toJsonObject(cropRect).toString();
-
-      String fallbackText = candidate.isBarcode ? "" : candidate.value;
-      String fallbackBarcodes = candidate.isBarcode ? singleBarcodeJson(candidate) : "[]";
-
-      runOnUiThread(() ->
-        ocrHelper.runOcrAndFinish(
-          this,
-          cropFile.getAbsolutePath(),
-          originalWidth,
-          originalHeight,
-          null,
-          selectedRectJson,
-          fallbackText,
-          fallbackBarcodes
-        )
-      );
-    } catch (IOException e) {
-      runOnUiThread(() -> {
-        Toast.makeText(this, "Failed to save crop: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        resetCaptureState();
-      });
-    } finally {
-      rotated.release();
-    }
-  }
-
-  private static int clamp(int value, int min, int max) {
-    return Math.max(min, Math.min(max, value));
-  }
-
-  private static RectangleDetector.RectResult rectFromBox(int left, int top, int right, int bottom) {
-    Point[] points = {
-      new Point(left, top),
-      new Point(right, top),
-      new Point(right, bottom),
-      new Point(left, bottom),
-    };
-    return new RectangleDetector.RectResult(
-      points,
-      new Rect(left, top, right - left, bottom - top),
-      1.0
-    );
-  }
-
   private static String singleBarcodeJson(StreamingLabelGate.Candidate candidate) {
     JSONArray array = new JSONArray();
     try {
@@ -555,11 +530,38 @@ public class RectangleCameraActivity extends ComponentActivity {
   private void resetCaptureState() {
     captureMode = CaptureMode.NONE;
     pendingTapRect = null;
-    pendingStreamCandidate = null;
     if (streamAnalyzer != null) {
       streamAnalyzer.resume();
     }
     runOnUiThread(() -> captureButton.setEnabled(true));
+  }
+
+  /**
+   * Each entry is a JSON object {"name":…, "keywords":[…]} from the plugin's
+   * rules option; unparseable entries are skipped.
+   */
+  private static StreamingLabelGate.ScanRule[] parseRules(List<String> rulesJson) {
+    java.util.List<StreamingLabelGate.ScanRule> rules = new java.util.ArrayList<>();
+    for (String json : rulesJson) {
+      try {
+        JSONObject obj = new JSONObject(json);
+        String name = obj.optString("name", "");
+        JSONArray keywordsJson = obj.optJSONArray("keywords");
+        if (keywordsJson == null) {
+          continue;
+        }
+        java.util.List<String> keywords = new java.util.ArrayList<>();
+        for (int i = 0; i < keywordsJson.length(); i++) {
+          keywords.add(keywordsJson.optString(i, ""));
+        }
+        rules.add(
+          new StreamingLabelGate.ScanRule(name, keywords.toArray(new String[0]))
+        );
+      } catch (JSONException e) {
+        Log.w(TAG, "Skipping unparseable scan rule: " + json);
+      }
+    }
+    return rules.toArray(new StreamingLabelGate.ScanRule[0]);
   }
 
   private void startCamera() {
@@ -595,8 +597,10 @@ public class RectangleCameraActivity extends ComponentActivity {
       .build();
     preview.setSurfaceProvider(previewView.getSurfaceProvider());
 
+    boolean hd = ANALYSIS_SIZE_HD.equals(getIntent().getStringExtra(EXTRA_ANALYSIS_SIZE));
+    android.util.Size analysisSize = hd ? new android.util.Size(960, 720) : new android.util.Size(480, 640);
     ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
-      .setTargetResolution(new android.util.Size(480, 640))
+      .setTargetResolution(analysisSize)
       .setTargetRotation(rotation)
       .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
       .build();
@@ -621,6 +625,11 @@ public class RectangleCameraActivity extends ComponentActivity {
     );
 
     if (camera != null && camera.getCameraInfo().hasFlashUnit()) {
+      if (isLabelScan) {
+        // Torch glare off glossy supplier labels hurts OCR decoding — label
+        // scans start dark; the operator can still toggle it on in dim light.
+        sTorchOn = false;
+      }
       applyTorchState();
       updateFlashIcon();
       flashButton.setVisibility(android.view.View.VISIBLE);

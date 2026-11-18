@@ -18,9 +18,15 @@ import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
+import org.opencv.imgcodecs.Imgcodecs;
 
 /**
  * Streaming analyzer for label-scan mode (spec 2026-11-18-streaming-label-scan-design):
@@ -49,15 +55,32 @@ public class StreamingLabelAnalyzer implements ImageAnalysis.Analyzer {
     /** Best candidate of the latest tick, or null when nothing decoded. */
     void onCandidateTick(StreamingLabelGate.Candidate candidate);
 
-    /** Stability gate passed — reported exactly once per analyzer lifetime. */
-    void onStableCandidate(StreamingLabelGate.Candidate candidate);
+    /**
+     * Stability gate passed — reported exactly once per analyzer lifetime.
+     * {@code frameImagePath} is the current analysis frame saved as a JPEG
+     * (the result's evidence photo; empty string when encoding failed) —
+     * the stream path never takes a full-resolution capture.
+     * {@code matchedRule} names the confirming rule, or null.
+     * {@code tickBarcodesJson} is ALL barcodes decoded on the firing tick
+     * (OcrBarcodeProcessor shape) — non-empty even when an OCR rule fired,
+     * so 1D lot codes beside the text still reach the web decode.
+     */
+    void onStableCandidate(
+      StreamingLabelGate.Candidate candidate,
+      String frameImagePath,
+      String matchedRule,
+      String tickBarcodesJson
+    );
   }
 
   private static final String TAG = "StreamingLabelAnalyzer";
+  private static final int FRAME_JPEG_QUALITY = 85;
+  private static final String FRAME_FILE_PREFIX = "stream_frame_";
 
   private final StreamingLabelGate gate;
   private final Listener listener;
   private final Executor resultExecutor;
+  private final File cacheDir;
   private final BarcodeScanner barcodeScanner;
   private final TextRecognizer textRecognizer;
 
@@ -67,11 +90,13 @@ public class StreamingLabelAnalyzer implements ImageAnalysis.Analyzer {
   private long lastStartMs;
   private long lastLatencyMs;
   private long tickIndex;
+  private long lastStatsLogMs;
 
   public StreamingLabelAnalyzer(Context context, Listener listener, StreamingLabelGate.Options options) {
     this.gate = new StreamingLabelGate(options);
     this.listener = listener;
     this.resultExecutor = ContextCompat.getMainExecutor(context);
+    this.cacheDir = context.getCacheDir();
     this.barcodeScanner = BarcodeScanning.getClient();
     this.textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
   }
@@ -128,7 +153,10 @@ public class StreamingLabelAnalyzer implements ImageAnalysis.Analyzer {
 
     long startMs = SystemClock.elapsedRealtime();
     tickIndex++;
-    boolean runOcr = tickIndex % gateOptionsOcrEvery() == 0;
+    // OCR runs on the first analyzed tick (then every ocrEvery) — a brand
+    // keyword can only confirm on an OCR tick, so don't waste the opening
+    // frames on barcode-only passes.
+    boolean runOcr = tickIndex == 1 || tickIndex % gate.options().ocrEvery == 0;
 
     StreamingLabelGate.Candidate candidate = null;
     try {
@@ -151,7 +179,40 @@ public class StreamingLabelAnalyzer implements ImageAnalysis.Analyzer {
 
       StreamingLabelGate.Candidate stable = gate.fireCandidate();
       if (stable != null && fired.compareAndSet(false, true)) {
-        resultExecutor.execute(() -> listener.onStableCandidate(stable));
+        boolean keywordPath = gate.currentStreak() < gate.options().stableFrames;
+        Log.i(
+          TAG,
+          "stable candidate fired: kind=" +
+            (stable.isBarcode ? "barcode" : "ocr") +
+            (keywordPath ? " (rule=" + gate.matchedRuleName() + ")" : "") +
+            " streak=" +
+            gate.currentStreak() +
+            " latencyMs=" +
+            lastLatencyMs
+        );
+        String frameImagePath = saveFrame(imageProxy, rotationDegrees);
+        String matchedRule = gate.matchedRuleName();
+        String tickBarcodesJson = barcodesToJson(barcodes);
+        resultExecutor.execute(() ->
+          listener.onStableCandidate(stable, frameImagePath, matchedRule, tickBarcodesJson)
+        );
+      }
+
+      if (nowMs - lastStatsLogMs >= 1000) {
+        lastStatsLogMs = nowMs;
+        Log.d(
+          TAG,
+          "tick=" +
+            tickIndex +
+            " latencyMs=" +
+            lastLatencyMs +
+            " streak=" +
+            gate.currentStreak() +
+            " candidate=" +
+            (candidate == null
+              ? "none"
+              : (candidate.isBarcode ? "barcode" : "ocr") + ":" + candidate.signature.length() + "ch")
+        );
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -165,8 +226,79 @@ public class StreamingLabelAnalyzer implements ImageAnalysis.Analyzer {
     }
   }
 
-  private int gateOptionsOcrEvery() {
-    return gate.options().ocrEvery;
+  /**
+   * Saves the current analysis frame (upright, grayscale) as the result's
+   * evidence photo. Encoding failure is non-fatal — the result just carries
+   * an empty imagePath (review modals tolerate it).
+   */
+  private String saveFrame(ImageProxy imageProxy, int rotationDegrees) {
+    Mat gray = null;
+    Mat rotated = null;
+    try {
+      ImageProxy.PlaneProxy yPlane = imageProxy.getPlanes()[0];
+      gray = new Mat(
+        imageProxy.getHeight(),
+        imageProxy.getWidth(),
+        CvType.CV_8UC1,
+        yPlane.getBuffer(),
+        yPlane.getRowStride()
+      );
+      Mat copy = new Mat();
+      gray.copyTo(copy);
+      gray.release();
+      gray = copy;
+      rotated = rotateUpright(gray, rotationDegrees);
+      File file = RectangleCropper.matToFile(rotated, FRAME_JPEG_QUALITY, cacheDir, FRAME_FILE_PREFIX);
+      return file.getAbsolutePath();
+    } catch (IOException | RuntimeException e) {
+      Log.e(TAG, "Failed to save stream frame", e);
+      return "";
+    } finally {
+      if (gray != null) {
+        gray.release();
+      }
+      if (rotated != null) {
+        rotated.release();
+      }
+    }
+  }
+
+  private static Mat rotateUpright(Mat src, int degrees) {
+    Mat dst = new Mat();
+    switch (degrees) {
+      case 90:
+        Core.transpose(src, dst);
+        Core.flip(dst, dst, 1);
+        break;
+      case 180:
+        Core.flip(src, dst, -1);
+        break;
+      case 270:
+        Core.transpose(src, dst);
+        Core.flip(dst, dst, 0);
+        break;
+      default:
+        src.copyTo(dst);
+        break;
+    }
+    return dst;
+  }
+
+  /** Same JSON shape as OcrBarcodeProcessor: [{"value":…, "format":…}]. */
+  private static String barcodesToJson(List<Barcode> barcodes) {
+    org.json.JSONArray array = new org.json.JSONArray();
+    for (Barcode barcode : barcodes) {
+      try {
+        org.json.JSONObject obj = new org.json.JSONObject();
+        String value = barcode.getRawValue();
+        obj.put("value", value != null ? value : "");
+        obj.put("format", String.valueOf(barcode.getFormat()));
+        array.put(obj);
+      } catch (org.json.JSONException e) {
+        // ignore individual barcode serialization errors
+      }
+    }
+    return array.toString();
   }
 
   /** Largest decoded barcode wins; null when nothing decoded. */

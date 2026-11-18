@@ -17,6 +17,16 @@ public class StreamingLabelGateTest {
     return new StreamingLabelGate(new StreamingLabelGate.Options());
   }
 
+  private static StreamingLabelGate.ScanRule rule(String name, String... keywords) {
+    return new StreamingLabelGate.ScanRule(name, keywords);
+  }
+
+  private static StreamingLabelGate gateWithRules(StreamingLabelGate.ScanRule... rules) {
+    StreamingLabelGate.Options options = new StreamingLabelGate.Options();
+    options.rules = rules;
+    return new StreamingLabelGate(options);
+  }
+
   /** Centred box occupying 25% of the frame — well past every threshold. */
   private static StreamingLabelGate.Candidate candidate(
       String signature, String value, boolean isBarcode) {
@@ -30,6 +40,98 @@ public class StreamingLabelGateTest {
 
   private static StreamingLabelGate.Candidate ocr(String text) {
     return candidate(StreamingLabelGate.signatureFor(text, false), text, false);
+  }
+
+  @Test
+  public void ruleFiresImmediatelyWhenAllKeywordsPresentEvenOffCenter() {
+    StreamingLabelGate gate = gateWithRules(rule("reel", "KOA", "1000PCS"));
+    // Large box hard against the left edge — fails the centre check, but the
+    // rule confirm path waives it.
+    StreamingLabelGate.Candidate edgeKoa =
+      new StreamingLabelGate.Candidate("X", "KOA PN12345 1000PCS", false, 0, 160, 200, 340);
+    gate.onTick(edgeKoa, FRAME_W, FRAME_H);
+    StreamingLabelGate.Candidate fired = gate.fireCandidate();
+    assertNotNull(fired);
+    assertEquals(1, gate.currentStreak());
+    assertEquals("reel", gate.matchedRuleName());
+  }
+
+  @Test
+  public void ruleDoesNotFireWhenOneKeywordMissing() {
+    StreamingLabelGate gate = gateWithRules(rule("reel", "KOA", "1000PCS"));
+    StreamingLabelGate.Candidate missingQty =
+      candidate(StreamingLabelGate.signatureFor("KOA PN12345", false), "KOA PN12345", false);
+    gate.onTick(missingQty, FRAME_W, FRAME_H);
+    // Rule must not confirm without all its keywords…
+    assertNull(gate.matchedRuleName());
+    // …but the centred candidate still fires through the normal streak path.
+    gate.onTick(missingQty, FRAME_W, FRAME_H);
+    assertNotNull(gate.fireCandidate());
+    assertNull(gate.matchedRuleName());
+  }
+
+  @Test
+  public void ruleMatchingIsCaseInsensitive() {
+    StreamingLabelGate gate = gateWithRules(rule("reel", "koa", "1000pcs"));
+    gate.onTick(ocr("KOA Speer 1000PCS reel"), FRAME_W, FRAME_H);
+    assertNotNull(gate.fireCandidate());
+    assertEquals("reel", gate.matchedRuleName());
+  }
+
+  @Test
+  public void anyRuleCanConfirmAndReportsItsName() {
+    StreamingLabelGate gate = gateWithRules(
+      rule("reel", "KOA", "1000PCS"),
+      rule("box", "KOA", "QTY")
+    );
+    // "box" rule hit (KOA + QTY), "reel" not (no 1000PCS).
+    gate.onTick(ocr("KOA box QTY 500"), FRAME_W, FRAME_H);
+    assertNotNull(gate.fireCandidate());
+    assertEquals("box", gate.matchedRuleName());
+  }
+
+  @Test
+  public void ruleRequiresMinimumArea() {
+    StreamingLabelGate gate = gateWithRules(rule("reel", "KOA"));
+    StreamingLabelGate.Candidate tinyKoa =
+      new StreamingLabelGate.Candidate("X", "KOA A1 1000PCS", false, 300, 220, 330, 245);
+    gate.onTick(tinyKoa, FRAME_W, FRAME_H);
+    assertNull(gate.fireCandidate());
+  }
+
+  @Test
+  public void candidateWithoutRuleStillNeedsStreak() {
+    StreamingLabelGate gate = gateWithRules(rule("reel", "KOA", "1000PCS"));
+    gate.onTick(ocr("MURATA PN12345 QTY 5000"), FRAME_W, FRAME_H);
+    assertNull(gate.fireCandidate());
+    gate.onTick(ocr("MURATA PN12345 QTY 5000"), FRAME_W, FRAME_H);
+    assertNotNull(gate.fireCandidate());
+    // Normal path — no rule involved.
+    assertNull(gate.matchedRuleName());
+  }
+
+  @Test
+  public void noRulesKeepCenterRequirement() {
+    StreamingLabelGate gate = gate(); // no rules configured
+    StreamingLabelGate.Candidate edgeKoa =
+      new StreamingLabelGate.Candidate("X", "KOA PN12345", false, 0, 160, 200, 340);
+    gate.onTick(edgeKoa, FRAME_W, FRAME_H);
+    gate.onTick(edgeKoa, FRAME_W, FRAME_H);
+    assertNull(gate.fireCandidate());
+  }
+
+  @Test
+  public void blankRulesAndKeywordsAreIgnored() {
+    StreamingLabelGate.Options options = new StreamingLabelGate.Options();
+    options.rules = new StreamingLabelGate.ScanRule[] {
+      new StreamingLabelGate.ScanRule("blank", new String[] { "  ", null }),
+    };
+    StreamingLabelGate gate = new StreamingLabelGate(options);
+    StreamingLabelGate.Candidate edgeKoa =
+      new StreamingLabelGate.Candidate("X", "KOA PN12345", false, 0, 160, 200, 340);
+    gate.onTick(edgeKoa, FRAME_W, FRAME_H);
+    gate.onTick(edgeKoa, FRAME_W, FRAME_H);
+    assertNull(gate.fireCandidate());
   }
 
   @Test

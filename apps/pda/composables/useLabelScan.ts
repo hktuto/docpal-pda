@@ -3,6 +3,7 @@ import {
   RectangleDetection,
   SCAN_NOT_AVAILABLE_MESSAGE,
   type LabelScanCapture,
+  type ScanRule,
 } from './useRectangleDetection';
 import { runScanMatcher, useScanMatchers, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
 import { I18nError } from '~/composables/i18nError';
@@ -88,11 +89,25 @@ export function buildRawCapture(value: string): LabelScanCapture {
 /**
  * Camera label capture with the browser fallback (prompt for a raw value).
  * Returns null when the operator cancels.
+ *
+ * @param options streaming rule confirm (ALL of a named rule's keywords) and
+ * the analysis-stream resolution — see ScanLabelOptions.
  */
-export async function captureLabel(): Promise<LabelScanCapture | null> {
+export async function captureLabel(options?: {
+  rules?: ScanRule[];
+  analysisSize?: 'sd' | 'hd';
+}): Promise<LabelScanCapture | null> {
+  const t0 = performance.now();
   try {
-    const capture = await RectangleDetection.scanLabel({ stream: true });
+    const capture = await RectangleDetection.scanLabel({ stream: true, ...options });
+    console.log(
+      `[SCAN-TIME] native round-trip: ${(performance.now() - t0).toFixed(0)}ms` +
+        (capture.matchedRule ? ` (rule=${capture.matchedRule})` : '')
+    );
     pushLog('scan', `camera: ${captureRawLabelValue(capture).slice(0, 120)}`);
+    console.log(
+      `[SCAN-RESULT] native capture: text=${JSON.stringify(capture.text.slice(0, 150))} barcodes=${capture.barcodes.slice(0, 200)}`
+    );
     return capture;
   } catch (e: unknown) {
     if (isCancellationError(e)) {

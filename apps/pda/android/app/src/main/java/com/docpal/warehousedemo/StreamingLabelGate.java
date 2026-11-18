@@ -1,5 +1,7 @@
 package com.docpal.warehousedemo;
 
+import java.util.Locale;
+
 /**
  * Stability/prominence gate for the streaming label-scan analyzer
  * (spec 2026-11-18-streaming-label-scan-design).
@@ -14,7 +16,12 @@ package com.docpal.warehousedemo;
  *   <li>the candidate box must be prominent — large enough and centred
  *       enough that the operator is clearly pointing at that label;
  *   <li>OCR candidates must look label-ish (long enough + contain a digit).
- *       Barcode candidates bypass the text sanity check.
+ *       Barcode candidates bypass the text sanity check;
+ *   <li>OR the decoded value confirms one of the caller-supplied rules
+ *       (ALL of a named rule's keywords in one decode — e.g. a KOA label
+ *       layout in ad-hoc put-away) — then the streak and centre checks are
+ *       waived and the box only needs to be reasonably large, because the
+ *       content itself is the confirmation.
  * </ul>
  *
  * <p>Pure Java (no Android/OpenCV deps) so the policy is unit-testable.
@@ -93,21 +100,78 @@ public class StreamingLabelGate {
     public long minIntervalMs = 100;
     public long maxIntervalMs = 300;
     /** Run OCR on every Nth analysis tick (barcode runs every tick). */
-    public int ocrEvery = 3;
+    public int ocrEvery = 2;
+    /**
+     * Rule confirm (from JS scan options): a rule fires immediately when ALL
+     * of its keywords appear in one decoded value — the streak requirement
+     * and the centre check are waived; only a minimum-area gate stays, so
+     * the camera never fires on a keyword glimpse at the frame edge. Any
+     * rule can confirm (one brand may print several label layouts).
+     */
+    public ScanRule[] rules = new ScanRule[0];
+    public double keywordMinAreaRatio = 0.05;
+  }
+
+  /** A named all-of keyword group; one label layout per rule. */
+  public static class ScanRule {
+
+    public final String name;
+    public final String[] keywords;
+
+    public ScanRule(String name, String[] keywords) {
+      this.name = name;
+      this.keywords = keywords;
+    }
   }
 
   private final Options options;
+  private final ScanRule[] normalizedRules;
 
   private String lastSignature;
   private int streak;
   private Candidate pending;
+  private String matchedRuleName;
+  private int lastFrameWidth;
+  private int lastFrameHeight;
 
   public StreamingLabelGate(Options options) {
     this.options = options;
+    this.normalizedRules = normalizeRules(options.rules);
+  }
+
+  /** Name of the rule that confirmed the current candidate; null otherwise. */
+  public String matchedRuleName() {
+    return matchedRuleName;
   }
 
   public Options options() {
     return options;
+  }
+
+  private static ScanRule[] normalizeRules(ScanRule[] rules) {
+    if (rules == null || rules.length == 0) {
+      return new ScanRule[0];
+    }
+    java.util.List<ScanRule> list = new java.util.ArrayList<>();
+    for (ScanRule rule : rules) {
+      if (rule == null) {
+        continue;
+      }
+      java.util.List<String> keywords = new java.util.ArrayList<>();
+      for (String keyword : rule.keywords) {
+        if (keyword == null) {
+          continue;
+        }
+        String normalized = keyword.trim().toLowerCase(Locale.ROOT);
+        if (!normalized.isEmpty()) {
+          keywords.add(normalized);
+        }
+      }
+      if (!keywords.isEmpty()) {
+        list.add(new ScanRule(rule.name, keywords.toArray(new String[0])));
+      }
+    }
+    return list.toArray(new ScanRule[0]);
   }
 
   /** Clears all streak state (e.g. after a failed capture or on resume). */
@@ -115,6 +179,9 @@ public class StreamingLabelGate {
     lastSignature = null;
     streak = 0;
     pending = null;
+    matchedRuleName = null;
+    lastFrameWidth = 0;
+    lastFrameHeight = 0;
   }
 
   /**
@@ -137,13 +204,24 @@ public class StreamingLabelGate {
   /**
    * Feeds one analysis tick. {@code candidate} may be null (nothing decoded
    * this tick). Frame dimensions are used for the prominence checks.
+   *
+   * <p>A candidate becomes {@code pending} when it passes sanity plus EITHER
+   * the normal prominence check OR the keyword confirm gate — so a keyword
+   * hit can build no streak and still be eligible for {@link #fireCandidate}.
    */
   public void onTick(Candidate candidate, int frameWidth, int frameHeight) {
+    lastFrameWidth = frameWidth;
+    lastFrameHeight = frameHeight;
     if (candidate == null || frameWidth <= 0 || frameHeight <= 0) {
       onNoCandidate();
       return;
     }
-    if (!isProminent(candidate, frameWidth, frameHeight) || !passesSanity(candidate)) {
+    if (!passesSanity(candidate)) {
+      onNoCandidate();
+      return;
+    }
+    if (!isProminent(candidate, frameWidth, frameHeight)
+      && !isRuleConfirm(candidate, frameWidth, frameHeight)) {
       onNoCandidate();
       return;
     }
@@ -161,15 +239,30 @@ public class StreamingLabelGate {
     lastSignature = null;
     streak = 0;
     pending = null;
+    matchedRuleName = null;
   }
 
   /**
-   * Non-null once the current candidate has been stable for
-   * {@code stableFrames} consecutive ticks. Callers must latch: the gate
-   * keeps reporting the candidate until the streak breaks.
+   * Non-null once the current candidate may auto-fire:
+   * <ul>
+   *   <li>normal path — stable for {@code stableFrames} consecutive ticks and
+   *       prominent;</li>
+   *   <li>rule path — the pending candidate confirms a rule (ALL of its
+   *       keywords in one decode) and its box passes the keyword area gate
+   *       (no streak, no centre check — the content itself is the
+   *       confirmation). {@link #matchedRuleName()} names the rule.</li>
+   * </ul>
+   * Callers must latch: the gate keeps reporting the candidate until the
+   * streak breaks.
    */
   public Candidate fireCandidate() {
-    if (pending != null && streak >= options.stableFrames) {
+    if (pending == null || lastFrameWidth <= 0 || lastFrameHeight <= 0) {
+      return null;
+    }
+    if (streak >= options.stableFrames && isProminent(pending, lastFrameWidth, lastFrameHeight)) {
+      return pending;
+    }
+    if (isRuleConfirm(pending, lastFrameWidth, lastFrameHeight)) {
       return pending;
     }
     return null;
@@ -192,6 +285,49 @@ public class StreamingLabelGate {
       && centerX <= frameWidth - marginX
       && centerY >= marginY
       && centerY <= frameHeight - marginY;
+  }
+
+  /**
+   * Rule confirm gate: the decoded value confirms some rule (ALL of its
+   * keywords present, case-insensitive) and the box is at least
+   * {@code keywordMinAreaRatio} of the frame. The centre requirement is
+   * waived — the matched content, not the position, is the confirmation.
+   */
+  private boolean isRuleConfirm(Candidate candidate, int frameWidth, int frameHeight) {
+    if (normalizedRules.length == 0) {
+      return false;
+    }
+    String matched = matchingRule(candidate.value);
+    if (matched == null) {
+      return false;
+    }
+    long frameArea = (long) frameWidth * (long) frameHeight;
+    if (frameArea <= 0 || candidate.area() < (long) (options.keywordMinAreaRatio * frameArea)) {
+      return false;
+    }
+    matchedRuleName = matched;
+    return true;
+  }
+
+  /** First rule whose keywords ALL appear in the value; null when none. */
+  private String matchingRule(String value) {
+    if (value == null) {
+      return null;
+    }
+    String haystack = value.toLowerCase(Locale.ROOT);
+    for (ScanRule rule : normalizedRules) {
+      boolean all = true;
+      for (String keyword : rule.keywords) {
+        if (!haystack.contains(keyword)) {
+          all = false;
+          break;
+        }
+      }
+      if (all) {
+        return rule.name;
+      }
+    }
+    return null;
   }
 
   private boolean passesSanity(Candidate candidate) {
