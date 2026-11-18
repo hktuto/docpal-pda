@@ -162,6 +162,8 @@ describe("pickingListDocToPrintDoc — SZ warehouse variant", () => {
                 orderNo: "CUST-ORD-7",
                 lineNumber: 1,
                 mfrPartNo: "MFR-1",
+                custPoNo: "PO-CUST-ORD-7",
+                custPartNo: "CP-WCL-1",
                 qty: 10,
                 allocatedQty: 10,
                 pickedQty: 0,
@@ -171,6 +173,8 @@ describe("pickingListDocToPrintDoc — SZ warehouse variant", () => {
                 orderNo: null,
                 lineNumber: 2,
                 mfrPartNo: "MFR-1",
+                custPoNo: null,
+                custPartNo: null,
                 qty: 5,
                 allocatedQty: 0,
                 pickedQty: 0,
@@ -183,19 +187,22 @@ describe("pickingListDocToPrintDoc — SZ warehouse variant", () => {
       )
     );
 
-    expect(d.table.columns.map((c) => c.header).slice(0, 7)).toEqual([
+    expect(d.table.columns.map((c) => c.header).slice(0, 9)).toEqual([
       "Part No",
       "WCL Item No",
       "Order No",
       "Line No",
+      "Cust PO No",
+      "Cust Part No",
       "Item Qty",
       "Allocated Qty",
       "Picked Qty",
     ]);
-    // Lines are NOT merged: one row per line, each with its own order_no.
+    // Lines are NOT merged: one row per line, each with its own order_no +
+    // customer refs (blank when the line has no order_no).
     expect(d.table.rows).toEqual([
-      ["MFR-1", "WCL-1", "CUST-ORD-7", 1, 10, 10, 0, "Receiving RB-9", "(dock)", "", "", "", "", "", 10],
-      ["MFR-1", "WCL-1", "", 2, 5, 0, 0, "(no allocation)", "", "", "", "", "", "", ""],
+      ["MFR-1", "WCL-1", "CUST-ORD-7", 1, "PO-CUST-ORD-7", "CP-WCL-1", 10, 10, 0, "Receiving RB-9", "(dock)", "", "", "", "", "", 10],
+      ["MFR-1", "WCL-1", "", 2, "", "", 5, 0, 0, "(no allocation)", "", "", "", "", "", "", ""],
     ]);
     // The SZ xlsx has no totals row.
     expect(d.table.totals).toEqual([]);

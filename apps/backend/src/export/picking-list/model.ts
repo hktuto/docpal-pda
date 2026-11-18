@@ -41,6 +41,11 @@ export interface PickingListLine {
   orderNo: string | null; // upstream customer order no (additional_data passthrough)
   lineNumber: number | null; // upstream Oracle line number
   mfrPartNo: string | null; // same parts-master lookup as the group's
+  // Customer refs from the DocPal oracle order-item-refs API — SZ layout
+  // only, filled by route-level enrichment after data assembly; null when
+  // the line has no order_no or the API was unreachable.
+  custPoNo: string | null;
+  custPartNo: string | null;
   qty: number;
   allocatedQty: number;
   pickedQty: number;

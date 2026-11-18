@@ -63,6 +63,10 @@ export interface PickingListLine {
   orderNo: string | null; // upstream customer order no (additional_data passthrough)
   lineNumber: number | null; // upstream Oracle line number
   mfrPartNo: string | null;
+  // Customer refs from the DocPal oracle order-item-refs API (SZ only; null
+  // when the line has no order_no or the API was unreachable).
+  custPoNo: string | null;
+  custPartNo: string | null;
   qty: number;
   allocatedQty: number;
   pickedQty: number;
@@ -108,12 +112,14 @@ const BLANK_ROW: (string | number)[] = PICKING_COLUMN_HEADERS.map(() => "");
 // SZ layout (apps/backend/src/export/picking-list/render/sz.ts): one product
 // row per picking item — same-part lines are NOT merged — each carrying
 // Part No / WCL Item No / Order No / Line No.
-const SZ_COLUMN_WIDTHS = [20, 26, 18, 8, 10, 12, 10, 18, 16, 12, 12, 12, 12, 18, 10];
+const SZ_COLUMN_WIDTHS = [20, 26, 18, 8, 16, 18, 10, 12, 10, 18, 16, 12, 12, 12, 12, 18, 10];
 const SZ_COLUMN_HEADERS = [
   "Part No",
   "WCL Item No",
   "Order No",
   "Line No",
+  "Cust PO No",
+  "Cust Part No",
   "Item Qty",
   "Allocated Qty",
   "Picked Qty",
@@ -168,7 +174,7 @@ function buildDefaultRows(groups: PickingListGroup[]): (string | number)[][] {
 
 function buildSzRows(groups: PickingListGroup[]): (string | number)[][] {
   const rows: (string | number)[][] = [];
-  const blankBase: (string | number)[] = ["", "", "", "", "", "", ""];
+  const blankBase: (string | number)[] = ["", "", "", "", "", "", "", "", ""];
   for (const [groupIdx, group] of groups.entries()) {
     for (const line of group.lines) {
       const lineBase: (string | number)[] = [
@@ -176,6 +182,8 @@ function buildSzRows(groups: PickingListGroup[]): (string | number)[][] {
         group.partNo,
         line.orderNo ?? "",
         line.lineNumber ?? "",
+        line.custPoNo ?? "",
+        line.custPartNo ?? "",
         line.qty,
         line.allocatedQty,
         line.pickedQty,

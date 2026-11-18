@@ -198,6 +198,8 @@ export async function loadPickingListDocument(db: AppDb, id: string): Promise<Pi
         orderNo: item.orderNo,
         lineNumber: item.lineNumber,
         mfrPartNo: item.mfrPartNo,
+        custPoNo: null, // filled by route-level enrichCustRefs (SZ layout)
+        custPartNo: null,
         qty: item.qty,
         allocatedQty: item.allocatedQty,
         pickedQty: item.pickedQty,

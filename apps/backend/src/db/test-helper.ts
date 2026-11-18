@@ -55,6 +55,25 @@ function startFakeDocpal(): Promise<{ server: Server; url: string }> {
         },
       });
     }
+    if (req.method === "POST" && req.url === "/apis/v1/ms/oracle/order-info/order-item-refs") {
+      let raw = "";
+      req.on("data", (c) => (raw += c));
+      req.on("end", () => {
+        const body = JSON.parse(raw || "{}");
+        const items = Array.isArray(body.items) ? body.items : [];
+        // Deterministic derivation so export tests can assert the values.
+        json(200, {
+          items: items.map((it: { order_no?: string; wcl_item_no?: string }) => ({
+            order_no: it.order_no,
+            wcl_item_no: it.wcl_item_no,
+            cust_po_no: `PO-${it.order_no}`,
+            cust_part_no: `CP-${it.wcl_item_no}`,
+          })),
+          count: items.length,
+        });
+      });
+      return;
+    }
     json(404, { message: "not found" });
   });
   return new Promise((resolve) => {

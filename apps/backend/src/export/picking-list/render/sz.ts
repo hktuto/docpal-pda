@@ -34,6 +34,8 @@ async function render(doc: PickingListDocument): Promise<{ fileName: string; buf
     "WCL Item No",
     "Order No",
     "Line No",
+    "Cust PO No",
+    "Cust Part No",
     "Item Qty",
     "Allocated Qty",
     "Picked Qty",
@@ -92,11 +94,13 @@ async function render(doc: PickingListDocument): Promise<{ fileName: string; buf
         group.partNo,
         line.orderNo ?? "",
         line.lineNumber ?? "",
+        line.custPoNo ?? "",
+        line.custPartNo ?? "",
         line.qty,
         line.allocatedQty,
         line.pickedQty,
       ];
-      const blankBase: (string | number)[] = ["", "", "", "", "", "", ""];
+      const blankBase: (string | number)[] = ["", "", "", "", "", "", "", "", ""];
       if (line.allocs.length > 0) {
         pushAllocRows(lineBase, blankBase, line);
       } else {
@@ -118,6 +122,8 @@ async function render(doc: PickingListDocument): Promise<{ fileName: string; buf
     26, // WCL Item No
     18, // Order No
     8, // Line No
+    16, // Cust PO No
+    18, // Cust Part No
     10, // Item Qty
     12, // Allocated Qty
     10, // Picked Qty
@@ -140,7 +146,7 @@ async function render(doc: PickingListDocument): Promise<{ fileName: string; buf
     base64: (await orderLinkQrPng(orderLink("picking", head.orderId))).toString("base64"),
     extension: "png",
   });
-  ws.addImage(qrId, { tl: { col: 11, row: 0 }, ext: { width: 80, height: 80 }, editAs: "oneCell" });
+  ws.addImage(qrId, { tl: { col: 13, row: 0 }, ext: { width: 80, height: 80 }, editAs: "oneCell" });
   ws.getCell(11, 1).value = "Scan to open in PDA";
 
   const buf = Buffer.from(await wb.xlsx.writeBuffer());

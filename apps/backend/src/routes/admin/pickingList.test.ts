@@ -433,22 +433,23 @@ test("GET picking-list: WAREHOUSE_CODE=sz renders the per-line SZ layout", async
     const rows = sheetRows(await res.arrayBuffer());
 
     // SZ header: both the manufacturer part no and the wcl_item_no, plus
-    // Order No + Line No columns.
-    assert.deepEqual(rows[11]!.slice(0, 8), [
+    // Order No / Line No / customer-ref columns (cust refs come from the
+    // fake DocPal order-item-refs endpoint — PO-… / CP-… derivations).
+    assert.deepEqual(rows[11]!.slice(0, 10), [
       "Part No", "WCL Item No", "Order No", "Line No",
-      "Item Qty", "Allocated Qty", "Picked Qty", "Source",
+      "Cust PO No", "Cust Part No", "Item Qty", "Allocated Qty", "Picked Qty", "Source",
     ]);
 
     // Lines are NOT merged: one row per line, each carrying its own
-    // part_no / wcl_item_no / order_no / line_number. Row order is
-    // created_date/id-based (racy within one transaction) — sort by the
+    // part_no / wcl_item_no / order_no / line_number / cust refs. Row order
+    // is created_date/id-based (racy within one transaction) — sort by the
     // printed line number before comparing.
     const data = rows.slice(12);
     assert.deepEqual(
-      data.map((r) => r.slice(0, 5)).sort((a, b) => Number(a[3]) - Number(b[3])),
+      data.map((r) => r.slice(0, 7)).sort((a, b) => Number(a[3]) - Number(b[3])),
       [
-        ["MFR-XXX-1372", "RK73H2ATTD1372F", "CUST-ORD-7", 1, 100],
-        ["MFR-XXX-1372", "RK73H2ATTD1372F", "", 2, 150],
+        ["MFR-XXX-1372", "RK73H2ATTD1372F", "CUST-ORD-7", 1, "PO-CUST-ORD-7", "CP-RK73H2ATTD1372F", 100],
+        ["MFR-XXX-1372", "RK73H2ATTD1372F", "", 2, "", "", 150],
       ]
     );
   } finally {

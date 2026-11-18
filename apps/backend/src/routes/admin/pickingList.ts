@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../../db.js";
 import { loadPickingListDocument } from "../../export/picking-list/data.js";
+import { enrichCustRefs } from "../../export/picking-list/custRefs.js";
 import "../../export/picking-list/render/default.js"; // registers the default renderer
 import "../../export/picking-list/render/sz.js"; // registers the warehouse-scoped SZ variant
 import { resolveRenderer } from "../../export/registry.js";
@@ -26,9 +27,12 @@ export const adminPickingListRoute = new Hono();
 
 adminPickingListRoute.get("/picking-orders/:id/picking-list", async (c) => {
   const doc = await loadPickingListDocument(db, c.req.param("id"));
+  const warehouse = exportWarehouseCode();
+  // SZ layout prints customer PO / part refs from the DocPal oracle API.
+  if (warehouse === "sz") await enrichCustRefs(doc);
   const renderer = resolveRenderer<PickingListDocument>("picking-list", {
     customerCode: doc.head.customerCode,
-    warehouse: exportWarehouseCode(),
+    warehouse,
   });
   const { fileName, buffer } = await renderer.render(doc);
   return new Response(new Uint8Array(buffer), {
@@ -42,7 +46,10 @@ adminPickingListRoute.get("/picking-orders/:id/picking-list", async (c) => {
 
 adminPickingListRoute.get("/picking-orders/:id/picking-list-document", async (c) => {
   const doc = await loadPickingListDocument(db, c.req.param("id"));
+  const warehouse = exportWarehouseCode();
+  // SZ layout prints customer PO / part refs from the DocPal oracle API.
+  if (warehouse === "sz") await enrichCustRefs(doc);
   // The instance's warehouse rides along so client-side renderers (the
   // admin PNG print) can pick the same layout the xlsx renderer resolved.
-  return c.json({ ...doc, warehouse: exportWarehouseCode() });
+  return c.json({ ...doc, warehouse });
 });
