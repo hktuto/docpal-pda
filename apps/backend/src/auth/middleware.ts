@@ -20,6 +20,11 @@ function isOpenPath(path: string, method: string): boolean {
   // decodes a raw scan value against the supplier QR templates, no mutation,
   // no user data in the response. Usage doc: docs/backend/scan-decode-api.md.
   if (path === "/scan/decode" && method === "POST") return true;
+  // Public KOA lot-code → date-code helper (2026-11-18): same read-only,
+  // no-user-data rationale as /scan/decode.
+  if (path === "/scan/koa-date-code" && method === "POST") return true;
+  // Public date-code → KOA lot-code helper (reverse direction, 2026-11-18).
+  if (path === "/scan/koa-lot-code" && method === "POST") return true;
   if (path.startsWith("/dev/lab")) return true; // Dev Lab stays open (browser page, read-only)
   // /dev/allocate requires a bearer token (audit 2026-11-06 #1).
   return false;

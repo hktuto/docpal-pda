@@ -2,7 +2,10 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import { db } from "../db.js";
+import { dateCodeFormat } from "../config.js";
 import { decodeScan } from "../decode/index.js";
+import { getDecodeData } from "../decode/cache.js";
+import { formatKoaLotDateCodes, resolveKoaLotDate, encodeKoaLotDate, getIsoWeekMonday } from "../decode/codecs.js";
 
 async function readJson<T>(c: Context): Promise<T> {
   const text = await c.req.text();
@@ -55,4 +58,94 @@ scanDecodeRoute.post("/scan/decode", async (c) => {
     brands: optionalStringArray(body.brands, "brands"),
   });
   return c.json(result, 200);
+});
+
+// Public KOA lot-code → date-code helper (same openness rationale as
+// /scan/decode): a KOA reel LOT NO leads with a 2-digit month counter + 2-digit
+// day that only resolve to a real date against the date_code_counter_periods
+// cycles — external systems should not reimplement that. Body:
+// { lotCode, asOf? } — asOf (YYYY-MM-DD) pins the counter-era pick for
+// historical lots (the counter rolls 10→99 and restarts every 90 months, so
+// the same value recurs per cycle; default reference is today, latest
+// not-in-future cycle wins). Response: { yyww, yymmdd, wwyy } — canonical
+// YYWW, the exact calendar date YYMMDD, and the label-format code per this
+// warehouse's dateCodeFormat. Unresolvable codes return 200 with nulls +
+// a reason (mirroring /scan/decode's matched:false philosophy); usage doc
+// docs/backend/scan-decode-api.md.
+scanDecodeRoute.post("/scan/koa-date-code", async (c) => {
+  const body = await readJson<{ lotCode?: unknown; asOf?: unknown }>(c);
+  if (typeof body.lotCode !== "string" || !body.lotCode.trim()) {
+    throw new HTTPException(400, { message: "invalid_payload: lotCode must be a non-empty string" });
+  }
+  let asOf: Date | undefined;
+  if (body.asOf !== undefined && body.asOf !== null) {
+    if (typeof body.asOf !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.asOf)) {
+      throw new HTTPException(400, { message: "invalid_payload: asOf must be a YYYY-MM-DD date string" });
+    }
+    asOf = new Date(`${body.asOf}T00:00:00`);
+    if (Number.isNaN(asOf.getTime())) {
+      throw new HTTPException(400, { message: "invalid_payload: asOf is not a real calendar date" });
+    }
+  }
+  const { periods } = await getDecodeData(db);
+  const resolution = resolveKoaLotDate(body.lotCode.trim(), periods, asOf ?? new Date());
+  if (!resolution) {
+    return c.json({ yyww: null, yymmdd: null, wwyy: null, reason: "unresolvable_lot_code" }, 200);
+  }
+  return c.json(formatKoaLotDateCodes(resolution, dateCodeFormat()), 200);
+});
+
+// Public reverse helper (2026-11-18): date code → KOA lot-code digits, for
+// external systems that hold a date code (e.g. from our receiving data) and
+// need the counter+day digits printed at the head of a KOA LOT NO. Body:
+// exactly one of { yyww, yymmdd, wwyy } — the same fields the forward helper
+// /scan/koa-date-code returns, so its response round-trips. The week-based
+// inputs encode the Monday of the ISO week (same rule as label printing);
+// yymmdd encodes the exact date (20yy always meant literally). Response:
+// { lotCodeDigits, counter, day }; a month no seeded cycle covers → 200 with
+// nulls + reason. Note lotCodeDigits is the leading digits only — the LOT
+// NO's trailing suffix (e.g. "Q156") is not derived from the date.
+scanDecodeRoute.post("/scan/koa-lot-code", async (c) => {
+  const body = await readJson<{ yyww?: unknown; yymmdd?: unknown; wwyy?: unknown }>(c);
+  const provided = (["yyww", "yymmdd", "wwyy"] as const).filter(
+    (k) => body[k] !== undefined && body[k] !== null
+  );
+  if (provided.length !== 1) {
+    throw new HTTPException(400, { message: "invalid_payload: exactly one of yyww, yymmdd, wwyy is required" });
+  }
+  const key = provided[0];
+  const value = body[key];
+  if (typeof value !== "string") {
+    throw new HTTPException(400, { message: `invalid_payload: ${key} must be a string` });
+  }
+  let date: Date;
+  if (key === "yymmdd") {
+    if (!/^\d{6}$/.test(value)) {
+      throw new HTTPException(400, { message: "invalid_payload: yymmdd must be a 6-digit YYMMDD string" });
+    }
+    const yy = Number(value.slice(0, 2));
+    const mm = Number(value.slice(2, 4));
+    const dd = Number(value.slice(4, 6));
+    date = new Date(Date.UTC(2000 + yy, mm - 1, dd));
+    if (date.getUTCFullYear() !== 2000 + yy || date.getUTCMonth() !== mm - 1 || date.getUTCDate() !== dd) {
+      throw new HTTPException(400, { message: "invalid_payload: yymmdd is not a real calendar date" });
+    }
+  } else {
+    if (!/^\d{4}$/.test(value)) {
+      throw new HTTPException(400, { message: `invalid_payload: ${key} must be a 4-digit string` });
+    }
+    const week = key === "yyww" ? Number(value.slice(2, 4)) : Number(value.slice(0, 2));
+    const yy = key === "yyww" ? Number(value.slice(0, 2)) : Number(value.slice(2, 4));
+    if (week < 1 || week > 53) {
+      throw new HTTPException(400, { message: `invalid_payload: ${key} week must be 01-53` });
+    }
+    date = getIsoWeekMonday(2000 + yy, week);
+  }
+  const { periods } = await getDecodeData(db);
+  const encoding = encodeKoaLotDate(date, periods);
+  if (!encoding) {
+    return c.json({ lotCodeDigits: null, counter: null, day: null, reason: "date_outside_counter_periods" }, 200);
+  }
+  const { lotCodeDigits, counter, day } = encoding;
+  return c.json({ lotCodeDigits, counter, day }, 200);
 });

@@ -98,6 +98,89 @@ curl -X POST "http://127.0.0.1:3002/scan/decode" \
 | 400 | 请求体不合法，例如 `raw` 缺失 / 不是字符串，或 `targets`、`brands` 不是字符串数组 |
 | 405 | 方法错误（只接受 POST） |
 
+## KOA 批次號 → 日期碼轉換（輔助接口）
+
+`POST /scan/koa-date-code` 把 KOA 標籤上的批次號（LOT NO）轉換回日期碼。KOA 批次號以「2 位月計數 + 2 位日期」開頭（例如 `5420Q156` 的 `5420`）：月計數每 90 個月循環一次（10→99 後重新開始），必須對照本服務的 `date_code_counter_periods` 週期表才能還原真實日期——第三方系統不需要自行實作這套規則。
+
+- 同樣自 2026-11-18 起**對第三方系統公開**，**不需要 Bearer Token**，只讀操作。
+- `wwyy` 欄位依本倉 flow config 的 `dateCodeFormat`（香港倉為 `wwyy`）。
+
+### 请求
+
+```
+POST {后端地址}/scan/koa-date-code
+Content-Type: application/json
+```
+
+### 请求体参数
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `lotCode` | string | **是** | KOA 標籤上的批次號（LOT NO），原樣傳入；只有開頭的數字會被使用，後面的字母尾綴不影響結果 |
+| `asOf` | string | 否 | `YYYY-MM-DD` 參考日期。同一個月計數會在每個週期重複出現，預設以「今天」為準選擇**不在未來**的最近一個週期；查歷史批次時建議傳入該批次的收貨日期，避免滾動後撞到舊週期 |
+
+### 响应
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `yyww` | string \| null | 標準日期碼（2 位 ISO 年 + 2 位 ISO 週），例如 `"2207"` |
+| `yymmdd` | string \| null | 批次號還原出的實際日期（YYMMDD），例如 `"220220"`；保留了週格式會丟掉的具體日子 |
+| `wwyy` | string \| null | 標籤格式日期碼（依本倉 `dateCodeFormat`，香港倉為 WWYY），例如 `"0722"` |
+| `reason` | string | 只有解析失敗時出現，固定為 `"unresolvable_lot_code"` |
+
+### 请求示例
+
+```bash
+curl -X POST "http://127.0.0.1:3002/scan/koa-date-code" \
+  -H "Content-Type: application/json" \
+  -d '{ "lotCode": "5420Q156", "asOf": "2023-01-01" }'
+```
+
+### 响应示例
+
+```json
+{ "yyww": "2207", "yymmdd": "220220", "wwyy": "0722" }
+```
+
+解析失敗（批次號不是數字開頭、計數超出週期範圍、日期不可能存在如 2 月 30 日）會回 **HTTP 200**，但三個欄位為 `null` 並附 `reason`（與 `/scan/decode` 的 `matched:false` 同一套理念）。
+
+## 日期碼 → KOA 批次號（反向輔助接口）
+
+`POST /scan/koa-lot-code` 是上面的反向接口：給定日期碼，算出 KOA 批次號開頭的「月計數 + 日期」4 位數字（例如 `5420`）。適用情境：外部系統握有日期碼（例如本系統收貨資料中的日期碼），需要列印或核對 KOA 相容標籤。
+
+- 同樣自 2026-11-18 起**公開**，**不需要 Bearer Token**，只讀操作。
+- 請求體與正向接口的回傳欄位同名，**三個欄位必須恰好填一個**，方便把正向接口的回應直接回填：
+  | 欄位 | 說明 |
+  |---|---|
+  | `yyww` | 標準日期碼，如 `"2207"`；取該 ISO 週的**星期一**編碼（與標籤列印同一規則） |
+  | `yymmdd` | 精確日期，如 `"220220"`；按該日編碼 |
+  | `wwyy` | 標籤格式日期碼，如 `"0722"`；同樣取該週的星期一 |
+
+### 响应
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `lotCodeDigits` | string \| null | 批次號開頭的 4 位數字（月計數 + 日期），例如 `"5420"` |
+| `counter` | number \| null | 月計數，例如 `54` |
+| `day` | number \| null | 日期數字，例如 `20` |
+| `reason` | string | 只有編碼失敗時出現，固定為 `"date_outside_counter_periods"` |
+
+> 注意：`lotCodeDigits` 是標籤上 LOT NO 的**開頭數字部分**；尾綴（如 `Q156`）不由日期決定，無法由此產生。日期超出所有週期範圍（早於 2010/12，或晚於最後一個週期的 2033/05）會回 HTTP 200 但欄位為 `null`。
+
+### 请求示例
+
+```bash
+curl -X POST "http://127.0.0.1:3002/scan/koa-lot-code" \
+  -H "Content-Type: application/json" \
+  -d '{ "yymmdd": "220220" }'
+```
+
+### 响应示例
+
+```json
+{ "lotCodeDigits": "5420", "counter": 54, "day": 20 }
+```
+
 ## 注意事项
 
 1. **无需鉴权**：任何人能访问到后端地址即可调用，请确保后端只在内网 / 受控网络中暴露。
