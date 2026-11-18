@@ -42,5 +42,7 @@ adminPickingListRoute.get("/picking-orders/:id/picking-list", async (c) => {
 
 adminPickingListRoute.get("/picking-orders/:id/picking-list-document", async (c) => {
   const doc = await loadPickingListDocument(db, c.req.param("id"));
-  return c.json(doc);
+  // The instance's warehouse rides along so client-side renderers (the
+  // admin PNG print) can pick the same layout the xlsx renderer resolved.
+  return c.json({ ...doc, warehouse: exportWarehouseCode() });
 });

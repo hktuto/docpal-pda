@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickingListDocToPrintDoc, type PickingListDocument } from "~/utils/documentPrintPicking";
+import { pickingListDocToPrintDoc, type PickingListDocument, type PickingListGroup } from "~/utils/documentPrintPicking";
 
 const HEAD: PickingListDocument["head"] = {
   orderId: "order-1",
@@ -14,8 +14,18 @@ const HEAD: PickingListDocument["head"] = {
   remark: null,
 };
 
-function doc(groups: PickingListDocument["groups"]): PickingListDocument {
-  return { head: HEAD, generatedAt: "2026-11-06T08:00:00Z", groups };
+// The default (merged) layout ignores mfrPartNo/lines — fixtures only set
+// them when they exercise the SZ variant.
+type GroupFixture = Omit<PickingListGroup, "mfrPartNo" | "lines"> &
+  Partial<Pick<PickingListGroup, "mfrPartNo" | "lines">>;
+
+function doc(groups: GroupFixture[], warehouse?: string): PickingListDocument {
+  return {
+    head: HEAD,
+    generatedAt: "2026-11-06T08:00:00Z",
+    groups: groups.map((g) => ({ mfrPartNo: null, lines: [], ...g })),
+    ...(warehouse ? { warehouse } : {}),
+  };
 }
 
 describe("pickingListDocToPrintDoc", () => {
@@ -132,5 +142,71 @@ describe("pickingListDocToPrintDoc", () => {
     // Widest column = Part Number (26), narrowest = Item Qty / Picked Qty (10).
     expect(d.table.columns[0].weight).toBeCloseTo(26 / 168, 10);
     expect(d.table.columns[1].weight).toBeCloseTo(10 / 168, 10);
+  });
+});
+
+describe("pickingListDocToPrintDoc — SZ warehouse variant", () => {
+  it("renders one product row per picking item line with Part No / WCL Item No / Order No / Line No", () => {
+    const d = pickingListDocToPrintDoc(
+      doc(
+        [
+          {
+            partNo: "WCL-1",
+            mfrPartNo: "MFR-1",
+            qty: 15,
+            allocatedQty: 10,
+            pickedQty: 0,
+            allocs: [],
+            lines: [
+              {
+                orderNo: "CUST-ORD-7",
+                lineNumber: 1,
+                mfrPartNo: "MFR-1",
+                qty: 10,
+                allocatedQty: 10,
+                pickedQty: 0,
+                allocs: [{ kind: "receiving", receivingBatchNo: "RB-9", qty: 10 }],
+              },
+              {
+                orderNo: null,
+                lineNumber: 2,
+                mfrPartNo: "MFR-1",
+                qty: 5,
+                allocatedQty: 0,
+                pickedQty: 0,
+                allocs: [],
+              },
+            ],
+          },
+        ],
+        "sz"
+      )
+    );
+
+    expect(d.table.columns.map((c) => c.header).slice(0, 7)).toEqual([
+      "Part No",
+      "WCL Item No",
+      "Order No",
+      "Line No",
+      "Item Qty",
+      "Allocated Qty",
+      "Picked Qty",
+    ]);
+    // Lines are NOT merged: one row per line, each with its own order_no.
+    expect(d.table.rows).toEqual([
+      ["MFR-1", "WCL-1", "CUST-ORD-7", 1, 10, 10, 0, "Receiving RB-9", "(dock)", "", "", "", "", "", 10],
+      ["MFR-1", "WCL-1", "", 2, 5, 0, 0, "(no allocation)", "", "", "", "", "", "", ""],
+    ]);
+    // The SZ xlsx has no totals row.
+    expect(d.table.totals).toEqual([]);
+  });
+
+  it("keeps the default merged layout when warehouse is absent or hk", () => {
+    const group: GroupFixture = { partNo: "P1", qty: 10, allocatedQty: 10, pickedQty: 0, allocs: [] };
+    for (const warehouse of [undefined, "hk"]) {
+      const d = pickingListDocToPrintDoc(doc([group], warehouse));
+      expect(d.table.columns[0]!.header).toBe("Part Number");
+      expect(d.table.totals).toEqual(["Total", 10, 10, 0, "", "", "", "", "", "", "", ""]);
+    }
   });
 });

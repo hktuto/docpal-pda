@@ -19,6 +19,10 @@ import { insertReceivingOrder, insertPickingOrder } from "../../db/test-fixtures
 import { allocateAll } from "../../db/allocate.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
+// Deterministic warehouse for the HK-layout assertions: a developer's
+// .env may set WAREHOUSE_CODE (e.g. "sz" while testing the SZ layout) and
+// the app loads .env at import time — pin it here; the SZ test overrides.
+process.env.WAREHOUSE_CODE = "hk";
 
 let client: TestDb;
 let app: (typeof import("../../index.js"))["app"];
@@ -371,11 +375,12 @@ test("GET picking-list-document: per-line rows carry upstream order_no and line_
     UPDATE picking_items SET additional_data = jsonb_build_object('order_no', 'CUST-ORD-42')
     WHERE picking_order_id = ${orderId} AND line_number = 3
   `);
-  // Manufacturer part_no distinct from the wcl_item_no (MIN() wins over the
-  // demo seed's RK73… row: "MFR-…" < "RK73…").
+  // Manufacturer part_no distinct from the wcl_item_no (MIN() has only this
+  // one row for the key after the UPDATE). The demo row for this key is
+  // re-seeded every run, so an in-place UPDATE is run-to-run safe; a second
+  // INSERT would violate parts_wcl_item_no_unique.
   await client.db.execute(sql`
-    INSERT INTO parts (id, part_no, wcl_item_no, brand, created_date, last_update_date)
-    VALUES ('PART-MFR-1372', 'MFR-XXX-1372', 'RK73H2ATTD1372F', 'KOA', now(), now())
+    UPDATE parts SET part_no = 'MFR-XXX-1372' WHERE wcl_item_no = 'RK73H2ATTD1372F'
   `);
 
   const res = await req(`/admin/picking-orders/${orderId}/picking-list-document`);
@@ -388,7 +393,11 @@ test("GET picking-list-document: per-line rows carry upstream order_no and line_
   // order_no / line_number / qty.
   const lines = doc.groups[0].lines;
   assert.deepEqual(
-    lines.map((l: Record<string, unknown>) => [l.mfrPartNo, l.orderNo, l.lineNumber, l.qty]),
+    // Line order is created_date/id-based (same-transaction inserts share a
+    // timestamp) — assert per-line content regardless of order.
+    lines
+      .map((l: Record<string, unknown>) => [l.mfrPartNo, l.orderNo, l.lineNumber, l.qty])
+      .sort((a: unknown[], b: unknown[]) => Number(a[2]) - Number(b[2])),
     [
       ["MFR-XXX-1372", "CUST-ORD-42", 3, 100],
       ["MFR-XXX-1372", null, 7, 150],
@@ -411,9 +420,10 @@ test("GET picking-list: WAREHOUSE_CODE=sz renders the per-line SZ layout", async
     UPDATE picking_items SET additional_data = jsonb_build_object('order_no', 'CUST-ORD-7')
     WHERE picking_order_id = ${orderId} AND line_number = 1
   `);
+  // Distinct manufacturer part_no on the demo seed's row (unique
+  // wcl_item_no — see the document-JSON test above).
   await client.db.execute(sql`
-    INSERT INTO parts (id, part_no, wcl_item_no, brand, created_date, last_update_date)
-    VALUES ('PART-MFR-1372', 'MFR-XXX-1372', 'RK73H2ATTD1372F', 'KOA', now(), now())
+    UPDATE parts SET part_no = 'MFR-XXX-1372' WHERE wcl_item_no = 'RK73H2ATTD1372F'
   `);
 
   process.env.WAREHOUSE_CODE = "sz";
@@ -429,14 +439,19 @@ test("GET picking-list: WAREHOUSE_CODE=sz renders the per-line SZ layout", async
       "Item Qty", "Allocated Qty", "Picked Qty", "Source",
     ]);
 
-    // Same-part lines are NOT merged: two product rows, each carrying its
-    // own part_no / wcl_item_no / order_no / line_number.
+    // Lines are NOT merged: one row per line, each carrying its own
+    // part_no / wcl_item_no / order_no / line_number. Row order is
+    // created_date/id-based (racy within one transaction) — sort by the
+    // printed line number before comparing.
     const data = rows.slice(12);
-    assert.deepEqual(data.map((r) => r.slice(0, 5)), [
-      ["MFR-XXX-1372", "RK73H2ATTD1372F", "CUST-ORD-7", 1, 100],
-      ["MFR-XXX-1372", "RK73H2ATTD1372F", "", 2, 150],
-    ]);
+    assert.deepEqual(
+      data.map((r) => r.slice(0, 5)).sort((a, b) => Number(a[3]) - Number(b[3])),
+      [
+        ["MFR-XXX-1372", "RK73H2ATTD1372F", "CUST-ORD-7", 1, 100],
+        ["MFR-XXX-1372", "RK73H2ATTD1372F", "", 2, 150],
+      ]
+    );
   } finally {
-    delete process.env.WAREHOUSE_CODE;
+    process.env.WAREHOUSE_CODE = "hk";
   }
 });
