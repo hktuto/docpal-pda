@@ -739,6 +739,9 @@ function onChooseBox(boxId: string) {
 const displayBoxes = computed(() => {
   const own = order.value?.boxes ?? [];
   const boxId = scanIntoBoxId.value;
+  // Chosen cross-order box stays until unchosen (Choose box again / page
+  // reload), even after this order's packages land in it — the operator may
+  // keep packing or move items out.
   if (!boxId || !order.value || own.some((b) => b.id === boxId)) return own;
   // Items of OTHER orders already packed in the armed box (cross-order packing
   // by scans from the armed box's own page) — surfaced via boxContents.
@@ -800,7 +803,7 @@ async function addAllToBox(boxId: string) {
   addingAll.value[boxId] = true;
   error.value = null;
   try {
-    await warehouse.addAllUnboxedPackagesToBox(boxId);
+    await warehouse.addAllUnboxedPackagesToBox(boxId, orderId);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -865,6 +868,9 @@ async function removeScan(packageId: string) {
   removingScans.value[packageId] = true;
   try {
     await warehouse.removeScannedPackage(packageId);
+    // Let the operator re-scan the same label: the queue's duplicate guard
+    // remembers applied raws, so undoing a scan must forget this one.
+    if (pkg.labelBarcode) session.forgetAppliedRaw(pkg.labelBarcode);
     await load();
   } catch (e) {
     error.value = errorMessage(e);

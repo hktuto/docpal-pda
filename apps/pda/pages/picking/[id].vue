@@ -480,6 +480,9 @@ const unboxedCountForOrder = computed(() => {
 const displayBoxes = computed<PickingBox[]>(() => {
   const own = order.value?.boxes ?? [];
   const boxId = scanIntoBoxId.value;
+  // Chosen cross-order box stays until unchosen (Choose box again / page
+  // reload), even after this order's packages land in it — the operator may
+  // keep packing or move items out.
   if (!boxId || !order.value || own.some((b) => b.id === boxId)) return own;
   // Items of OTHER orders already packed in the armed box (cross-order packing
   // by scans from the armed box's own page) — surfaced via boxContents.
@@ -539,7 +542,7 @@ async function addAllToBox(boxId: string) {
   addingAll.value[boxId] = true;
   error.value = null;
   try {
-    await warehouse.addAllUnboxedPackagesToBox(boxId);
+    await warehouse.addAllUnboxedPackagesToBox(boxId, orderId);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
