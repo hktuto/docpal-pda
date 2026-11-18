@@ -1192,7 +1192,8 @@ export default {
       measuring_finished: "Measuring finished",
       issue: "Issue",
       shipped: "Shipped",
-      cancelled: "Cancelled"
+      cancelled: "Cancelled",
+      COMPLETED: "Completed"
     },
     allocation: {
       allocated: "Allocated",

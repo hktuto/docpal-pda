@@ -1190,7 +1190,8 @@ export default {
       measuring_finished: "複核完成",
       issue: "異常",
       shipped: "已出貨",
-      cancelled: "已取消"
+      cancelled: "已取消",
+      COMPLETED: "已完成"
     },
     allocation: {
       allocated: "已分配",
