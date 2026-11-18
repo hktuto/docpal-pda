@@ -27,6 +27,8 @@ export const scanDecodeRoute = new Hono();
 // Server-side decode of a raw label scan value against the supplier QR
 // templates (the decode that needs DB lookups — supplier_profiles +
 // date_code_counter_periods + flow-config dateCodeFormat).
+// PUBLIC endpoint (no bearer token) since 2026-11-18 — external systems call
+// it to decode supplier labels; see docs/backend/scan-decode-api.md.
 // Body: { raw, targets?, supplierCode?, brands? } (targets/supplierCode/brands
 // carry the client's order context, same inputs as parseQrCapture).
 // Response: the PDA `OcrParseResult` shape minus `raw` (parsed/options/

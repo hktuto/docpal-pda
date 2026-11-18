@@ -142,9 +142,13 @@ test("decodeScan targets gate matches by wcl_item_no and unwrapped keys too", as
 
 // --- POST /scan/decode (route) -------------------------------------------------
 
-test("POST /scan/decode requires a bearer token", async () => {
+test("POST /scan/decode is public (no bearer token required)", async () => {
+  // Open-path since 2026-11-18 (docs/backend/scan-decode-api.md) — external
+  // systems decode labels without credentials; still validates the payload.
   const res = await postDecode(null, { raw: "anything" });
-  assert.equal(res.status, 401);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.matched, false);
 });
 
 test("POST /scan/decode validates the payload", async () => {

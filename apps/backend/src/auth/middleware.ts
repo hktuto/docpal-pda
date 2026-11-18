@@ -16,6 +16,10 @@ function isOpenPath(path: string, method: string): boolean {
   if (path === "/latency-ping") return true; // latency probe, leaks nothing
   if (path === "/auth/login" && method === "POST") return true;
   if (path === "/auth/login-token" && method === "POST") return true;
+  // Public label-decode API for external systems (2026-11-18): read-only —
+  // decodes a raw scan value against the supplier QR templates, no mutation,
+  // no user data in the response. Usage doc: docs/backend/scan-decode-api.md.
+  if (path === "/scan/decode" && method === "POST") return true;
   if (path.startsWith("/dev/lab")) return true; // Dev Lab stays open (browser page, read-only)
   // /dev/allocate requires a bearer token (audit 2026-11-06 #1).
   return false;
