@@ -123,7 +123,12 @@ export interface PickingItemRow {
     /** The label's own drawing code as scanned (2026-11-19 scan-truth:
      *  NCC's itemId). NULL for legacy rows — Excel falls back to drawingNo. */
     scannedDrawingNo?: string | null;
+    scannedPartNo?: string | null;
+    scannedWclItemNo?: string | null;
   }[];
+  /** Order-level scan record (2026-11-19 aggregate scan-record): unbound
+   *  reel-scan packages — one row per scan, independent of line items. */
+  orderScanRecord?: PickingOrderDetail["items"][number]["packages"];
 }
 
 export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | "totalQty" | "pickedQty" | "prioritySeq" | "workingBy" | "workingByName" | "hasOutdatedAllocations"> {

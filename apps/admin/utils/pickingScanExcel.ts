@@ -42,6 +42,8 @@ export function canonicalDateCodeToYyyymmdd(code: string | null | undefined): st
   return `${y}${m}${d}`;
 }
 
+type PickingPackage = PickingOrderDetail["items"][number]["packages"][number];
+
 export interface PickingScanExcelInput {
   order: PickingOrderDetail;
   /** Date-code format config (canonical YYWW vs label WWYY) — used to
@@ -59,27 +61,34 @@ export function buildPickingScanAoa(
   const boxIds = (order.boxes ?? []).map((b) => b.id);
   const rows: (string | number)[][] = [[...PICKING_SCAN_EXCEL_HEADERS]];
   let seq = 1;
+  const emit = (wcl: string, p: PickingPackage) => {
+    const canonical = p.scannedDateCode ?? p.dateCode;
+    const yyyymmdd = canonicalDateCodeToYyyymmdd(canonical) ?? "";
+    const original = canonical ? (toLabelDateCode(canonical, dateCodeFormat) ?? canonical) : "";
+    const boxIdx = p.shippingBoxId ? boxIds.indexOf(p.shippingBoxId) : -1;
+    rows.push([
+      seq++,
+      order.orderNo,
+      wcl,
+      p.qty,
+      yyyymmdd,
+      original,
+      p.scannedCoo ?? p.coo ?? "",
+      p.scannedCow ?? p.cow ?? "",
+      p.scannedDrawingNo ?? p.drawingNo ?? "",
+      boxIdx >= 0 ? boxIdx + 1 : "",
+      boxIdx >= 0 ? `${boxIdx + 1}/${boxIds.length}` : "",
+    ]);
+  };
+  // Per-item packages first (item-bound rows, legacy + item scans), then the
+  // order-level scan record (unbound aggregate rows, 2026-11-19) — the flat
+  // one-line-per-scan truth.
   for (const item of order.items ?? []) {
     if (item.status === "cancelled") continue;
-    for (const p of item.packages ?? []) {
-      const canonical = p.scannedDateCode ?? p.dateCode;
-      const yyyymmdd = canonicalDateCodeToYyyymmdd(canonical) ?? "";
-      const original = canonical ? (toLabelDateCode(canonical, dateCodeFormat) ?? canonical) : "";
-      const boxIdx = p.shippingBoxId ? boxIds.indexOf(p.shippingBoxId) : -1;
-      rows.push([
-        seq++,
-        order.orderNo,
-        item.wclItemNo ?? item.partNo,
-        p.qty,
-        yyyymmdd,
-        original,
-        p.scannedCoo ?? p.coo ?? "",
-        p.scannedCow ?? p.cow ?? "",
-        p.scannedDrawingNo ?? p.drawingNo ?? "",
-        boxIdx >= 0 ? boxIdx + 1 : "",
-        boxIdx >= 0 ? `${boxIdx + 1}/${boxIds.length}` : "",
-      ]);
-    }
+    for (const p of item.packages ?? []) emit(item.wclItemNo ?? item.partNo, p);
+  }
+  for (const p of order.orderScanRecord ?? []) {
+    emit(p.scannedWclItemNo ?? p.scannedPartNo ?? "", p);
   }
   return rows;
 }
