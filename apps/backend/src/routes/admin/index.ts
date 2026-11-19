@@ -31,6 +31,7 @@ import { adminFlowConfigRoute } from "./flowConfig.js";
 import { adminReceivingShipperRoute } from "./receivingShipper.js";
 import { adminPartsLookupRoute } from "./partsLookup.js";
 import { adminCustItemLookupRoute } from "./custItemLookup.js";
+import { adminCustPartRefsRoute } from "./custPartRefs.js";
 import { adminPickingListRoute } from "./pickingList.js";
 import { shelfBatchImportRoute } from "./shelfBatchImport.js";
 import { adminAllocationRoute } from "./allocation.js";
@@ -496,6 +497,10 @@ adminRoute.route("/", adminPartsLookupRoute);
 // Batch CUST_ITEM_NUMBER + part-description lookup for the Custom Print Label
 // CSV upload (src/db/custItemLookup.ts).
 adminRoute.route("/", adminCustItemLookupRoute);
+
+// DocPal customer part-number lookup for the Custom Print Label box labels
+// (routes/admin/custPartRefs.ts).
+adminRoute.route("/", adminCustPartRefsRoute);
 
 // Task assignee management for the PDA queues (spec
 // 2026-11-01-task-assignee-design.md).

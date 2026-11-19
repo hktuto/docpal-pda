@@ -119,10 +119,32 @@ export async function nextSeqValues(key: string, count: number): Promise<number>
   return start;
 }
 
-export async function convertToPrintData(csvData: Record<string, string>[]) {
-  // get order CUST_ITEM_NUMBER form mapping
+/** DocPal cust_part_no per (orderNo, wclItemNo) — the rohs-7 box label's
+ *  item partNumber. Backend proxy POST /admin/cust-part-refs (DocPal oracle
+ *  order-item-refs); fail-soft, missing = null → printed empty. */
+export interface CustPartRefResult {
+  orderNo: string;
+  wclItemNo: string;
+  custPartNo: string | null;
+}
+
+async function lookupCustPartNos(csvData: Record<string, string>[]): Promise<CustPartRefResult[]> {
+  const pairs = new Set(csvData.map((r) => `${r["單號"] ?? ""}|${r["物料號"] ?? ""}`));
+  if (pairs.size === 0) return [];
   const api = useApi();
+  const lines = [...pairs].map((key) => {
+    const [orderNo, wclItemNo] = key.split("|");
+    return { orderNo, wclItemNo };
+  });
+  const { results } = await api.post<{ results: CustPartRefResult[] }>("/admin/cust-part-refs", { lines });
+  return results;
+}
+
+export async function convertToPrintData(csvData: Record<string, string>[]) {
+  const api = useApi();
+  // get order CUST_ITEM_NUMBER form mapping
   const custItems = await lookupCustItemNumbers(csvData);
+  const custPartRefs = await lookupCustPartNos(csvData);
   const VENDER_CODE = 71279;
 
   // Resolve the order/part info for a CSV row; null = skipped row (no MOQ or
@@ -136,18 +158,15 @@ export async function convertToPrintData(csvData: Record<string, string>[]) {
   // 1 label 1 number: pre-count the labels this CSV will produce so one
   // /admin/sequences/next call can reserve the exact contiguous block from the
   // weekly counter (custom_label_weekly_serial, resets every Monday) — each
-  // small label copy and each large (box) label then takes the next serial.
-  let preBoxCount = 0;
+  // small label copy takes the next serial. (Box labels are template rohs-7
+  // and carry no weekly serial.)
   let smallLabelCount = 0;
-  const largeLabelKeys = new Set<string>();
   for (const row of csvData) {
     const custItem = resolveCustItem(row);
     if (!custItem) continue;
-    if (Number(row.物品序列) === 1) preBoxCount++;
     smallLabelCount += Math.floor(Number(row.數量) / custItem.moq);
-    largeLabelKeys.add(`${preBoxCount}|${custItem.partNo}|${row.LOTNO}`);
   }
-  const serialTotal = smallLabelCount + largeLabelKeys.size;
+  const serialTotal = smallLabelCount;
   let nextSerialNo = serialTotal > 0
     ? (await api.post<{ key: string; start: number; count: number }>("/admin/sequences/next", {
         key: "custom_label_weekly_serial",
@@ -156,8 +175,9 @@ export async function convertToPrintData(csvData: Record<string, string>[]) {
     : 1;
   const nextWeekly = () => String(nextSerialNo++).padStart(6, "0");
 
-  // first step loop all row and group largeLabel
+  // first step loop all rows; rows are remembered for the rohs-7 box build
   let currentBoxCount = 0;
+  const boxRows: { boxId: number; orderNo: string; wclItemNo: string; lotNo: string; qty: number }[] = [];
 
   const result = csvData.reduce((f, c) => {
     // check if item new box
@@ -167,7 +187,8 @@ export async function convertToPrintData(csvData: Record<string, string>[]) {
       console.log('no moq item', custItem)
       return f
     }
-     const deliverDay = custItem.deliveryDate.replaceAll('-','').replaceAll('/','')
+    // create delivery date , orginal value : 2026-01-01, need to remove all - and / then remove first 2 letter
+     const deliverDay = custItem.deliveryDate.replaceAll('-','').replaceAll('/','').slice(2)
     // update currentBoxCount
     if (Number(c.物品序列) === 1) {
       currentBoxCount++
@@ -203,49 +224,60 @@ export async function convertToPrintData(csvData: Record<string, string>[]) {
       }
     }))
     // insert to small label
-    // time to group large label
-    // check if same currentBoxCount + partNo + lotCode in largeLabel
-    const existLargeLabel = f.largeLabel
-      .filter((l) => l.boxId === currentBoxCount)
-      .find((l) => l.partNo === custItem.partNo && l.lotNo === c.LOTNO)
-    if (existLargeLabel) {
-      const qty = Number(c.數量)
-      const newQty = existLargeLabel.qty + qty
-      existLargeLabel.qty = newQty
-      existLargeLabel.qty2 = newQty
-      existLargeLabel.qrcode = `${custItem.custItemNumber}*${c.LOTNO}*${c.DATECODE}*${VENDER_CODE}*${newQty}*${VENDER_CODE}${deliverDay}${existLargeLabel.weekly_count}`,
-      existLargeLabel.qrcode2 = `${custItem.orderNo};${custItem.partNo};${newQty};${c.LOTNO};${c.DATECODE}`
-    } else {
-      // a new large (box) label gets its own weekly serial; merging rows reuse it
-      const largeWeekly = nextWeekly()
-      f.largeLabel.push({
-        boxId: currentBoxCount,
-        barcode1: custItem.custItemNumber,
-        dateCode: c.DATECODE,
-        dateCode2: c.DATECODE,
-        deliverDay: deliverDay,
-        description: custItem.partNo,
-        description2: custItem.itemDescription,
-        invNo: c.單號,
-        lotNo: c.LOTNO,
-        lotNo2: c.LOTNO,
-        partNo: custItem.partNo,
-        qrcode: `${custItem.custItemNumber}*${c.LOTNO}*${c.DATECODE}*${VENDER_CODE}*${custItem.moq}*${VENDER_CODE}${deliverDay}${largeWeekly}`,
-        qrcode2: `${custItem.orderNo};${custItem.partNo};${custItem.moq};${c.LOTNO};${c.DATECODE}`,
-        qty: Number(c.數量),
-        qty2: Number(c.數量),
-        reelno: VENDER_CODE+deliverDay+largeWeekly,
-        vendorCode: VENDER_CODE,
-        weekly_count: largeWeekly,
-      })
-    }
+    // remember the row for the rohs-7 box-label build (grouped after the loop)
+    boxRows.push({
+      boxId: currentBoxCount,
+      orderNo: c["單號"],
+      wclItemNo: c["物料號"],
+      lotNo: c.LOTNO,
+      qty: Number(c["數量"]),
+    })
     // update
     return f
   }, {
     smalllabel: [],
-    largeLabel: []
   })
-  return result;
+
+  // Box labels — template rohs-7, one label (one A4 page) per box
+  // (物品序列 = 1 starts a box). items[] = one entry per part+lot group in
+  // the box, in first-appearance order; merged rows accumulate qty.
+  const partNoFor = (orderNo: string, wclItemNo: string): string =>
+    custPartRefs.find(r => r.orderNo === orderNo && r.wclItemNo === wclItemNo)?.custPartNo ?? "";
+  const boxes = new Map<number, typeof boxRows>();
+  for (const r of boxRows) {
+    if (!boxes.has(r.boxId)) boxes.set(r.boxId, []);
+    boxes.get(r.boxId)!.push(r);
+  }
+  const totalBoxes = boxes.size;
+  const boxLabels: Record<string, unknown>[] = [];
+  let page = 0;
+  for (const rowsInBox of boxes.values()) {
+    page++;
+    const first = rowsInBox[0];
+    // group by (wclItemNo, lotNo), first-appearance order
+    const groups: { orderNo: string; wclItemNo: string; lotNo: string; qty: number }[] = [];
+    for (const r of rowsInBox) {
+      const g = groups.find(x => x.wclItemNo === r.wclItemNo && x.lotNo === r.lotNo);
+      if (g) g.qty += r.qty;
+      else groups.push({ orderNo: r.orderNo, wclItemNo: r.wclItemNo, lotNo: r.lotNo, qty: r.qty });
+    }
+    boxLabels.push({
+      items: groups.map((g, i) => ({
+        item: String(i + 1),
+        partNumber: partNoFor(g.orderNo, g.wclItemNo),
+        desc: g.wclItemNo,
+        qty: g.qty.toLocaleString("en-US"),
+        poNumber: g.orderNo,
+        drawingNo: "", // externally managed in our case — always empty
+      })),
+      cusNo: "PRIME",
+      page: String(page),
+      total: String(totalBoxes),
+      qrcode: "", // TODO: box-label QR content not finalised yet
+      cusNo2: `PRIME-${first.orderNo}`,
+    });
+  }
+  return { smalllabel: result.smalllabel, boxLabels };
 }
 
 export function parseCustomLabelCsv(text: string): CustomLabelCsvResult {

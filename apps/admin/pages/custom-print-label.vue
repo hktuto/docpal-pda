@@ -19,6 +19,9 @@ const PREVIEW_LIMIT = 10;
 // printingParams is one entry per A4 page, each carrying up to 12 labels in
 // its items[] (small labels first, then the box labels).
 const CUSTOM_LABEL_TEMPLATE_ID = "a4-lwxy-3-4";
+// Box label template: one full-page label per box (items[] list, cusNo/cusNo2
+// header, rohs-7) — sent as one printingParams entry per box.
+const BOX_LABEL_TEMPLATE_ID = "rohs-7";
 const CUSTOM_LABEL_PAGE_SLOTS = 12;
 // Remembered printer for this page (separate from `label_printer` / `doc_printer`).
 const CUSTOM_LABEL_PRINTER_KEY = "custom_label_printer";
@@ -78,10 +81,11 @@ async function onFile(e: Event) {
 const preparing = ref(false);
 const confirmError = ref("");
 const showConfirm = ref(false);
-const boxCount = ref(0);
 const smallLabelCount = ref(0);
 const labelTotal = ref(0);
+const boxLabelCount = ref(0);
 const printParams = ref<Record<string, unknown>[]>([]);
+const boxParams = ref<Record<string, unknown>[]>([]);
 
 const printers = ref<PrinterInfo[]>([]);
 const printerName = ref("");
@@ -89,6 +93,10 @@ const printing = ref(false);
 const progress = ref("");
 const printError = ref("");
 const printDone = ref(false);
+// Which label set the Print button sends: small (a4-lwxy-3-4) or box (rohs-7).
+const printTarget = ref<"small" | "box">("small");
+const doneCount = ref(0);
+const donePages = ref(0);
 
 const selectedPrinter = computed(() => parsePrinterKey(printerName.value.trim()));
 
@@ -97,27 +105,19 @@ async function confirm() {
   preparing.value = true;
   confirmError.value = "";
   try {
-    const { smalllabel, largeLabel } = await convertToPrintData(rows.value);
-    boxCount.value = largeLabel.length ? largeLabel[largeLabel.length - 1].boxId : 0;
+    const { smalllabel, boxLabels } = await convertToPrintData(rows.value);
     smallLabelCount.value = smalllabel.length;
-    labelTotal.value = smalllabel.length + largeLabel.length;
-    const labels = largeLabel.reduce((ll, l) => {
-      ll.push(l);// put the box label in front
-      // then get all small lable in that box
-      const relatedSmallLabel = smalllabel.filter(s => s.boxId === l.boxId && s.description === l.description && s.lotNo && l.lotNo)
-      ll.push(...relatedSmallLabel);
-      // if boxId is not last box add empty label
-      if (l.boxId !== boxCount.value) {
-        ll.push({})
-      }
-      return ll
-    },[])
-    // const labels = [...smalllabel, ...largeLabel];
+    labelTotal.value = smalllabel.length;
+    boxLabelCount.value = boxLabels.length;
+    // Small labels print on a4-lwxy-3-4 (12 per A4 page); box labels print on
+    // rohs-7 — one full page per box, sent as a separate print job.
+    const labels = [...smalllabel];
     const pages: Record<string, unknown>[] = [];
     for (let i = 0; i < labels.length; i += CUSTOM_LABEL_PAGE_SLOTS) {
       pages.push({ items: labels.slice(i, i + CUSTOM_LABEL_PAGE_SLOTS) });
     }
     printParams.value = pages;
+    boxParams.value = boxLabels;
     showConfirm.value = true;
     printDone.value = false;
     printError.value = "";
@@ -142,22 +142,29 @@ const dlg = useOverlayDismiss(closeConfirm);
 
 async function print() {
   const printer = selectedPrinter.value;
-  if (!printer || printing.value || printParams.value.length === 0) return;
+  const isBox = printTarget.value === "box";
+  const params = isBox ? boxParams.value : printParams.value;
+  if (!printer || printing.value || params.length === 0) return;
   printing.value = true;
   printError.value = "";
   printDone.value = false;
   try {
-    const res = await printDynamic({
-      templateId: CUSTOM_LABEL_TEMPLATE_ID,
-      printingParams: printParams.value,
-      serviceId: printer.serviceId,
-      deviceKey: printer.deviceKey,
-    });
+    const printParams:any = {
+      templateId: isBox ? BOX_LABEL_TEMPLATE_ID : CUSTOM_LABEL_TEMPLATE_ID,
+      printingParams: params,
+    }
+    if (!isBox) {
+      printParams.serviceId = printer.serviceId
+      printParams.deviceKey =  printer.deviceKey
+    }
+    const res = await printDynamic(printParams);
     for (const [i, job] of res.jobs.entries()) {
       progress.value = t("admin.pages.customPrintLabel.job", { n: i + 1, total: res.jobs.length });
       await waitForPrintJob(job.jobId);
     }
     localStorage.setItem(CUSTOM_LABEL_PRINTER_KEY, printerName.value.trim());
+    doneCount.value = isBox ? boxLabelCount.value : labelTotal.value;
+    donePages.value = params.length;
     printDone.value = true;
   } catch (e) {
     printError.value = e instanceof Error ? e.message : String(e);
@@ -234,7 +241,7 @@ const sizeLabel = computed(() =>
       <div class="dialog">
         <button type="button" class="dialog-close" :disabled="printing" @click="closeConfirm" aria-label="Close">&times;</button>
         <h2>{{ t("admin.pages.customPrintLabel.confirmTitle") }}</h2>
-        <p>{{ t("admin.pages.customPrintLabel.confirmSummary", { boxes: boxCount, labels: smallLabelCount, total: labelTotal, pages: printParams.length }) }}</p>
+        <p>{{ t("admin.pages.customPrintLabel.confirmSummary", { labels: smallLabelCount, boxes: boxLabelCount, pages: printParams.length }) }}</p>
 
         <div class="form-row">
           <label for="cl-printer">{{ t("admin.print.printer") }}</label>
@@ -251,7 +258,7 @@ const sizeLabel = computed(() =>
 
         <div v-if="printError" class="error-banner">{{ printError }}</div>
         <div v-if="printDone" class="success-banner">
-          {{ t("admin.pages.customPrintLabel.printSuccess", { count: labelTotal, pages: printParams.length }) }}
+          {{ t("admin.pages.customPrintLabel.printSuccess", { count: doneCount, pages: donePages }) }}
         </div>
 
         <div class="dialog-actions">
@@ -260,10 +267,17 @@ const sizeLabel = computed(() =>
           </button>
           <button
             class="btn btn-primary"
-            :disabled="!selectedPrinter || printing || printParams.length === 0"
-            @click="print"
+            :disabled="!selectedPrinter || printing || boxParams.length === 0"
+            @click="printTarget = 'box'; print()"
           >
-            {{ printing ? t("admin.pages.customPrintLabel.printing", { progress }) : t("admin.print.print") }}
+            {{ printing && printTarget === 'box' ? t("admin.pages.customPrintLabel.printing", { progress }) : t("admin.pages.customPrintLabel.printBoxes", { n: boxLabelCount }) }}
+          </button>
+          <button
+            class="btn btn-primary"
+            :disabled="!selectedPrinter || printing || printParams.length === 0"
+            @click="printTarget = 'small'; print()"
+          >
+            {{ printing && printTarget === 'small' ? t("admin.pages.customPrintLabel.printing", { progress }) : t("admin.print.print") }}
           </button>
         </div>
       </div>
