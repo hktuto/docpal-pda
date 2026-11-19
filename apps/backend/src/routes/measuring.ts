@@ -25,6 +25,7 @@ measuringRoute.post("/measuring-boxes/scan-item", async (c) => {
     orderKey?: string;
     partNo?: string;
     wclItemNo?: string;
+    raw?: string;
   } | null;
   if ((body?.mode !== "measuring" && body?.mode !== "verify") || !body.orderKey?.trim()) {
     throw new HTTPException(400, { message: "invalid_scan_item_input" });
@@ -34,6 +35,7 @@ measuringRoute.post("/measuring-boxes/scan-item", async (c) => {
     orderKey: body.orderKey.trim(),
     partNo: body.partNo,
     wclItemNo: body.wclItemNo,
+    raw: body.raw,
     actorId: actorFrom(c).id,
     username: visibilityUsername(c),
   });

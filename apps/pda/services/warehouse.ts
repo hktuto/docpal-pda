@@ -324,6 +324,9 @@ export interface WarehouseService {
     orderKey: string;
     partNo?: string;
     wclItemNo?: string;
+    /** Raw scan string — exact physical-label proof (one QR cannot finish
+     *  multiple boxes). */
+    raw?: string;
   }): Promise<{ boxId: string; creditedPackages: number; taskCompleted: boolean }>;
 
   // Verify — the second measuring pass, one task per shipping box

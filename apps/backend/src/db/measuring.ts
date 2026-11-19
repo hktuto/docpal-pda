@@ -265,6 +265,10 @@ export async function scanItemCompleteBox(
     orderKey: string;
     partNo?: string;
     wclItemNo?: string;
+    /** Raw scan string — exact physical-label proof (2026-11-19): a box
+     *  whose packages all carry pick-time labels only quick-completes when
+     *  the scan IS one of those labels (per package). */
+    raw?: string;
     actorId: string;
     username?: string;
   }
@@ -312,9 +316,24 @@ export async function scanItemCompleteBox(
     if (!boxIdentity) continue;
     if (!remaining.every((p) => normalizePartNo(p.wclItemNo || p.partNo) === boxIdentity)) continue;
     if (!needles.some((n) => scanIdentityMatches(n, remaining.map((p) => [p.partNo, p.wclItemNo]).flat()))) continue;
+    // Exact-label gate: quick-scan credit is physical-label proof. When a
+    // package carries a pick-time label, the scan must BE that label — one
+    // QR cannot finish multiple boxes; wrong-content labels are rejected by
+    // verifyPackage's known-label content gate.
+    const rawTrim = input.raw?.trim();
+    if (rawTrim) {
+      const known = remaining.filter((p) => p.labelBarcode);
+      if (known.length > 0) {
+        if (!known.every((p) => p.labelBarcode!.trim() === rawTrim)) continue;
+      }
+    }
 
     for (const p of remaining) {
-      await verifyPackage(db, { packageId: p.id, actorId: input.actorId });
+      await verifyPackage(db, {
+        packageId: p.id,
+        actorId: input.actorId,
+        ...(rawTrim ? { barcode: rawTrim } : {}),
+      });
     }
     let taskCompleted = false;
     if (input.mode === "verify" && candidate.taskId) {

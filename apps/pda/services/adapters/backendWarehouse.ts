@@ -780,6 +780,9 @@ export function createBackendWarehouseService(
       orderKey: string;
       partNo?: string;
       wclItemNo?: string;
+      /** Raw scan string — exact physical-label proof (one QR cannot
+       *  finish multiple boxes). */
+      raw?: string;
     }): Promise<{ boxId: string; creditedPackages: number; taskCompleted: boolean }> {
       return client.post("/measuring-boxes/scan-item", input);
     },

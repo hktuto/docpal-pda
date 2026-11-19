@@ -104,7 +104,7 @@ async function tryQuickItemScan(rawValue: string): Promise<boolean> {
   } catch {
     // decode is best-effort — the raw string is still a usable needle
   }
-  const result = await warehouse.scanItemCompleteBox({ mode: "verify", orderKey: orderNo, partNo, wclItemNo });
+  const result = await warehouse.scanItemCompleteBox({ mode: "verify", orderKey: orderNo, partNo, wclItemNo, raw });
   showToast(
     result.taskCompleted
       ? t("verify.itemScanVerified", { boxId: result.boxId })
