@@ -336,7 +336,7 @@ pickingRoute.post("/picking-orders/:id/claim-shelf-box", async (c) => {
 // step is disabled the verify pass runs on the still-open box (the finish
 // spawned the task; verify completion closes the box).
 pickingRoute.post("/packages/:id/verify", async (c) => {
-  const body = await readJson<{ qty?: number; partNo?: string; wclItemNo?: string; coo?: string; dateCode?: string }>(c);
+  const body = await readJson<{ qty?: number; partNo?: string; wclItemNo?: string; coo?: string; dateCode?: string; lotCode?: string; barcode?: string }>(c);
   await verifyPackage(db, {
     packageId: c.req.param("id"),
     actorId: actorFrom(c).id,
@@ -345,6 +345,8 @@ pickingRoute.post("/packages/:id/verify", async (c) => {
     wclItemNo: body.wclItemNo,
     coo: body.coo,
     dateCode: body.dateCode,
+    lotCode: body.lotCode,
+    barcode: body.barcode,
   });
   return c.json({ ok: true }, 200);
 });

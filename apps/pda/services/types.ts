@@ -1547,6 +1547,7 @@ export interface VerifyPackageBatch {
   wclItemNo?: string;
   coo?: string;
   dateCode?: string;
+  lotCode?: string;
   /** Raw pick-time scan string — exact physical-label proof; when the
    *  package's labelBarcode matches a DIFFERENT label, the backend rejects
    *  (409 label_item_mismatch). */

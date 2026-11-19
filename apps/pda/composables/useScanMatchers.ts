@@ -295,6 +295,15 @@ export function useScanMatchers(): ScanMatchers {
         // A scan with no part at all parses to nothing — keep the old
         // part_no_required error for that case.
         if (!parsed.partNo && !parsed.wclItemNo) return error('part_no_required');
+        // Exact-label reject (2026-11-19): the scan's raw code matches some
+        // package's pick-time label, but the parsed batch fields (date/lot/
+        // COO) ruled that package out — the physical label IS known here,
+        // so the scanned content cannot be "right": fail loudly instead of
+        // silently falling through to the field pool.
+        const raw = rawLabel?.trim();
+        if (raw && packages.some((p) => (!targetPackageId || p.id === targetPackageId) && !!p.labelBarcode && p.labelBarcode.trim() === raw)) {
+          return error('label_item_mismatch', { fields: t('verify.labelFields.dateCode') });
+        }
         return { type: 'none' };
       }
 
@@ -315,14 +324,14 @@ export function useScanMatchers(): ScanMatchers {
                   dateCode: parsed.dateCode
                     ? (toCanonicalDateCode(String(parsed.dateCode), format) ?? String(parsed.dateCode))
                     : undefined,
-                  // Exact-label proof: the physical re-scan must be the very
-                  // label the package was picked from (one QR cannot finish
-                  // multiple boxes).
-                  barcode: rawLabel?.trim() || undefined,
+                  lotCode: parsed.lotCode ? String(parsed.lotCode) : undefined,
                 }
               : undefined;
             try {
-              await warehouse.verifyPackage(credit.packageId, credit.qty, batch ?? { barcode: rawLabel?.trim() || undefined });
+              await warehouse.verifyPackage(credit.packageId, credit.qty, {
+                ...(batch ?? {}),
+                barcode: rawLabel?.trim() || undefined,
+              });
             } catch (e: unknown) {
               if (e instanceof ApiError && e.body?.error === 'label_item_mismatch' && Array.isArray(e.body.fields)) {
                 const fields = (e.body.fields as unknown[])

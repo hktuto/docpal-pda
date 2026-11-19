@@ -2788,8 +2788,10 @@ export async function verifyPackage(
     dateCode?: string;
     /** Raw pick-time scan string — exact physical-label proof: when the
      *  package carries a different labelBarcode, the re-scan cannot be the
-     *  same physical label (2026-11-19 aggregate reel scans). */
+     *  same physical label; when it IS the same label, the decoded batch
+     *  fields hard-compare against the anchored values (2026-11-19). */
     barcode?: string;
+    lotCode?: string;
   }
 ): Promise<void> {
   return db.transaction(async (tx) => {
@@ -2806,6 +2808,7 @@ export async function verifyPackage(
       wclItemNo: string | null;
       coo: string | null;
       dateCode: string | null;
+      lotCode: string | null;
       labelBarcode: string | null;
     }>(
       tx,
@@ -2817,7 +2820,8 @@ export async function verifyPackage(
                  COALESCE(pp.scanned_part_no, pi.part_no, pp.picking_part_no) AS "partNo",
                  COALESCE(pp.scanned_wcl_item_no, p.wcl_item_no, pp.picking_part_no) AS "wclItemNo",
                  COALESCE(pp.scanned_coo, pp.coo) AS coo,
-                 COALESCE(pp.scanned_date_code, pp.date_code) AS "dateCode"
+                 COALESCE(pp.scanned_date_code, pp.date_code) AS "dateCode",
+                 COALESCE(pp.scanned_lot_code, pp.lot_code) AS "lotCode"
           FROM picking_packages pp
           LEFT JOIN picking_items pi ON pi.id = pp.picking_item_id
           -- parts wcl_item_no is no longer unique on upstream-synced DBs:
@@ -2839,6 +2843,25 @@ export async function verifyPackage(
           headers: { "content-type": "application/json" },
         }),
       });
+    }
+    // Known-label content gate: the scan's raw code IS this package's label,
+    // so its decoded batch fields must match the package's anchored values
+    // (scanned_* fallback to the source snapshot). An empty package field
+    // cannot contradict the label; every non-empty anchor must match.
+    if (input.barcode !== undefined && pkg.labelBarcode && input.barcode.trim() === pkg.labelBarcode.trim()) {
+      const differing: string[] = [];
+      if (input.dateCode !== undefined && pkg.dateCode && input.dateCode !== pkg.dateCode) differing.push("dateCode");
+      if (input.lotCode !== undefined && pkg.lotCode && input.lotCode !== pkg.lotCode) differing.push("lotCode");
+      if (input.coo !== undefined && pkg.coo && input.coo !== pkg.coo) differing.push("coo");
+      if (input.wclItemNo !== undefined && pkg.wclItemNo && normalizePartNo(input.wclItemNo) !== normalizePartNo(pkg.wclItemNo)) differing.push("wclItemNo");
+      if (differing.length > 0) {
+        throw new HTTPException(409, {
+          res: new Response(JSON.stringify({ error: "label_item_mismatch", fields: differing }), {
+            status: 409,
+            headers: { "content-type": "application/json" },
+          }),
+        });
+      }
     }
     if (pkg.labelVerified) {
       // Part keys compare unwrapped both sides (the record may be the raw
