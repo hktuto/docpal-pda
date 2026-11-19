@@ -1,0 +1,1 @@
+ALTER TABLE "picking_packages" ADD COLUMN "scanned_drawing_no" text;

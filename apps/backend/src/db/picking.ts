@@ -1370,6 +1370,7 @@ export async function getPickingOrderDetail(
             pp.rescanned_qty AS "rescannedQty", pp.label_barcode AS "labelBarcode",
             pp.scanned_date_code AS "scannedDateCode", pp.scanned_lot_code AS "scannedLotCode",
             pp.scanned_coo AS "scannedCoo", pp.scanned_cow AS "scannedCow",
+            pp.scanned_drawing_no AS "scannedDrawingNo",
             pp.shipping_box_id AS "shippingBoxId",
             pp.source_type AS "sourceType", pp.source_id AS "sourceId",
             il.drawing_no AS "drawingNo"
@@ -1493,6 +1494,11 @@ export interface ScanPickingItemInput {
   scannedLotCode?: string | null;
   scannedCoo?: string | null;
   scannedCow?: string | null;
+  /** The label's own drawing code as scanned (2026-11-19 scan-truth: NCC's
+   *  itemId is the numeric drawing code). Stored verbatim on every package
+   *  row; NULL for labels without a drawing code → consumers fall back to
+   *  the inventory_lots.drawing_no join (legacy behavior). */
+  scannedDrawingNo?: string | null;
   /** Sticky shelf-scan context (flow config pickingShelfScan): the shelf/box
    *  the operator last scanned. Ignored in mode "off"; required in the
    *  "require-*" modes (409 shelf_scan_required when absent). */
@@ -1887,16 +1893,17 @@ export async function scanPickingItem(
       const scannedLotCode = input.scannedLotCode?.trim() ? input.scannedLotCode : null;
       const scannedCoo = input.scannedCoo?.trim() ? input.scannedCoo : null;
       const scannedCow = input.scannedCow?.trim() ? input.scannedCow : null;
+      const scannedDrawingNo = input.scannedDrawingNo?.trim() ? input.scannedDrawingNo : null;
       await queryRun(
         tx,
         sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty,
                                          shipping_box_id, date_code, lot_code, coo, cow, label_barcode,
-                                         scanned_part_no, scanned_wcl_item_no,
+                                         scanned_part_no, scanned_wcl_item_no, scanned_drawing_no,
                                          scanned_date_code, scanned_lot_code, scanned_coo, scanned_cow,
                                          created_date, last_update_date)
             VALUES (${pid}, ${item.id}, ${item.pickingOrderId}, ${p.sourceType}, ${p.sourceId}, ${p.qty}, ${box?.id ?? null},
                     ${dateCode}, ${lotCode}, ${coo}, ${cow}, ${input.barcode ?? null},
-                    ${input.scannedPartNo ?? null}, ${input.scannedWclItemNo ?? null},
+                    ${input.scannedPartNo ?? null}, ${input.scannedWclItemNo ?? null}, ${scannedDrawingNo},
                     ${scannedDateCode}, ${scannedLotCode},
                     ${scannedCoo}, ${scannedCow}, ${at}, ${at})`
       );

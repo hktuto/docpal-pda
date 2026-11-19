@@ -427,6 +427,9 @@ test("decodeScan resolves an NCC drawing code past the targets gate (Case B)", a
   assert.equal(result.parsed.itemId, "424307"); // stays the drawing code
   assert.equal(result.parsed.wclItemNo, NCC_WCL_ITEM_NO);
   assert.equal(result.supplier?.code, "23");
+  // Scan-truth echo (2026-11-19): the label's own drawing code rides the
+  // parsed result so the PDA stores it as the package's scanned_drawing_no.
+  assert.equal(result.parsed.drawingNo, "424307");
 });
 
 test("decodeScan attaches the resolved wclItemNo without targets (Case A)", async () => {

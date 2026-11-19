@@ -120,6 +120,9 @@ export interface PickingItemRow {
     /** Drawing number — joined from inventory_lots for lot-sourced packages;
      *  null for receiving-sourced packages. */
     drawingNo: string | null;
+    /** The label's own drawing code as scanned (2026-11-19 scan-truth:
+     *  NCC's itemId). NULL for legacy rows — Excel falls back to drawingNo. */
+    scannedDrawingNo?: string | null;
   }[];
 }
 

@@ -17,6 +17,10 @@ export async function resolve(
 ): Promise<boolean> {
   const drawno = parsed.itemId;
   if (!drawno) return true;
+  // Echo the label's own drawing code on the parsed result (2026-11-19
+  // scan-truth): the PDA stores it as the package's scanned_drawing_no so
+  // the record carries the label identity independent of the lot join.
+  parsed.drawingNo = drawno;
   const wcls = [...new Set((await lookupPartsByDrawingNo(db, drawno)).map((m) => m.wclItemNo))];
   if (!gated) {
     parsed.wclItemNo = wcls[0];

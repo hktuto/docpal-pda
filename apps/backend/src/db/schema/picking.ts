@@ -212,6 +212,10 @@ export const pickingPackages = pgTable(
     scannedLotCode: text("scanned_lot_code"),
     scannedCoo: text("scanned_coo"),
     scannedCow: text("scanned_cow"),
+    // The label's own drawing code as scanned (2026-11-19 scan-truth: NCC's
+    // itemId is the numeric drawing code). NULL for legacy rows and labels
+    // without a drawing code — consumers fall back to the lot join.
+    scannedDrawingNo: text("scanned_drawing_no"),
     verified: boolean("verified").notNull().default(false),
     verifyVerified: boolean("verify_verified").notNull().default(false), // verify-step re-scan flag
     // Aggregate re-scan truth (2026-10-03): credited qty from verify scans —

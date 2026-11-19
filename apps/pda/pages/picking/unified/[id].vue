@@ -491,6 +491,15 @@ async function confirm() {
         // the allocated item's part.
         scannedPartNo: row.scannedPartNo,
         scannedWclItemNo: row.scannedWclItemNo ?? undefined,
+        // The label's batch fields as scanned (2026-11-19 scan-truth fix):
+        // these were decoded but never posted — the record kept the stock
+        // lot's snapshot instead of the label's own values. The drawing code
+        // rides along too (NCC's itemId is the numeric drawing code).
+        scannedDateCode: row.scannedDateCode ?? undefined,
+        scannedLotCode: row.scannedLotCode ?? undefined,
+        scannedCoo: row.scannedCoo ?? undefined,
+        scannedCow: row.scannedCow ?? undefined,
+        scannedDrawingNo: row.scannedDrawingNo ?? undefined,
         // Sticky shelf-scan context (require-* modes): every scan POST
         // carries the shelf/box the operator last scanned.
         shelfCode: requireShelfScan.value ? pendingShelf.value?.shelfCode ?? undefined : undefined,

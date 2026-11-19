@@ -42,6 +42,10 @@ export interface DecodedScan {
     cow?: string;
     wclItemNo?: string;
     serialNo?: string;
+    /** The label's own drawing code (2026-11-19 scan-truth): set by the NCC
+     *  brand resolver from itemId; echoes itemId for NCC-style labels whose
+     *  part identity is a drawing code rather than a supplier part number. */
+    drawingNo?: string;
   };
   options: {
     itemIds: string[];

@@ -111,6 +111,9 @@ export interface ScanQueueRow {
   scannedLotCode: string | null;
   scannedCoo: string | null;
   scannedCow: string | null;
+  /** The label's own drawing code as scanned (2026-11-19 scan-truth: NCC's
+   *  itemId is the numeric drawing code). NULL for whole-carton rows. */
+  scannedDrawingNo: string | null;
   raw: string;
   source: "qr" | "ocr";
   status: "queued" | "applied" | "failed";
@@ -289,6 +292,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
         scannedLotCode: parsed.lotCode || null,
         scannedCoo: parsed.coo || null,
         scannedCow: parsed.cow || null,
+        scannedDrawingNo: parsed.drawingNo || null,
         raw,
         source,
         status: "queued",
@@ -430,6 +434,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
       scannedLotCode: parsed.lotCode || null,
       scannedCoo: parsed.coo || null,
       scannedCow: parsed.cow || null,
+      scannedDrawingNo: parsed.drawingNo || null,
       raw,
       source,
       status: "queued",
@@ -478,6 +483,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
         scannedLotCode: null,
         scannedCoo: null,
         scannedCow: null,
+        scannedDrawingNo: null,
         raw,
         source: "qr",
         status: "queued",

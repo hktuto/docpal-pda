@@ -8,7 +8,7 @@ import { queryAll, queryGet } from "./query.js";
 import { allocateAll, allocateForPickingOrder } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
 import { _setPickingShelfScanForTests, _setPickingFromSubinventoryOrgsForTests, _setReceivingSubInventoryRulesForTests, _setOutdatedStockYearsForTests, _setFlowStepsDisabledForTests, _resetFlowConfigForTests } from "../config.js";
-import { dateToDateCode } from "./dateCode.js";
+import { dateToDateCode, toCanonicalDateCode } from "./dateCode.js";
 import {
   acquireWorkLock,
   addAllUnboxedToShippingBox,
@@ -559,6 +559,51 @@ test("scan: lot source — package + batch snapshot, lot/allocation shrink, PICK
   assert.equal(pkg2!.lotCode, "L2603A");
   assert.equal(pkg2!.coo, "JP");
   assert.equal(pkg2!.dateCode, "0326");
+
+  // Scan-truth fields (2026-11-19): the label's own values as scanned land on
+  // the package's scanned_* columns, including the drawing code; empty strings
+  // normalize to NULL.
+  const scan3 = await scanPickingItem(client.db, itemId, {
+    actorId,
+    allocationId: alloc.id,
+    qty: 50,
+    barcode: "6245005121592004433007503018",
+    scannedPartNo: "624500",
+    scannedWclItemNo: "NCC-EGXE630EC3471MK30S",
+    scannedDateCode: "2551",
+    scannedLotCode: "51215-0920044-33",
+    scannedCoo: "JP",
+    scannedCow: "",
+    scannedDrawingNo: "624500",
+  });
+  const pkg3 = await queryGet<{
+    labelBarcode: string | null;
+    scannedPartNo: string | null;
+    scannedWclItemNo: string | null;
+    scannedDateCode: string | null;
+    scannedLotCode: string | null;
+    scannedCoo: string | null;
+    scannedCow: string | null;
+    scannedDrawingNo: string | null;
+  }>(
+    client.db,
+    sql`SELECT label_barcode AS "labelBarcode", scanned_part_no AS "scannedPartNo",
+               scanned_wcl_item_no AS "scannedWclItemNo", scanned_date_code AS "scannedDateCode",
+               scanned_lot_code AS "scannedLotCode", scanned_coo AS "scannedCoo",
+               scanned_cow AS "scannedCow", scanned_drawing_no AS "scannedDrawingNo"
+        FROM picking_packages WHERE id = ${scan3.packageIds[0]}`
+  );
+  assert.equal(pkg3!.labelBarcode, "6245005121592004433007503018");
+  assert.equal(pkg3!.scannedPartNo, "624500");
+  assert.equal(pkg3!.scannedWclItemNo, "NCC-EGXE630EC3471MK30S");
+  // The scanned date code is canonicalized at the boundary (label format →
+  // YYWW): under this test env's default wwyy format, "2551" swaps to "5125"
+  // (SZ runs yyww where it stays "2551" — see the incident spec).
+  assert.equal(pkg3!.scannedDateCode, toCanonicalDateCode("2551", "wwyy"));
+  assert.equal(pkg3!.scannedLotCode, "51215-0920044-33");
+  assert.equal(pkg3!.scannedCoo, "JP");
+  assert.equal(pkg3!.scannedCow, null); // empty string → NULL
+  assert.equal(pkg3!.scannedDrawingNo, "624500");
 });
 
 test("scan guards: over-allocation, over-required, ownership, actor, qty, order status", async () => {

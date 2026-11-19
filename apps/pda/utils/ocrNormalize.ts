@@ -13,6 +13,9 @@ export interface OcrInput {
   wclItemNo?: string;
   /** Supplier-template serial (e.g. iC-Haus LTS) — put-away duplicate check. */
   serialNo?: string;
+  /** The label's own drawing code (2026-11-19 scan-truth: NCC's itemId is the
+   *  numeric drawing code, echoed by the decode's brand resolver). */
+  drawingNo?: string;
 }
 
 /**

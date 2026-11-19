@@ -7,6 +7,32 @@ import { decodeScan } from "../decode/index.js";
 import { getDecodeData } from "../decode/cache.js";
 import { formatKoaLotDateCodes, resolveKoaLotDate, encodeKoaLotDate, getIsoWeekMonday } from "../decode/codecs.js";
 import { lookupPartDetails } from "../db/partDetails.js";
+import { scanEvents } from "../db/schema/index.js";
+import { newId } from "../db/id.js";
+import { now } from "../db/now.js";
+import { sql } from "drizzle-orm";
+
+/** Fire-and-forget scan-event audit row (2026-11-19 scan-truth): one row per
+ *  decode call, failures included. Must never block or fail the scan — the
+ *  response is already sent by the time this runs; insert errors only
+ *  console.warn. */
+function logScanEvent(
+  raw: string,
+  result: Awaited<ReturnType<typeof decodeScan>>,
+  actorId: string | null
+) {
+  db.insert(scanEvents)
+    .values({
+      id: newId(),
+      source: "scan_decode",
+      raw,
+      matched: result.matched,
+      templateSupplierCode: result.supplier?.code ?? null,
+      parsed: result.parsed as Record<string, unknown>,
+      actorId,
+    })
+    .catch((err: unknown) => console.warn("[scan-events] insert failed", err));
+}
 
 async function readJson<T>(c: Context): Promise<T> {
   const text = await c.req.text();
@@ -58,6 +84,8 @@ scanDecodeRoute.post("/scan/decode", async (c) => {
     supplierCode: body.supplierCode as string | undefined,
     brands: optionalStringArray(body.brands, "brands"),
   });
+  // Audit after the result exists; the insert rides the response (non-blocking).
+  logScanEvent(body.raw, result, null);
   return c.json(result, 200);
 });
 

@@ -73,24 +73,32 @@ aggregate design:
     `picking_items` = derived consumed qty; `allocations` netting unchanged.
   - `shipping_box_items` rollup likewise derives per-item contents at
     close/ship time.
-- Over-pick flag: when total scanned > total demand for a part, the surplus
-  rows are marked `over_picked = true` on the package (new boolean). They
-  still ship (model A, user-confirmed direction: scan record = what we
-  ship), appear in the scan Excel with a flag, and the ledger books the
-  full out-of-stock qty.
+- Derived allocation mapping (package rows → line items) is computed FIFO
+  in allocation priority order, capped at each line's `qty`. Since scanned
+  totals never exceed demand (scan-time room check, section 3), every
+  scanned qty is fully consumed by lines.
 
-### 3. What happens to surplus qty (model A — over-pick ships)
+### 3. Scan-time room check (replaces the surplus decision)
 
-- Physically: the whole reel goes in the box; nothing is cut or returned.
-- Record: package row keeps the full scanned qty (750, not 500).
-- Line items consume up to demand; the extra is `over_picked`, visible on
-  the order detail and scan Excel ("over-pick +250").
-- Ledger: books the full −750 (stock genuinely leaves the building).
-- Completion check: `total scanned ≥ total demand` per part — surplus never
-  blocks finishing; **shortage** still does.
-- If a warehouse later wants surplus excluded from shipment (model B), that
-  becomes a `flow-config` knob routed to the existing put-back flow — not
-  part of this change.
+No surplus is accepted — the record never exceeds the order's need:
+
+- The aggregate scan validates **per part, not per line**:
+  1. part identity matches one of the order's open lines (normalized part
+     match, same rule as the verify aggregate match);
+  2. `sum(qty of already-scanned rows for this part) + scan qty ≤ total
+     demand of the order's open lines for this part` — over this, reject
+     with a clear `no_room_for_part` error showing the remaining room.
+- Because the guard is per-part, the operator can scan reels in any order
+  and any grouping — a 750 reel can cover a 500 line + the next line's 250
+  without being split; the record stays one row qty 750.
+- Edge case: remaining room smaller than the smallest physical unit (e.g.
+  room 500, reels are 750). The scan is rejected — the operator escalates
+  (admin re-allocates or the order is corrected). This is deliberate: the
+  system does not invent a fake 250 line to absorb the remainder.
+- Completion check unchanged: `total scanned ≥ total demand` per part;
+  shortage blocks finishing.
+- Over-pick flag dropped — with the room check there is no over-pick
+  state.
 
 ### 4. Undo / put-back semantics
 
@@ -107,7 +115,7 @@ aggregate design:
 - `db/verify.ts` / `db/measuring.ts`: already aggregate — switch their
   package source from item-keyed to order+part-keyed.
 - Pick-scan Excel: iterate `order.packages` (one row per scan) instead of
-  nested `item.packages`; add the over-pick flag column.
+  nested `item.packages`.
 - Label printing (`labelPrintParams`): per-item params derived from the
   consumption mapping.
 - Admin picking list detail page (`apps/admin/pages/picking-orders/[id].vue`):
@@ -126,8 +134,9 @@ aggregate design:
 - Test reproducing the incident: order demanding 42,000 (whole reels),
   scan 56 reels → 56 package rows, order finishable, ledger books
   −42,000, scan Excel shows 56 lines.
-- Test the surplus path: demand 500, scan one 750 reel → 1 row qty 750,
-  line picked, `over_picked` flag, ledger −750.
+- Test the room-check path: demand 500 total, scan one 750 reel →
+  rejected with `no_room_for_part` (remaining room 500); demand 750×N and
+  scan N reels + one extra → the extra rejected.
 - Test undo: delete one reel row → ledger reversal +750, order short again.
 - Existing suite (`picking.test.ts` etc.) passes under both config modes.
 

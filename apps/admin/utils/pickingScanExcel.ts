@@ -75,7 +75,7 @@ export function buildPickingScanAoa(
         original,
         p.scannedCoo ?? p.coo ?? "",
         p.scannedCow ?? p.cow ?? "",
-        p.drawingNo ?? "",
+        p.scannedDrawingNo ?? p.drawingNo ?? "",
         boxIdx >= 0 ? boxIdx + 1 : "",
         boxIdx >= 0 ? `${boxIdx + 1}/${boxIds.length}` : "",
       ]);

@@ -714,6 +714,9 @@ export interface ScanPickingItemInput {
   scannedLotCode?: string | null;
   scannedCoo?: string | null;
   scannedCow?: string | null;
+  /** The label's own drawing code as scanned (2026-11-19 scan-truth: NCC's
+   *  itemId is the numeric drawing code) — stored on the package rows. */
+  scannedDrawingNo?: string | null;
   /** Sticky shelf-scan context (flow config pickingShelfScan require-* modes):
    *  the shelf/box the operator last scanned; sent with every item scan. */
   shelfCode?: string | null;

@@ -22,6 +22,9 @@ export interface ParsedFields {
   wclItemNo?: string;
   /** Supplier-template serial (e.g. iC-Haus LTS) — put-away duplicate check. */
   serialNo?: string;
+  /** The label's own drawing code (2026-11-19 scan-truth: set by the backend
+   *  NCC brand resolver; the local heuristics never fill it). */
+  drawingNo?: string;
 }
 
 /**
