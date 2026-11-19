@@ -1412,6 +1412,7 @@ export async function getPickingOrderDetail(
         pp.rescanned_qty AS "rescannedQty", pp.label_barcode AS "labelBarcode",
         pp.scanned_date_code AS "scannedDateCode", pp.scanned_lot_code AS "scannedLotCode",
         pp.scanned_coo AS "scannedCoo", pp.scanned_cow AS "scannedCow",
+        pp.scanned_part_no AS "scannedPartNo", pp.scanned_wcl_item_no AS "scannedWclItemNo",
         pp.scanned_drawing_no AS "scannedDrawingNo",
         pp.shipping_box_id AS "shippingBoxId",
         pp.source_type AS "sourceType", pp.source_id AS "sourceId",
@@ -3005,11 +3006,13 @@ export async function addPackageToBox(
   input: { shippingBoxId: string; packageId: string; actorId: string }
 ): Promise<void> {
   return db.transaction(async (tx) => {
-    const pkg = await queryGet<{ id: string; pickingItemId: string; pickingOrderId: string; shippingBoxId: string | null; qty: number; partNo: string; coo: string | null }>(
+    const pkg = await queryGet<{ id: string; pickingItemId: string | null; pickingOrderId: string; shippingBoxId: string | null; qty: number; partNo: string; coo: string | null }>(
       tx,
-      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pi.picking_order_id AS "pickingOrderId",
-                 pp.shipping_box_id AS "shippingBoxId", pp.qty, pi.part_no AS "partNo", pp.coo
-          FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id WHERE pp.id = ${input.packageId}`
+      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", COALESCE(pp.picking_order_id, pi.picking_order_id) AS "pickingOrderId",
+                 pp.shipping_box_id AS "shippingBoxId", pp.qty, COALESCE(pi.part_no, pp.picking_part_no) AS "partNo", pp.coo
+          FROM picking_packages pp
+          LEFT JOIN picking_items pi ON pi.id = pp.picking_item_id
+          WHERE pp.id = ${input.packageId}`
     );
     if (!pkg) throw new HTTPException(404, { message: "package_not_found" });
     if (pkg.shippingBoxId !== null) throw new HTTPException(409, { message: "package_already_in_box" });
@@ -3022,14 +3025,26 @@ export async function addPackageToBox(
 
     await assignPackageToBoxTx(tx, pkg.id, box.id);
     await prefillShippingBoxFromSources(tx, box.id);
-    await logTransition(tx, {
-      entityType: "picking_item",
-      entityId: pkg.pickingItemId,
-      fromState: "scanned",
-      toState: "boxed",
-      actorId: input.actorId,
-      metadata: { qty: pkg.qty, box: box.id, partNo: pkg.partNo },
-    });
+    if (pkg.pickingItemId) {
+      await logTransition(tx, {
+        entityType: "picking_item",
+        entityId: pkg.pickingItemId,
+        fromState: "scanned",
+        toState: "boxed",
+        actorId: input.actorId,
+        metadata: { qty: pkg.qty, box: box.id, partNo: pkg.partNo },
+      });
+    } else {
+      // Aggregate reel-scan row: order-level transition (no item binding).
+      await logTransition(tx, {
+        entityType: "picking_order",
+        entityId: pkg.pickingOrderId,
+        fromState: "scanned_reel",
+        toState: "boxed_reel",
+        actorId: input.actorId,
+        metadata: { qty: pkg.qty, box: box.id, partNo: pkg.partNo, package: pkg.id },
+      });
+    }
   });
 }
 
@@ -3053,23 +3068,36 @@ export async function addAllUnboxedToShippingBox(
     // The calling order must be writable, even when the box belongs elsewhere.
     const order = await loadOrderForWrite(tx, input.pickingOrderId);
     assertOrderWritable(order);
-    const packages = await queryAll<{ id: string; pickingItemId: string; qty: number; partNo: string }>(
+    const packages = await queryAll<{ id: string; pickingItemId: string | null; qty: number; partNo: string }>(
       tx,
-      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pp.qty, pi.part_no AS "partNo"
-          FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
-          WHERE pi.picking_order_id = ${input.pickingOrderId} AND pp.shipping_box_id IS NULL
+      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pp.qty,
+                 COALESCE(pi.part_no, pp.picking_part_no) AS "partNo"
+          FROM picking_packages pp
+          LEFT JOIN picking_items pi ON pi.id = pp.picking_item_id
+          WHERE pp.picking_order_id = ${input.pickingOrderId} AND pp.shipping_box_id IS NULL
           ORDER BY pp.created_date ASC, pp.id ASC`
     );
     for (const pkg of packages) {
       await assignPackageToBoxTx(tx, pkg.id, box.id);
-      await logTransition(tx, {
-        entityType: "picking_item",
-        entityId: pkg.pickingItemId,
-        fromState: "scanned",
-        toState: "boxed",
-        actorId: input.actorId,
-        metadata: { qty: pkg.qty, box: box.id, partNo: pkg.partNo },
-      });
+      if (pkg.pickingItemId) {
+        await logTransition(tx, {
+          entityType: "picking_item",
+          entityId: pkg.pickingItemId,
+          fromState: "scanned",
+          toState: "boxed",
+          actorId: input.actorId,
+          metadata: { qty: pkg.qty, box: box.id, partNo: pkg.partNo },
+        });
+      } else {
+        await logTransition(tx, {
+          entityType: "picking_order",
+          entityId: input.pickingOrderId,
+          fromState: "scanned_reel",
+          toState: "boxed_reel",
+          actorId: input.actorId,
+          metadata: { qty: pkg.qty, box: box.id, partNo: pkg.partNo, package: pkg.id },
+        });
+      }
     }
     await prefillShippingBoxFromSources(tx, box.id);
     return { packed: packages.length };
@@ -3090,11 +3118,13 @@ export async function boxEachUnboxedPackage(
     const order = await loadOrderForWrite(tx, input.pickingOrderId);
     assertOrderWritable(order);
     await assertActor(tx, input.actorId);
-    const packages = await queryAll<{ id: string; pickingItemId: string; qty: number; partNo: string }>(
+    const packages = await queryAll<{ id: string; pickingItemId: string | null; qty: number; partNo: string }>(
       tx,
-      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pp.qty, pi.part_no AS "partNo"
-          FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
-          WHERE pi.picking_order_id = ${order.id} AND pp.shipping_box_id IS NULL
+      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pp.qty,
+                 COALESCE(pi.part_no, pp.picking_part_no) AS "partNo"
+          FROM picking_packages pp
+          LEFT JOIN picking_items pi ON pi.id = pp.picking_item_id
+          WHERE pp.picking_order_id = ${order.id} AND pp.shipping_box_id IS NULL
           ORDER BY pp.created_date ASC, pp.id ASC`
     );
     const boxIds: string[] = [];
@@ -3116,14 +3146,25 @@ export async function boxEachUnboxedPackage(
       });
       await assignPackageToBoxTx(tx, pkg.id, boxId);
       await prefillShippingBoxFromSources(tx, boxId);
-      await logTransition(tx, {
-        entityType: "picking_item",
-        entityId: pkg.pickingItemId,
-        fromState: "scanned",
-        toState: "boxed",
-        actorId: input.actorId,
-        metadata: { qty: pkg.qty, box: boxId, partNo: pkg.partNo },
-      });
+      if (pkg.pickingItemId) {
+        await logTransition(tx, {
+          entityType: "picking_item",
+          entityId: pkg.pickingItemId,
+          fromState: "scanned",
+          toState: "boxed",
+          actorId: input.actorId,
+          metadata: { qty: pkg.qty, box: boxId, partNo: pkg.partNo },
+        });
+      } else {
+        await logTransition(tx, {
+          entityType: "picking_order",
+          entityId: order.id,
+          fromState: "scanned_reel",
+          toState: "boxed_reel",
+          actorId: input.actorId,
+          metadata: { qty: pkg.qty, box: boxId, partNo: pkg.partNo, package: pkg.id },
+        });
+      }
       boxIds.push(boxId);
     }
     return { created: packages.length, boxIds };

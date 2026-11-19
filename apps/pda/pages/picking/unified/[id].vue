@@ -41,7 +41,7 @@
       </div>
 
       <PickingUnifiedItems
-        :items="order.items ?? []"
+        :items="displayItems"
         :queue-rows="rows"
         :actionable="actionable"
         :box-selections="boxSelections"
@@ -178,6 +178,7 @@ import PickingScanReviewModal from "~/components/picking/PickingScanReviewModal.
 import PickFromBoxDialog from "~/components/picking/PickFromBoxDialog.vue";
 import ChooseBoxDialog from "~/components/picking/ChooseBoxDialog.vue";
 import PickingUnifiedItems from "~/components/picking/PickingUnifiedItems.vue";
+import { normalizePartNo } from "~/utils/text";
 import LabelPrintPrompt from "~/components/picking/LabelPrintPrompt.vue";
 import type { OcrInput } from "~/utils/ocrNormalize";
 import type { LabelPrintRuleMatch, OpenShippingBox, PickingBox, PickingOrderDetail } from "~/services/types";
@@ -289,6 +290,33 @@ const {
 } = session;
 
 const orderItems = computed(() => order.value?.items ?? []);
+/** Display-only items: aggregate order-level reel scans (unbound packages)
+ *  are attached to the first line of their part so the unified page renders
+ *  them (qty counters, unboxed list, add-to-box / remove-scan actions) —
+ *  the component's group totals come from here. The underlying order data
+ *  (completion math in usePickingScanSession) stays untouched. */
+const displayItems = computed(() => {
+  const items = order.value?.items ?? [];
+  const record = order.value?.orderScanRecord ?? [];
+  console.log("orderScanRecord", record)
+  if (record.length === 0) return items;
+  const byPart = new Map<string, typeof record>();
+  for (const r of record) {
+    const k = normalizePartNo(r.scannedWclItemNo ?? r.scannedPartNo ?? "");
+    console.log('k',k, r.scannedWclItemNo ?? r.scannedPartNo)
+    const list = byPart.get(k) ?? [];
+    list.push(r);
+    byPart.set(k, list);
+  }
+  let attached = false;
+  return items.map((i) => {
+    const extra = byPart.get(normalizePartNo(i.partNo));
+    if (!extra) return i;
+    attached = true;
+    return { ...i, packages: [...(i.packages ?? []), ...extra] };
+  });
+  void attached;
+});
 const orderPartNos = computed(() => orderItems.value.map((i) => i.partNo));
 
 function updateBoxSelections(value: Record<string, string>) {
