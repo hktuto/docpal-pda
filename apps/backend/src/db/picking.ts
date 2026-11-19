@@ -2828,6 +2828,18 @@ export async function verifyPackage(
     if (!pkg) throw new HTTPException(404, { message: "package_not_found" });
     if (pkg.shippingBoxId === null) throw new HTTPException(409, { message: "package_not_in_box" });
     await assertActor(tx, input.actorId);
+    // Exact-label gate (2026-11-19, aggregate reel scans): a package whose
+    // pick-time label is known can only be re-scanned with THAT label — one
+    // QR cannot finish multiple boxes (checks the physical identity first,
+    // before any field-based compare).
+    if (input.barcode !== undefined && pkg.labelBarcode && input.barcode.trim() !== pkg.labelBarcode.trim()) {
+      throw new HTTPException(409, {
+        res: new Response(JSON.stringify({ error: "label_item_mismatch", fields: ["barcode"] }), {
+          status: 409,
+          headers: { "content-type": "application/json" },
+        }),
+      });
+    }
     if (pkg.labelVerified) {
       // Part keys compare unwrapped both sides (the record may be the raw
       // bare-MPN barcode or the canonical wrapped master key). Batch fields
@@ -2838,11 +2850,6 @@ export async function verifyPackage(
       if (input.wclItemNo !== undefined && pkg.wclItemNo && normalizePartNo(input.wclItemNo) !== normalizePartNo(pkg.wclItemNo)) differing.push("wclItemNo");
       if (input.coo !== undefined && pkg.coo && input.coo !== pkg.coo) differing.push("coo");
       if (input.dateCode !== undefined && pkg.dateCode && input.dateCode !== pkg.dateCode) differing.push("dateCode");
-      if (input.barcode !== undefined && pkg.labelBarcode && input.barcode.trim() !== pkg.labelBarcode.trim()) {
-        // The physical re-scan cannot be a label the package was never
-        // scanned from — one QR cannot finish multiple boxes.
-        differing.push("barcode");
-      }
       if (differing.length > 0) {
         throw new HTTPException(409, {
           res: new Response(JSON.stringify({ error: "label_item_mismatch", fields: differing }), {
