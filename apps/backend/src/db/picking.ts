@@ -1183,6 +1183,9 @@ export interface PickingOrderDetail extends PickingOrderRow {
   packedWeight: number | null;
   packedBoxCount: number | null;
   packedPalletCount: number | null;
+  /** Order-level scan record (2026-11-19 aggregate scan-record): unbound
+   *  reel-scan packages — one row per scan, independent of line items. */
+  orderScanRecord: PickingPackageDetail[];
   packedInputBoxCount: number | null;
   packedCarts: { boxCount: number; weight: number }[] | null;
   items: PickingItemDetail[];
@@ -1396,6 +1399,30 @@ export async function getPickingOrderDetail(
       )
     : [];
 
+  // Order-level scan record (2026-11-19 aggregate scan-record): unbound
+  // reel-scan packages — the flat "one line per scan" truth, independent of
+  // the item mapping. Returned alongside the per-item views.
+  const orderScanRecord = await queryAll<PickingPackageDetail>(
+    db,
+    sql`
+      SELECT
+        pp.id, pp.qty,
+        pp.date_code AS "dateCode", pp.lot_code AS "lotCode", pp.coo, pp.cow,
+        pp.verified, pp.verify_verified AS "verifyVerified",
+        pp.rescanned_qty AS "rescannedQty", pp.label_barcode AS "labelBarcode",
+        pp.scanned_date_code AS "scannedDateCode", pp.scanned_lot_code AS "scannedLotCode",
+        pp.scanned_coo AS "scannedCoo", pp.scanned_cow AS "scannedCow",
+        pp.scanned_drawing_no AS "scannedDrawingNo",
+        pp.shipping_box_id AS "shippingBoxId",
+        pp.source_type AS "sourceType", pp.source_id AS "sourceId",
+        il.drawing_no AS "drawingNo"
+      FROM picking_packages pp
+      LEFT JOIN inventory_lots il ON pp.source_type = 'inventory_lot' AND il.id = pp.source_id
+      WHERE pp.picking_order_id = ${orderId} AND pp.picking_item_id IS NULL
+      ORDER BY pp.created_date, pp.id
+    `
+  );
+
   const boxes = await queryAll<PickingBoxDetail>(
     db,
     sql`
@@ -1463,6 +1490,7 @@ export async function getPickingOrderDetail(
         .filter((p) => p.pickingItemId === i.id)
         .map(({ pickingItemId: _pickingItemId, ...rest }) => rest),
     })),
+    orderScanRecord,
     boxes,
     suggestedBox,
   };
