@@ -35,6 +35,12 @@ const props = defineProps<{
   subInventoryOptions?: { value: string; label: string }[];
   /** Same pattern as subInventoryOptions: a shelf dropdown (CN receiving). */
   shelfOptions?: { value: string; label: string }[];
+  /** When false the lot-code field is omitted (inventory-lot edit has no
+   *  editable lot code — it identifies the lot). Default true. */
+  withLotCode?: boolean;
+  /** When false the carton-no field is omitted (inventory-lot edit). Default
+   *  true. */
+  withCtnNo?: boolean;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -46,6 +52,7 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const dcFormat = useDateCodeFormat();
 const dismiss = useOverlayDismiss(() => emit("close"));
 
 const batch = computed(() => props.items.length > 1);
@@ -84,11 +91,11 @@ watch(
 function submit() {
   const entries: [string, string][] = [
     ["dateCode", dateCode.value],
-    ["lotCode", lotCode.value],
     ["coo", coo.value],
     ["cow", cow.value],
-    ["ctnNo", ctnNo.value],
   ];
+  if (props.withLotCode !== false) entries.push(["lotCode", lotCode.value]);
+  if (props.withCtnNo !== false) entries.push(["ctnNo", ctnNo.value]);
   if (props.withDrawingNo) entries.push(["drawingNo", drawingNo.value]);
   const fields: Record<string, string | null> = {};
   for (const [k, v] of entries) {
@@ -119,15 +126,12 @@ function submit() {
   emit("save", fields);
 }
 
-// WWYY date code (ISO-8601 week number + 2-digit year), offset in weeks from today.
+// Date code generated in the flow's label format (dateToDateCode is canonical
+// YYWW; toLabelDateCode converts — the receiving enclave stores label format).
 function applyDateCode(offsetWeeks: number) {
   const nowDate = new Date();
   const d = new Date(Date.UTC(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate() + offsetWeeks * 7));
-  const dayNum = (d.getUTCDay() + 6) % 7; // Monday = 0
-  d.setUTCDate(d.getUTCDate() - dayNum + 3); // Thursday of this ISO week
-  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  const week = 1 + Math.round((d.getTime() - firstThursday.getTime()) / 604800000);
-  dateCode.value = `${String(week).padStart(2, "0")}${String(d.getUTCFullYear()).slice(2)}`;
+  dateCode.value = toLabelDateCode(dateToDateCode(d), dcFormat.format.value) ?? "";
 }
 </script>
 
@@ -165,7 +169,7 @@ function applyDateCode(offsetWeeks: number) {
             <label v-if="batch" class="clear-check"><input v-model="cleared.dateCode" type="checkbox" /> {{ $t("admin.pages.receiving.clearField") }}</label>
           </div>
         </div>
-        <div class="form-row">
+        <div v-if="withLotCode !== false" class="form-row">
           <label for="ie-lot">{{ $t("admin.pages.receiving.lotCode") }}</label>
           <div class="field-row">
             <input id="ie-lot" v-model="lotCode" type="text" :disabled="batch && cleared.lotCode" />
@@ -186,7 +190,7 @@ function applyDateCode(offsetWeeks: number) {
             <label v-if="batch" class="clear-check"><input v-model="cleared.cow" type="checkbox" /> {{ $t("admin.pages.receiving.clearField") }}</label>
           </div>
         </div>
-        <div class="form-row">
+        <div v-if="withCtnNo !== false" class="form-row">
           <label for="ie-ctn">{{ $t("admin.pages.receiving.ctnNo") }}</label>
           <div class="field-row">
             <input id="ie-ctn" v-model="ctnNo" type="text" :disabled="batch && cleared.ctnNo" />

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import { db } from "../../db.js";
-import { updatePickingDeliveryDate, updatePickingOrderFields, updateReceivingDeliveryDate, updateReceivingItemFields } from "../../db/adminedits.js";
+import { updatePickingDeliveryDate, updatePickingOrderFields, updateReceivingDeliveryDate, updateReceivingItemFields, updateInventoryLotFields } from "../../db/adminedits.js";
 import { overridePickingOrderStatus, resetPickingOrderProgress } from "../../db/picking.js";
 import { overrideReceivingOrderStatus } from "../../db/receiving.js";
 import { allocateForReceivingOrder, awaitAllocationTask } from "../../db/allocate.js";
@@ -175,6 +175,33 @@ adminFlowEditsRoute.patch("/receiving-invoice-items/:id", async (c) => {
   return c.json(
     await updateReceivingItemFields(db, {
       itemId: c.req.param("id"),
+      fields,
+      actorId: actorFrom(c).id,
+    }),
+    200
+  );
+});
+
+// Change editable fields on one inventory lot (stock-search batch edit):
+// date code, COO, COW, drawing no. `null` or "" clears a field; absent keys
+// stay unchanged. 409 duplicate_lot_identity when the new identity collides
+// with another located lot.
+const INVENTORY_LOT_EDITABLE = ["dateCode", "coo", "cow", "drawingNo"] as const;
+
+adminFlowEditsRoute.patch("/inventory-lots/:id", async (c) => {
+  const body = await readJson(c);
+  const fields: Record<string, string | null> = {};
+  for (const k of INVENTORY_LOT_EDITABLE) {
+    if (!(k in body)) continue;
+    const v = body[k];
+    if (v !== null && typeof v !== "string") throw new HTTPException(400, { message: `${k} must be a string` });
+    fields[k] = v === null || v.trim() === "" ? null : v.trim();
+  }
+  if (Object.keys(fields).length === 0)
+    throw new HTTPException(400, { message: `at least one of ${INVENTORY_LOT_EDITABLE.join(", ")} is required` });
+  return c.json(
+    await updateInventoryLotFields(db, {
+      lotId: c.req.param("id"),
       fields,
       actorId: actorFrom(c).id,
     }),

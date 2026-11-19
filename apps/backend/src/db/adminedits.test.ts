@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryGet } from "./query.js";
-import { updatePickingDeliveryDate, updatePickingOrderFields, updateReceivingDeliveryDate, updateReceivingItemFields } from "./adminedits.js";
+import { updatePickingDeliveryDate, updatePickingOrderFields, updateReceivingDeliveryDate, updateReceivingItemFields, updateInventoryLotFields } from "./adminedits.js";
 
 let client: TestDb;
 
@@ -230,4 +230,50 @@ test("admin edits: picking order ship-to + location pair + audit rows", async ()
   assert.equal(noFields.status, 400);
   const missing = await catchHttp(updatePickingOrderFields(client.db, { orderId: "nope", shipTo: "x", actorId }));
   assert.equal(missing.status, 404);
+});
+
+test("admin edits: set and clear inventory lot identity fields + audit rows", async () => {
+  await reseed(client);
+  const lotId = (await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM inventory_lots WHERE shelf_code IS NOT NULL OR box_id IS NOT NULL LIMIT 1`
+  ))!.id;
+  const actorId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'admin'`))!.id;
+
+  const set = await updateInventoryLotFields(client.db, {
+    lotId,
+    fields: { dateCode: "2637", coo: "JP", cow: "JP", drawingNo: "DWG-1" },
+    actorId,
+  });
+  assert.equal(set.id, lotId);
+  const row = await queryGet<{ d: string | null; coo: string | null; cow: string | null; draw: string | null }>(
+    client.db,
+    sql`SELECT date_code AS d, coo, cow, drawing_no AS draw FROM inventory_lots WHERE id = ${lotId}`
+  );
+  assert.equal(row!.d, "2637");
+  assert.equal(row!.coo, "JP");
+  assert.equal(row!.cow, "JP");
+  assert.equal(row!.draw, "DWG-1");
+
+  const log = await queryGet<{ metadata: { field: string; to: string } }>(
+    client.db,
+    sql`SELECT metadata FROM transaction_logs
+        WHERE entity_type = 'inventory_lot' AND entity_id = ${lotId}
+          AND metadata->>'field' = 'date_code'
+        ORDER BY created_date DESC LIMIT 1`
+  );
+  assert.equal(log!.metadata.to, "2637");
+
+  const cleared = await updateInventoryLotFields(client.db, { lotId, fields: { dateCode: null }, actorId });
+  assert.equal(cleared.id, lotId);
+  const clearedRow = await queryGet<{ d: string | null }>(
+    client.db,
+    sql`SELECT date_code AS d FROM inventory_lots WHERE id = ${lotId}`
+  );
+  assert.equal(clearedRow!.d, null);
+
+  const missing = await catchHttp(updateInventoryLotFields(client.db, { lotId: "nope", fields: { coo: "JP" }, actorId }));
+  assert.equal(missing.status, 404);
+  const noFields = await catchHttp(updateInventoryLotFields(client.db, { lotId, fields: {}, actorId }));
+  assert.equal(noFields.status, 400);
 });

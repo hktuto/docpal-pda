@@ -1677,6 +1677,12 @@ export function useFlowApi() {
       fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo" | "drawingNo", string | null>>
     ) => api.patch(`/admin/receiving-invoice-items/${id}`, fields),
 
+    // Stock-search lot edit (batch): date code, COO, COW, drawing no.
+    updateInventoryLot: (
+      lotId: string,
+      fields: Partial<Record<"dateCode" | "coo" | "cow" | "drawingNo", string | null>>
+    ) => api.patch(`/admin/inventory-lots/${lotId}`, fields),
+
     // Customer receiving (CN) workflow upload tracking (admin only).
     listCnWorkflows: (params: CnWorkflowListParams = {}) =>
       api.get<{ rows: CnWorkflowRow[]; total: number }>(`/admin/receiving-cn${cnWorkflowQuery(params)}`),

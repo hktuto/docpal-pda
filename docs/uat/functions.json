@@ -366,7 +366,7 @@
     "id": "ADM-034",
     "app": "Admin",
     "module": "Issues & stock",
-    "name": "Stock search — multi-select filters, parts/lots tables, xlsx export, lot history drill-down",
+    "name": "Stock search — multi-select filters, parts/lots tables, xlsx export, lot history drill-down, lot batch edit (date code / COO / COW / drawing no)",
     "tester": "",
     "testDate": "",
     "result": "",

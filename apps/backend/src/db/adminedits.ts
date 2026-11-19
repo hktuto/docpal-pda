@@ -8,8 +8,11 @@ import { now } from "./now.js";
 
 // ---------------------------------------------------------------------------
 // Admin console edits to flow data (not master data): picking order delivery
-// date (TOC 4.2) and receiving invoice item date code (TOC 4.1). Each write
-// leaves a transaction_logs audit row (metadata carries field/from/to).
+// date (TOC 4.2), receiving invoice item date code (TOC 4.1), and inventory
+// lot identity fields (stock-search batch edit, spec
+// docs/superpowers/specs/2026-11-14-stock-search-lot-batch-edit-design.md).
+// Each write leaves a transaction_logs audit row (metadata carries
+// field/from/to).
 // ---------------------------------------------------------------------------
 
 export const ADMIN_EDIT_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -162,6 +165,58 @@ const RECEIVING_ITEM_FIELDS = {
 const RECEIVING_ITEM_JSONB_FIELDS = { drawingNo: "drawing_no" } as const;
 
 export type ReceivingItemField = keyof typeof RECEIVING_ITEM_FIELDS | keyof typeof RECEIVING_ITEM_JSONB_FIELDS;
+
+/** Editable column fields on an inventory lot (stock-search batch edit).
+ *  Unlike receiving items these are all real columns on inventory_lots. */
+const INVENTORY_LOT_FIELDS = {
+  dateCode: "date_code",
+  coo: "coo",
+  cow: "cow",
+  drawingNo: "drawing_no",
+} as const;
+
+export type InventoryLotField = keyof typeof INVENTORY_LOT_FIELDS;
+
+/** Set (or clear with null) editable fields on one inventory lot. Editing
+ *  dateCode/coo/cow changes the lot's identity — a resulting unique-index
+ *  collision with another lot surfaces as 409 duplicate_lot_identity. */
+export async function updateInventoryLotFields(
+  db: AppDb,
+  input: { lotId: string; fields: Partial<Record<InventoryLotField, string | null>>; actorId: string | null }
+): Promise<{ id: string }> {
+  const keys = (Object.keys(INVENTORY_LOT_FIELDS) as InventoryLotField[]).filter((k) => k in input.fields);
+  if (keys.length === 0) throw new HTTPException(400, { message: "no_fields" });
+  const existing = await queryGet<Record<string, string | null>>(
+    db,
+    sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo", date_code AS "dateCode", coo, cow, drawing_no AS "drawingNo" FROM inventory_lots WHERE id = ${input.lotId}`
+  );
+  if (!existing) throw new HTTPException(404, { message: "inventory_lot_not_found" });
+  const lotMeta: Record<string, unknown> = { partNo: existing.partNo };
+  if (existing.wclItemNo) lotMeta.wclItemNo = existing.wclItemNo;
+  try {
+    await queryRun(
+      db,
+      sql`UPDATE inventory_lots SET ${sql.join(
+        keys.map((k) => sql`${sql.raw(INVENTORY_LOT_FIELDS[k])} = ${input.fields[k] ?? null}`),
+        sql`, `
+      )}, last_update_date = ${now()} WHERE id = ${input.lotId}`
+    );
+  } catch (err: any) {
+    if (err?.code === "23505") throw new HTTPException(409, { message: "duplicate_lot_identity" });
+    throw err;
+  }
+  for (const k of keys) {
+    const to = input.fields[k] ?? null;
+    if (existing[k] === to) continue;
+    await audit(db, "inventory_lot", input.lotId, input.actorId, {
+      ...lotMeta,
+      field: INVENTORY_LOT_FIELDS[k],
+      from: existing[k],
+      to,
+    });
+  }
+  return { id: input.lotId };
+}
 
 /** Set (or clear with null) editable fields on one receiving invoice item. */
 export async function updateReceivingItemFields(

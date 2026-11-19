@@ -50,6 +50,85 @@ function openLotHistory(lot: StockSearchLot) {
   historyOpen.value = true;
 }
 
+// Per-lot / batch editing (date code, COO, COW, drawing no) — same pattern as
+// the receiving detail page: shared selection Set across all tables, the edit
+// modal reused from receiving (lot code / ctn no fields hidden). Date codes
+// display/enter in the label format; saveEdit converts back to canonical.
+const selected = ref<Set<string>>(new Set());
+type LotEditTarget = {
+  id: string;
+  partNo: string;
+  wclItemNo: string | null;
+  poNo: string | null;
+  poLine: string | null;
+  lineQty: number | null;
+  receivedQty: number;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  ctnNo: string | null;
+  drawingNo: string | null;
+};
+const editLots = ref<LotEditTarget[] | null>(null);
+const savingEdit = ref(false);
+
+const selectedLots = computed(() => {
+  const pool = groupBy.value === "none" ? lotsRows.value : (result.value?.lots ?? []);
+  return pool.filter((l) => selected.value.has(l.lotId));
+});
+
+const asLotEditTarget = (l: StockSearchLot): LotEditTarget => ({
+  id: l.lotId,
+  partNo: l.partNo,
+  wclItemNo: l.wclItemNo,
+  poNo: null,
+  poLine: null,
+  lineQty: null,
+  receivedQty: l.totalQty,
+  dateCode: toLabelDateCode(l.dateCode, dcFormat.format.value),
+  lotCode: l.lotCode,
+  coo: l.coo,
+  cow: l.cow,
+  ctnNo: null,
+  drawingNo: l.drawingNo,
+});
+
+function openLotEdit(lot: StockSearchLot) {
+  editLots.value = [asLotEditTarget(lot)];
+}
+
+function openBatchLotEdit() {
+  if (selectedLots.value.length > 0) editLots.value = selectedLots.value.map(asLotEditTarget);
+}
+
+async function saveLotEdit(fields: Partial<Record<"dateCode" | "coo" | "cow" | "drawingNo", string | null>>) {
+  const lots = editLots.value;
+  if (!lots || Object.keys(fields).length === 0) {
+    editLots.value = null;
+    return;
+  }
+  savingEdit.value = true;
+  error.value = "";
+  // The modal edits in the label format; inventory_lots stores canonical YYWW.
+  const payload: Record<string, string | null> = { ...fields };
+  if (fields.dateCode !== undefined) {
+    payload.dateCode = toCanonicalDateCode(fields.dateCode, dcFormat.format.value);
+  }
+  const failed: string[] = [];
+  for (const lot of lots) {
+    try {
+      await flow.updateInventoryLot(lot.id, payload);
+    } catch (e: any) {
+      failed.push(`${lot.wclItemNo ?? lot.partNo}: ${e?.message ?? String(e)}`);
+    }
+  }
+  savingEdit.value = false;
+  editLots.value = null;
+  if (failed.length > 0) error.value = failed.join("; ");
+  await search();
+}
+
 // --- filter dropdown options (from /stock-search/options) ---
 
 const brandOptions = computed<SearchableSelectOption[]>(() =>
@@ -220,6 +299,7 @@ const {
   tableId: "stock-search-lots",
   columns: lotsColumnDefs,
   rows: lotsRows,
+  getRowId: (l) => l.lotId,
   server: { total: lotsTotal },
 });
 
@@ -238,6 +318,7 @@ function tableForGroup(key: string): GroupTable {
       syncKey: "stock-search-lots",
       columns: lotsColumnDefs,
       rows: computed(() => lotGroups.value.find((g) => g.key === key)?.lots ?? []),
+      getRowId: (l) => l.lotId,
       defaultPageSize: 1000,
     });
     groupTables.set(key, inst);
@@ -340,6 +421,8 @@ async function search() {
     }
     // Stock may have changed — refresh the dropdown option sets too.
     loadOptions();
+    // Fresh result set: drop any stale row selection.
+    selected.value = new Set();
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -567,9 +650,20 @@ const {
 
     <template v-else-if="searched">
       <h2 v-if="groupBy !== 'none'" class="section-title">{{ $t("stockSearch.lots") }}</h2>
+      <div v-if="selected.size > 0" class="batch-bar">
+        <span>{{ $t("admin.pages.receiving.selectedCount", { count: selected.size }) }}</span>
+        <button class="btn btn-small btn-primary" @click="openBatchLotEdit">
+          {{ $t("admin.pages.receiving.batchEdit") }}
+        </button>
+        <button class="btn btn-small" @click="selected = new Set()">
+          {{ $t("admin.pages.receiving.clearSelection") }}
+        </button>
+      </div>
       <template v-if="groupBy === 'none'">
         <DataTable
           :table="lotsTable"
+          v-model:selected="selected"
+          selectable
           :empty-text="$t('stockSearch.noLots')"
           :on-reset-columns="resetLotsColumns"
         >
@@ -577,6 +671,7 @@ const {
             <span class="part-cell">
               {{ row.wclItemNo ?? row.partNo }}
               <button class="btn-icon" :title="$t('lotHistory.open')" @click="openLotHistory(row)">🕒</button>
+              <button class="btn-icon" :title="$t('admin.pages.receiving.editDetail')" @click="openLotEdit(row)">✏️</button>
             </span>
           </template>
           <template #cell-description="{ row }">
@@ -596,6 +691,8 @@ const {
           </h3>
           <DataTable
             :table="tableForGroup(g.key).table"
+            v-model:selected="selected"
+            selectable
             sync-scroll-key="stock-search-lots"
             :empty-text="$t('stockSearch.noLots')"
             :on-reset-columns="tableForGroup(g.key).resetColumnState"
@@ -604,6 +701,7 @@ const {
               <span class="part-cell">
                 {{ row.wclItemNo ?? row.partNo }}
                 <button class="btn-icon" :title="$t('lotHistory.open')" @click="openLotHistory(row)">🕒</button>
+                <button class="btn-icon" :title="$t('admin.pages.receiving.editDetail')" @click="openLotEdit(row)">✏️</button>
               </span>
             </template>
             <template #cell-description="{ row }">
@@ -619,6 +717,17 @@ const {
     </template>
 
     <StockSearchLotHistoryModal :open="historyOpen" :lot-id="historyLotId" @close="historyOpen = false" />
+
+    <ReceivingItemEditModal
+      v-if="editLots"
+      :items="editLots"
+      :saving="savingEdit"
+      with-drawing-no
+      :with-lot-code="false"
+      :with-ctn-no="false"
+      @save="saveLotEdit"
+      @close="editLots = null"
+    />
   </div>
 </template>
 
@@ -706,6 +815,18 @@ const {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+}
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin: 0 0 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid #d9e2ec;
+  border-radius: 0.375rem;
+  background: #f0f4f8;
+  font-size: 0.8125rem;
+  color: #37424e;
 }
 .btn-icon {
   border: none;

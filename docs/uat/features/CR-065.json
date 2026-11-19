@@ -1,0 +1,14 @@
+{
+  "id": "CR-065",
+  "dateRaised": "2026-11-19",
+  "raisedBy": "Sean",
+  "app": "Admin",
+  "functionId": "ADM-034",
+  "feature": "Stock-search lot edit: checkbox multi-select on the admin stock-search lots table (server-paged and group-by modes share one selection), with a batch bar (Batch edit / Clear) and a per-row ✏️ button. Both open the receiving item edit modal (lot code / carton no hidden) to set or clear date code, COO, COW and drawing no — batch mode applies only non-blank fields, with a per-field Clear box; single mode blanks clear. Date codes edit in the label format and are converted to canonical YYWW on save. Backend PATCH /admin/inventory-lots/:id writes inventory_lots with per-field transaction_logs audit rows; a resulting lot-identity collision (unique index) returns 409 duplicate_lot_identity.",
+  "reason": "Wrong date code / COO / COW / drawing no only surfaced after put-away, when the receiving item edit no longer helped — stock lots had no admin tool and fixing them required raw SQL",
+  "priority": "Must have",
+  "status": "In progress",
+  "owner": "dev",
+  "targetDate": "",
+  "remarks": "Spec docs/superpowers/specs/2026-11-19-stock-search-lot-batch-edit-design.md. Modal reused from receiving (components/receiving/ItemEditModal.vue) with new withLotCode/withCtnNo props; its Today/Next-week buttons now generate the flow's configured date-code format."
+}

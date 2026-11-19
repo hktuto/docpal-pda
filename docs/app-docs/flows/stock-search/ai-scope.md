@@ -30,7 +30,9 @@
 
 ## Out of scope
 
-- Editing inventory from the search page.
+- Editing inventory from the search page (the admin console's stock-search
+  page does offer a lot batch edit — see the 2026-11-19 spec below; the PDA
+  search page stays read-only).
 - Real-time live query (manual reload on mount/visibility; search re-fires
   per filter change with a stale-response guard).
 - Server-paged `{rows,total}` sort controls, group-by, and export/print
@@ -41,6 +43,23 @@
   `GET /admin/inventory-lots/:id/history` (origin receiving lines + the lot's
   ledger movements with actor/shelf/box/picking-order/shipping-box); lot rows
   carry `lotId` for it.
+
+## Admin lot batch edit (2026-11-19)
+
+Admin stock-search lots tables (both server-paged ungrouped and group-by
+modes) gained row selection (`DataTable selectable`, `getRowId` = lotId, one
+shared selection Set) and a per-row ✏️ edit button. The batch bar opens the
+receiving item edit modal (`components/receiving/ItemEditModal.vue`, reused
+with new `withLotCode` / `withCtnNo` props set false, `withDrawingNo` true)
+to set/clear **dateCode / coo / cow / drawingNo** on `inventory_lots` — batch
+mode applies only non-blank fields (per-field Clear box), single mode blanks
+clear. Date codes are edited in the label format and converted to canonical
+YYWW on save (`toCanonicalDateCode`). Backend: `PATCH
+/admin/inventory-lots/:id` (`routes/admin/flowEdits.ts` → `db/adminedits.ts
+updateInventoryLotFields`, per-field `transaction_logs` audit rows, 409
+`duplicate_lot_identity` on a unique-index collision with another located
+lot). No allocation recompute is scheduled — allocations reference lots by
+id. Spec: `docs/superpowers/specs/2026-11-19-stock-search-lot-batch-edit-design.md`.
 
 ## Key files
 
@@ -64,6 +83,9 @@
   `dateCodeFrom?` / `dateCodeTo?` → `{parts, lots}`). Opt-in server paging
   (`?page=&pageSize=&sort=&dir=` → `{rows, total}`) serves both the admin
   lots table and the PDA load-more list.
+- `apps/admin/pages/stock-search.vue` +
+  `apps/admin/components/receiving/ItemEditModal.vue` +
+  `apps/backend/src/db/adminedits.ts` — admin lot batch edit (see above).
 - `pages/index.vue` — home menu card.
 
 ## Known limitations
@@ -78,4 +100,5 @@
 - `docs/backend/api-design.md` §Stock search
 - `docs/superpowers/specs/2026-07-04-stock-search-design.md`
 - `docs/superpowers/specs/2026-09-30-web-stock-search-admin-parity-design.md`
+- `docs/superpowers/specs/2026-11-19-stock-search-lot-batch-edit-design.md`
 - `docs/superpowers/plans/2026-07-04-stock-search.md`
