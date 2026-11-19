@@ -42,6 +42,7 @@
 
       <PickingUnifiedItems
         :items="displayItems"
+        :aggregate="aggregateScan"
         :queue-rows="rows"
         :actionable="actionable"
         :box-selections="boxSelections"
@@ -308,14 +309,17 @@ const displayItems = computed(() => {
     list.push(r);
     byPart.set(k, list);
   }
-  let attached = false;
+  const attachedParts = new Set<string>();
   return items.map((i) => {
-    const extra = byPart.get(normalizePartNo(i.partNo));
-    if (!extra) return i;
-    attached = true;
+    const partKey = normalizePartNo(i.partNo);
+    const extra = byPart.get(partKey);
+    if (!extra || attachedParts.has(partKey)) return i;
+    // Attach ONCE per part (the first line) — every line of the part shares
+    // the same order-level scan record; per-line duplication would multiply
+    // the group's unboxed list and qty totals.
+    attachedParts.add(partKey);
     return { ...i, packages: [...(i.packages ?? []), ...extra] };
   });
-  void attached;
 });
 const orderPartNos = computed(() => orderItems.value.map((i) => i.partNo));
 

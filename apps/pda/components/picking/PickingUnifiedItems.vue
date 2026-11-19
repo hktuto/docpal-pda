@@ -45,7 +45,7 @@
           </div>
         </div>
 
-        <template v-if="group.items.length > 1">
+        <template v-if="group.items.length > 1 && !aggregate">
           <div v-for="item in group.items" :key="item.id" class="merged-line">
             {{ $t('picking.itemsSection.line') }} {{ item.lineNumber ?? '—' }}
             ({{ $t('picking.itemsSection.shipment') }} {{ item.shipmentNumber ?? '—' }})
@@ -53,6 +53,22 @@
             · {{ $t('picking.itemsSection.scannedQty') }}: {{ scannedQty(item) }}
           </div>
         </template>
+
+        <!-- Aggregate scan-record breakdown (pickingScanRecord=aggregate):
+             scanned totals grouped by date / lot code — "is the scan right"
+             view; per-line allocations are irrelevant here. -->
+        <div v-if="aggregate && group.scannedQty > 0" class="unboxed-packages">
+          <h3 class="subsection-title">{{ $t('picking.itemsSection.scannedBreakdown') }}</h3>
+          <div
+            v-for="row in scanBreakdown(group)"
+            :key="row.key"
+            class="lot package-row"
+          >
+            <span class="package-info">
+              {{ row.qty }} {{ $t('common.pcs') }} · {{ row.label }}
+            </span>
+          </div>
+        </div>
 
         <div v-if="group.unboxed.length && actionable" class="unboxed-packages">
           <h3 class="subsection-title">{{ $t('picking.itemsSection.unboxedPackages') }}</h3>
@@ -128,7 +144,7 @@
           </div>
         </div>
 
-        <details v-if="group.allocations.length && actionable && group.scannedQty < group.qty" class="planned">
+        <details v-if="!aggregate && group.allocations.length && actionable && group.scannedQty < group.qty" class="planned">
           <summary class="subsection-title planned__summary">{{ $t('picking.itemsSection.planned') }}</summary>
           <div
             v-for="allocation in group.allocations"
@@ -198,6 +214,14 @@ type ShippingBox = PickingOrderDetail["boxes"][number];
 
 const props = defineProps<{
   items: PickingOrderDetail["items"];
+  /** Order-level scan record (flow config pickingScanRecord=aggregate):
+   *  unbound reel-scan packages — merged into the matching part group's
+   *  unboxed list + counted in its scanned total. */
+  orderScanRecord?: PickingItem["packages"];
+  /** Aggregate card mode: the operator only cares that the scans are right —
+   *  no per-line allocation detail; a scanned-qty breakdown by date/lot code
+   *  replaces the order-line list. */
+  aggregate?: boolean;
   /** Live queue rows (pending + failed) from usePickingScanSession. */
   queueRows: ScanQueueRow[];
   actionable: boolean;
@@ -277,17 +301,17 @@ interface ItemGroup {
   queuedQty: number;
 }
 
-function toGroup(key: string, items: PickingItem[], queuedByItem: Record<string, number>): ItemGroup {
+function toGroup(key: string, items: PickingItem[], queuedByItem: Record<string, number>, unbound: PickingItem["packages"]): ItemGroup {
   const packages = items.flatMap((i) => i.packages ?? []);
   return {
     key,
     title: (items[0].wclItemNo ?? items[0].partNo) || "",
     items,
     qty: items.reduce((sum, i) => sum + i.qty, 0),
-    scannedQty: items.reduce((sum, i) => sum + scannedQty(i), 0),
+    scannedQty: items.reduce((sum, i) => sum + scannedQty(i), 0) + unbound.reduce((sum, p) => sum + p.qty, 0),
     allocations: mergeAllocations(items.flatMap((i) => i.allocations ?? [])),
-    unboxed: packages.filter((p) => !p.shippingBoxId),
-    boxed: packages.filter((p) => p.shippingBoxId),
+    unboxed: [...packages.filter((p) => !p.shippingBoxId), ...unbound.filter((p) => !p.shippingBoxId)],
+    boxed: [...packages.filter((p) => p.shippingBoxId), ...unbound.filter((p) => p.shippingBoxId)],
     queuedQty: items.reduce((sum, i) => sum + (queuedByItem[i.id] ?? 0), 0),
   };
 }
@@ -302,8 +326,14 @@ const displayGroups = computed<ItemGroup[]>(() => {
     if (g) g.push(item);
     else groups.set(key, [item]);
   }
+  const record = props.orderScanRecord ?? [];
   return [...groups.entries()].map(([key, items]) =>
-    toGroup(key, items, queuedQtyByItem.value)
+    toGroup(
+      key,
+      items,
+      queuedQtyByItem.value,
+      record.filter((r) => normalizePartNo(r.scannedWclItemNo ?? r.scannedPartNo ?? "") === key)
+    )
   );
 });
 
@@ -336,6 +366,22 @@ const openBoxById = computed(() => {
   }
   return map;
 });
+
+/** Aggregate breakdown: committed scans of the group grouped by the label's
+ *  date/lot code (scanned values win over the lot snapshot). */
+function scanBreakdown(group: ItemGroup): { key: string; qty: number; label: string }[] {
+  const totals = new Map<string, { qty: number; label: string }>();
+  for (const pkg of [...group.unboxed, ...group.boxed]) {
+    const dateCode = pkg.scannedDateCode ?? pkg.dateCode;
+    const lotCode = pkg.scannedLotCode ?? pkg.lotCode;
+    const key = `${dateCode ?? ''}|${lotCode ?? ''}`;
+    const label = formatLotFields({ dateCode, lotCode, coo: pkg.scannedCoo ?? pkg.coo, cow: pkg.scannedCow ?? pkg.cow });
+    const cur = totals.get(key);
+    if (cur) cur.qty += pkg.qty;
+    else totals.set(key, { qty: pkg.qty, label });
+  }
+  return [...totals.entries()].map(([key, v]) => ({ key, ...v }));
+}
 
 function scannedQty(item: PickingItem) {
   return (item.packages ?? []).reduce((sum, p) => sum + p.qty, 0);

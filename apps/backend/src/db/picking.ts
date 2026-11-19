@@ -303,13 +303,14 @@ async function bumpAllocation(
 
 /** Box a package (picking_packages is the truth; no shipping_box_items mirror). */
 async function assignPackageToBoxTx(tx: DbOrTx, packageId: string, boxId: string): Promise<void> {
-  const pkg = await queryGet<{ pickingItemId: string }>(
+  const pkg = await queryGet<{ pickingItemId: string | null }>(
     tx,
     sql`SELECT picking_item_id AS "pickingItemId" FROM picking_packages WHERE id = ${packageId}`
   );
   if (!pkg) return;
   await queryRun(tx, sql`UPDATE picking_packages SET shipping_box_id = ${boxId}, last_update_date = ${now()} WHERE id = ${packageId}`);
-  await recomputePickingItem(tx, pkg.pickingItemId);
+  // Aggregate reel-scan rows have no item to recompute.
+  if (pkg.pickingItemId) await recomputePickingItem(tx, pkg.pickingItemId);
 }
 
 /** Unbox a package: clear shipping_box_id (and the verified flag, like the old code). */
@@ -323,7 +324,8 @@ async function unassignPackageFromBoxTx(tx: DbOrTx, packageId: string): Promise<
     tx,
     sql`UPDATE picking_packages SET shipping_box_id = NULL, verified = false, last_update_date = ${now()} WHERE id = ${packageId}`
   );
-  await recomputePickingItem(tx, pkg.pickingItemId);
+  // Aggregate reel-scan rows have no item to recompute.
+  if (pkg.pickingItemId) await recomputePickingItem(tx, pkg.pickingItemId);
 }
 
 /** One COO per box (spec 2026-10-16): a box should hold items of a single
