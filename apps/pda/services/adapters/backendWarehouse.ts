@@ -23,6 +23,7 @@ import type {
   FinishPickingOrderResult,
   FinishLabelPrintingResult,
   ScanPickingItemInput,
+  ScanPickingOrderReelInput,
   PickingShelfStockQuery,
   ShippingBoxUpdateInput,
   OpenShippingBox,
@@ -63,6 +64,7 @@ import type {
   ScanDecodeResult,
   PartOption,
   ScanPickingItemResult,
+  ScanPickingOrderReelResult,
   ScanIntoShippingBoxResult,
   PutAwayScanResult,
   CnPutAwayCompleteItem,
@@ -339,6 +341,36 @@ export function createBackendWarehouseService(
       return result;
     },
     // require-match scan-time presence check (pickingShelfScan flow config).
+    // Aggregate order-level reel scan (flow config pickingScanRecord=aggregate):
+    // one package row per scan, guards per part on the backend.
+    async scanPickingOrderReel(
+      orderId: string,
+      input: ScanPickingOrderReelInput
+    ): Promise<ScanPickingOrderReelResult> {
+      const result = await client.post<ScanPickingOrderReelResult>(`/picking-orders/${orderId}/scan-reel`, {
+        qty: input.qty,
+        partNo: input.partNo ?? undefined,
+        wclItemNo: input.wclItemNo ?? undefined,
+        drawingNo: input.drawingNo ?? undefined,
+        dateCode: input.dateCode ?? undefined,
+        lotCode: input.lotCode ?? undefined,
+        coo: input.coo ?? undefined,
+        cow: input.cow ?? undefined,
+        barcode: input.barcode ?? undefined,
+        scannedPartNo: input.scannedPartNo ?? undefined,
+        scannedWclItemNo: input.scannedWclItemNo ?? undefined,
+        scannedDateCode: input.scannedDateCode ?? undefined,
+        scannedLotCode: input.scannedLotCode ?? undefined,
+        scannedCoo: input.scannedCoo ?? undefined,
+        scannedCow: input.scannedCow ?? undefined,
+        scannedDrawingNo: input.scannedDrawingNo ?? undefined,
+        shippingBoxId: input.shippingBoxId ?? undefined,
+        shelfCode: input.shelfCode ?? undefined,
+        boxId: input.boxId ?? undefined,
+      });
+      if (result.outdatedWarning) emitOutdatedWarning(result.outdatedWarning as never);
+      return result;
+    },
     async getPickingShelfStock(query: PickingShelfStockQuery): Promise<{ qty: number }> {
       return client.get("/picking-shelf-stock", {
         partNo: query.partNo,

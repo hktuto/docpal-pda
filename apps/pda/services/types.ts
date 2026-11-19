@@ -588,6 +588,12 @@ export interface PickingPackage {
   scannedLotCode?: string | null;
   scannedCoo?: string | null;
   scannedCow?: string | null;
+  /** Scanned part identity (2026-10-05): the label's keys as scanned; set on
+   *  aggregate order-level scan-record rows for the per-part grouping. */
+  scannedPartNo?: string | null;
+  scannedWclItemNo?: string | null;
+  /** The label's own drawing code as scanned (2026-11-19 scan-truth). */
+  scannedDrawingNo?: string | null;
 }
 
 export interface PickingItem {
@@ -689,6 +695,10 @@ export interface PickingOrderDetail {
   items: PickingItem[];
   boxes: PickingBox[];
   suggestedBox: SuggestedShelfBox | null;
+  /** Order-level scan record (2026-11-19 aggregate scan-record): unbound
+   *  reel-scan packages — one row per scan, independent of line items.
+   *  Optional — backends predating the endpoint omit it. */
+  orderScanRecord?: PickingPackage[];
 }
 
 /** POST /picking-items/:id/scan body (the actor comes from the JWT). */
@@ -721,6 +731,39 @@ export interface ScanPickingItemInput {
    *  the shelf/box the operator last scanned; sent with every item scan. */
   shelfCode?: string | null;
   boxId?: string | null;
+}
+
+/** POST /picking-orders/:id/scan-reel — aggregate order-level scan (2026-11-19
+ *  aggregate scan-record spec, flow config pickingScanRecord=aggregate): ONE
+ *  package row per scan, guards per part (on-order identity + room check). */
+export interface ScanPickingOrderReelInput {
+  actorNotePlaceholder?: never;
+  qty: number;
+  /** Decoded label identity — any of these matches an order line. */
+  partNo?: string | null;
+  wclItemNo?: string | null;
+  drawingNo?: string | null;
+  dateCode?: string | null;
+  lotCode?: string | null;
+  coo?: string | null;
+  cow?: string | null;
+  barcode?: string | null;
+  scannedPartNo?: string | null;
+  scannedWclItemNo?: string | null;
+  scannedDateCode?: string | null;
+  scannedLotCode?: string | null;
+  scannedCoo?: string | null;
+  scannedCow?: string | null;
+  scannedDrawingNo?: string | null;
+  shippingBoxId?: string | null;
+  shelfCode?: string | null;
+  boxId?: string | null;
+}
+
+export interface ScanPickingOrderReelResult {
+  packageIds: string[];
+  partNo: string;
+  outdatedWarning?: unknown;
 }
 
 /** GET /picking-shelf-stock query — the require-match scan-time presence
@@ -1553,6 +1596,11 @@ export interface FlowConfig {
   /** Picking shelf-scan mode ("off" | "require-match" | "require-any").
    *  Optional — backends predating the feature omit it (= "off"). */
   pickingShelfScan?: "off" | "require-match" | "require-any";
+  /** Picking scan-record mode (2026-11-19 aggregate scan-record spec):
+   *  "item" (default) = per-line item-bound scans; "aggregate" = the PDA
+   *  posts order-level reel scans (one package row per scan, per-part room
+   *  checks). Optional — backends predating the key omit it (= "item"). */
+  pickingScanRecord?: "item" | "aggregate";
   /** The receiving enclave's label date-code format ("wwyy" | "yyww").
    *  Canonical storage downstream of receiving is always YYWW; the PDA
    *  canonicalizes scanned label codes before comparing them against lots.

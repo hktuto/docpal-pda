@@ -302,6 +302,54 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
     return { ok: true };
   }
 
+
+  /** Aggregate order-level scan (flow config pickingScanRecord=aggregate):
+   *  same duplicate/qty guards and row shape, but NO allocation room cap and
+   *  NO per-portion split — the backend's scan-reel endpoint enforces the
+   *  per-part identity + room checks and books one unbound package row.
+   *  allocationId stays empty; the page's confirm() posts to scan-reel. */
+  function addScanAggregate(
+    parsed: OcrInput,
+    raw: string,
+    source: ScanQueueRow["source"]
+  ): { ok: boolean; message?: string } {
+    if (appliedRaws.has(raw) || rows.value.some((r) => r.status === "queued" && r.raw === raw)) {
+      return { ok: false, message: "duplicate" };
+    }
+    const qty = typeof parsed.qty === "number" ? parsed.qty : Number(parsed.qty);
+    if (!normalize(String(parsed.partNo ?? "")) && !normalize(String(parsed.wclItemNo ?? ""))) {
+      return { ok: false, message: "invalid" };
+    }
+    if (!Number.isInteger(qty) || qty <= 0) return { ok: false, message: "invalid" };
+    const scanned = { partNo: String(parsed.partNo ?? ""), wclItemNo: parsed.wclItemNo };
+    const matched = matchingItems(scanned);
+    if (matched.length === 0) return { ok: false, message: "no_match" };
+    const item = matched[0];
+    rows.value.unshift({
+      key: `row-${nextKey++}`,
+      itemId: item.id,
+      allocationId: "",
+      partNo: item.partNo,
+      scannedPartNo: String(parsed.partNo ?? ""),
+      scannedWclItemNo: parsed.wclItemNo ?? null,
+      qty,
+      dateCode: parsed.dateCode || null,
+      lotCode: parsed.lotCode || null,
+      coo: parsed.coo || null,
+      cow: parsed.cow || null,
+      scannedDateCode: parsed.dateCode || null,
+      scannedLotCode: parsed.lotCode || null,
+      scannedCoo: parsed.coo || null,
+      scannedCow: parsed.cow || null,
+      scannedDrawingNo: parsed.drawingNo || null,
+      raw,
+      source,
+      status: "queued",
+      error: null,
+    });
+    return { ok: true };
+  }
+
   function removeRow(key: string) {
     rows.value = rows.value.filter((r) => r.key !== key || r.status === "applied");
   }
@@ -516,6 +564,9 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
   function reresolveQueued() {
     for (const row of rows.value) {
       if (row.status !== "queued") continue;
+      // Aggregate rows (order-level reel scans) are allocation-free — nothing
+      // to re-point; the backend consumes the part's allocations FIFO.
+      if (row.allocationId === "") continue;
       // Keep the label's WCL item no in the re-point: same part_no under two
       // brand item lines must not re-resolve to the wrong one (audit
       // 2026-11-03 #7).
@@ -567,5 +618,5 @@ export function usePickingScanQueue(items: Ref<OrderItems>, options?: PickingSca
     return rows.value.filter((r) => r.status === "failed").length;
   }
 
-  return { rows, queuedRows, queuedQtyByItem, addScan, findTargets, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, forgetAppliedRaw, reresolveQueued, applyAll };
+  return { rows, queuedRows, queuedQtyByItem, addScan, addScanAggregate, findTargets, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, forgetAppliedRaw, reresolveQueued, applyAll };
 }

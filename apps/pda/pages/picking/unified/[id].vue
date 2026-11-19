@@ -193,7 +193,11 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const { showToast } = useToast();
-const { flowSteps, pickingShelfScan: shelfScanMode, dateCodeFormat } = useFlowSteps();
+const { flowSteps, pickingShelfScan: shelfScanMode, dateCodeFormat, pickingScanRecord } = useFlowSteps();
+// Aggregate scan-record mode (flow config pickingScanRecord=aggregate): label
+// scans queue against the ORDER and confirm posts to scan-reel — one package
+// row per scan, per-part room checks (2026-11-19 spec).
+const aggregateScan = computed(() => pickingScanRecord.value === "aggregate");
 const { viewConfig } = useViewConfig();
 const { parseRawValue } = useLabelScan();
 
@@ -269,6 +273,8 @@ const session = usePickingScanSession({
   shelfMode: shelfScanMode,
   dateCodeFormat,
   shelfStockFn: async (q) => (await warehouse.getPickingShelfStock(q)).qty,
+  aggregate: aggregateScan,
+  order: computed(() => order.value ?? null),
 });
 const {
   rows,
@@ -476,6 +482,32 @@ watch(completed, (done) => {
 async function confirm() {
   const failed = await session.confirm(
     async (row) => {
+      if (aggregateScan.value) {
+        // Aggregate reel scan: one order-level row per scan; the backend
+        // validates the part identity + per-part room and consumes the
+        // part's allocations FIFO (allocationId is intentionally empty).
+        await warehouse.scanPickingOrderReel(orderId, {
+          qty: row.qty,
+          partNo: row.partNo,
+          wclItemNo: row.scannedWclItemNo ?? undefined,
+          drawingNo: row.scannedDrawingNo ?? undefined,
+          dateCode: row.dateCode ?? undefined,
+          lotCode: row.lotCode ?? undefined,
+          coo: row.coo ?? undefined,
+          cow: row.cow ?? undefined,
+          barcode: row.source === "qr" ? row.raw : undefined,
+          scannedPartNo: row.scannedPartNo ?? undefined,
+          scannedWclItemNo: row.scannedWclItemNo ?? undefined,
+          scannedDateCode: row.scannedDateCode ?? undefined,
+          scannedLotCode: row.scannedLotCode ?? undefined,
+          scannedCoo: row.scannedCoo ?? undefined,
+          scannedCow: row.scannedCow ?? undefined,
+          scannedDrawingNo: row.scannedDrawingNo ?? undefined,
+          shelfCode: requireShelfScan.value ? pendingShelf.value?.shelfCode ?? undefined : undefined,
+          boxId: requireShelfScan.value ? pendingShelf.value?.boxId ?? undefined : undefined,
+        });
+        return;
+      }
       await warehouse.scanPickingItem(row.itemId, {
         allocationId: row.allocationId,
         qty: row.qty,

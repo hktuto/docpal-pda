@@ -23,6 +23,8 @@ import type {
   FinishPickingOrderResult,
   FinishLabelPrintingResult,
   ScanPickingItemInput,
+  ScanPickingOrderReelInput,
+  ScanPickingOrderReelResult,
   PickingShelfStockQuery,
   ShippingBoxUpdateInput,
   OpenShippingBox,
@@ -128,6 +130,11 @@ export interface WarehouseService {
     itemId: string,
     input: ScanPickingItemInput
   ): Promise<ScanPickingItemResult>;
+  // Aggregate order-level reel scan (flow config pickingScanRecord=aggregate).
+  scanPickingOrderReel(
+    orderId: string,
+    input: ScanPickingOrderReelInput
+  ): Promise<ScanPickingOrderReelResult>;
   // require-match scan-time presence check: stock of the part at the shelf.
   getPickingShelfStock(query: PickingShelfStockQuery): Promise<{ qty: number }>;
   removeScannedPackage(packageId: string): Promise<void>;

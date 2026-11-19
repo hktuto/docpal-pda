@@ -35,6 +35,12 @@ export interface PickingScanSessionOptions {
   dateCodeFormat?: Ref<DateCodeFormat>;
   /** Backend shelf-stock probe (warehouse.getPickingShelfStock → qty). */
   shelfStockFn: (query: PickingShelfStockQuery) => Promise<number>;
+  /** Flow config pickingScanRecord = "aggregate" → label scans queue against
+   *  the ORDER (scan-reel) instead of line items; optional, default false. */
+  aggregate?: Ref<boolean>;
+  /** Live ref of the whole order (aggregate completion reads orderScanRecord
+   *  per part). Optional — only needed in aggregate mode. */
+  order?: Ref<PickingOrderDetail | null>;
 }
 
 /**
@@ -47,12 +53,16 @@ export interface PickingScanSessionOptions {
  * amendment 2026-10-14); the old scan page batch-applies on Confirm.
  */
 export function usePickingScanSession(options: PickingScanSessionOptions) {
-  const { orderItems, scope, shelfMode, shelfStockFn } = options;
+  const { orderItems, scope, shelfMode, shelfStockFn, aggregate } = options;
+  const isAggregate = () => aggregate?.value === true;
+  const orderRef = options.order;
   const { parseRawValue } = useLabelScan();
 
   const {
     rows,
+    queuedRows,
     addScan,
+    addScanAggregate,
     findTargets,
     matchBoxAllocations,
     matchCartonAllocations,
@@ -172,7 +182,7 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
         }
       }
     }
-    const result = addScan(parsed, raw, source);
+    const result = isAggregate() ? addScanAggregate(parsed, raw, source) : addScan(parsed, raw, source);
     return result.ok ? { ok: true, kind: "queued" } : { ok: false, message: result.message };
   }
 
@@ -256,12 +266,45 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
     return (item.packages ?? []).reduce((sum, p) => sum + p.qty, 0);
   }
 
+  /** Per-part scanned totals (2026-11-19 aggregate scan-record): bound
+   *  packages from the last fetch + the order-level scan record. */
+  function partScannedTotals(): Map<string, number> {
+    const totals = new Map<string, number>();
+    const order = orderRef?.value;
+    const bump = (part: string | null | undefined, qty: number) => {
+      if (!part) return;
+      totals.set(part, (totals.get(part) ?? 0) + qty);
+    };
+    for (const item of orderItems.value) {
+      for (const p of item.packages ?? []) bump(item.partNo, p.qty);
+    }
+    for (const p of order?.orderScanRecord ?? []) bump(orderItems.value.find((i) => normalizePartNo(i.partNo) === normalizePartNo(p.scannedWclItemNo ?? ""))?.partNo ?? p.scannedWclItemNo, p.qty);
+    return totals;
+  }
+
+  /** Per-part demand. */
+  function partDemands(): Map<string, number> {
+    const demand = new Map<string, number>();
+    for (const item of orderItems.value) {
+      demand.set(item.partNo, (demand.get(item.partNo) ?? 0) + item.qty);
+    }
+    return demand;
+  }
+
   // Progress-based completion (spec 2026-10-03): every item fully scanned
-  // (Σ packages from the last order fetch) with an empty queue.
+  // (Σ packages from the last order fetch) with an empty queue. Aggregate
+  // mode completes per part (bound + order-level scan record ≥ demand).
   const completed = computed(() => {
     const items = orderItems.value;
     if (items.length === 0) return false;
-    return queuedCount.value === 0 && items.every((i) => scannedQtyOf(i) >= i.qty);
+    if (queuedCount.value !== 0) return false;
+    if (!isAggregate()) return items.every((i) => scannedQtyOf(i) >= i.qty);
+    const totals = partScannedTotals();
+    const demand = partDemands();
+    for (const [part, qty] of demand) {
+      if ((totals.get(part) ?? 0) < qty) return false;
+    }
+    return true;
   });
 
   // The queued scans cover what the server has not confirmed yet — every
@@ -270,7 +313,14 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
   const orderMatched = computed(() => {
     const items = orderItems.value;
     if (items.length === 0 || queuedCount.value === 0) return false;
-    return items.every((i) => scannedQtyOf(i) + (queuedQtyByItem.value[i.id] ?? 0) >= i.qty);
+    if (!isAggregate()) return items.every((i) => scannedQtyOf(i) + (queuedQtyByItem.value[i.id] ?? 0) >= i.qty);
+    const demand = partDemands();
+    for (const item of items) {
+      const pending = queuedRows.value.filter((r) => r.partNo === item.partNo).reduce((s, r) => s + r.qty, 0);
+      const totals = partScannedTotals();
+      if ((totals.get(item.partNo) ?? 0) + pending < (demand.get(item.partNo) ?? 0)) return false;
+    }
+    return true;
   });
 
   // Remaining shelf/box (lot-sourced) pick work: the sticky shelf scan and

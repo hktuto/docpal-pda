@@ -365,6 +365,11 @@ export interface FlowConfig {
   pdaViewConfig: PdaViewConfigOverrides;
   /** Picking shelf-scan mode; default "off". */
   pickingShelfScan: PickingShelfScanMode;
+  /** Picking scan-record mode (2026-11-19 aggregate scan-record spec):
+   *  "item" (default) = per-line item-bound scans; "aggregate" = the PDA
+   *  posts order-level reel scans (POST /picking-orders/:id/scan-reel),
+   *  one package row per scan with per-part room checks. */
+  pickingScanRecord: "item" | "aggregate";
   /** Label/upstream (receiving enclave) date-code format; canonical storage
    *  downstream of receiving is always YYWW. Default "wwyy" (spec
    *  2026-10-22-datecode-format-config-design.md). */
@@ -529,6 +534,7 @@ function defaultFlowConfig(): FlowConfig {
     pdaListTemplates: defaultPdaListTemplates(),
     pdaViewConfig: {},
     pickingShelfScan: "off",
+    pickingScanRecord: "item",
     dateCodeFormat: "wwyy",
   };
 }
@@ -865,6 +871,13 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
       cfg.pickingShelfScan = value as PickingShelfScanMode;
       continue;
     }
+    if (key === "pickingScanRecord") {
+      if (typeof value !== "string" || !(["item", "aggregate"] as readonly string[]).includes(value)) {
+        throw new Error('[config] flow config.pickingScanRecord must be "item" or "aggregate"');
+      }
+      cfg.pickingScanRecord = value as "item" | "aggregate";
+      continue;
+    }
     if (key === "dateCodeFormat") {
       if (typeof value !== "string" || !(DATE_CODE_FORMATS as readonly string[]).includes(value)) {
         throw new Error('[config] flow config.dateCodeFormat must be "wwyy" or "yyww"');
@@ -1062,6 +1075,11 @@ export function pdaViewConfig(): PdaViewConfig {
  *  docs/superpowers/specs/2026-10-02-picking-shelf-scan-config-design.md). */
 export function pickingShelfScan(): PickingShelfScanMode {
   return flowConfig.pickingShelfScan;
+}
+
+/** Picking scan-record mode (2026-11-19 aggregate scan-record spec). */
+export function pickingScanRecord(): "item" | "aggregate" {
+  return flowConfig.pickingScanRecord;
 }
 
 /** Label/upstream (receiving enclave) date-code format; canonical storage is

@@ -1,5 +1,5 @@
 <template>
-  <div class="dev-scan-sim" v-show="false">
+  <div class="dev-scan-sim" v-show="true">
     <button type="button" class="dev-scan-sim__toggle" @click="open = !open">
       DEV SCAN
     </button>
@@ -262,7 +262,7 @@ watch(open, (isOpen) => {
   position: fixed;
   bottom: 1.25rem;
   left: 1.25rem;
-  z-index: 70;
+  z-index: 9999;
   font-size: 0.8125rem;
 }
 
