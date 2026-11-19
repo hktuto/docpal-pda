@@ -2786,6 +2786,10 @@ export async function verifyPackage(
     wclItemNo?: string;
     coo?: string;
     dateCode?: string;
+    /** Raw pick-time scan string — exact physical-label proof: when the
+     *  package carries a different labelBarcode, the re-scan cannot be the
+     *  same physical label (2026-11-19 aggregate reel scans). */
+    barcode?: string;
   }
 ): Promise<void> {
   return db.transaction(async (tx) => {
@@ -2802,12 +2806,14 @@ export async function verifyPackage(
       wclItemNo: string | null;
       coo: string | null;
       dateCode: string | null;
+      labelBarcode: string | null;
     }>(
       tx,
       sql`SELECT pp.id, pp.shipping_box_id AS "shippingBoxId", pp.verified,
                  pp.verify_verified AS "verifyVerified", pp.qty, pp.rescanned_qty AS "rescannedQty",
                  COALESCE(pi.picking_order_id, pp.picking_order_id) AS "pickingOrderId",
                  pp.label_verified AS "labelVerified",
+                 pp.label_barcode AS "labelBarcode",
                  COALESCE(pp.scanned_part_no, pi.part_no, pp.picking_part_no) AS "partNo",
                  COALESCE(pp.scanned_wcl_item_no, p.wcl_item_no, pp.picking_part_no) AS "wclItemNo",
                  COALESCE(pp.scanned_coo, pp.coo) AS coo,
@@ -2832,6 +2838,11 @@ export async function verifyPackage(
       if (input.wclItemNo !== undefined && pkg.wclItemNo && normalizePartNo(input.wclItemNo) !== normalizePartNo(pkg.wclItemNo)) differing.push("wclItemNo");
       if (input.coo !== undefined && pkg.coo && input.coo !== pkg.coo) differing.push("coo");
       if (input.dateCode !== undefined && pkg.dateCode && input.dateCode !== pkg.dateCode) differing.push("dateCode");
+      if (input.barcode !== undefined && pkg.labelBarcode && input.barcode.trim() !== pkg.labelBarcode.trim()) {
+        // The physical re-scan cannot be a label the package was never
+        // scanned from — one QR cannot finish multiple boxes.
+        differing.push("barcode");
+      }
       if (differing.length > 0) {
         throw new HTTPException(409, {
           res: new Response(JSON.stringify({ error: "label_item_mismatch", fields: differing }), {

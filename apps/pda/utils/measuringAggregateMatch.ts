@@ -61,6 +61,22 @@ export function matchAggregatePackages(
     .map((v) => normalizePartNo(v));
   if (scannedKeys.length === 0) return null;
 
+  // Exact-label gate (2026-11-19, aggregate reel scans): when the label
+  // carries a serial (e.g. NCC QR), the raw pick-time scan string identifies
+  // ONE physical reel — it may only credit THE package scanned from that
+  // exact label, never the same-part/lot sibling packages (without this the
+  // same QR finishes multiple boxes field-by-field).
+  const raw = rawLabel?.trim();
+  if (raw) {
+    const exact = packages.filter(
+      (pkg) =>
+        (!targetPackageId || pkg.id === targetPackageId) &&
+        !!pkg.labelBarcode &&
+        pkg.labelBarcode.trim() === raw
+    );
+    if (exact.length > 0) return creditPackages(exact, scan.qty);
+  }
+
   const dateCode = scanDateCode(scan);
   const lotCode = scanLotCode(scan);
   const coo = scanCoo(scan);
@@ -88,39 +104,9 @@ export function matchAggregatePackages(
     if (cow && pkgCow && cow !== pkgCow) return false;
     return true;
   });
-  if (eligible.length === 0) {
-    // No package matches the parsed fields at all — try the raw-label proof
-    // before giving up.
-    const raw = rawLabel?.trim();
-    if (raw) {
-      const byRawLabel = packages.filter(
-        (pkg) =>
-          (!targetPackageId || pkg.id === targetPackageId) &&
-          !!pkg.labelBarcode &&
-          pkg.labelBarcode.trim() === raw
-      );
-      if (byRawLabel.length > 0) return creditPackages(byRawLabel, scan.qty);
-    }
-    return null;
-  }
+  if (eligible.length === 0) return null;
 
-  const fieldMatch = creditPackages(eligible, scan.qty);
-  if (fieldMatch !== null) return fieldMatch;
-  // The parsed-field comparison matched nothing creditable (nothing eligible,
-  // all fully credited is 'already-done' above, or the qty exceeds the
-  // remaining) — the same physical label is provable by the raw pick-time
-  // scan string when the caller provides it.
-  const raw = rawLabel?.trim();
-  if (raw) {
-    const byRawLabel = packages.filter(
-      (pkg) =>
-        (!targetPackageId || pkg.id === targetPackageId) &&
-        !!pkg.labelBarcode &&
-        pkg.labelBarcode.trim() === raw
-    );
-    if (byRawLabel.length > 0) return creditPackages(byRawLabel, scan.qty);
-  }
-  return fieldMatch;
+  return creditPackages(eligible, scan.qty);
 }
 
 /** FIFO credit plan across the given packages (partial allowed). */

@@ -315,10 +315,14 @@ export function useScanMatchers(): ScanMatchers {
                   dateCode: parsed.dateCode
                     ? (toCanonicalDateCode(String(parsed.dateCode), format) ?? String(parsed.dateCode))
                     : undefined,
+                  // Exact-label proof: the physical re-scan must be the very
+                  // label the package was picked from (one QR cannot finish
+                  // multiple boxes).
+                  barcode: rawLabel?.trim() || undefined,
                 }
               : undefined;
             try {
-              await warehouse.verifyPackage(credit.packageId, credit.qty, batch);
+              await warehouse.verifyPackage(credit.packageId, credit.qty, batch ?? { barcode: rawLabel?.trim() || undefined });
             } catch (e: unknown) {
               if (e instanceof ApiError && e.body?.error === 'label_item_mismatch' && Array.isArray(e.body.fields)) {
                 const fields = (e.body.fields as unknown[])
