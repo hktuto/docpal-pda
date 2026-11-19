@@ -62,7 +62,7 @@
             class="lot package-row"
           >
             <span class="package-info">
-              {{ pkg.qty }} {{ $t('common.pcs') }} · {{ formatLotFields(pkg) }}
+              {{ pkg.qty }} {{ $t('common.pcs') }} · {{ formatLotFields({ dateCode: pkg.scannedDateCode ?? pkg.dateCode, lotCode: pkg.scannedLotCode ?? pkg.lotCode, coo: pkg.scannedCoo ?? pkg.coo, cow: pkg.scannedCow ?? pkg.cow }) }}
               <span v-if="pkg.labelBarcode" class="package-label"> · {{ $t('picking.itemsSection.label') }}: {{ pkg.labelBarcode }}</span>
             </span>
             <div class="package-actions">
