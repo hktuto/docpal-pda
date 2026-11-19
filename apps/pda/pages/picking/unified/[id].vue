@@ -913,14 +913,22 @@ async function addAllToBox(boxId: string) {
   }
 }
 
+
+/** Find a package across the item-bound views and the order-level scan
+ *  record (aggregate reel scans live only in orderScanRecord). */
+function findPackage(packageId: string) {
+  return order.value?.items
+    .flatMap((i) => i.packages ?? [])
+    .find((p) => p.id === packageId)
+    ?? (order.value?.orderScanRecord ?? []).find((p) => p.id === packageId);
+}
+
 async function addToBox(packageId: string) {
   const boxId = boxSelections.value[packageId];
   if (!boxId) return;
   // One COO per box (spec 2026-10-16) — client-side guard for a friendly
   // message; the backend's 409 box_coo_mismatch is the safety net.
-  const pkg = order.value?.items
-    .flatMap((i) => i.packages ?? [])
-    .find((p) => p.id === packageId);
+  const pkg = findPackage(packageId);
   if (pkg && cooConflict(boxId, pkg.coo)) {
     showToast(t("errors.box_coo_mismatch", { coos: boxCoos(boxId).join(" / ") }));
     return;
@@ -941,9 +949,7 @@ async function addToBox(packageId: string) {
 }
 
 async function removeFromBox(packageId: string) {
-  const pkg = order.value?.items
-    .flatMap((i) => i.packages ?? [])
-    .find((p) => p.id === packageId);
+  const pkg = findPackage(packageId);
   if (!pkg?.shippingBoxId) return;
   removing.value[packageId] = true;
   try {
@@ -961,9 +967,7 @@ async function removeFromBox(packageId: string) {
  *  first, like put-away's committed-scan removal. 409 package_already_in_box
  *  / package_already_verified keep boxed/verified packages safe. */
 async function removeScan(packageId: string) {
-  const pkg = order.value?.items
-    .flatMap((i) => i.packages ?? [])
-    .find((p) => p.id === packageId);
+  const pkg = findPackage(packageId);
   if (!pkg || pkg.shippingBoxId) return;
   if (!window.confirm(t("picking.itemsSection.removeScanConfirm", { qty: pkg.qty }))) return;
   removingScans.value[packageId] = true;

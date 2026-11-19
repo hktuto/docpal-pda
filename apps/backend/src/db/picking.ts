@@ -3181,11 +3181,13 @@ export async function removePackageFromBox(
   input: { shippingBoxId: string; packageId: string; actorId: string }
 ): Promise<void> {
   return db.transaction(async (tx) => {
-    const pkg = await queryGet<{ id: string; pickingItemId: string; pickingOrderId: string; shippingBoxId: string | null; qty: number; partNo: string }>(
+    const pkg = await queryGet<{ id: string; pickingItemId: string | null; pickingOrderId: string; shippingBoxId: string | null; qty: number; partNo: string }>(
       tx,
-      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pi.picking_order_id AS "pickingOrderId",
-                 pp.shipping_box_id AS "shippingBoxId", pp.qty, pi.part_no AS "partNo"
-          FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id WHERE pp.id = ${input.packageId}`
+      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", COALESCE(pp.picking_order_id, pi.picking_order_id) AS "pickingOrderId",
+                 pp.shipping_box_id AS "shippingBoxId", pp.qty, COALESCE(pi.part_no, pp.picking_part_no) AS "partNo"
+          FROM picking_packages pp
+          LEFT JOIN picking_items pi ON pi.id = pp.picking_item_id
+          WHERE pp.id = ${input.packageId}`
     );
     if (!pkg || pkg.shippingBoxId !== input.shippingBoxId) {
       throw new HTTPException(404, { message: "package_not_found" });
@@ -3197,14 +3199,25 @@ export async function removePackageFromBox(
     if (order.status === "issue") throw new HTTPException(409, { message: "picking_order_has_open_issue" });
 
     await unassignPackageFromBoxTx(tx, pkg.id);
-    await logTransition(tx, {
-      entityType: "picking_item",
-      entityId: pkg.pickingItemId,
-      fromState: "boxed",
-      toState: "scanned",
-      actorId: input.actorId,
-      metadata: { qty: pkg.qty, box: box.id, partNo: pkg.partNo },
-    });
+    if (pkg.pickingItemId) {
+      await logTransition(tx, {
+        entityType: "picking_item",
+        entityId: pkg.pickingItemId,
+        fromState: "boxed",
+        toState: "scanned",
+        actorId: input.actorId,
+        metadata: { qty: pkg.qty, box: box.id, partNo: pkg.partNo },
+      });
+    } else {
+      await logTransition(tx, {
+        entityType: "picking_order",
+        entityId: pkg.pickingOrderId,
+        fromState: "boxed_reel",
+        toState: "scanned_reel",
+        actorId: input.actorId,
+        metadata: { qty: pkg.qty, box: box.id, partNo: pkg.partNo, package: pkg.id },
+      });
+    }
   });
 }
 
