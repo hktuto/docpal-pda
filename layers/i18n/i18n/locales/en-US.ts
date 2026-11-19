@@ -530,6 +530,7 @@ export default {
       receivingArea: "Receiving area",
       allocatedQty: "Allocated qty",
       unboxedPackages: "Unboxed packages",
+      scannedBreakdown: "Scanned breakdown (by date/lot)",
       boxedPackages: "Boxed packages",
       selectBox: "Select box",
       addToBox: "Add to box",

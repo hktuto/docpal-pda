@@ -529,6 +529,7 @@ export default {
       receivingArea: "收货区",
       allocatedQty: "已分配数量",
       unboxedPackages: "未装箱包裹",
+      scannedBreakdown: "扫描分布（按日期/批号）",
       boxedPackages: "已装箱包裹",
       selectBox: "选择箱子",
       addToBox: "添加到箱子",
