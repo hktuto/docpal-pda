@@ -289,8 +289,8 @@ test("detail: suggested net weight is null when no package has a formula row", a
       VALUES (${bareItemId}, ${bareOrderId}, 'RK73B1JTTD181G', 100, 9003, 1, 1, now(), now())`);
   await client.db.execute(sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_date, last_update_date)
       VALUES (${bareBoxId}, ${bareOrderId}, 'open', now(), now())`);
-  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
-      VALUES (${randomUUID()}, ${bareItemId}, ${bareOrderId}, 'inventory_lot', 'bare-src', 100, ${bareBoxId}, now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
+      VALUES (${randomUUID()}, ${bareItemId}, (SELECT part_no FROM picking_items WHERE id = ${bareItemId}), ${bareOrderId}, 'inventory_lot', 'bare-src', 100, ${bareBoxId}, now(), now())`);
 
   const detail = await getMeasuringBoxDetail(client.db, bareBoxId);
   assert.equal(detail.suggestedNetWeightKg, null);

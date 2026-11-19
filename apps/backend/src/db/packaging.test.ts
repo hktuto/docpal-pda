@@ -116,8 +116,8 @@ async function orderInBox(orderNo: string, boxId: string, status = "picking_fini
       VALUES (${orderId}, ${orderNo}, ${status}, now(), now())`);
   await client.db.execute(sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, created_date, last_update_date)
       VALUES (${itemId}, ${orderId}, 'RK73B1JTTD181G', 100, now(), now())`);
-  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
-      VALUES (${randomUUID()}, ${itemId}, ${orderId}, 'inventory_lot', 'x-order-src', 100, ${boxId}, now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
+      VALUES (${randomUUID()}, ${itemId}, (SELECT part_no FROM picking_items WHERE id = ${itemId}), ${orderId}, 'inventory_lot', 'x-order-src', 100, ${boxId}, now(), now())`);
   return orderId;
 }
 

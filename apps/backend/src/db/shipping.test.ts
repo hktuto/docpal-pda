@@ -226,8 +226,8 @@ test("shipPickingOrder: ships the order's ready boxes per box; 404 unknown; 409 
       VALUES (${orderB}, 'SO-SHIP-B', 'picking_finished', now(), now())`);
   await client.db.execute(sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, created_date, last_update_date)
       VALUES (${itemId}, ${orderB}, 'RK73B1JTTD181G', 1, now(), now())`);
-  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
-      VALUES (${randomUUID()}, ${itemId}, ${orderB}, 'inventory_lot', 'x', 1, ${fx.boxId}, now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
+      VALUES (${randomUUID()}, ${itemId}, (SELECT part_no FROM picking_items WHERE id = ${itemId}), ${orderB}, 'inventory_lot', 'x', 1, ${fx.boxId}, now(), now())`);
   const resultB = await shipPickingOrder(client.db, orderB, fx.actorId);
   assert.deepEqual(resultB.shippedBoxIds, []);
   assert.equal(resultB.failed.length, 1);
@@ -414,10 +414,10 @@ async function seedShipWorld(): Promise<ShipWorld> {
   await client.db.execute(sql`INSERT INTO shipping_boxes (id, picking_order_id, status, destination_country, box_size, net_weight, gross_weight, created_date, last_update_date)
       VALUES (${box1Id}, ${orderAId}, 'closed', 'HK', '26 X 20 X 20', 0.5, 0.8, now(), now()),
              (${box2Id}, ${orderBId}, 'closed', 'HK', '26 X 20 X 20', 0.2, 0.3, now(), now())`);
-  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, verified, created_date, last_update_date)
-      VALUES (${randomUUID()}, ${itemAId}, ${orderAId}, 'inventory_lot', 'ship-src-a', 100, ${box1Id}, true, now(), now()),
-             (${randomUUID()}, ${itemBId}, ${orderBId}, 'inventory_lot', 'ship-src-b1', 25, ${box1Id}, true, now(), now()),
-             (${randomUUID()}, ${itemBId}, ${orderBId}, 'inventory_lot', 'ship-src-b2', 25, ${box2Id}, true, now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, shipping_box_id, verified, created_date, last_update_date)
+      VALUES (${randomUUID()}, ${itemAId}, (SELECT part_no FROM picking_items WHERE id = ${itemAId}), ${orderAId}, 'inventory_lot', 'ship-src-a', 100, ${box1Id}, true, now(), now()),
+             (${randomUUID()}, ${itemBId}, (SELECT part_no FROM picking_items WHERE id = ${itemBId}), ${orderBId}, 'inventory_lot', 'ship-src-b1', 25, ${box1Id}, true, now(), now()),
+             (${randomUUID()}, ${itemBId}, (SELECT part_no FROM picking_items WHERE id = ${itemBId}), ${orderBId}, 'inventory_lot', 'ship-src-b2', 25, ${box2Id}, true, now(), now())`);
   await client.db.execute(sql`INSERT INTO verify_tasks (id, shipping_box_id, status, created_date, last_update_date)
       VALUES (${randomUUID()}, ${box1Id}, 'completed', now(), now()),
              (${randomUUID()}, ${box2Id}, 'completed', now(), now())`);

@@ -29,6 +29,7 @@ import {
   resolvePickingOrderIssue,
   scanIntoShippingBox,
   scanPickingItem,
+  scanPickingOrderReel,
   updateShippingBox,
   verifyPackage,
   type PickingIssueEntry,
@@ -260,6 +261,57 @@ pickingRoute.post("/picking-items/:id/scan", async (c) => {
 pickingRoute.delete("/packages/:id", async (c) => {
   await removeScannedPackage(db, { packageId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json({ ok: true }, 200);
+});
+
+// Order-level aggregate reel scan (2026-11-19 aggregate scan-record spec):
+// one scan = one picking_packages row, guards per part (on-order identity +
+// room check), no line-item binding. Body adds the decoded identity keys
+// partNo/wclItemNo/drawingNo on top of the item-scan body.
+pickingRoute.post("/picking-orders/:id/scan-reel", async (c) => {
+  const body = await readJson<{
+    qty?: number;
+    partNo?: string;
+    wclItemNo?: string;
+    drawingNo?: string;
+    dateCode?: string;
+    lotCode?: string;
+    coo?: string;
+    cow?: string;
+    barcode?: string;
+    scannedPartNo?: string;
+    scannedWclItemNo?: string;
+    scannedDateCode?: string;
+    scannedLotCode?: string;
+    scannedCoo?: string;
+    scannedCow?: string;
+    scannedDrawingNo?: string;
+    shippingBoxId?: string;
+    shelfCode?: string;
+    boxId?: string;
+  }>(c);
+  const result = await scanPickingOrderReel(db, c.req.param("id"), {
+    actorId: actorFrom(c).id,
+    qty: body.qty as number,
+    partNo: body.partNo ?? null,
+    wclItemNo: body.wclItemNo ?? null,
+    drawingNo: body.drawingNo ?? null,
+    dateCode: body.dateCode ?? null,
+    lotCode: body.lotCode ?? null,
+    coo: body.coo ?? null,
+    cow: body.cow ?? null,
+    barcode: body.barcode ?? null,
+    scannedPartNo: body.scannedPartNo ?? null,
+    scannedWclItemNo: body.scannedWclItemNo ?? null,
+    scannedDateCode: body.scannedDateCode ?? null,
+    scannedLotCode: body.scannedLotCode ?? null,
+    scannedCoo: body.scannedCoo ?? null,
+    scannedCow: body.scannedCow ?? null,
+    scannedDrawingNo: body.scannedDrawingNo ?? null,
+    shippingBoxId: body.shippingBoxId,
+    shelfCode: body.shelfCode ?? null,
+    boxId: body.boxId ?? null,
+  });
+  return c.json(result, 201);
 });
 
 // Whole-box exact-match claim: reuse a shelf carton whose contents exactly

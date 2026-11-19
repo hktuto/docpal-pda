@@ -62,8 +62,8 @@ async function seedTask(lot: Awaited<ReturnType<typeof seedLot>>, opts: { shelf:
   );
   const pkgId = randomUUID();
   await client.db.execute(
-    sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
-        VALUES (${pkgId}, ${itemId}, ${orderId}, 'inventory_lot', ${lot.id}, 10, now(), now())`
+    sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
+        VALUES (${pkgId}, ${itemId}, (SELECT part_no FROM picking_items WHERE id = ${itemId}), ${orderId}, 'inventory_lot', ${lot.id}, 10, now(), now())`
   );
   const taskId = randomUUID();
   await client.db.execute(

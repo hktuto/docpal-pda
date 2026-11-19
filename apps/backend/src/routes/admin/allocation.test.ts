@@ -1650,8 +1650,8 @@ test("allocate-group: a line's picked packages still cap its headroom", async ()
   );
   // 150 of line 1's 200 is already packed — only 50 of headroom remains.
   await client.db.execute(sql`
-    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
-    VALUES ('PKG-GRP-1', ${line1!.id}, ${orderId}, 'inventory_lot', 'LOT-GRP-7', 150, now(), now())
+    INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
+    VALUES ('PKG-GRP-1', ${line1!.id}, (SELECT part_no FROM picking_items WHERE id = ${line1!.id}), ${orderId}, 'inventory_lot', 'LOT-GRP-7', 150, now(), now())
   `);
 
   // 450 = 50 + 300 + 100: line 1 caps at its remaining 50, the rest flows on.

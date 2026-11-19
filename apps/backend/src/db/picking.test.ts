@@ -19,6 +19,7 @@ import {
   closeShippingBox,
   createShippingBox,
   finishPickingOrder,
+  scanPickingOrderReel,
   getPickingOrderDetail,
   getPickingShelfStock,
   listOpenShippingBoxes,
@@ -674,6 +675,69 @@ test("scan guards: over-allocation, over-required, ownership, actor, qty, order 
 
 // --- shared-lot scan race (audit 2026-11-03 #2) --------------------------------
 
+// --- aggregate order-level reel scan (2026-11-19 aggregate scan-record spec) ---
+
+test("scan-reel: one scan = one unbound package row, per-part room check, finish by part totals", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf();
+  // Dedicated order — one item, 1000 pcs, so the finish check covers only
+  // this part.
+  const orderId = await insertPickingOrder("SO-REEL-1", "pending");
+  const item = await insertPickingItem(orderId, "RK73H1JTTD1002F", 1000);
+  await allocateForPickingOrder(client.db, orderId);
+
+  // Scan 1: reel of 750 (qty from the label, not the line pre-fill).
+  const scan1 = await scanPickingOrderReel(client.db, orderId, {
+    actorId,
+    qty: 750,
+    partNo: "RK73H1JTTD1002F",
+    barcode: "2811225000000000000000750123",
+    scannedDateCode: "2551",
+    scannedDrawingNo: "624500",
+  });
+  const pkg1 = await queryGet<{
+    pickingItemId: string | null;
+    partNo: string;
+    qty: number;
+    scannedDateCode: string | null;
+    scannedDrawingNo: string | null;
+  }>(
+    client.db,
+    sql`SELECT picking_item_id AS "pickingItemId", picking_part_no AS "partNo", qty,
+               scanned_date_code AS "scannedDateCode", scanned_drawing_no AS "scannedDrawingNo"
+        FROM picking_packages WHERE id = ${scan1.packageIds[0]}`
+  );
+  assert.equal(pkg1!.pickingItemId, null); // unbound — one row per scan
+  assert.equal(pkg1!.partNo, "RK73H1JTTD1002F");
+  assert.equal(pkg1!.qty, 750);
+  assert.equal(pkg1!.scannedDrawingNo, "624500");
+
+  // 750 + 250 = 1000 = demand — finishes exactly; 251 would be rejected.
+  const overflow = await catchHttp(scanPickingOrderReel(client.db, orderId, {
+    actorId, qty: 251, partNo: "RK73H1JTTD1002F",
+  }));
+  assert.equal(overflow.status, 409);
+  assert.equal((await overflow.res!.text()).includes("\"no_room_for_part\""), true);
+
+  // The part is not on the order — rejected.
+  const offOrder = await catchHttp(scanPickingOrderReel(client.db, orderId, {
+    actorId, qty: 10, partNo: "NOT-ON-ORDER-1",
+  }));
+  assert.equal(offOrder.status, 404);
+  assert.equal(offOrder.message, "reel_part_not_on_order");
+
+  // Second scan of 250 → part fully covered → finish succeeds with the
+  // order-level packages (unbound) counted by part totals.
+  await scanPickingOrderReel(client.db, orderId, { actorId, qty: 250, partNo: "RK73H1JTTD1002F" });
+  await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
+  const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`);
+  assert.equal(order!.status, "picking_finished");
+  // Item-level bookkeeping untouched by unbound rows (picked_qty stays 0);
+  // the part totals are the completion truth.
+  const picked = await queryGet<{ pickedQty: number }>(client.db, sql`SELECT picked_qty AS "pickedQty" FROM picking_items WHERE id = ${item}`);
+  assert.equal(picked!.pickedQty, 0);
+});
+
 test("scan race: two orders draining one lot — guarded decrement, lot never negative", async () => {
   await reseed(client);
   const actorA = await actorIdOf("operator");
@@ -846,8 +910,8 @@ test("boxes: membership add/remove, cancel; cross-order add allowed (box-scoped 
   ))!.id;
   const otherPkgId = randomUUID();
   await client.db.execute(
-    sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
-        VALUES (${otherPkgId}, ${otherItemId}, ${otherOrderId}, 'inventory_lot', ${lotId}, 100, now(), now())`
+    sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
+        VALUES (${otherPkgId}, ${otherItemId}, 'RK73H1JTTD1002F', ${otherOrderId}, 'inventory_lot', ${lotId}, 100, now(), now())`
   );
   await addPackageToBox(client.db, { shippingBoxId: boxA.id, packageId: otherPkgId, actorId });
   const crossBoxed = await queryGet<{ shippingBoxId: string | null }>(
@@ -1639,8 +1703,8 @@ test("work lock: finishing the order clears the lock", async () => {
         VALUES (${boxId}, ${orderId}, 'open', now(), now())`
   );
   await client.db.execute(
-    sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
-        VALUES (${randomUUID()}, ${itemId}, ${orderId}, 'inventory_lot', 'test-lot', 5, ${boxId}, now(), now())`
+    sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
+        VALUES (${randomUUID()}, ${itemId}, 'RK73H1JTTD1002F', ${orderId}, 'inventory_lot', 'test-lot', 5, ${boxId}, now(), now())`
   );
   await client.db.execute(sql`UPDATE picking_items SET picked_qty = 5 WHERE id = ${itemId}`);
 

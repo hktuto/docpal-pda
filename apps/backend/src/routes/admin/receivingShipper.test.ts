@@ -453,8 +453,8 @@ test("GET shipper?mode=finished: slots come from actual picked packages", async 
   // Actuals: 400 picked straight off ctn 7001 (dock stock), and 150 of the
   // no-ctn part picked from a put-away lot traced via inventory_lot_sources.
   await client.db.execute(sql`
-    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
-    VALUES (${randomUUID()}, ${piH2.id}, ${so1!.id}, 'receiving_invoice_item', ${ctn7001.id}, 400, now(), now())
+    INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, ${piH2.id}, (SELECT part_no FROM picking_items WHERE id = ${piH2.id}), ${so1!.id}, 'receiving_invoice_item', ${ctn7001.id}, 400, now(), now())
   `);
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
@@ -465,8 +465,8 @@ test("GET shipper?mode=finished: slots come from actual picked packages", async 
     VALUES (${randomUUID()}, 'LOT-FIN-01', ${noCtn.id}, 500, now(), now())
   `);
   await client.db.execute(sql`
-    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
-    VALUES (${randomUUID()}, ${piH1.id}, ${so1!.id}, 'inventory_lot', 'LOT-FIN-01', 150, now(), now())
+    INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, ${piH1.id}, (SELECT part_no FROM picking_items WHERE id = ${piH1.id}), ${so1!.id}, 'inventory_lot', 'LOT-FIN-01', 150, now(), now())
   `);
 
   // Order completed.
@@ -857,10 +857,10 @@ test("GET shipper?mode=finished split: package slots attribute per section", asy
     )
   )!;
   await client.db.execute(sql`
-    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
+    INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
     VALUES
-      (${randomUUID()}, ${piA.id}, ${so1.id}, 'receiving_invoice_item', ${items.find((i) => i.ctnNo === "9001")!.id}, 40, now(), now()),
-      (${randomUUID()}, ${piB.id}, ${so2.id}, 'receiving_invoice_item', ${items.find((i) => i.ctnNo === "9002")!.id}, 70, now(), now())
+      (${randomUUID()}, ${piA.id}, (SELECT part_no FROM picking_items WHERE id = ${piA.id}), ${so1.id}, 'receiving_invoice_item', ${items.find((i) => i.ctnNo === "9001")!.id}, 40, now(), now()),
+      (${randomUUID()}, ${piB.id}, (SELECT part_no FROM picking_items WHERE id = ${piB.id}), ${so2.id}, 'receiving_invoice_item', ${items.find((i) => i.ctnNo === "9002")!.id}, 70, now(), now())
   `);
   await client.db.execute(sql`UPDATE receiving_orders SET status = 'clear' WHERE id = ${orderId}`);
 

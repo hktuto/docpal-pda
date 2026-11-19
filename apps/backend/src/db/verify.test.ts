@@ -295,9 +295,9 @@ test("complete: last pending verify task flips picking_finished → measuring_fi
   await client.db.execute(sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_date, last_update_date)
       VALUES (${box1Id}, ${orderId}, 'closed', now(), now()),
              (${box2Id}, ${orderId}, 'closed', now(), now())`);
-  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, rescanned_qty, shipping_box_id, created_date, last_update_date)
-      VALUES (${pkg1Id}, ${itemId}, ${orderId}, 'inventory_lot', 'verify-src-1', 50, 50, ${box1Id}, now(), now()),
-             (${pkg2Id}, ${itemId}, ${orderId}, 'inventory_lot', 'verify-src-2', 50, 50, ${box2Id}, now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, rescanned_qty, shipping_box_id, created_date, last_update_date)
+      VALUES (${pkg1Id}, ${itemId}, (SELECT part_no FROM picking_items WHERE id = ${itemId}), ${orderId}, 'inventory_lot', 'verify-src-1', 50, 50, ${box1Id}, now(), now()),
+             (${pkg2Id}, ${itemId}, (SELECT part_no FROM picking_items WHERE id = ${itemId}), ${orderId}, 'inventory_lot', 'verify-src-2', 50, 50, ${box2Id}, now(), now())`);
   const task1Id = randomUUID();
   const task2Id = randomUUID();
   await client.db.execute(sql`INSERT INTO verify_tasks (id, shipping_box_id, status, created_date, last_update_date)
@@ -598,9 +598,9 @@ test("measuring off: a cross-order box gets its verify task only once every orde
              (${itemB}, ${orderB}, 'RK73H1JTTD1002F', 50, 50, 9302, 1, 1, now(), now())`);
   await client.db.execute(sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_date, last_update_date)
       VALUES (${boxId}, ${orderA}, 'open', now(), now())`);
-  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, rescanned_qty, shipping_box_id, created_date, last_update_date)
-      VALUES (${randomUUID()}, ${itemA}, ${orderA}, 'inventory_lot', 'xorder-src-1', 100, 100, ${boxId}, now(), now()),
-             (${randomUUID()}, ${itemB}, ${orderB}, 'inventory_lot', 'xorder-src-2', 50, 50, ${boxId}, now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, rescanned_qty, shipping_box_id, created_date, last_update_date)
+      VALUES (${randomUUID()}, ${itemA}, (SELECT part_no FROM picking_items WHERE id = ${itemA}), ${orderA}, 'inventory_lot', 'xorder-src-1', 100, 100, ${boxId}, now(), now()),
+             (${randomUUID()}, ${itemB}, (SELECT part_no FROM picking_items WHERE id = ${itemB}), ${orderB}, 'inventory_lot', 'xorder-src-2', 50, 50, ${boxId}, now(), now())`);
 
   // finishing A alone: B is still picking → no task yet
   await finishPickingOrder(client.db, { pickingOrderId: orderA, actorId });

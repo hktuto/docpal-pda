@@ -310,8 +310,8 @@ async function crossOrderBox(): Promise<{ orderA: string; orderB: string; boxId:
   ] as const) {
     await client.db.execute(sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, picked_qty, line_id, line_number, shipment_number, created_date, last_update_date)
         VALUES (${itemId}, ${orderId}, 'RK73H1JTTD1002F', 10, 10, 9301, 1, 1, now(), now())`);
-    await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
-        VALUES (${pkgId}, ${itemId}, ${orderId}, 'inventory_lot', 'label-src', 10, ${boxId}, now(), now())`);
+    await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
+        VALUES (${pkgId}, ${itemId}, (SELECT part_no FROM picking_items WHERE id = ${itemId}), ${orderId}, 'inventory_lot', 'label-src', 10, ${boxId}, now(), now())`);
   }
   return { orderA, orderB, boxId, actorId };
 }

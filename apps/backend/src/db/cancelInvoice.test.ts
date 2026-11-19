@@ -193,8 +193,8 @@ test("cancel_invoice with a picked boxed package → put-back task + item (sourc
   );
   const pkgId = randomUUID();
   await client.db.execute(
-    sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
-        VALUES (${pkgId}, ${alloc.itemId}, ${orderId}, 'inventory_lot', ${alloc.lotId}, 10, ${boxId}, now(), now())`
+    sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
+        VALUES (${pkgId}, ${alloc.itemId}, (SELECT part_no FROM picking_items WHERE id = ${alloc.itemId}), ${orderId}, 'inventory_lot', ${alloc.lotId}, 10, ${boxId}, now(), now())`
   );
 
   const sourceId = await insertInvoiceCancel("SO-DEMO-0001");

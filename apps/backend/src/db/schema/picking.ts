@@ -183,7 +183,14 @@ export const pickingPackages = pgTable(
   "picking_packages",
   {
     id: text("id").primaryKey(),
-    pickingItemId: text("picking_item_id").notNull().references(() => pickingItems.id, { onDelete: "cascade" }),
+    // NULL for aggregate order-level reel scans (2026-11-19 aggregate scan
+    // record spec): one scan = one row regardless of item boundaries; item
+    // fulfillment is derived FIFO from picking_part_no at read/finish time.
+    // Legacy rows keep the item binding.
+    pickingItemId: text("picking_item_id").references(() => pickingItems.id, { onDelete: "cascade" }),
+    // NOT NULL — the part actually scanned; drives part-level room checks,
+    // finish checks and the derived item consumption mapping.
+    pickingPartNo: text("picking_part_no").notNull(),
     pickingOrderId: text("picking_order_id").notNull().references(() => pickingOrders.id, { onDelete: "cascade" }),
     sourceType: text("source_type").notNull(), // receiving_invoice_item | inventory_lot
     sourceId: text("source_id").notNull(),
@@ -233,6 +240,7 @@ export const pickingPackages = pgTable(
     itemIdx: index("idx_picking_packages_item").on(t.pickingItemId),
     orderIdx: index("idx_picking_packages_order").on(t.pickingOrderId),
     boxIdx: index("idx_picking_packages_box").on(t.shippingBoxId),
+    orderPartIdx: index("idx_picking_packages_order_part").on(t.pickingOrderId, t.pickingPartNo),
   })
 );
 

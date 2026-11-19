@@ -388,7 +388,9 @@ interface BoxLotRow {
   cow: string | null;
 }
 
-/** Open demand per part_no: qty − Σ picking_packages, zero-open parts excluded. */
+/** Open demand per part_no: qty − Σ picking_packages, zero-open parts excluded.
+ *  Unbound aggregate packages (order-level reel scans, picking_item_id NULL)
+ *  are subtracted at the part level — they belong to no single line. */
 async function loadOpenDemand(dbOrTx: DbOrTx, orderId: string): Promise<Map<string, number>> {
   const rows = await queryAll<{ partNo: string; openQty: number }>(
     dbOrTx,
@@ -401,10 +403,22 @@ async function loadOpenDemand(dbOrTx: DbOrTx, orderId: string): Promise<Map<stri
         ) pkg ON pkg.picking_item_id = pi.id
         WHERE pi.picking_order_id = ${orderId}`
   );
+  const unbound = await queryAll<{ partNo: string; qty: number }>(
+    dbOrTx,
+    sql`SELECT picking_part_no AS "partNo", SUM(qty)::int AS qty
+        FROM picking_packages
+        WHERE picking_order_id = ${orderId} AND picking_item_id IS NULL
+        GROUP BY picking_part_no`
+  );
   const demand = new Map<string, number>();
   for (const r of rows) {
-    if (r.openQty <= 0) continue;
     demand.set(r.partNo, (demand.get(r.partNo) ?? 0) + r.openQty);
+  }
+  for (const u of unbound) {
+    demand.set(u.partNo, (demand.get(u.partNo) ?? 0) - u.qty);
+  }
+  for (const [part, open] of demand) {
+    if (open <= 0) demand.delete(part);
   }
   return demand;
 }
@@ -1460,7 +1474,9 @@ export async function getPickingOrderDetail(
 
 export interface ScanPickingItemInput {
   actorId: string;
-  allocationId: string;
+  /** Unused by the order-level reel scan (scanPickingOrderReel) — the part's
+   *  allocations are consumed FIFO without a caller-pinned one. */
+  allocationId?: string;
   qty: number;
   /** When set, the created package(s) are boxed straight into this (open)
    *  shipping box — the scan-into-box flow behind POST /shipping-boxes/:id/scan. */
@@ -1700,6 +1716,142 @@ export async function getPickingShelfStock(
  * package(s) land boxed in that (open) box straight away (scanned→boxed
  * transitions + carton prefill), skipping the separate add-to-box step.
  */
+/** Consume one allocation's source into package portions (shared by the
+ *  item-bound scan and the order-level reel scan, 2026-11-19 aggregate
+ *  scan-record spec). Deducts the source (lot total_qty / receiving
+ *  picked_qty) and returns the portions; the caller reduces the allocation
+ *  and inserts packages/ledger. Shelf-scan mode enforcement lives here so
+ *  both paths behave identically. */
+async function consumeAllocationSource(
+  tx: DbOrTx,
+  ctx: {
+    alloc: AllocationRow;
+    item: { id: string; partNo: string };
+    order: OrderState;
+    input: ScanPickingItemInput;
+    qty: number;
+    shelfScanMode: string;
+  }
+): Promise<{ portions: PackagePortion[] }> {
+  const { alloc, item, order, input, qty, shelfScanMode } = ctx;
+  const portions: PackagePortion[] = [];
+  if (alloc.inventoryLotId) {
+    let lot = await queryGet<SourceLine & { shelfCode: string | null; totalQty: number }>(
+      tx,
+      sql`SELECT id, total_qty AS "totalQty", shelf_code AS "shelfCode", box_id AS "boxId",
+                 date_code AS "dateCode", lot_code AS "lotCode", coo, cow
+          FROM inventory_lots WHERE id = ${alloc.inventoryLotId}`
+    );
+    if (!lot) throw new HTTPException(404, { message: "inventory_lot_not_found" });
+    if (shelfScanMode !== "off" && !input.shelfCode && !input.boxId) {
+      throw new HTTPException(409, { message: "shelf_scan_required" });
+    }
+    // Both require-* modes follow physical truth: when the scanned location
+    // differs from the allocation lot's, deduct the scanned shelf's lot
+    // (the require-match client pre-checks presence at scan time; the 409
+    // here is the safety net).
+    if (shelfScanMode !== "off" && !scannedLocationMatches(input, lot)) {
+      lot = await resolveScannedShelfLot(tx, item, order, input);
+    }
+    if (lot.totalQty < qty) throw new HTTPException(409, { message: "insufficient_lot_qty" });
+    // Conditional decrement: a concurrent scan on another order can drain the
+    // same lot between the read above and this UPDATE (audit 2026-11-03 #2) —
+    // 0 rows changed means the guard lost the race, never a negative lot.
+    const lotUdp = await queryRun(
+      tx,
+      sql`UPDATE inventory_lots SET total_qty = total_qty - ${qty} WHERE id = ${lot.id} AND total_qty >= ${qty}`
+    );
+    if (lotUdp.changes === 0) throw new HTTPException(409, { message: "insufficient_lot_qty" });
+    if (lot.boxId) await markShelfBoxStockChanged(tx, lot.boxId);
+    portions.push({
+      sourceType: "inventory_lot",
+      sourceId: lot.id,
+      qty,
+      dateCode: lot.dateCode,
+      lotCode: lot.lotCode,
+      coo: lot.coo,
+      cow: lot.cow,
+      inventoryLotId: lot.id,
+      shelfCode: lot.shelfCode,
+      boxId: lot.boxId,
+      receivingInvoiceItemId: null,
+    });
+  } else if (alloc.receivingInvoiceItemId) {
+    const rii = await queryGet<SourceLine>(
+      tx,
+      sql`SELECT id, ctn_no AS "boxId", date_code AS "dateCode", lot_code AS "lotCode", coo, cow
+          FROM receiving_invoice_items WHERE id = ${alloc.receivingInvoiceItemId}`
+    );
+    if (!rii) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
+    await queryRun(tx, sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty + ${qty} WHERE id = ${rii.id}`);
+    portions.push({
+      sourceType: "receiving_invoice_item",
+      sourceId: rii.id,
+      qty,
+      dateCode: rii.dateCode,
+      lotCode: rii.lotCode,
+      coo: rii.coo,
+      cow: rii.cow,
+      inventoryLotId: null,
+      shelfCode: null,
+      boxId: rii.boxId,
+      receivingInvoiceItemId: rii.id,
+    });
+  } else if (alloc.receivingOrderId) {
+    // Order-level source (line without ctn_no): distribute FIFO across the
+    // receiving order's lines for the part — the allocation row does not
+    // record which line the engine pooled it from.
+    const lines = await queryAll<SourceLine & { remaining: number }>(
+      tx,
+      sql`SELECT rii.id, rii.ctn_no AS "boxId", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
+                 rii.coo, rii.cow,
+                 (rii.received_qty - rii.picked_qty - rii.put_away_qty)::int AS "remaining"
+          FROM receiving_invoice_items rii
+          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          WHERE ri.receiving_order_id = ${alloc.receivingOrderId}
+            AND (rii.part_no = ${item.partNo} OR rii.wcl_item_no = ${item.partNo})
+            AND (rii.received_qty - rii.picked_qty - rii.put_away_qty) > 0
+          ORDER BY rii.date_code ASC NULLS LAST, rii.id`
+    );
+    let left = qty;
+    for (const line of lines) {
+      if (left <= 0) break;
+      const take = Math.min(line.remaining, left);
+      await queryRun(tx, sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty + ${take} WHERE id = ${line.id}`);
+      portions.push({
+        sourceType: "receiving_order",
+        sourceId: alloc.receivingOrderId,
+        qty: take,
+        dateCode: line.dateCode,
+        lotCode: line.lotCode,
+        coo: line.coo,
+        cow: line.cow,
+        inventoryLotId: null,
+        shelfCode: null,
+        boxId: line.boxId,
+        receivingInvoiceItemId: line.id,
+      });
+      left -= take;
+    }
+    if (left > 0) throw new HTTPException(409, { message: "receiving_source_qty_not_available" });
+  } else {
+    throw new HTTPException(409, { message: "allocation_has_no_source" });
+  }
+  return { portions };
+}
+
+/** Scanned batch fields as they land on a package row (shared normalization):
+ *  empty strings → NULL, the date code canonicalized label-format → YYWW. */
+function scannedPackageFields(input: ScanPickingItemInput, fmt: ReturnType<typeof dateCodeFormat>) {
+  return {
+    scannedDateCode: input.scannedDateCode?.trim() ? toCanonicalDateCode(input.scannedDateCode.trim(), fmt) : null,
+    scannedLotCode: input.scannedLotCode?.trim() ? input.scannedLotCode : null,
+    scannedCoo: input.scannedCoo?.trim() ? input.scannedCoo : null,
+    scannedCow: input.scannedCow?.trim() ? input.scannedCow : null,
+    scannedDrawingNo: input.scannedDrawingNo?.trim() ? input.scannedDrawingNo : null,
+  };
+}
+
 export async function scanPickingItem(
   db: AppDb,
   pickingItemId: string,
@@ -1749,109 +1901,14 @@ export async function scanPickingItem(
     const shelfScanMode = pickingShelfScan();
 
     // Consume the source into package portions.
-    const portions: PackagePortion[] = [];
-    if (alloc.inventoryLotId) {
-      let lot = await queryGet<SourceLine & { shelfCode: string | null; totalQty: number }>(
-        tx,
-        sql`SELECT id, total_qty AS "totalQty", shelf_code AS "shelfCode", box_id AS "boxId",
-                   date_code AS "dateCode", lot_code AS "lotCode", coo, cow
-            FROM inventory_lots WHERE id = ${alloc.inventoryLotId}`
-      );
-      if (!lot) throw new HTTPException(404, { message: "inventory_lot_not_found" });
-      if (shelfScanMode !== "off" && !input.shelfCode && !input.boxId) {
-        throw new HTTPException(409, { message: "shelf_scan_required" });
-      }
-      // Both require-* modes follow physical truth: when the scanned location
-      // differs from the allocation lot's, deduct the scanned shelf's lot
-      // (the require-match client pre-checks presence at scan time; the 409
-      // here is the safety net).
-      if (shelfScanMode !== "off" && !scannedLocationMatches(input, lot)) {
-        lot = await resolveScannedShelfLot(tx, item, order, input);
-      }
-      if (lot.totalQty < input.qty) throw new HTTPException(409, { message: "insufficient_lot_qty" });
-      // Conditional decrement: a concurrent scan on another order can drain the
-      // same lot between the read above and this UPDATE (audit 2026-11-03 #2) —
-      // 0 rows changed means the guard lost the race, never a negative lot.
-      const lotUdp = await queryRun(
-        tx,
-        sql`UPDATE inventory_lots SET total_qty = total_qty - ${input.qty} WHERE id = ${lot.id} AND total_qty >= ${input.qty}`
-      );
-      if (lotUdp.changes === 0) throw new HTTPException(409, { message: "insufficient_lot_qty" });
-      if (lot.boxId) await markShelfBoxStockChanged(tx, lot.boxId);
-      portions.push({
-        sourceType: "inventory_lot",
-        sourceId: lot.id,
-        qty: input.qty,
-        dateCode: lot.dateCode,
-        lotCode: lot.lotCode,
-        coo: lot.coo,
-        cow: lot.cow,
-        inventoryLotId: lot.id,
-        shelfCode: lot.shelfCode,
-        boxId: lot.boxId,
-        receivingInvoiceItemId: null,
-      });
-    } else if (alloc.receivingInvoiceItemId) {
-      const rii = await queryGet<SourceLine>(
-        tx,
-        sql`SELECT id, ctn_no AS "boxId", date_code AS "dateCode", lot_code AS "lotCode", coo, cow
-            FROM receiving_invoice_items WHERE id = ${alloc.receivingInvoiceItemId}`
-      );
-      if (!rii) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
-      await queryRun(tx, sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty + ${input.qty} WHERE id = ${rii.id}`);
-      portions.push({
-        sourceType: "receiving_invoice_item",
-        sourceId: rii.id,
-        qty: input.qty,
-        dateCode: rii.dateCode,
-        lotCode: rii.lotCode,
-        coo: rii.coo,
-        cow: rii.cow,
-        inventoryLotId: null,
-        shelfCode: null,
-        boxId: rii.boxId,
-        receivingInvoiceItemId: rii.id,
-      });
-    } else if (alloc.receivingOrderId) {
-      // Order-level source (line without ctn_no): distribute FIFO across the
-      // receiving order's lines for the part — the allocation row does not
-      // record which line the engine pooled it from.
-      const lines = await queryAll<SourceLine & { remaining: number }>(
-        tx,
-        sql`SELECT rii.id, rii.ctn_no AS "boxId", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
-                   rii.coo, rii.cow,
-                   (rii.received_qty - rii.picked_qty - rii.put_away_qty)::int AS "remaining"
-            FROM receiving_invoice_items rii
-            JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-            WHERE ri.receiving_order_id = ${alloc.receivingOrderId}
-              AND (rii.part_no = ${item.partNo} OR rii.wcl_item_no = ${item.partNo})
-              AND (rii.received_qty - rii.picked_qty - rii.put_away_qty) > 0
-            ORDER BY rii.date_code ASC NULLS LAST, rii.id`
-      );
-      let left = input.qty;
-      for (const line of lines) {
-        if (left <= 0) break;
-        const take = Math.min(line.remaining, left);
-        await queryRun(tx, sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty + ${take} WHERE id = ${line.id}`);
-        portions.push({
-          sourceType: "receiving_order",
-          sourceId: alloc.receivingOrderId,
-          qty: take,
-          dateCode: line.dateCode,
-          lotCode: line.lotCode,
-          coo: line.coo,
-          cow: line.cow,
-          inventoryLotId: null,
-          shelfCode: null,
-          boxId: line.boxId,
-          receivingInvoiceItemId: line.id,
-        });
-        left -= take;
-      }
-      if (left > 0) throw new HTTPException(409, { message: "receiving_source_qty_not_available" });
-    } else {
-      throw new HTTPException(409, { message: "allocation_has_no_source" });
-    }
+    const { portions } = await consumeAllocationSource(tx, {
+      alloc,
+      item,
+      order,
+      input,
+      qty: input.qty,
+      shelfScanMode,
+    });
 
     await reduceAllocation(tx, alloc.id, input.qty);
 
@@ -1889,19 +1946,16 @@ export async function scanPickingItem(
       // "the label carried this value" and NULL drives the verify/measuring
       // fallback to the stored source snapshot (legacy behavior). The scanned
       // date code is stored canonical (label format → YYWW at this boundary).
-      const scannedDateCode = input.scannedDateCode?.trim() ? toCanonicalDateCode(input.scannedDateCode.trim(), fmt) : null;
-      const scannedLotCode = input.scannedLotCode?.trim() ? input.scannedLotCode : null;
-      const scannedCoo = input.scannedCoo?.trim() ? input.scannedCoo : null;
-      const scannedCow = input.scannedCow?.trim() ? input.scannedCow : null;
-      const scannedDrawingNo = input.scannedDrawingNo?.trim() ? input.scannedDrawingNo : null;
+      const { scannedDateCode, scannedLotCode, scannedCoo, scannedCow, scannedDrawingNo } =
+        scannedPackageFields(input, fmt);
       await queryRun(
         tx,
-        sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty,
+        sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty,
                                          shipping_box_id, date_code, lot_code, coo, cow, label_barcode,
                                          scanned_part_no, scanned_wcl_item_no, scanned_drawing_no,
                                          scanned_date_code, scanned_lot_code, scanned_coo, scanned_cow,
                                          created_date, last_update_date)
-            VALUES (${pid}, ${item.id}, ${item.pickingOrderId}, ${p.sourceType}, ${p.sourceId}, ${p.qty}, ${box?.id ?? null},
+            VALUES (${pid}, ${item.id}, ${item.partNo}, ${item.pickingOrderId}, ${p.sourceType}, ${p.sourceId}, ${p.qty}, ${box?.id ?? null},
                     ${dateCode}, ${lotCode}, ${coo}, ${cow}, ${input.barcode ?? null},
                     ${input.scannedPartNo ?? null}, ${input.scannedWclItemNo ?? null}, ${scannedDrawingNo},
                     ${scannedDateCode}, ${scannedLotCode},
@@ -1992,6 +2046,242 @@ export async function scanPickingItem(
 
     await recomputePickingItem(tx, item.id);
     return { packageIds, outdatedWarning };
+  });
+}
+
+/** Order-level reel scan (2026-11-19 aggregate scan-record spec, scheme 1):
+ *  one scan = ONE picking_packages row regardless of line-item boundaries.
+ *  Guards are per part, not per line:
+ *  1. the scanned identity (partNo / wclItemNo / drawingNo / scanned_* keys,
+ *     normalizePartNo'd) must match one of the order's open lines;
+ *  2. room check — total already scanned for that part on the order
+ *     (item-bound + unbound packages) + this scan's qty ≤ the order's total
+ *     demand for that part → 409 `no_room_for_part` otherwise.
+ *  The package row carries picking_item_id = NULL + picking_part_no set;
+ *  item fulfillment is derived FIFO from these rows at read/finish time.
+ *  Source consumption reuses the item-bound machinery (allocations FIFO,
+ *  ledger rows per consumed allocation's item). */
+export interface ScanPickingOrderReelInput extends ScanPickingItemInput {
+  /** Decoded label identity — any of partNo/wclItemNo/drawingNo/scanned_*. */
+  partNo?: string | null;
+  wclItemNo?: string | null;
+  drawingNo?: string | null;
+}
+
+export async function scanPickingOrderReel(
+  db: AppDb,
+  orderId: string,
+  input: ScanPickingOrderReelInput
+): Promise<{ packageIds: string[]; partNo: string; outdatedWarning: OutdatedWarningInfo | null }> {
+  return db.transaction(async (tx) => {
+    await assertActor(tx, input.actorId);
+    const order = await loadOrderForWrite(tx, orderId);
+    assertOrderWritable(order);
+    if (!Number.isInteger(input.qty) || input.qty <= 0) {
+      throw new HTTPException(400, { message: "qty_must_be_positive_integer" });
+    }
+
+    // 1. Identity → the order's open lines of that part (normalizePartNo on
+    // both sides; NCC drawing codes never match directly — the decoded
+    // wclItemNo from the backend resolver does).
+    const keys = [...new Set(
+      [input.partNo, input.wclItemNo, input.scannedPartNo, input.scannedWclItemNo, input.drawingNo]
+        .filter((k): k is string => !!k?.trim())
+        .map((k) => normalizePartNo(k))
+    )];
+    if (keys.length === 0) throw new HTTPException(400, { message: "part_identity_required" });
+    const items = await queryAll<{ id: string; partNo: string; qty: number; boundQty: number }>(
+      tx,
+      sql`SELECT pi.id, pi.part_no AS "partNo", pi.qty,
+                COALESCE((SELECT SUM(pp.qty)::int FROM picking_packages pp WHERE pp.picking_item_id = pi.id), 0) AS "boundQty"
+          FROM picking_items pi
+          WHERE pi.picking_order_id = ${orderId} AND pi.status <> 'cancelled'`
+    );
+    const matched = items.filter((it) => keys.includes(normalizePartNo(it.partNo)));
+    if (matched.length === 0) throw new HTTPException(404, { message: "reel_part_not_on_order" });
+    const partNo = matched[0].partNo;
+    const partNorm = normalizePartNo(partNo);
+    const partItems = items.filter((it) => normalizePartNo(it.partNo) === partNorm);
+
+    // 2. Per-part room check: demand − (bound + unbound packages) ≥ qty.
+    const unboundRow = await queryGet<{ qty: number }>(
+      tx,
+      sql`SELECT COALESCE(SUM(qty), 0)::int AS qty FROM picking_packages
+          WHERE picking_order_id = ${orderId} AND picking_item_id IS NULL
+            AND picking_part_no = ${partNo}`
+    );
+    const demand = partItems.reduce((s, it) => s + it.qty, 0);
+    const scannedTotal = partItems.reduce((s, it) => s + it.boundQty, 0) + (unboundRow?.qty ?? 0);
+    const remainingRoom = demand - scannedTotal;
+    if (input.qty > remainingRoom) {
+      throw new HTTPException(409, {
+        res: new Response(JSON.stringify({ error: "no_room_for_part", remaining: remainingRoom }), {
+          status: 409,
+          headers: { "content-type": "application/json" },
+        }),
+      });
+    }
+
+    // 3. Consume the part's allocations FIFO (priority = creation order).
+    const allocs = await queryAll<AllocationRow>(
+      tx,
+      sql`SELECT a.id, a.picking_item_id AS "pickingItemId", a.qty,
+                a.inventory_lot_id AS "inventoryLotId", a.receiving_invoice_item_id AS "receivingInvoiceItemId",
+                a.receiving_order_id AS "receivingOrderId"
+          FROM allocations a
+          JOIN picking_items pi ON pi.id = a.picking_item_id
+          WHERE pi.picking_order_id = ${orderId}
+            AND (pi.part_no = ${partNo} OR ${unwrappedPartCol(sql`pi.part_no`)} = ${partNorm})
+            AND a.qty > 0
+          ORDER BY a.created_date, a.id`
+    );
+    const shelfScanMode = pickingShelfScan();
+    const portions: PackagePortion[] = [];
+    const consumedItemIds: string[] = [];
+    let left = input.qty;
+    for (const alloc of allocs) {
+      if (left <= 0) break;
+      const take = Math.min(alloc.qty, left);
+      const allocItem = partItems.find((it) => it.id === alloc.pickingItemId);
+      if (!allocItem) continue;
+      const { portions: p } = await consumeAllocationSource(tx, {
+        alloc,
+        item: allocItem,
+        order,
+        input,
+        qty: take,
+        shelfScanMode,
+      });
+      await reduceAllocation(tx, alloc.id, take);
+      portions.push(...p);
+      consumedItemIds.push(allocItem.id);
+      left -= take;
+    }
+    if (left > 0) {
+      // Part-level room exists but the allocations cannot cover it — the
+      // admin must re-allocate (manual-only recompute policy).
+      throw new HTTPException(409, {
+        res: new Response(JSON.stringify({ error: "reel_no_allocation_for_part", remaining: left }), {
+          status: 409,
+          headers: { "content-type": "application/json" },
+        }),
+      });
+    }
+
+    // 4. One COO per box (spec 2026-10-16).
+    let box: ShippingBoxRow | null = null;
+    if (input.shippingBoxId) {
+      box = await loadShippingBox(tx, input.shippingBoxId);
+      if (box.status !== "open") throw new HTTPException(409, { message: "shipping_box_not_open" });
+      for (const coo of new Set(portions.map((p) => p.coo ?? input.coo ?? null))) {
+        await assertBoxCooCompatible(tx, box.id, coo);
+      }
+    }
+
+    // 5. ONE package row — the physical scan, unbound to any line item.
+    const at = now();
+    const fmt = dateCodeFormat();
+    const scannedLabelDateCode = toCanonicalDateCode(input.dateCode, fmt);
+    const fields = scannedPackageFields(input, fmt);
+    const pid = newId();
+    const dateCode = portions[0]?.dateCode ?? scannedLabelDateCode;
+    await queryRun(
+      tx,
+      sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty,
+                                       shipping_box_id, date_code, lot_code, coo, cow, label_barcode,
+                                       scanned_part_no, scanned_wcl_item_no, scanned_drawing_no,
+                                       scanned_date_code, scanned_lot_code, scanned_coo, scanned_cow,
+                                       created_date, last_update_date)
+          VALUES (${pid}, NULL, ${partNo}, ${orderId}, ${portions[0].sourceType}, ${portions[0].sourceId}, ${input.qty}, ${box?.id ?? null},
+                  ${dateCode}, ${portions[0]?.lotCode ?? input.lotCode ?? null}, ${portions[0]?.coo ?? input.coo ?? null}, ${portions[0]?.cow ?? input.cow ?? null}, ${input.barcode ?? null},
+                  ${input.scannedPartNo ?? null}, ${input.scannedWclItemNo ?? null}, ${fields.scannedDrawingNo},
+                  ${fields.scannedDateCode}, ${fields.scannedLotCode}, ${fields.scannedCoo}, ${fields.scannedCow}, ${at}, ${at})`
+    );
+
+    // 6. Ledger per portion, referenced to the consumed allocation's item so
+    // per-item reporting keeps working.
+    const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
+    for (const p of portions) {
+      const base = {
+        inventoryLotId: p.inventoryLotId,
+        partNo,
+        shelfCode: p.shelfCode,
+        boxId: p.boxId,
+        txnType: "PICK",
+        dateCode: p.dateCode ?? scannedLabelDateCode,
+        lotCode: p.lotCode ?? input.lotCode ?? null,
+        coo: p.coo ?? input.coo ?? null,
+        cow: p.cow ?? input.cow ?? null,
+        referenceType: "picking_item",
+        referenceId: consumedItemIds[0] ?? null,
+        receivingInvoiceItemId: p.receivingInvoiceItemId,
+        actorId: input.actorId,
+        txnReason: "pick",
+        txnAt: at,
+      };
+      txnRows.push(
+        { ...base, id: newId(), qtyType: "reserved", qtyDelta: -p.qty },
+        { ...base, id: newId(), qtyType: "on_hand", qtyDelta: -p.qty }
+      );
+    }
+    await tx.insert(inventoryTransactions).values(txnRows);
+
+    // 7. Outdated date-code check — same policy as the item-bound scan.
+    let outdatedWarning: OutdatedWarningInfo | null = null;
+    const outdatedHit = await checkPartScanOutdated(tx, { partNo, dateCode: scannedLabelDateCode });
+    if (outdatedHit) {
+      outdatedWarning = await recordOutdatedWarning(tx, {
+        orderKind: "picking",
+        orderId,
+        orderItemId: matched[0].id,
+        packageId: pid,
+        supplierCode: outdatedHit.supplierCode,
+        wclItemNo: outdatedHit.wclItemNo,
+        partNo: outdatedHit.partNo,
+        dateCode: outdatedHit.dateCode,
+        limitMonths: outdatedHit.limitMonths,
+        qty: input.qty,
+        scannedBy: input.actorId,
+      });
+    }
+
+    if (order.status === "pending" || order.status === "allocated") {
+      await queryRun(tx, sql`UPDATE picking_orders SET status = 'picking', last_update_date = ${at} WHERE id = ${order.id}`);
+      await logTransition(tx, {
+        entityType: "picking_order",
+        entityId: orderId,
+        fromState: order.status,
+        toState: "picking",
+        actorId: input.actorId,
+      });
+    }
+    // Order-level scan transition + box transitions (aggregate metadata; the
+    // package row is the per-item truth, no per-item transition spam).
+    await logTransition(tx, {
+      entityType: "picking_order",
+      entityId: orderId,
+      fromState: "picking",
+      toState: "scanned_reel",
+      actorId: input.actorId,
+      metadata: { qty: input.qty, partNo, package: pid },
+    });
+    if (box) {
+      await logTransition(tx, {
+        entityType: "picking_order",
+        entityId: orderId,
+        fromState: "scanned_reel",
+        toState: "boxed_reel",
+        actorId: input.actorId,
+        metadata: { qty: input.qty, partNo, box: box.id, package: pid },
+      });
+      await prefillShippingBoxFromSources(tx, box.id);
+    }
+    // Recompute each consumed item (picked_qty/allocated_qty bookkeeping only
+    // counts item-bound packages — unbound rows are the aggregate record).
+    for (const itemId of new Set(consumedItemIds)) {
+      await recomputePickingItem(tx, itemId);
+    }
+    return { packageIds: [pid], partNo, outdatedWarning };
   });
 }
 
@@ -2157,9 +2447,9 @@ export async function claimShelfBox(
         const pid = newId();
         await queryRun(
           tx,
-          sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty,
+          sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty,
                                            shipping_box_id, date_code, lot_code, coo, cow, created_date, last_update_date)
-              VALUES (${pid}, ${item.id}, ${order.id}, 'inventory_lot', ${lot.lotId}, ${take}, ${shippingBoxId},
+              VALUES (${pid}, ${item.id}, ${lot.partNo}, ${order.id}, 'inventory_lot', ${lot.lotId}, ${take}, ${shippingBoxId},
                       ${lot.dateCode}, ${lot.lotCode}, ${lot.coo}, ${lot.cow}, ${at}, ${at})`
         );
         packageIds.push(pid);
@@ -2268,7 +2558,8 @@ async function reverseScannedPackageTx(
   tx: DbOrTx,
   pkg: {
     id: string;
-    pickingItemId: string;
+    pickingItemId: string | null;
+    pickingOrderId: string;
     partNo: string;
     sourceType: string;
     sourceId: string;
@@ -2280,8 +2571,21 @@ async function reverseScannedPackageTx(
   },
   actorId: string,
   txnReason: string
-): Promise<void> {
+): Promise<string | null> {
   const at = now();
+  // Unbound aggregate rows (order-level reel scans) belong to no single line:
+  // the reversal (allocation bump + ledger reference + item recompute) falls
+  // back to the part's first open line on the order.
+  let effectiveItemId: string | null = pkg.pickingItemId;
+  if (!effectiveItemId) {
+    const fallback = await queryGet<{ id: string }>(
+      tx,
+      sql`SELECT id FROM picking_items
+          WHERE picking_order_id = ${pkg.pickingOrderId} AND part_no = ${pkg.partNo} AND status <> 'cancelled'
+          ORDER BY created_date, id LIMIT 1`
+    );
+    effectiveItemId = fallback?.id ?? null;
+  }
   const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
   const base = {
     partNo: pkg.partNo,
@@ -2291,7 +2595,7 @@ async function reverseScannedPackageTx(
     coo: pkg.coo,
     cow: pkg.cow,
     referenceType: "picking_item",
-    referenceId: pkg.pickingItemId,
+    referenceId: effectiveItemId,
     actorId,
     txnReason,
     txnAt: at,
@@ -2305,7 +2609,7 @@ async function reverseScannedPackageTx(
     if (!lot) throw new HTTPException(404, { message: "inventory_lot_not_found" });
     await queryRun(tx, sql`UPDATE inventory_lots SET total_qty = total_qty + ${pkg.qty} WHERE id = ${lot.id}`);
     if (lot.boxId) await markShelfBoxStockChanged(tx, lot.boxId);
-    await bumpAllocation(tx, { pickingItemId: pkg.pickingItemId, qty: pkg.qty, inventoryLotId: lot.id });
+    if (effectiveItemId) await bumpAllocation(tx, { pickingItemId: effectiveItemId, qty: pkg.qty, inventoryLotId: lot.id });
     txnRows.push(
       { ...base, id: newId(), inventoryLotId: lot.id, shelfCode: lot.shelfCode, boxId: lot.boxId, receivingInvoiceItemId: null, qtyType: "reserved", qtyDelta: pkg.qty },
       { ...base, id: newId(), inventoryLotId: lot.id, shelfCode: lot.shelfCode, boxId: lot.boxId, receivingInvoiceItemId: null, qtyType: "on_hand", qtyDelta: pkg.qty }
@@ -2317,7 +2621,7 @@ async function reverseScannedPackageTx(
     );
     if (!rii) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
     await queryRun(tx, sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty - ${pkg.qty} WHERE id = ${rii.id}`);
-    await bumpAllocation(tx, { pickingItemId: pkg.pickingItemId, qty: pkg.qty, receivingInvoiceItemId: rii.id });
+    if (effectiveItemId) await bumpAllocation(tx, { pickingItemId: effectiveItemId, qty: pkg.qty, receivingInvoiceItemId: rii.id });
     txnRows.push(
       { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: rii.boxId, receivingInvoiceItemId: rii.id, qtyType: "reserved", qtyDelta: pkg.qty },
       { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: rii.boxId, receivingInvoiceItemId: rii.id, qtyType: "on_hand", qtyDelta: pkg.qty }
@@ -2345,21 +2649,22 @@ async function reverseScannedPackageTx(
       left -= give;
     }
     if (left > 0) throw new HTTPException(409, { message: "receiving_source_qty_not_available" });
-    await bumpAllocation(tx, { pickingItemId: pkg.pickingItemId, qty: pkg.qty, receivingOrderId: pkg.sourceId });
+    if (effectiveItemId) await bumpAllocation(tx, { pickingItemId: effectiveItemId, qty: pkg.qty, receivingOrderId: pkg.sourceId });
   } else {
     throw new HTTPException(409, { message: "unknown_package_source_type" });
   }
 
   await queryRun(tx, sql`DELETE FROM picking_packages WHERE id = ${pkg.id}`);
   if (txnRows.length > 0) await tx.insert(inventoryTransactions).values(txnRows);
-  await recomputePickingItem(tx, pkg.pickingItemId);
+  if (effectiveItemId) await recomputePickingItem(tx, effectiveItemId);
+  return effectiveItemId;
 }
 
 export async function removeScannedPackage(db: AppDb, input: { packageId: string; actorId: string }): Promise<void> {
   return db.transaction(async (tx) => {
     const pkg = await queryGet<{
       id: string;
-      pickingItemId: string;
+      pickingItemId: string | null;
       pickingOrderId: string;
       partNo: string;
       sourceType: string;
@@ -2373,12 +2678,12 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
       cow: string | null;
     }>(
       tx,
-      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pi.picking_order_id AS "pickingOrderId",
-                 pi.part_no AS "partNo",
+      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pp.picking_order_id AS "pickingOrderId",
+                 pp.picking_part_no AS "partNo",
                  pp.source_type AS "sourceType", pp.source_id AS "sourceId", pp.qty,
                  pp.shipping_box_id AS "shippingBoxId", pp.verified,
                  pp.date_code AS "dateCode", pp.lot_code AS "lotCode", pp.coo, pp.cow
-          FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
+          FROM picking_packages pp
           WHERE pp.id = ${input.packageId}`
     );
     if (!pkg) throw new HTTPException(404, { message: "package_not_found" });
@@ -2388,15 +2693,17 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
     const order = await loadOrderForWrite(tx, pkg.pickingOrderId);
     assertOrderWritable(order);
 
-    await reverseScannedPackageTx(tx, pkg, input.actorId, "remove package");
-    await logTransition(tx, {
-      entityType: "picking_item",
-      entityId: pkg.pickingItemId,
-      fromState: "scanned",
-      toState: "removed",
-      actorId: input.actorId,
-      metadata: { qty: pkg.qty, package: pkg.id, partNo: pkg.partNo },
-    });
+    const effectiveItemId = await reverseScannedPackageTx(tx, pkg, input.actorId, "remove package");
+    if (effectiveItemId) {
+      await logTransition(tx, {
+        entityType: "picking_item",
+        entityId: effectiveItemId,
+        fromState: "scanned",
+        toState: "removed",
+        actorId: input.actorId,
+        metadata: { qty: pkg.qty, package: pkg.id, partNo: pkg.partNo },
+      });
+    }
   });
 }
 
@@ -3003,12 +3310,35 @@ export async function finishPickingOrder(
     if (order.status !== "pending" && order.status !== "picking" && order.status !== "allocated") {
       throw new HTTPException(409, { message: "picking_order_could_not_be_finished" });
     }
-    const items = await queryAll<{ qty: number; pickedQty: number }>(
+    // Per-part completion (2026-11-19 aggregate scan-record): the order
+    // finishes when every part's total scanned qty (item-bound + unbound
+    // aggregate rows) covers the part's total demand — the number of scans
+    // and their item boundaries are free.
+    const partRows = await queryAll<{ partNo: string; qty: number; boundQty: number; unboundQty: number }>(
       tx,
-      sql`SELECT qty, picked_qty AS "pickedQty" FROM picking_items WHERE picking_order_id = ${order.id}`
+      sql`SELECT pi.part_no AS "partNo",
+                SUM(pi.qty)::int AS "qty",
+                COALESCE(SUM(b.qty), 0)::int AS "boundQty",
+                COALESCE(MAX(u.qty), 0)::int AS "unboundQty"
+          FROM picking_items pi
+          LEFT JOIN (
+            SELECT pp.picking_item_id, SUM(pp.qty)::int AS qty
+            FROM picking_packages pp
+            JOIN picking_items i2 ON i2.id = pp.picking_item_id
+            WHERE i2.picking_order_id = ${order.id} AND i2.status <> 'cancelled'
+            GROUP BY pp.picking_item_id
+          ) b ON b.picking_item_id = pi.id
+          LEFT JOIN (
+            SELECT picking_part_no, SUM(qty)::int AS qty
+            FROM picking_packages
+            WHERE picking_order_id = ${order.id} AND picking_item_id IS NULL
+            GROUP BY picking_part_no
+          ) u ON u.picking_part_no = pi.part_no
+          WHERE pi.picking_order_id = ${order.id} AND pi.status <> 'cancelled'
+          GROUP BY pi.part_no, u.qty`
     );
-    if (items.length === 0) throw new HTTPException(409, { message: "no_items_to_pick" });
-    if (!items.every((i) => i.pickedQty >= i.qty)) {
+    if (partRows.length === 0) throw new HTTPException(409, { message: "no_items_to_pick" });
+    if (!partRows.every((p) => p.boundQty + p.unboundQty >= p.qty)) {
       throw new HTTPException(409, { message: "not_all_items_fully_boxed" });
     }
     await queryRun(tx, sql`UPDATE picking_orders SET status = 'picking_finished', working_by = NULL, working_at = NULL, last_update_date = ${now()} WHERE id = ${order.id}`);
@@ -3606,7 +3936,8 @@ export async function resetPickingOrderProgress(
 
     const packages = await queryAll<{
       id: string;
-      pickingItemId: string;
+      pickingItemId: string | null;
+      pickingOrderId: string;
       partNo: string;
       sourceType: string;
       sourceId: string;
@@ -3617,11 +3948,12 @@ export async function resetPickingOrderProgress(
       cow: string | null;
     }>(
       tx,
-      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pi.part_no AS "partNo",
+      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pp.picking_order_id AS "pickingOrderId",
+                 pp.picking_part_no AS "partNo",
                  pp.source_type AS "sourceType", pp.source_id AS "sourceId", pp.qty,
                  pp.date_code AS "dateCode", pp.lot_code AS "lotCode", pp.coo, pp.cow
-          FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
-          WHERE pp.picking_order_id = ${order.id} AND pi.status <> 'cancelled'
+          FROM picking_packages pp
+          WHERE pp.picking_order_id = ${order.id}
           ORDER BY pp.created_date, pp.id`
     );
     for (const pkg of packages) {

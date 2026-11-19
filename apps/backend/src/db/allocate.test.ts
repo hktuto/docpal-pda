@@ -320,8 +320,8 @@ test("allocateAll: open qty subtracts unboxed packages (no double reserve)", asy
   // simulate a scan: 500 of ITEM_23's 1000 consumed into an UNBOXED package
   // (picked_qty stays 0 — the old picked_qty-based guard would re-reserve it)
   await client.db.execute(sql`
-    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
-    VALUES ('00000000-0000-4000-8000-0000000000c1', ${ITEM_23}, ${PO_22}, 'inventory_lot', ${LOT_18}, 500, now(), now())`);
+    INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
+    VALUES ('00000000-0000-4000-8000-0000000000c1', ${ITEM_23}, (SELECT part_no FROM picking_items WHERE id = ${ITEM_23}), ${PO_22}, 'inventory_lot', ${LOT_18}, 500, now(), now())`);
   await client.db.execute(sql`UPDATE allocations SET qty = 500 WHERE picking_item_id = ${ITEM_23}`);
 
   await allocateAll(client.db);
@@ -872,10 +872,10 @@ test("allocation_status: fully-picked (Σ open = 0) order reads allocated", asyn
   // simulate all three items fully scanned (unboxed packages): the demand
   // filter sees no open qty, allocations are consumed down to 0
   await client.db.execute(sql`
-    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
-    VALUES ('00000000-0000-4000-8000-0000000000d1', ${ITEM_23}, ${PO_22}, 'inventory_lot', ${LOT_18}, 1000, now(), now()),
-           ('00000000-0000-4000-8000-0000000000d2', ${ITEM_24}, ${PO_22}, 'inventory_lot', ${LOT_19}, 500, now(), now()),
-           ('00000000-0000-4000-8000-0000000000d3', ${ITEM_25}, ${PO_22}, 'inventory_lot', ${LOT_28}, 300, now(), now())`);
+    INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
+    VALUES ('00000000-0000-4000-8000-0000000000d1', ${ITEM_23}, (SELECT part_no FROM picking_items WHERE id = ${ITEM_23}), ${PO_22}, 'inventory_lot', ${LOT_18}, 1000, now(), now()),
+           ('00000000-0000-4000-8000-0000000000d2', ${ITEM_24}, (SELECT part_no FROM picking_items WHERE id = ${ITEM_24}), ${PO_22}, 'inventory_lot', ${LOT_19}, 500, now(), now()),
+           ('00000000-0000-4000-8000-0000000000d3', ${ITEM_25}, (SELECT part_no FROM picking_items WHERE id = ${ITEM_25}), ${PO_22}, 'inventory_lot', ${LOT_28}, 300, now(), now())`);
   await client.db.execute(sql`UPDATE picking_items SET allocated_qty = 0 WHERE picking_order_id = ${PO_22}`);
   await client.db.execute(sql`UPDATE picking_orders SET status = 'picking' WHERE id = ${PO_22}`);
 

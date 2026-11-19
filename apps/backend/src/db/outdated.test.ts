@@ -281,8 +281,8 @@ test("picking finish: 409 unresolved_outdated_warnings while unresolved; succeed
         VALUES (${boxId}, ${orderId}, 'open', now(), now())`
   );
   await client.db.execute(
-    sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
-        VALUES (${randomUUID()}, ${itemId}, ${orderId}, 'inventory_lot', 'test-lot', 5, ${boxId}, now(), now())`
+    sql`INSERT INTO picking_packages (id, picking_item_id, picking_part_no, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
+        VALUES (${randomUUID()}, ${itemId}, (SELECT part_no FROM picking_items WHERE id = ${itemId}), ${orderId}, 'inventory_lot', 'test-lot', 5, ${boxId}, now(), now())`
   );
   await client.db.execute(sql`UPDATE picking_items SET picked_qty = 5 WHERE id = ${itemId}`);
 
