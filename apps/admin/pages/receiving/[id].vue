@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { OrderLogsParams, OrderLogsPage, ReceivingItemAllocation, ReceivingOrderDetail, ReceivingItemRow, ReceivingPutAwayLogRow } from "~/utils/flowApi";
+import type { OrderLogsParams, OrderLogsPage, ReceivingItemAllocation, ReceivingOrderDetail, ReceivingItemRow, ReceivingPutAwayLogRow, ReceivingRelatedPickingOrder } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
@@ -17,6 +17,9 @@ const logsKey = ref(0);
 // Put-away ledger entries ride along on the paged logs response; captured here
 // for the put-away sub-table below the transition log.
 const putAwayLogs = ref<ReceivingPutAwayLogRow[]>([]);
+// Related picking orders (allocations/packages sourced from this receiving
+// order) — shows which item was allocated and picked into which picking order.
+const relatedPicking = ref<ReceivingRelatedPickingOrder[]>([]);
 const fetchLogs = async (p: OrderLogsParams): Promise<OrderLogsPage> => {
   const res = await flow.listReceivingOrderLogs(orderId, p);
   putAwayLogs.value = res.putAway ?? [];
@@ -259,11 +262,19 @@ async function loadOutdatedWarningCount() {
   }
 }
 
+async function loadRelatedPicking() {
+  try {
+    relatedPicking.value = (await flow.listReceivingPickingOrders(orderId)).pickingOrders;
+  } catch {
+    relatedPicking.value = [];
+  }
+}
+
 async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [detail] = await Promise.all([flow.getReceivingOrder(orderId), loadOutdatedWarningCount()]);
+    const [detail] = await Promise.all([flow.getReceivingOrder(orderId), loadOutdatedWarningCount(), loadRelatedPicking()]);
     order.value = detail;
     deliveryDate.value = order.value.deliveryDate ? order.value.deliveryDate.slice(0, 10) : "";
     selected.value = new Set();
@@ -273,6 +284,22 @@ async function load() {
     loading.value = false;
   }
 }
+
+// Receiving-item id → display map for the related-picking source column
+// ("which receiving line this allocation came from").
+const receivingItemById = computed(() => {
+  const m = new Map<string, ReceivingItemRow>();
+  for (const it of allItems.value) m.set(it.id, it);
+  return m;
+});
+
+const receivingItemLabel = (id: string | null) => {
+  if (!id) return null;
+  const it = receivingItemById.value.get(id);
+  return it ? (it.wclItemNo ?? it.partNo) : null;
+};
+
+const receivingItemCtn = (id: string | null) => receivingItemById.value.get(id)?.ctnNo ?? null;
 
 async function saveDeliveryDate() {
   savingDate.value = true;
@@ -920,26 +947,78 @@ const {
       <table v-if="putAwayLogs.length > 0" class="putaway-table">
         <thead>
           <tr>
-            <th>{{ $t("admin.pages.auditLog.time") }}</th>
             <th>{{ $t("stockSearch.partNo") }}</th>
-            <th class="num">{{ $t("admin.pages.issues.qty") }}</th>
+            <th class="num">{{ $t("admin.pages.auditLog.putAwayQty") }}</th>
             <th>{{ $t("stockSearch.shelf") }}</th>
             <th>{{ $t("stockSearch.box") }}</th>
-            <th>{{ $t("admin.pages.auditLog.actor") }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="p in putAwayLogs" :key="p.id">
-            <td>{{ formatDateTime(p.createdDate) }}</td>
+          <tr v-for="p in putAwayLogs" :key="`${p.wclItemNo ?? p.partNo}-${p.shelfCode ?? ''}-${p.boxId ?? ''}`">
             <td>{{ p.wclItemNo ?? p.partNo }}</td>
             <td class="num">{{ p.qty }}</td>
             <td>{{ p.shelfCode ?? "—" }}</td>
             <td>{{ p.boxId ?? "—" }}</td>
-            <td>{{ p.actorName ?? p.actorId ?? "—" }}</td>
           </tr>
         </tbody>
       </table>
       <p v-else class="muted">{{ $t("admin.pages.auditLog.putAwayEmpty") }}</p>
+
+      <h2 class="section-title">{{ $t("admin.pages.auditLog.relatedPickingTitle") }}</h2>
+      <template v-if="relatedPicking.length > 0">
+        <template v-for="po in relatedPicking" :key="po.id">
+          <div class="related-order-head">
+            <NuxtLink :to="`/picking-orders/${po.id}`" class="related-order-no">{{ po.orderNo }}</NuxtLink>
+            <span class="related-order-status">{{ $t(`status.picking.${po.status}`) }}</span>
+            <span v-if="po.customerCode" class="muted">{{ po.customerCode }}<template v-if="po.shipTo"> · {{ po.shipTo }}</template></span>
+            <span v-if="po.boxes.length > 0" class="muted">
+              — {{ $t("admin.pages.auditLog.relatedPickingBoxes", { count: po.boxes.length }) }}
+            </span>
+          </div>
+          <table class="putaway-table related-picking-table">
+            <thead>
+              <tr>
+                <th>{{ $t("stockSearch.partNo") }}</th>
+                <th class="num">{{ $t("admin.pages.auditLog.relatedPickingQty") }}</th>
+                <th class="num">{{ $t("admin.pages.auditLog.relatedPickingAllocated") }}</th>
+                <th class="num">{{ $t("admin.pages.auditLog.relatedPickingPicked") }}</th>
+                <th>{{ $t("admin.pages.auditLog.relatedPickingSource") }}</th>
+                <th>{{ $t("stockSearch.shelf") }}</th>
+                <th>{{ $t("stockSearch.box") }}</th>
+                <th>{{ $t("admin.pages.auditLog.relatedPickingPackages") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="it in po.items" :key="it.id">
+                <td>{{ it.wclItemNo ?? it.partNo }}</td>
+                <td class="num">{{ it.qty }}</td>
+                <td class="num">{{ it.allocatedQty }}</td>
+                <td class="num">{{ it.pickedQty }}</td>
+                <td>
+                  <template v-if="it.allocations.length > 0">
+                    <div v-for="a in it.allocations" :key="a.id">
+                      {{ receivingItemLabel(a.receivingInvoiceItemId) ?? $t("admin.pages.auditLog.relatedPickingWholeOrder") }}
+                      <template v-if="receivingItemCtn(a.receivingInvoiceItemId)"> ({{ receivingItemCtn(a.receivingInvoiceItemId) }})</template>
+                      <span v-if="a.outdated" class="shelf-warning" :title="$t('stockAgeWarning.tooltip')">⚠️</span>
+                    </div>
+                  </template>
+                  <template v-else>—</template>
+                </td>
+                <td>{{ [...new Set(it.allocations.map((a) => a.lot?.shelfCode).filter(Boolean))].join(", ") || "—" }}</td>
+                <td>{{ [...new Set(it.allocations.map((a) => a.lot?.boxId ?? a.boxId).filter(Boolean))].join(", ") || "—" }}</td>
+                <td>
+                  <template v-if="it.packages.length > 0">
+                    {{ it.packages.reduce((s, p) => s + p.qty, 0) }}
+                    <span class="muted">({{ $t("admin.pages.auditLog.relatedPickingPackagesCount", { count: it.packages.length }) }})</span>
+                  </template>
+                  <template v-else>—</template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+      </template>
+      <p v-else class="muted">{{ $t("admin.pages.auditLog.relatedPickingEmpty") }}</p>
 
       <AuditLogTable :fetch-logs="fetchLogs" :refresh-key="logsKey" />
     </template>
@@ -1051,6 +1130,25 @@ const {
 }
 .putaway-table th {
   background: #f5f7fa;
+}
+.related-order-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.875rem;
+}
+.related-order-no {
+  font-weight: 600;
+}
+.related-order-status {
+  padding: 0 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  background: #eef2f7;
+  border: 1px solid #d5dee7;
+  color: #52606d;
 }
 .putaway-table .num {
   text-align: right;

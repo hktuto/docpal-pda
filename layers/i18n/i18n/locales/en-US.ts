@@ -2590,7 +2590,18 @@ export default {
         details: "Details",
         empty: "No log entries.",
         searchPlaceholder: "Search logs…",
-        putAwayTitle: "Put-away",
+        putAwayTitle: "Put-away locations",
+        putAwayQty: "Put-away qty",
+        relatedPickingTitle: "Related picking orders",
+        relatedPickingEmpty: "No picking orders use items from this receiving order.",
+        relatedPickingQty: "Demand",
+        relatedPickingAllocated: "Allocated",
+        relatedPickingPicked: "Picked",
+        relatedPickingSource: "Source item",
+        relatedPickingWholeOrder: "Whole-order",
+        relatedPickingPackages: "Packaged",
+        relatedPickingPackagesCount: "{count} pkgs",
+        relatedPickingBoxes: "{count} boxes",
         putAwayEmpty: "No put-away movements recorded."
       },
       issues: {
@@ -2993,9 +3004,10 @@ export default {
         confirm: "Confirm",
         preparing: "Preparing…",
         confirmTitle: "Confirm print",
-        confirmSummary: "{boxes} box(es), {labels} small label(s) — {total} label(s) in {pages} A4 page(s) will be printed with template a4-lwxy-3-4.",
+        confirmSummary: "{labels} small label(s) ({pages} A4 page(s), template a4-lwxy-3-4) + {boxes} box label(s) (template rohs-7) prepared.",
         job: "Job {n}/{total}",
         printing: "Printing… {progress}",
+        printBoxes: "Print box labels ({n})",
         printSuccess: "Sent {count} label(s) ({pages} page(s)) to the printer."
       },
       labelPrintRules: {

@@ -2585,7 +2585,18 @@ export default {
         details: "詳情",
         empty: "暫無記錄。",
         searchPlaceholder: "搜尋記錄…",
-        putAwayTitle: "上架記錄",
+        putAwayTitle: "上架分佈",
+        putAwayQty: "上架數量",
+        relatedPickingTitle: "相關揀貨單",
+        relatedPickingEmpty: "沒有揀貨單使用此收貨單的貨品。",
+        relatedPickingQty: "需求量",
+        relatedPickingAllocated: "已分配",
+        relatedPickingPicked: "已揀",
+        relatedPickingSource: "來源貨品",
+        relatedPickingWholeOrder: "整單來源",
+        relatedPickingPackages: "已包裝",
+        relatedPickingPackagesCount: "{count} 件",
+        relatedPickingBoxes: "裝箱 {count}",
         putAwayEmpty: "暫無上架記錄。"
       },
       issues: {
@@ -2988,9 +2999,10 @@ export default {
         confirm: "確認",
         preparing: "準備中…",
         confirmTitle: "確認列印",
-        confirmSummary: "共 {boxes} 箱、{labels} 張小標籤 — 將以模板 a4-lwxy-3-4 列印 {total} 張標籤（{pages} 頁 A4）。",
+        confirmSummary: "已準備 {labels} 張小標籤（{pages} 頁 A4，模板 a4-lwxy-3-4）及 {boxes} 張箱標籤（模板 rohs-7）。",
         job: "工作 {n}/{total}",
         printing: "列印中… {progress}",
+        printBoxes: "列印箱標籤（{n}）",
         printSuccess: "已送出 {count} 張標籤（{pages} 頁）到打印機。"
       },
       labelPrintRules: {

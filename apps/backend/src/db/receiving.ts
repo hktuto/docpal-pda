@@ -884,20 +884,15 @@ export interface OrderLogsPage {
   putAway?: ReceivingPutAwayRow[];
 }
 
-/** One put-away movement of an order's item onto a shelf (ledger-derived;
- *  qty_type 'on_hand' row only — the dock −qty pair row is omitted). */
+/** Current put-away state of an order's items: net ledger quantity per
+ *  part × shelf × box (PUT_AWAY on_hand rows summed, so put-away reversals
+ *  net out — this is where the stock sits now, not the movement history). */
 export interface ReceivingPutAwayRow {
-  id: string;
-  itemId: string;
   partNo: string;
   wclItemNo: string | null;
   qty: number;
   shelfCode: string | null;
   boxId: string | null;
-  lotId: string | null;
-  actorId: string | null;
-  actorName: string | null;
-  createdDate: Date;
 }
 
 const LOG_SORTS: Record<string, SQL> = {
@@ -945,19 +940,17 @@ export async function listReceivingOrderLogs(
     const pageSize = Math.min(200, Math.max(1, params.pageSize ?? 50));
     const putAwayQuery = queryAll<ReceivingPutAwayRow>(
       db,
-      sql`SELECT it.id, it.receiving_invoice_item_id AS "itemId",
-                   rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo",
-                   it.qty_delta AS "qty", it.shelf_code AS "shelfCode",
-                   it.box_id AS "boxId", it.inventory_lot_id AS "lotId",
-                   it.actor_id AS "actorId", u2.display_name AS "actorName",
-                   it.txn_at AS "createdDate"
+      sql`SELECT rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo",
+                   SUM(it.qty_delta)::int AS "qty", it.shelf_code AS "shelfCode",
+                   it.box_id AS "boxId"
             FROM inventory_transactions it
             JOIN receiving_invoice_items rii ON rii.id = it.receiving_invoice_item_id
             JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-            LEFT JOIN users u2 ON u2.id = it.actor_id
             WHERE ri.receiving_order_id = ${orderId}
               AND it.txn_type = 'PUT_AWAY' AND it.qty_type = 'on_hand'
-            ORDER BY it.txn_at ASC, it.id ASC`
+            GROUP BY rii.part_no, rii.wcl_item_no, it.shelf_code, it.box_id
+            HAVING SUM(it.qty_delta) <> 0
+            ORDER BY rii.wcl_item_no ASC, rii.part_no ASC, it.shelf_code ASC, it.box_id ASC`
     );
     const [rows, count, putAway] = await Promise.all([
       queryAll<TransactionLogRow>(

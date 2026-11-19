@@ -119,7 +119,7 @@ test("listLotHistory: lot identity, origin source, and ledger movements with act
 
 test("listReceivingOrderLogs paged response embeds the order's putAway rows", async () => {
   await reseed(client);
-  const { actorId, lotId } = await receivedAndPutAwayWorld();
+  const { lotId } = await receivedAndPutAwayWorld();
   const orderId = await orderIdOf("04958210");
 
   const res = await listReceivingOrderLogs(client.db, orderId, { page: 1, pageSize: 50 });
@@ -131,7 +131,4 @@ test("listReceivingOrderLogs paged response embeds the order's putAway rows", as
   assert.equal(row.qty, 5000);
   assert.equal(row.shelfCode, "A0101");
   assert.match(row.boxId ?? "", /^BOX-H-/);
-  assert.equal(row.lotId, lotId);
-  assert.equal(row.actorId, actorId);
-  assert.equal(row.actorName, "Demo Operator");
 });

@@ -342,6 +342,59 @@ export interface ReceivingItemAllocation {
   outdated: boolean;
 }
 
+export interface ReceivingRelatedLot {
+  shelfCode: string | null;
+  shelfWarning: boolean | null;
+  boxId: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+}
+
+export interface ReceivingRelatedAllocation {
+  id: string;
+  qty: number;
+  lot: ReceivingRelatedLot | null;
+  /** Receiving invoice item this allocation sourced from (null = whole-order
+   *  dock allocation). Maps to a ReceivingItemRow id on the detail response. */
+  receivingInvoiceItemId: string | null;
+  receivingOrderId: string | null;
+  boxId: string | null;
+  outdated: boolean;
+}
+
+export interface ReceivingRelatedPackage {
+  id: string;
+  qty: number;
+  dateCode: string | null;
+  lotCode: string | null;
+  verified: boolean;
+  shippingBoxId: string | null;
+}
+
+export interface ReceivingRelatedItem {
+  id: string;
+  partNo: string;
+  wclItemNo: string | null;
+  qty: number;
+  pickedQty: number;
+  allocatedQty: number;
+  allocations: ReceivingRelatedAllocation[];
+  packages: ReceivingRelatedPackage[];
+  transitionLogs: { fromState: string; toState: string; actorId: string | null; createdDate: string }[];
+}
+
+export interface ReceivingRelatedPickingOrder {
+  id: string;
+  orderNo: string;
+  status: string;
+  shipTo: string | null;
+  customerCode: string | null;
+  boxes: { id: string; status: string; boxSize: string | null; grossWeight: number | null; netWeight: number | null }[];
+  items: ReceivingRelatedItem[];
+}
+
 export interface ReceivingItemRow {
   id: string;
   receivingInvoiceId: string;
@@ -1358,24 +1411,18 @@ export interface OrderLogsParams {
 }
 
 export interface ReceivingPutAwayLogRow {
-  id: string;
-  itemId: string;
   partNo: string;
   wclItemNo: string | null;
   qty: number;
   shelfCode: string | null;
   boxId: string | null;
-  lotId: string | null;
-  actorId: string | null;
-  actorName: string | null;
-  createdDate: string;
 }
 
 export interface OrderLogsPage {
   rows: TransactionLogRow[];
   total: number;
-  /** Receiving orders only: the order's put-away ledger entries
-   *  (item → shelf/box → actor), oldest first. */
+  /** Receiving orders only: the order's current put-away state — net ledger
+   *  quantity per part × shelf × box (reversals netted out). */
   putAway?: ReceivingPutAwayLogRow[];
 }
 
@@ -1659,6 +1706,11 @@ export function useFlowApi() {
     listReceivingOrders: (params: OrderListParams = {}) =>
       api.get<{ rows: ReceivingOrderRow[]; total: number }>(`/receiving-orders${orderListQuery(params)}`),
     getReceivingOrder: (id: string) => api.get<ReceivingOrderDetail>(`/receiving-orders/${id}`),
+    // Related picking orders: every picking order holding allocations (or
+    // already-scanned packages) sourced from this receiving order, with
+    // per-item allocations/lots/packages and transition logs.
+    listReceivingPickingOrders: (id: string) =>
+      api.get<{ pickingOrders: ReceivingRelatedPickingOrder[] }>(`/receiving-orders/${id}/picking`),
     // confirm-arrival runs the scoped allocation recompute synchronously;
     // allocation is null when it fell back to the background full recompute.
     confirmReceivingArrival: (id: string) =>
