@@ -57,7 +57,6 @@
         @remove-scan="removeScan"
         @update:box-selections="updateBoxSelections"
       />
-
       <PickingBoxesSection
         v-model:expanded="boxesExpanded"
         :boxes="displayBoxes"
@@ -596,10 +595,15 @@ const headerStatus = computed(() => statusLabel.picking(order.value?.status ?? "
 const anyAddingAll = computed(() => Object.values(addingAll.value).some(Boolean));
 
 const unboxedCountForOrder = computed(() => {
-  return (order.value?.items ?? []).reduce((sum, item) => {
+  // Item-bound packages + the aggregate order-level scan record (unbound
+  // rows live only in orderScanRecord — an items-only count breaks the
+  // Box each unboxed / Add all buttons in aggregate mode).
+  const bound = (order.value?.items ?? []).reduce((sum, item) => {
     const unboxed = (item.packages ?? []).filter((p) => !p.shippingBoxId);
     return sum + unboxed.length;
   }, 0);
+  const record = (order.value?.orderScanRecord ?? []).filter((p) => !p.shippingBoxId);
+  return bound + record.length;
 });
 
 const actionable = computed(
@@ -751,6 +755,7 @@ async function cancelBox(boxId: string) {
 
 // One new box per scanned-but-unboxed package (spec 2026-11-01).
 async function boxEachUnboxed() {
+  console.log("boxingEach", boxingEach.value)
   if (boxingEach.value) return;
   if (unboxedCountForOrder.value === 0) return;
   const confirmed = window.confirm(t("picking.boxesSection.boxEachConfirm"));
