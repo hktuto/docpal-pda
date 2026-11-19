@@ -2,13 +2,13 @@
   "id": "CR-065",
   "dateRaised": "2026-11-19",
   "raisedBy": "Sean",
-  "app": "Admin",
-  "functionId": "ADM-034",
-  "feature": "Stock-search lot edit: checkbox multi-select on the admin stock-search lots table (server-paged and group-by modes share one selection), with a batch bar (Batch edit / Clear) and a per-row ✏️ button. Both open the receiving item edit modal (lot code / carton no hidden) to set or clear date code, COO, COW and drawing no — batch mode applies only non-blank fields, with a per-field Clear box; single mode blanks clear. Date codes edit in the label format and are converted to canonical YYWW on save. Backend PATCH /admin/inventory-lots/:id writes inventory_lots with per-field transaction_logs audit rows; a resulting lot-identity collision (unique index) returns 409 duplicate_lot_identity.",
-  "reason": "Wrong date code / COO / COW / drawing no only surfaced after put-away, when the receiving item edit no longer helped — stock lots had no admin tool and fixing them required raw SQL",
+  "app": "Backend",
+  "functionId": "ADM-023",
+  "feature": "Every locally generated CN number now carries the warehouse prefix from WAREHOUSE_CODE (default HK): nextCnBrandedNo mints [WH]-[brand]-yyyymmdd-seq (covers the local Excel upload's order batch_no, manual-receipt invoice_no = order batch_no, and pdf-upload workflow batch_no) and nextCnTruckNo mints [WH]-[truckRef]-YYYYMMDD(-seq) for truck manifests — e.g. SZ-TE-20261119-01, HK-KOA-20261119-01. One backend instance runs per warehouse with its own DB, so before this two warehouses could mint identical numbers on the same day; HQ-side reports and the DocPal workflow trail aggregate across warehouses. Legacy unprefixed rows keep their shape (no migration; each warehouse's prefixed sequence starts fresh). The random CN-yyyymmdd-XXXXXX DocPal correlation key is unchanged. Advisory-lock keys, the MAX-scan split_part and the match regex all moved to the prefixed shape; the brand is sanitized inside the numbering function.",
+  "reason": "CN numbers are generated locally per warehouse instance but are read fleet-wide, so unprefixed per-day sequences collided across warehouses (e.g. both HK and SZ minting TE-20261119-01)",
   "priority": "Must have",
   "status": "In progress",
   "owner": "dev",
   "targetDate": "",
-  "remarks": "Spec docs/superpowers/specs/2026-11-19-stock-search-lot-batch-edit-design.md. Modal reused from receiving (components/receiving/ItemEditModal.vue) with new withLotCode/withCtnNo props; its Today/Next-week buttons now generate the flow's configured date-code format."
+  "remarks": "Spec docs/superpowers/specs/2026-11-19-cn-numbering-warehouse-prefix-design.md. Operator decision 2026-11-19: HK also carries the prefix (uniform rule); prefix applies to ALL CN number families, not just TE. Verified: receivingCn.test.ts 9/9 (format assertions, advisory-lock race, new WAREHOUSE_CODE=sz prefix + legacy-restart test); tsc clean. Deploy note: WAREHOUSE_CODE is already set on SZ/SH/BJ instances; HK needs no env change (falls back to HK)."
 }

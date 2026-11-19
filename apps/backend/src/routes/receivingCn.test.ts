@@ -145,7 +145,7 @@ test("happy path: one order + ONE branded invoice; batch_no = invoice_no; items 
   const res = await postManual(token, VALID_BODY);
   assert.equal(res.status, 201);
   const created = (await res.json()) as { id: string; batchNo: string; putAwayTaskId: string };
-  assert.match(created.batchNo, /^KOA-\d{8}-01$/); // [brand]-yyyymmdd-[seq]
+  assert.match(created.batchNo, /^HK-KOA-\d{8}-01$/); // [WH]-[brand]-yyyymmdd-[seq]
   assert.ok(created.putAwayTaskId);
 
   const order = await queryGet<{
@@ -168,7 +168,7 @@ test("happy path: one order + ONE branded invoice; batch_no = invoice_no; items 
   assert.equal(order!.orgId, 14); // first po_no (329…) → org 14
   assert.ok(order!.deliveryDate); // = the creation day at 00:00:00
   assert.match(order!.deliveryDate!, /^\d{4}-\d{2}-\d{2} 00:00:00$/);
-  assert.equal(order!.deliveryDate!.slice(0, 10).replace(/-/g, ""), created.batchNo.slice(4, 12)); // same day as the invoice no
+  assert.equal(order!.deliveryDate!.slice(0, 10).replace(/-/g, ""), created.batchNo.slice(7, 15)); // same day as the invoice no
   assert.ok(order!.arrivedAt);
   assert.equal(order!.arrivedByName, "Demo Operator");
 
@@ -271,8 +271,8 @@ test("invoice seq: the second same-brand receipt of the day gets -02; uniform pa
   };
   const first = (await (await postManual(token, body)).json()) as { batchNo: string; putAwayTaskId: string };
   const second = (await (await postManual(token, body)).json()) as { batchNo: string; putAwayTaskId: string };
-  assert.match(first.batchNo, /^KOA-\d{8}-01$/);
-  assert.match(second.batchNo, /^KOA-\d{8}-02$/);
+  assert.match(first.batchNo, /^HK-KOA-\d{8}-01$/);
+  assert.match(second.batchNo, /^HK-KOA-\d{8}-02$/);
   assert.notEqual(first.batchNo, second.batchNo);
 
   // All items share one org/sub pair → the task carries it directly.
@@ -354,8 +354,38 @@ test("numbering race: two concurrent txs reserving + inserting get distinct seqs
     )
   );
   assert.notEqual(results[0], results[1]);
-  assert.match(results[0]!, /^RACE-20260115-\d+$/);
-  assert.match(results[1]!, /^RACE-20260115-\d+$/);
-  const seqs = results.map((r) => Number(r!.split("-")[2]!)).sort((a, b) => a - b);
+  assert.match(results[0]!, /^HK-RACE-20260115-\d+$/);
+  assert.match(results[1]!, /^HK-RACE-20260115-\d+$/);
+  const seqs = results.map((r) => Number(r!.split("-")[3]!)).sort((a, b) => a - b);
   assert.deepEqual(seqs, [seqs[0], seqs[0] + 1]); // consecutive, no gap/collision
+});
+
+test("numbering: WAREHOUSE_CODE prefixes every generated number; legacy unprefixed rows restart the sequence", async () => {
+  await reseed(client);
+  const prev = process.env.WAREHOUSE_CODE;
+  process.env.WAREHOUSE_CODE = "sz";
+  try {
+    // A pre-prefix SZ row in the old unprefixed shape must NOT seed the new
+    // sequence — the prefixed namespace starts fresh (the strings differ).
+    await client.db.execute(
+      sql`INSERT INTO receiving_orders_cn (id, batch_no, status, org_id)
+          VALUES ('cn-legacy-1', 'TE-20260115-07', 'pending', 2)`
+    );
+    const branded = await client.db.transaction(async (tx) => {
+      const no = await nextCnBrandedNo(tx, "TE", new Date("2026-01-15T00:00:00Z"));
+      await tx.execute(
+        sql`INSERT INTO receiving_orders_cn (id, batch_no, status, org_id)
+            VALUES ('cn-new-1', ${no}, 'pending', 2)`
+      );
+      return no;
+    });
+    assert.equal(branded, "SZ-TE-20260115-01");
+    // Same-day second reservation takes seq 2; the truck namespace is
+    // prefixed too and independent of the branded seq.
+    const branded2 = await nextCnBrandedNo(client.db, "TE", new Date("2026-01-15T00:00:00Z"));
+    assert.equal(branded2, "SZ-TE-20260115-02");
+  } finally {
+    if (prev === undefined) delete process.env.WAREHOUSE_CODE;
+    else process.env.WAREHOUSE_CODE = prev;
+  }
 });

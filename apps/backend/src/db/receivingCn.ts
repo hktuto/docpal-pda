@@ -238,53 +238,71 @@ export function generateCnBatchNo(at: Date = new Date()): string {
   return `CN-${ymd}-${code}`;
 }
 
-/** Next `[brand]-yyyymmdd-[seq]` number in the shared CN numbering namespace.
- *  Counts the max numeric suffix across every table the namespace spans —
+/** Warehouse prefix for locally generated CN numbers: WAREHOUSE_CODE
+ *  uppercased (default "hk"). Every warehouse instance numbers its CN orders
+ *  locally in its own database, so without the prefix two warehouses mint
+ *  the same `[brand]-yyyymmdd-seq` on the same day — the prefix makes every
+ *  generated number globally unique across the fleet (spec
+ *  docs/superpowers/specs/2026-11-19-cn-numbering-warehouse-prefix-design.md).
+ *  Legacy unprefixed rows keep their old shape; the new prefixed namespace
+ *  starts fresh (the strings can never collide). */
+export function cnNumberPrefix(): string {
+  return (process.env.WAREHOUSE_CODE ?? "hk").toUpperCase().replace(/[^A-Z0-9]/g, "") || "HK";
+}
+
+/** Next `[WH]-[brand]-yyyymmdd-[seq]` number in the shared CN numbering
+ *  namespace (`WH` = this warehouse's cnNumberPrefix). Counts the max numeric
+ *  suffix across every table the namespace spans —
  *  `receiving_invoices_cn.invoice_no` (manual receipts), `receiving_orders_cn.batch_no`
  *  (synced orders) and `receiving_cn_workflows.batch_no` (pdf uploads) — so a
  *  manual TE receipt and a TE pdf upload never collide on the same day. */
-export async function nextCnBrandedNo(db: DbOrTx, brand: string, at: Date = new Date()): Promise<string> {
+export async function nextCnBrandedNo(db: DbOrTx, brandRaw: string, at: Date = new Date()): Promise<string> {
+  const brand = (brandRaw ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const wh = cnNumberPrefix();
   const ymd = [
     at.getFullYear(),
     String(at.getMonth() + 1).padStart(2, "0"),
     String(at.getDate()).padStart(2, "0"),
   ].join("");
-  const prefix = `${brand}-${ymd}-`;
-  // Serialize numbering per brand+day: the MAX-then-insert scan races under
-  // READ COMMITTED — two concurrent txs read the same max and both take
-  // seq+1. The transaction-scoped advisory lock (released at commit) makes
-  // every reservation of the same brand/day mutually exclusive. Callers MUST
-  // pass a tx (or reserve + insert the first numbered row inside one tx) so
-  // the lock still covers the insert.
-  await queryRun(db, sql`SELECT pg_advisory_xact_lock(hashtext(${`cn-numbering:${brand}-${ymd}`}))`);
+  const prefix = `${wh}-${brand}-${ymd}-`;
+  // Serialize numbering per warehouse+brand+day: the MAX-then-insert scan
+  // races under READ COMMITTED — two concurrent txs read the same max and
+  // both take seq+1. The transaction-scoped advisory lock (released at
+  // commit) makes every reservation of the same warehouse/brand/day mutually
+  // exclusive. Callers MUST pass a tx (or reserve + insert the first
+  // numbered row inside one tx) so the lock still covers the insert.
+  await queryRun(db, sql`SELECT pg_advisory_xact_lock(hashtext(${`cn-numbering:${wh}-${brand}-${ymd}`}))`);
   const row = await queryGet<{ max: number | null }>(
     db,
-    sql`SELECT MAX(CAST(split_part(no, '-', 3) AS integer)) AS max FROM (
+    sql`SELECT MAX(CAST(split_part(no, '-', 4) AS integer)) AS max FROM (
           SELECT invoice_no AS no FROM receiving_invoices_cn WHERE invoice_no LIKE ${`${prefix}%`}
           UNION ALL SELECT batch_no FROM receiving_orders_cn WHERE batch_no LIKE ${`${prefix}%`}
           UNION ALL SELECT batch_no FROM receiving_cn_workflows WHERE batch_no LIKE ${`${prefix}%`}
         ) s
-        WHERE no ~ ${`^${brand}-[0-9]{8}-[0-9]+$`}`
+        WHERE no ~ ${`^${prefix}[0-9]+$`}`
   );
   return `${prefix}${String((row?.max ?? 0) + 1).padStart(2, "0")}`;
 }
 
-/** Next `[truckRef]-YYYYMMDD(-seq)` order number for a manifest upload (spec
- *  2026-11-17). The ref (sheet `Ref :`) is sanitized to `[A-Z0-9-]` (blank →
- *  `CN`), the first candidate is suffix-free, collisions the same day take
- *  `-2`, `-3`, … — checked against `receiving_orders_cn.batch_no`, the table
- *  the admin detail resolves by. Serialized per ref+day with the same
- *  transaction-scoped advisory lock as the branded numbering. */
+/** Next `[WH]-[truckRef]-YYYYMMDD(-seq)` order number for a manifest upload
+ *  (spec 2026-11-17; `WH` = cnNumberPrefix, same fleet-uniqueness rule as the
+ *  branded numbering). The ref (sheet `Ref :`) is sanitized to `[A-Z0-9-]`
+ *  (blank → `CN`), the first candidate is suffix-free, collisions the same
+ *  day take `-2`, `-3`, … — checked against `receiving_orders_cn.batch_no`,
+ *  the table the admin detail resolves by. Serialized per
+ *  warehouse+ref+day with the same transaction-scoped advisory lock as the
+ *  branded numbering. */
 export async function nextCnTruckNo(db: DbOrTx, ref: string, at: Date = new Date()): Promise<string> {
+  const wh = cnNumberPrefix();
   const ymd = [
     at.getFullYear(),
     String(at.getMonth() + 1).padStart(2, "0"),
     String(at.getDate()).padStart(2, "0"),
   ].join("");
   const clean = (ref || "").toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 24) || "CN";
-  await queryRun(db, sql`SELECT pg_advisory_xact_lock(hashtext(${`cn-truckno:${clean}-${ymd}`}))`);
+  await queryRun(db, sql`SELECT pg_advisory_xact_lock(hashtext(${`cn-truckno:${wh}-${clean}-${ymd}`}))`);
   for (let n = 0; ; n++) {
-    const candidate = n === 0 ? `${clean}-${ymd}` : `${clean}-${ymd}-${n + 1}`;
+    const candidate = n === 0 ? `${wh}-${clean}-${ymd}` : `${wh}-${clean}-${ymd}-${n + 1}`;
     const clash = await queryGet<{ id: string }>(
       db,
       sql`SELECT id FROM receiving_orders_cn WHERE batch_no = ${candidate} LIMIT 1`
