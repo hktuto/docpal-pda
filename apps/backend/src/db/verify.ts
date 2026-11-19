@@ -104,8 +104,10 @@ export async function listVerifyTasks(db: AppDb, status?: string, username?: str
       FROM verify_tasks vt
       JOIN shipping_boxes sb ON sb.id = vt.shipping_box_id
       LEFT JOIN picking_packages pp ON pp.shipping_box_id = sb.id
+      -- Aggregate reel-scan packages have no item binding — fall back to
+      -- the package's own order column for the order_no lookup.
       LEFT JOIN picking_items pi ON pi.id = pp.picking_item_id
-      LEFT JOIN picking_orders po ON po.id = pi.picking_order_id
+      LEFT JOIN picking_orders po ON po.id = COALESCE(pi.picking_order_id, pp.picking_order_id)
       ${status ? sql`WHERE vt.status = ${status}` : sql`WHERE TRUE`}
       ${assigneeFilter(sql`vt.assignee`, username)}
       GROUP BY vt.id, sb.id

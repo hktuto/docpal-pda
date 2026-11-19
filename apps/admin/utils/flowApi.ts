@@ -187,6 +187,10 @@ export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | 
     verifyTaskId?: string | null;
     verifyAssignee?: string | null;
   }[];
+  /** Order-level scan record (2026-11-19 aggregate scan-record): unbound
+   *  reel-scan packages — one row per scan, independent of line items.
+   *  Optional — backends predating the endpoint omit it. */
+  orderScanRecord?: PickingItemRow["packages"];
 }
 
 /** Admin-editable picking order fields (PATCH /admin/picking-orders/:id). */

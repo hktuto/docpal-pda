@@ -44,8 +44,15 @@ function onAssigneeSaved() {
 
 const activeItems = computed(() => (props.order.items ?? []).filter((i) => i.status !== "cancelled"));
 const requiredQty = computed(() => activeItems.value.reduce((sum, i) => sum + i.qty, 0));
-const pickedQty = computed(() => activeItems.value.reduce((sum, i) => sum + i.pickedQty, 0));
-const allPackages = computed(() => activeItems.value.flatMap((i) => i.packages ?? []));
+const orderScanRecord = computed(() => props.order.orderScanRecord ?? []);
+const pickedQty = computed(() =>
+  activeItems.value.reduce((sum, i) => sum + i.pickedQty, 0) +
+  orderScanRecord.value.reduce((sum, p) => sum + p.qty, 0)
+);
+const allPackages = computed(() => [
+  ...activeItems.value.flatMap((i) => i.packages ?? []),
+  ...orderScanRecord.value,
+]);
 const reScannedQty = computed(() => allPackages.value.reduce((sum, p) => sum + (p.rescannedQty ?? 0), 0));
 const boxCount = computed(() => (props.order.boxes ?? []).length);
 const verifiedPackageCount = computed(() => allPackages.value.filter((p) => p.verified).length);
@@ -119,8 +126,8 @@ function overrideMark(scanned: string | null, source: string | null): { value: s
   return { value: value || "—", overridden: !!scanned && scanned !== (source ?? "") };
 }
 
-const scanRows = computed<ScanRow[]>(() =>
-  activeItems.value.flatMap((item) =>
+const scanRows = computed<ScanRow[]>(() => [
+  ...activeItems.value.flatMap((item) =>
     (item.packages ?? []).map((p) => {
       const dc = overrideMark(p.scannedDateCode, p.dateCode);
       const lot = overrideMark(p.scannedLotCode, p.lotCode);
@@ -148,8 +155,37 @@ const scanRows = computed<ScanRow[]>(() =>
         sourceType: p.sourceType,
       };
     })
-  )
-);
+  ),
+  // Aggregate order-level scan record (pickingScanRecord=aggregate): unbound
+  // reel-scan packages — the pick truth, independent of line items.
+  ...(props.order.orderScanRecord ?? []).map((p) => {
+    const dc = overrideMark(p.scannedDateCode, p.dateCode);
+    const lot = overrideMark(p.scannedLotCode, p.lotCode);
+    const coo = overrideMark(p.scannedCoo, p.coo);
+    const cow = overrideMark(p.scannedCow, p.cow);
+    return {
+      id: p.id,
+      partNo: p.scannedWclItemNo ?? p.scannedPartNo ?? props.order.orderNo ?? "",
+      wclItemNo: p.scannedWclItemNo ?? null,
+      line: "—",
+      qty: p.qty,
+      rescannedQty: p.rescannedQty ?? 0,
+      dc: formatDcLabel({ dateCode: dc.value === "—" ? null : dc.value }) || "—",
+      dcOverridden: dc.overridden,
+      lot: lot.value,
+      lotOverridden: lot.overridden,
+      coo: coo.value,
+      cooOverridden: coo.overridden,
+      cow: cow.value,
+      cowOverridden: cow.overridden,
+      shippingBoxId: p.shippingBoxId,
+      verified: p.verified,
+      verifyVerified: p.verifyVerified,
+      labelBarcode: p.labelBarcode,
+      sourceType: p.sourceType,
+    };
+  }),
+]);
 
 const scanColumnDefs = computed<AdminColumnDef<ScanRow>[]>(() => [
   { key: "partNo", label: t("admin.fields.partNo"), accessor: (r) => r.wclItemNo ?? r.partNo, size: 150 },
