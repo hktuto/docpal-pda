@@ -726,6 +726,16 @@ test("scan-reel: one scan = one unbound package row, per-part room check, finish
   assert.equal(offOrder.status, 404);
   assert.equal(offOrder.message, "reel_part_not_on_order");
 
+  // Duplicate reel guard: the same label barcode commits only once — a QR
+  // re-scan double-counts the reel (the client queue de-dupes per session
+  // only; the backend is the authority).
+  const dup = await catchHttp(scanPickingOrderReel(client.db, orderId, {
+    actorId, qty: 750, partNo: "RK73H1JTTD1002F",
+    barcode: "2811225000000000000000750123",
+  }));
+  assert.equal(dup.status, 409);
+  assert.ok((await dup.res!.text()).includes("duplicate_reel_scan"));
+
   // Second scan of 250 → part fully covered → finish succeeds with the
   // order-level packages (unbound) counted by part totals.
   await scanPickingOrderReel(client.db, orderId, { actorId, qty: 250, partNo: "RK73H1JTTD1002F" });

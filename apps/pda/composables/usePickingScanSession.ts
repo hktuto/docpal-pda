@@ -182,6 +182,18 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
         }
       }
     }
+    // Duplicate reel guard at SCAN time (2026-11-19): when the decoded label
+    // carries a serialNo (template has a serial group — e.g. NCC), the raw
+    // code identifies ONE physical reel. If that exact code is already
+    // committed on this order (last fetch: item packages + the aggregate
+    // scan record — covers scans from previous sessions), reject here
+    // instead of waiting for the backend's commit-time 409.
+    if (isAggregate() && parsed.serialNo) {
+      const committed =
+        orderItems.value.some((i) => (i.packages ?? []).some((p) => p.labelBarcode === raw)) ||
+        (orderRef?.value?.orderScanRecord ?? []).some((p) => p.labelBarcode === raw);
+      if (committed) return { ok: false, message: "duplicate" };
+    }
     const result = isAggregate() ? addScanAggregate(parsed, raw, source) : addScan(parsed, raw, source);
     return result.ok ? { ok: true, kind: "queued" } : { ok: false, message: result.message };
   }

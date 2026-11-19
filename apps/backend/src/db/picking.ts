@@ -2128,6 +2128,27 @@ export async function scanPickingOrderReel(
     );
     const matched = items.filter((it) => keys.includes(normalizePartNo(it.partNo)));
     if (matched.length === 0) throw new HTTPException(404, { message: "reel_part_not_on_order" });
+
+    // Duplicate reel guard (2026-11-19): the same physical label must not
+    // commit twice on one order — a QR re-scan double-counts the reel. The
+    // client queue de-dupes per session, but a page reload resets it, so the
+    // backend is the authority. Undo (remove-scan) deletes the row, so a
+    // legitimate re-scan after an undo passes.
+    if (input.barcode?.trim()) {
+      const dup = await queryGet<{ id: string }>(
+        tx,
+        sql`SELECT id FROM picking_packages
+            WHERE picking_order_id = ${orderId} AND label_barcode = ${input.barcode.trim()} LIMIT 1`
+      );
+      if (dup) {
+        throw new HTTPException(409, {
+          res: new Response(JSON.stringify({ error: "duplicate_reel_scan", barcode: input.barcode.trim() }), {
+            status: 409,
+            headers: { "content-type": "application/json" },
+          }),
+        });
+      }
+    }
     const partNo = matched[0].partNo;
     const partNorm = normalizePartNo(partNo);
     const partItems = items.filter((it) => normalizePartNo(it.partNo) === partNorm);
