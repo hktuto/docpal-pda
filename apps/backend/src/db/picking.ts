@@ -2806,17 +2806,17 @@ export async function verifyPackage(
       tx,
       sql`SELECT pp.id, pp.shipping_box_id AS "shippingBoxId", pp.verified,
                  pp.verify_verified AS "verifyVerified", pp.qty, pp.rescanned_qty AS "rescannedQty",
-                 pi.picking_order_id AS "pickingOrderId",
+                 COALESCE(pi.picking_order_id, pp.picking_order_id) AS "pickingOrderId",
                  pp.label_verified AS "labelVerified",
-                 COALESCE(pp.scanned_part_no, pi.part_no) AS "partNo",
-                 COALESCE(pp.scanned_wcl_item_no, p.wcl_item_no) AS "wclItemNo",
+                 COALESCE(pp.scanned_part_no, pi.part_no, pp.picking_part_no) AS "partNo",
+                 COALESCE(pp.scanned_wcl_item_no, p.wcl_item_no, pp.picking_part_no) AS "wclItemNo",
                  COALESCE(pp.scanned_coo, pp.coo) AS coo,
                  COALESCE(pp.scanned_date_code, pp.date_code) AS "dateCode"
           FROM picking_packages pp
-          JOIN picking_items pi ON pi.id = pp.picking_item_id
+          LEFT JOIN picking_items pi ON pi.id = pp.picking_item_id
           -- parts wcl_item_no is no longer unique on upstream-synced DBs:
           -- join the deduped master (partsMaster.ts).
-          JOIN ${partsMasterByWcl} p ON p.wcl_item_no = pi.part_no
+          LEFT JOIN ${partsMasterByWcl} p ON p.wcl_item_no = COALESCE(pi.part_no, pp.picking_part_no)
           WHERE pp.id = ${input.packageId}`
     );
     if (!pkg) throw new HTTPException(404, { message: "package_not_found" });
@@ -3369,8 +3369,8 @@ async function advanceAfterPickingFinish(tx: DbOrTx, orderId: string): Promise<v
             )
             AND NOT EXISTS (
               SELECT 1 FROM picking_packages pp2
-              JOIN picking_items pi2 ON pi2.id = pp2.picking_item_id
-              JOIN picking_orders po2 ON po2.id = pi2.picking_order_id
+              LEFT JOIN picking_items pi2 ON pi2.id = pp2.picking_item_id
+              JOIN picking_orders po2 ON po2.id = COALESCE(pi2.picking_order_id, pp2.picking_order_id)
               WHERE pp2.shipping_box_id = sb.id
                 AND (po2.status NOT IN ('picking_finished', 'measuring_finished', 'shipped')
                      OR po2.labeling_pending = true

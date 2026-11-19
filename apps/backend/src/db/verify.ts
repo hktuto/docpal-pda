@@ -208,16 +208,18 @@ export async function getVerifyTaskDetail(db: AppDb, taskId: string, username?: 
         pp.scanned_date_code AS "scannedDateCode", pp.scanned_lot_code AS "scannedLotCode",
         pp.scanned_coo AS "scannedCoo", pp.scanned_cow AS "scannedCow",
         pp.label_verified AS "labelVerified",
-        pi.picking_order_id AS "pickingOrderId",
-        COALESCE(pp.scanned_part_no, pi.part_no) AS "partNo",
-        COALESCE(pp.scanned_wcl_item_no, p.wcl_item_no) AS "wclItemNo",
+        -- Aggregate reel-scan packages have no item binding — fall back to
+        -- the package's own order column.
+        COALESCE(pi.picking_order_id, pp.picking_order_id) AS "pickingOrderId",
+        COALESCE(pp.scanned_part_no, pi.part_no, pp.picking_part_no) AS "partNo",
+        COALESCE(pp.scanned_wcl_item_no, p.wcl_item_no, pp.picking_part_no) AS "wclItemNo",
         nwf.weight AS "formulaWeight", nwf.qty AS "formulaQty"
       FROM picking_packages pp
-      JOIN picking_items pi ON pi.id = pp.picking_item_id
+      LEFT JOIN picking_items pi ON pi.id = pp.picking_item_id
       -- parts wcl_item_no is no longer unique on upstream-synced DBs: join
       -- the deduped master (partsMaster.ts) to avoid fan-out per package.
-      JOIN ${partsMasterByWcl} p ON p.wcl_item_no = pi.part_no
-      LEFT JOIN net_weight_formula nwf ON nwf.part_no = pi.part_no
+      LEFT JOIN ${partsMasterByWcl} p ON p.wcl_item_no = COALESCE(pi.part_no, pp.picking_part_no)
+      LEFT JOIN net_weight_formula nwf ON nwf.part_no = COALESCE(pi.part_no, pp.picking_part_no)
       WHERE pp.shipping_box_id = ${task.shippingBoxId}
       ORDER BY pp.created_date, pp.id
     `
@@ -514,8 +516,8 @@ export async function completeVerifyTask(db: AppDb, input: { taskId: string; act
       tx,
       sql`SELECT DISTINCT po.id, po.status
           FROM picking_packages pp
-          JOIN picking_items pi ON pi.id = pp.picking_item_id
-          JOIN picking_orders po ON po.id = pi.picking_order_id
+          LEFT JOIN picking_items pi ON pi.id = pp.picking_item_id
+          JOIN picking_orders po ON po.id = COALESCE(pi.picking_order_id, pp.picking_order_id)
           WHERE pp.shipping_box_id = ${task.shippingBoxId}`
     );
     for (const order of orderIds) {
@@ -526,9 +528,9 @@ export async function completeVerifyTask(db: AppDb, input: { taskId: string; act
             WHERE vt.status = 'pending'
               AND EXISTS (
                 SELECT 1 FROM picking_packages pp2
-                JOIN picking_items pi2 ON pi2.id = pp2.picking_item_id
+                LEFT JOIN picking_items pi2 ON pi2.id = pp2.picking_item_id
                 WHERE pp2.shipping_box_id = vt.shipping_box_id
-                  AND pi2.picking_order_id = ${order.id}
+                  AND COALESCE(pi2.picking_order_id, pp2.picking_order_id) = ${order.id}
               )
             LIMIT 1`
       );
