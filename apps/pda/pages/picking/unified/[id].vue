@@ -587,9 +587,35 @@ async function confirm() {
   }
 }
 
-const allItemsFullyBoxed = computed(
-  () => order.value?.items?.every((i) => i.pickedQty >= i.qty) ?? false
-);
+// Finish button gate: aggregate mode checks per-part totals (bound +
+// order-level scan record ≥ demand — the scanned packages may not be
+// boxed yet, like item mode's picked_qty semantics); item mode keeps the
+// per-item picked_qty check.
+const allItemsFullyBoxed = computed(() => {
+  const detail = order.value;
+  if (!detail) return false;
+  const items = detail.items ?? [];
+  if (items.length === 0) return false;
+  if (!aggregateScan.value) return items.every((i) => i.pickedQty >= i.qty);
+  const totals = new Map<string, number>();
+  const bump = (part: string | null | undefined, qty: number) => {
+    if (!part) return;
+    totals.set(part, (totals.get(part) ?? 0) + qty);
+  };
+  for (const item of items) {
+    for (const p of item.packages ?? []) bump(item.partNo, p.qty);
+  }
+  for (const p of detail.orderScanRecord ?? []) {
+    const item = items.find((i) => normalizePartNo(i.partNo) === normalizePartNo(p.scannedWclItemNo ?? ""));
+    bump(item?.partNo ?? p.scannedWclItemNo, p.qty);
+  }
+  const demand = new Map<string, number>();
+  for (const item of items) demand.set(item.partNo, (demand.get(item.partNo) ?? 0) + item.qty);
+  for (const [part, qty] of demand) {
+    if ((totals.get(part) ?? 0) < qty) return false;
+  }
+  return true;
+});
 const headerBadgeClass = computed(() => badgeClass(order.value?.status));
 const headerStatus = computed(() => statusLabel.picking(order.value?.status ?? ""));
 const anyAddingAll = computed(() => Object.values(addingAll.value).some(Boolean));
