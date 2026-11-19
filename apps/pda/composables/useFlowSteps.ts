@@ -61,11 +61,11 @@ const pickingShelfScan = ref<"off" | "require-match" | "require-any">("off");
 const dateCodeFormat = ref<DateCodeFormat>("wwyy");
 
 // Resolved pickingScanRecord mode (GET /config pickingScanRecord): "item"
-// (default) = per-line item-bound scans; "aggregate" = order-level reel
-// scans (POST /picking-orders/:id/scan-reel, one package row per scan).
-// Default "item" — pages behave as before until the first fetch resolves,
-// and backends predating the key omit it.
-const pickingScanRecord = ref<"item" | "aggregate">("item");
+// = legacy per-line item-bound scans; "aggregate" = order-level reel scans
+// (POST /picking-orders/:id/scan-reel, one package row per scan).
+// Default "aggregate" — matches the backend default; the first /config fetch
+// overrides it (older backends omit the key entirely).
+const pickingScanRecord = ref<"item" | "aggregate">("aggregate");
 
 // Resolved cnReceiving flag (GET /config cnReceiving): the CN
 // customer-receiving flow. Default false — pages behave as before until the

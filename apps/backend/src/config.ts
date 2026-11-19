@@ -534,7 +534,10 @@ function defaultFlowConfig(): FlowConfig {
     pdaListTemplates: defaultPdaListTemplates(),
     pdaViewConfig: {},
     pickingShelfScan: "off",
-    pickingScanRecord: "item",
+    // Default "aggregate" (2026-11-19): one scan = one package row, per-part
+    // room checks — the scan record is the truth of what ships. Warehouses
+    // on the legacy per-line flow opt out with pickingScanRecord: "item".
+    pickingScanRecord: "aggregate",
     dateCodeFormat: "wwyy",
   };
 }
