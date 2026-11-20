@@ -41,6 +41,13 @@ let client: TestDb;
 
 before(async () => {
   client = await setupTestDb();
+  // wcl_part_drawno is externally managed (not in the schema/migrations) —
+  // the reel scan's NCC drawing-code fallback joins it.
+  await client.db.execute(sql`CREATE TABLE IF NOT EXISTS wcl_part_drawno (
+    id varchar(100) PRIMARY KEY,
+    wcl_part_no varchar(255) NOT NULL,
+    drawno varchar(2000) NOT NULL
+  )`);
 });
 
 // --- business-key lookups (never hardcode seed UUIDs) ------------------------

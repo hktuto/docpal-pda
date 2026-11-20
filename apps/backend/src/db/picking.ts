@@ -2128,6 +2128,22 @@ export async function scanPickingOrderReel(
           FROM picking_items pi
           WHERE pi.picking_order_id = ${orderId} AND pi.status <> 'cancelled'`
     );
+    // NCC drawing-code fallback: NCC labels carry the numeric drawing code
+    // as itemId (never a part/wcl key), and the row's scanned_part_no may be
+    // that drawing code — resolve it through wcl_part_drawno before giving
+    // up (same authority as the decode's brand resolver).
+    if (!items.some((it) => keys.includes(normalizePartNo(it.partNo)))) {
+      const drawnoKeys = [input.scannedPartNo, input.partNo]
+        .filter((k): k is string => !!k?.trim())
+        .map((k) => k.trim());
+      if (drawnoKeys.length > 0) {
+        const drawRows = await queryAll<{ wclPartNo: string }>(
+          tx,
+          sql`SELECT DISTINCT wcl_part_no AS "wclPartNo" FROM wcl_part_drawno WHERE drawno IN (${sql.join(drawnoKeys.map((k) => sql`${k}`), sql`, `)})`
+        );
+        for (const d of drawRows) keys.push(normalizePartNo(d.wclPartNo));
+      }
+    }
     const matched = items.filter((it) => keys.includes(normalizePartNo(it.partNo)));
     if (matched.length === 0) throw new HTTPException(404, { message: "reel_part_not_on_order" });
 
