@@ -290,7 +290,12 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
     for (const item of orderItems.value) {
       for (const p of item.packages ?? []) bump(item.partNo, p.qty);
     }
-    for (const p of order?.orderScanRecord ?? []) bump(orderItems.value.find((i) => normalizePartNo(i.partNo) === normalizePartNo(p.scannedWclItemNo ?? ""))?.partNo ?? p.scannedWclItemNo, p.qty);
+    for (const p of order?.orderScanRecord ?? []) {
+    // scannedWclItemNo is null on non-QR scans (manual/OCR entry) — fall
+    // back to scannedPartNo / picking_part_no for the part mapping.
+    const key = p.scannedWclItemNo ?? p.scannedPartNo ?? "";
+    bump(orderItems.value.find((i) => normalizePartNo(i.partNo) === normalizePartNo(key))?.partNo ?? key, p.qty);
+  }
     return totals;
   }
 

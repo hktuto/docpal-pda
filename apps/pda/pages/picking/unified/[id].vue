@@ -602,15 +602,20 @@ const allItemsFullyBoxed = computed(() => {
     if (!part) return;
     totals.set(part, (totals.get(part) ?? 0) + qty);
   };
+  console.log("bump",items)
   for (const item of items) {
     for (const p of item.packages ?? []) bump(item.partNo, p.qty);
   }
   for (const p of detail.orderScanRecord ?? []) {
-    const item = items.find((i) => normalizePartNo(i.partNo) === normalizePartNo(p.scannedWclItemNo ?? ""));
-    bump(item?.partNo ?? p.scannedWclItemNo, p.qty);
+    // scannedWclItemNo is null on non-QR scans (manual/OCR entry) — fall
+    // back to scannedPartNo for the part mapping.
+    const key = p.scannedWclItemNo ?? p.scannedPartNo ?? "";
+    const item = items.find((i) => normalizePartNo(i.partNo) === normalizePartNo(key));
+    bump(item?.partNo ?? key, p.qty);
   }
   const demand = new Map<string, number>();
   for (const item of items) demand.set(item.partNo, (demand.get(item.partNo) ?? 0) + item.qty);
+  console.log("totals",totals)
   for (const [part, qty] of demand) {
     if ((totals.get(part) ?? 0) < qty) return false;
   }
