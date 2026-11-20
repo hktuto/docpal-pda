@@ -39,6 +39,9 @@ const KNOWN_EVENT_TYPES = [
   "goods_verify.task_confirmed",
   "goods_verify.task_rejected",
   "receiving_order.upserted",
+  "receiving_cn.updated",
+  "receiving_cn.completed",
+  "receiving_cn_scan.item_updated",
 ] as const;
 
 // Only "new work" events toast; the rest are subscriber notification only.
